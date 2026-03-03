@@ -1,18 +1,51 @@
-# Rules of the Card Game
+# Master Design Document
 
-This document provides an overview of the rules for the card game project. It outlines the gameplay mechanics, objectives, and any special rules that players need to be aware of.
+## Core Architecture
+- Engine: Decoupled, Headless TypeScript (Boardgame.io).
 
-## Gameplay Mechanics
+- State: Fully serialized JSON with "Secret State" support for hidden information.
 
-- **Objective**: Describe the main goal of the game.
-- **Setup**: Explain how to set up the game before starting.
-- **Turns**: Detail how turns are taken, including any specific actions players can perform.
+- Players: Agnostic (2+ players).
 
-## Special Rules
+- Victory: Point-based with a turn limit. Highest score wins.
 
-- **Rule Variations**: Mention any variations of the rules that can be applied.
-- **Winning Conditions**: Clarify what constitutes a win in the game.
+## Card Types
+- Units: Based on historical figures. Stats (STR, CUN, CHA) default to 5. Attributes: Scientist, Politician, Engineer, Warrior, Spiritual.
 
-## Additional Information
+- Missions: Main VP source. Some have duration (hold for X turns).
 
-For more details on the game engine, testing strategies, and client applications, please refer to the respective `README.md` files in the `engine/`, `test/`, and `clients/` directories.
+- Equipment: Augments units or stored in HQ.
+
+- Events: One-time use, passive, or Traps (face-down triggers).
+
+- Policies: Static global modifiers. Selected at start or seeded.
+
+## Keyword System
+- Static: Passive effects.
+
+- Triggered: Uses an event bus (e.g., "On Play", "On Attack").
+
+## Mechanics
+- Seeding Phase: Drafting from private collections and a shared face-down pool.
+
+- Automation: Headless simulations for balance and win-rate testing.
+
+## Variants
+### Baseline Variant (Default)
+- Players: 2
+
+- Turn Limit: 10 Turns
+
+- Victory Condition: First to 50 Victory Points or highest score at Turn 10.
+
+- Starting Hand: 5 cards.
+
+- Resource Generation: Standard (1 per turn).
+Variants
+Baseline Variant (Default)
+
+- Turn Limit: 20 Turns
+
+- Victory Condition: First to 50 Victory Points or highest score at Turn 20.
+
+- Starting Hand: 5 cards.

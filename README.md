@@ -1,35 +1,21 @@
 # Card Game Project
 
-Welcome to the Card Game project! This repository is designed to provide a comprehensive framework for developing a complicated card game. Below you will find an overview of the project's structure, purpose, and instructions on how to get started.
+This repository houses a card game [name pending] with the following aspects:
 
-## Project Purpose
+1. Completely free. Only monetization is through donations, if I can be bothered.
+2. Collectible. New card packs will be released and cards gained through packs.
+3. Any number of players. Single player and multiplayer with a cap of 8 players [subject to change].
+4. Variants. The game allows for any number of variants. The default variant called `Baseline` will give us a starting point for others. Examples of future variants: `Fair` (optimizes fairness between players with different card collections), `Chaos` (more RNG oriented, opens for stronger synergies), `Competitive` (less RNG oriented, more deterministic, presses player skills), `Cooperative` (players play towards a common goal)
+5. Challenging. Complex in ways that challenges players. Like reacting to changing conditions or spotting valuable synergies.
+6. De-coupled. The rules are as de-coupled from the engine as much as possible (among other things allowing maximum customization of rules through variants). Clients and test runner are also de-coupled from the engine and import it as a dependency.
 
-The Card Game project aims to create an engaging and interactive card game experience. It encompasses various components, including the game rules, engine, testing framework, reusable libraries, and client applications.
 
 ## Project Structure
 
 The project is organized into the following main directories:
 
-- **rules/**: Contains documentation specific to the rules of the card game, detailing gameplay mechanics, objectives, and any special rules.
-- **engine/**: Describes the architecture of the game engine, including how it processes game logic, manages state, and interacts with other components.
-- **test/**: Outlines the testing strategy for the project, including how to run tests, the testing framework used, and guidelines for writing new tests.
-- **library/**: Documents the library of reusable components or utilities that support the game, explaining how to use them and their purpose within the project.
-- **clients/**: Details the client applications or interfaces that interact with the game, including any specific requirements or setup instructions for each client.
-
-## Getting Started
-
-To get started with the Card Game project, follow these steps:
-
-1. Clone the repository:
-   ```
-   git clone https://github.com/lalli-oni/cards.git
-   ```
-
-2. Navigate to the project directory:
-   ```
-   cd cards/card-game
-   ```
-
-3. Explore the individual directories for specific documentation and instructions.
-
-We hope you enjoy working on this project and contribute to creating an exciting card game experience!
+- **rules/**: Contains the `Baseline` rules of the card game, detailing gameplay mechanics, objectives, and any special rules. Includes variants which can be loaded to override `Baseline` rules. Loaded by engine.
+- **engine/**: Game engine. Processes game logic. Library used by clients and test runner. Loads rules.
+- **test/**: Runs tests using the engine. Also handles running balance testing, collecting full game statistics for balancing and game design decisions.
+- **library/**: Contains all card definitions.
+- **clients/**: Various game clients. For example: game web app, card design tool.

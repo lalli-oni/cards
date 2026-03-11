@@ -3,7 +3,9 @@
 The market is a shared pool of purchasable cards available during the Main Phase.
 
 ## Initializing
-At the start of the Main Phase players populate the market by drawing [var:market_draw_count:3] cards each and placing them in the market area.
+At the start of the Main Phase players populate the market by drawing
+[var:market_draw_count:3] cards each from their **market deck** and placing them in the
+market area.
 
 ### Event draw mechanic
 When a player draws cards to populate the market, apply the following special handling for Event cards:
@@ -16,7 +18,9 @@ To buy a card from the market a player must pay one of the listed costs to add i
 
 Cards can have more than one cost but player only has to pay one of them.
 
-The market slot is immediately replaced by drawing from the active players deck.
+The market slot is immediately replaced by drawing from the active
+player's **market deck**. The event draw mechanic applies to
+replacement draws as well.
 
 ## Optional Variants
 

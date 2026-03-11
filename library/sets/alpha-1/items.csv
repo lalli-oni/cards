@@ -1,0 +1,4 @@
+id,name,set,rarity,cost,equip,stored,keywords,actions,text,flavor
+alpha1-i001,Ancient Scroll,alpha-1,common,2,Equipped unit gets +2 cunning.,,Artifact,,+2 cunning to equipped unit.,Ink fades but ideas endure.
+alpha1-i002,War Banner,alpha-1,uncommon,3,All your units at this location get +1 strength.,,Banner,,+1 strength to all friendly units at this location.,It flew above a hundred fields.
+alpha1-i003,Merchant Ledger,alpha-1,rare,4,,Generates 2 gold at start of your turn.,Commerce,,Stored at a location: gain 2 gold per turn.,Every coin accounted for.

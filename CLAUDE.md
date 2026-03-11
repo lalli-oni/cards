@@ -7,7 +7,7 @@ See [README.md](README.md) for full project structure.
 
 ## Key Conventions
 - `rules/` contains only markdown files defining game rules — no code
-- Variant-dependent values use `[var:X]` format (e.g. `[var:5]` means baseline value is 5)
+- Variant-dependent values use `[var:id:baseline_value]` format (e.g. `[var:starting_gold:10]` means the baseline value is 10, keyed by `starting_gold`)
 - Design commentary uses `[design:...]` format
 - Avoid duplication of rules across files; link instead
 - When rule sections grow long, split into a dedicated file and link from the parent
@@ -27,13 +27,13 @@ Monorepo with bun workspaces. Single version (`package.json` root). Rules and li
 - Cards are stored as **CSV files** in `library/sets/{set_name}/` — one file per card type
 - Build to JSON with `bun library/build.ts` (output in `library/build/`, gitignored)
 - Schema and column definitions are in `library/schema.md`
-- ID format: `{set}-{type_prefix}-{number}` (e.g. `core-u001`, `core-l003`)
-- Type prefixes: `u` (unit), `l` (location), `i` (item), `e` (event), `p` (policy)
+- ID format: kebab-case of card name (e.g. `cleopatra`, `investment-banking`). Globally unique.
+- Card types: unit, location, item, event, policy
 - Delimiters within fields: `;` for lists, `|` for alternative costs, `:` for action components
 - When adding cards, always run the build script to validate
 - New sets: create a new directory under `library/sets/` with the same CSV structure
 
 ### Workflows
-- **Editing**: Use VisiData (`vd library/sets/core/units.csv`) for terminal spreadsheet editing, or Numbers/Excel for bulk sessions
+- **Editing**: Use VisiData (`vd library/sets/baseline/units.csv`) for terminal spreadsheet editing, or Numbers/Excel for bulk sessions
 - **Querying**: Use `/card-query` skill to query card data with nushell
 - **Building**: Run `bun library/build.ts` after edits to validate and generate JSON

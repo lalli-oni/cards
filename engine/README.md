@@ -118,8 +118,8 @@ log, which is the source of truth for replaying a game from the start.
   ],
   "seed": "abc123",
   "actions": [
-    { "turn": 1, "player": "p1", "type": "deploy", "card": "alpha1-u001" },
-    { "turn": 1, "player": "p1", "type": "move", "unit": "alpha1-u001", "to": "alpha1-l001" }
+    { "turn": 1, "player": "p1", "type": "deploy", "card": "cleopatra" },
+    { "turn": 1, "player": "p1", "type": "move", "unit": "cleopatra", "to": "the-great-library" }
   ],
   "result": {
     "winner": "p1",

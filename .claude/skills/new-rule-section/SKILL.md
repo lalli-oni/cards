@@ -22,7 +22,7 @@ Create a new rule section markdown file in `rules/`.
 
 ## <First subsection>
 
-<!-- Use [var:X] for any variant-dependent values -->
+<!-- Use [var:id:baseline_value] for variant-dependent values, e.g. [var:max_hand_size:5] -->
 <!-- Use [design:...] for design commentary -->
 <!-- Link back to README.md or other rule files where relevant -->
 ```
@@ -36,6 +36,6 @@ Create a new rule section markdown file in `rules/`.
 
 ## Rules
 - Only create `.md` files
-- Use `[var:X]` for variant-dependent values
+- Use `[var:id:baseline_value]` for variant-dependent values
 - Use `[design:...]` for design notes
 - Do not duplicate content that exists in other rule files — link instead

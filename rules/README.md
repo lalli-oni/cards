@@ -52,7 +52,7 @@ Each player therefore starts the game with two policies. These policies are outs
 ### Units
 Based on historical figures.
 Stats (for example; strength, cunning, charisma).
-Any stats not listed on the card are treated as [var:5].
+Any stats not listed on the card are treated as [var:default_stat:5].
 Attributes (for example: Scientist, Politician, Engineer, Warrior, Spiritual)
 Actions: Units can have various actions that players can activate.
 

@@ -13,7 +13,7 @@ Only create or modify .md files.
 
 Avoid duplication of rules or definitions.
 
-Any values that can be affected by variants should be written in a format of `[var:5]` to indicate this is the baseline value, but can be different in other variants.
+Any values that can be affected by variants should be written in a format of `[var:id:baseline_value]` (e.g. `[var:starting_gold:10]`). The `id` is a human-readable snake_case key for consumers to look up, and the value is the baseline default.
 
 Anything that is not strictly rules (for example: design comments, interactions to be aware of) should be wrapped in `[design:...]`.
 

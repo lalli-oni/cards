@@ -1,9 +1,10 @@
 #!/bin/bash
+set -euo pipefail
 # Hook: Block non-markdown file edits in rules/
-# Ensures only .md files are created or modified in the rules/ directory.
 
-if echo "$CLAUDE_TOOL_INPUT" | grep -q '"file_path".*rules/' && \
-   ! echo "$CLAUDE_TOOL_INPUT" | grep -q '\.md"'; then
-  echo "BLOCK: Only .md files are allowed in rules/"
+file_path=$(echo "$CLAUDE_TOOL_INPUT" | jq -r '.file_path // empty')
+
+if [[ "$file_path" == rules/* ]] && [[ "$file_path" != *.md ]]; then
+  echo "BLOCK: Only .md files are allowed in rules/" >&2
   exit 1
 fi

@@ -8,7 +8,7 @@ description: Query and aggregate card library data using nushell. Use for findin
 Query the card library CSV files using nushell for filtering, aggregation, and analysis.
 
 ## Arguments
-- Free-form natural language query about the card library (e.g. "how many legendaries in core", "show all units sorted by strength", "average cost by rarity")
+- Free-form natural language query about the card library (e.g. "how many legendaries in baseline", "show all units sorted by strength", "average cost by rarity")
 
 ## Instructions
 
@@ -18,28 +18,28 @@ Use the Bash tool to run `nu -c '<command>'` for all queries. The card CSVs are 
 
 **Open a single file:**
 ```nu
-nu -c "open library/sets/core/units.csv"
+nu -c "open library/sets/baseline/units.csv"
 ```
 
 **Filter rows:**
 ```nu
-nu -c "open library/sets/core/units.csv | where rarity == 'legendary'"
-nu -c "open library/sets/core/units.csv | where strength > 5"
+nu -c "open library/sets/baseline/units.csv | where rarity == 'legendary'"
+nu -c "open library/sets/baseline/units.csv | where strength > 5"
 ```
 
 **Select columns:**
 ```nu
-nu -c "open library/sets/core/units.csv | select name rarity cost strength"
+nu -c "open library/sets/baseline/units.csv | select name rarity cost strength"
 ```
 
 **Sort:**
 ```nu
-nu -c "open library/sets/core/units.csv | sort-by strength | reverse"
+nu -c "open library/sets/baseline/units.csv | sort-by strength | reverse"
 ```
 
 **Load all cards from a set:**
 ```nu
-nu -c "glob library/sets/core/*.csv | each { open $in } | flatten"
+nu -c "glob library/sets/baseline/*.csv | each { open $in } | flatten"
 ```
 
 **Load all cards across all sets:**
@@ -49,12 +49,12 @@ nu -c "glob library/sets/**/*.csv | each { open $in } | flatten"
 
 **Count by group:**
 ```nu
-nu -c "glob library/sets/core/*.csv | each { open $in } | flatten | group-by rarity | transpose key value | each { { rarity: $in.key, count: ($in.value | length) } }"
+nu -c "glob library/sets/baseline/*.csv | each { open $in } | flatten | group-by rarity | transpose key value | each { { rarity: $in.key, count: ($in.value | length) } }"
 ```
 
 **Cross-type stats:**
 ```nu
-nu -c "glob library/sets/core/*.csv | each { |f| open $f | insert type ($f | path parse | get stem) } | flatten | group-by type | transpose key value | each { { type: $in.key, count: ($in.value | length) } }"
+nu -c "glob library/sets/baseline/*.csv | each { |f| open $f | insert type ($f | path parse | get stem) } | flatten | group-by type | transpose key value | each { { type: $in.key, count: ($in.value | length) } }"
 ```
 
 ## Rules

@@ -4,7 +4,7 @@
  *
  * Usage:
  *   bun library/build.ts            # build all sets
- *   bun library/build.ts core       # build specific set
+ *   bun library/build.ts baseline   # build specific set
  *
  * Output goes to library/build/
  */

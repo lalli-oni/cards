@@ -58,7 +58,7 @@ nu -c "glob sessions/*.json | each { open $in } | where config.variant == 'basel
 
 **Games where a specific card was deployed:**
 ```nu
-nu -c "glob sessions/*.json | each { |s| if ($s | open | get actions | where type == 'deploy' and card == 'alpha1-u001' | length) > 0 { open $s } } | compact"
+nu -c "glob sessions/*.json | each { |s| if ($s | open | get actions | where type == 'deploy' and card == 'cleopatra' | length) > 0 { open $s } } | compact"
 ```
 
 ## Rules

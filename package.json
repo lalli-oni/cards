@@ -1,0 +1,16 @@
+{
+  "name": "cards",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "engine",
+    "clients/*",
+    "test"
+  ],
+  "scripts": {
+    "build:library": "bun library/build.ts"
+  },
+  "devDependencies": {
+    "bun-types": "^1.3.10"
+  }
+}

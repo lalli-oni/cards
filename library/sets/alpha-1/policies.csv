@@ -1,4 +1,4 @@
 id,name,set,rarity,cost,effect,keywords,text,flavor
-alpha1-p001,Manifest Destiny,alpha-1,rare,0,Your units get +1 strength when at locations you control.,Expansion,Boost strength at controlled locations.,The frontier calls.
-alpha1-p002,Free Trade,alpha-1,rare,0,Market purchases cost 1 less gold (minimum 1).,Commerce,Reduced market prices.,Open borders open wallets.
-alpha1-p003,War Economy,alpha-1,rare,0,You gain 1 gold each time one of your units wins a contest.,Military,Earn gold from contests.,Victory pays for itself.
+manifest-destiny,Manifest Destiny,alpha-1,rare,0,Your units get +1 strength when at locations you control.,Expansion,Boost strength at controlled locations.,The frontier calls.
+free-trade,Free Trade,alpha-1,rare,0,Market purchases cost 1 less gold (minimum 1).,Commerce,Reduced market prices.,Open borders open wallets.
+war-economy,War Economy,alpha-1,rare,0,You gain 1 gold each time one of your units wins a contest.,Military,Earn gold from contests.,Victory pays for itself.

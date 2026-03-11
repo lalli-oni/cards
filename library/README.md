@@ -1,19 +1,56 @@
-# Library Documentation
+# Card Library
 
-This folder contains the library of reusable components and utilities that support the card game project. The library is designed to provide essential functions and classes that can be utilized across different parts of the project, promoting code reusability and maintainability.
+Card definitions stored as CSV, built to JSON for the engine.
 
-## Purpose
+## Structure
 
-The library serves as a collection of tools that facilitate various functionalities required by the game engine, rules, and client applications. It includes components such as data structures, algorithms, and helper functions that are critical for the game's operation.
+```
+library/
+  sets/
+    core/           # Core set
+      units.csv
+      locations.csv
+      items.csv
+      events.csv
+      policies.csv
+    expansion-1/    # Future sets follow same structure
+      ...
+  build/            # Generated JSON (gitignored)
+  schema.md         # Column definitions per card type
+  build.ts          # CSV → JSON build script
+```
 
-## Usage
+## Building
 
-To use the components in this library, import the necessary modules into your project files. Ensure that you follow the guidelines for each component as outlined in their respective documentation.
+```sh
+bun library/build.ts          # all sets
+bun library/build.ts core     # specific set
+```
 
-## Components
+Output goes to `library/build/`. The build validates required fields
+and enums, exiting with errors if anything is invalid.
 
-- **Utilities**: General-purpose functions that can be used throughout the project.
-- **Data Structures**: Custom data types that may be needed for game logic.
-- **Algorithms**: Functions that implement specific game-related algorithms.
+## Editing Cards
 
-For detailed information on each component, refer to the individual module documentation within this library.
+Edit the CSV files directly. Recommended workflows:
+
+- **Nushell** — query, filter, and aggregate card data from the terminal.
+  Your shell already handles CSVs natively:
+  ```nu
+  open library/sets/core/units.csv | where rarity == "legendary"
+  open library/sets/core/units.csv | sort-by strength | reverse
+  open library/sets/core/*.csv | group-by rarity | transpose key value | each { {rarity: $in.key, count: ($in.value | length)} }
+  ```
+
+- **Spreadsheet app** — open CSVs in Numbers, Excel, or Google Sheets
+  for bulk editing. Re-export as CSV when done.
+
+## Adding a New Set
+
+1. Create a directory under `sets/` (e.g. `sets/expansion-1/`)
+2. Add CSV files following the same column schema
+3. Run `bun library/build.ts` to build
+
+## Schema
+
+See [schema.md](schema.md) for full column definitions per card type.

@@ -1,0 +1,4 @@
+id,name,set,rarity,cost,mission,passive,keywords,text,flavor
+alpha1-l001,The Great Library,alpha-1,epic,0,scientist_2>5,Your units here get +1 cunning.,Archive,Have 2 units with the Scientist attribute here to complete.,Knowledge is the only treasure that multiplies when shared.
+alpha1-l002,The Colosseum,alpha-1,rare,0,warrior_strength_15>4,,Arena,Have warriors with combined strength of 15+ here to complete.,The sand remembers every name.
+alpha1-l003,The Silk Road,alpha-1,uncommon,0,units_3_different_attributes>3,Units here generate 1 gold at start of your turn.,Trade,Have 3 units with different attributes here to complete.,A thread that stitched the world together.

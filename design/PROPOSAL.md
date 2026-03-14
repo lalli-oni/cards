@@ -222,6 +222,8 @@ reuse and a familiar tech stack.
 - [x] Design a single unit card template in the Penpot UI — evaluate the component/token system
   - Template created programmatically via `design/create-card-template.py` (750×1050px unit card)
   - Penpot's component/token system is capable but the API is the primary interface for batch work
+  - Design system setup via `design/setup-design-system.py`: 17 library colors, 8 typographies, 27 design tokens (W3C DTCG format), 1 component (Unit Card), token mappings on 10 shapes
+  - **Key finding:** `set-tokens-lib` requires the `tokens-lib` value to be a JSON **string**, not an inline object. Penpot's JSON middleware strips `$` from keys (`$type` → `type`), but when the value is a string, `read-multi-set-dtcg` re-parses it with `identity` key-fn, preserving `$type`/`$value`
 - [x] Set up penpot-mcp and connect from Claude Code — test reading/writing design elements
   - `penpot-mcp` (montevive/penpot-mcp) works for reading designs (object tree, search, schema)
   - **Bug found:** export failed with 400 on self-hosted Penpot — the `get-resource` command doesn't exist in the exporter. Fix: download from the asset URI returned by `export-shapes` directly. PR submitted upstream: [montevive/penpot-mcp#28](https://github.com/montevive/penpot-mcp/pull/28)
@@ -231,15 +233,19 @@ reuse and a familiar tech stack.
   - Performance: **~2.5s per card** (5 cards in 12.5s). Acceptable for ~100-card sets
   - All 5 alpha-1 unit cards exported successfully with correct data
 - [x] Evaluate SVG output quality — can exported SVGs be used in a web client?
-  - Font URLs reference internal Docker hostname (`http://penpot-frontend:8080/fonts/...`) — not usable outside Docker without URL rewriting
-  - Text rendered with hardcoded `textLength`/`lengthAdjust` from `positionData` — no natural text flow or wrapping
-  - Duplicate `@font-face` declarations, verbose markup (~16KB per card)
-  - **Verdict:** SVG export is not directly usable in a web client. Use PNG for print/preview. For a web client, either post-process the SVG (rewrite font URLs, simplify markup) or render cards in HTML/CSS using the design tokens from Penpot
+  - Raw SVG has issues: internal Docker font URLs, duplicate `@font-face`, hardcoded `textLength`, verbose markup (~16KB)
+  - **Fix:** `design/postprocess-svg.py` resolves all issues:
+    - Rewrites fonts to Google Fonts CDN `@import`
+    - Strips `textLength`/`lengthAdjust` for natural text flow
+    - Maps `sourcesanspro` → `'Source Sans Pro', sans-serif`
+    - Removes identity transforms, unused fill patterns, empty wrapper groups
+    - 16,490 → 10,666 bytes (35% smaller)
+  - **Verdict:** Post-processed SVGs are web-embeddable. PNG for print, SVG for web client.
 
-#### Phase 2: Decide or fall back
-- [ ] If Penpot works: define component structure for all 5 card types, build export pipeline
-- [ ] If Penpot doesn't work: prototype the same unit card in HTML/CSS, compare authoring effort
-- [ ] If falling back to HTML/CSS: compare Vanilla Extract vs UnoCSS for token/theme structure
+#### Phase 2: Build pipeline ✅ Decision: Penpot
+- [x] Penpot works — proceeding with Penpot for card rendering
+- [ ] Define component structure for all 5 card types
+- [ ] Build batch export pipeline (PNG + SVG with post-processing)
 
 #### Phase 3: Build pipeline
 - [ ] Batch export all cards from chosen approach

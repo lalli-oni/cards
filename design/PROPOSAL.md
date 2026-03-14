@@ -230,7 +230,11 @@ reuse and a familiar tech stack.
   - **Key finding:** must clear `position-data` alongside `content` updates, otherwise the exporter renders stale pre-computed text layout. Fix: `{"type": "set", "attr": "position-data", "val": null}`
   - Performance: **~2.5s per card** (5 cards in 12.5s). Acceptable for ~100-card sets
   - All 5 alpha-1 unit cards exported successfully with correct data
-- [ ] Evaluate SVG output quality — can exported SVGs be used in a web client?
+- [x] Evaluate SVG output quality — can exported SVGs be used in a web client?
+  - Font URLs reference internal Docker hostname (`http://penpot-frontend:8080/fonts/...`) — not usable outside Docker without URL rewriting
+  - Text rendered with hardcoded `textLength`/`lengthAdjust` from `positionData` — no natural text flow or wrapping
+  - Duplicate `@font-face` declarations, verbose markup (~16KB per card)
+  - **Verdict:** SVG export is not directly usable in a web client. Use PNG for print/preview. For a web client, either post-process the SVG (rewrite font URLs, simplify markup) or render cards in HTML/CSS using the design tokens from Penpot
 
 #### Phase 2: Decide or fall back
 - [ ] If Penpot works: define component structure for all 5 card types, build export pipeline

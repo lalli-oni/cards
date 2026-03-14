@@ -33,12 +33,22 @@ OBJECT_IDS = {
     "card_name":       "b66d9191-e4c5-43b6-890d-5dfdbd5af2ae",
     "cost_value":      "da6279e7-eed4-4e07-afa8-d7854ef63a6a",
     "type_label":      "9f3cdfcd-5106-448c-b1d5-218deb920b45",
+    "action_name":     "e2a244f2-fa5d-4e33-b964-d511b9f89c74",
     "rules_text":      "2dc6e411-7a12-4b67-96ed-28fc50e6b21e",
     "flavor_text":     "f7825ac8-886d-452f-9adc-9080f2df97a7",
     "keywords_text":   "3fa7768b-946f-445e-9201-052c8d68877e",
     "strength_value":  "2012b2b9-9883-4ebf-9d63-412ce1461a8a",
     "cunning_value":   "97f7ec84-7bee-486a-bb51-4f068253d808",
     "charisma_value":  "5f7d8fa7-b836-401c-86a5-7d2d9b73995a",
+    "rarity_bar":      "354ba97a-66cc-4abe-ba98-b425644fe65d",
+}
+
+# Rarity → accent color
+RARITY_COLORS = {
+    "legendary": "#d4a843",  # gold
+    "epic":      "#a855f7",  # purple
+    "rare":      "#3b82f6",  # blue
+    "common":    "#6b7280",  # gray
 }
 
 UNITS_CSV = os.path.join(os.path.dirname(__file__), "..", "library", "sets", "alpha-1", "units.csv")
@@ -220,6 +230,14 @@ def main():
         # Build attribute string from semicolon-separated values
         attributes = card.get("attributes", "").replace(";", " \u2022 ")
 
+        # Parse action name from actions field (format: "name:cost:effect")
+        actions = card.get("actions", "")
+        action_name = actions.split(":")[0].upper() if actions else "\u2014"
+
+        # Rarity color for accent bar
+        rarity = card.get("rarity", "common")
+        rarity_color = RARITY_COLORS.get(rarity, RARITY_COLORS["common"])
+
         # Build text update changes
         changes = [
             mod_text_change(PAGE_ID, OBJECT_IDS["card_name"],
@@ -228,6 +246,8 @@ def main():
                 make_text_content(card["cost"], "22", "700", "#000000")),
             mod_text_change(PAGE_ID, OBJECT_IDS["type_label"],
                 make_text_content(attributes.upper(), "16", "600")),
+            mod_text_change(PAGE_ID, OBJECT_IDS["action_name"],
+                make_text_content(action_name, "13", "700", "#d4a843")),
             mod_text_change(PAGE_ID, OBJECT_IDS["rules_text"],
                 make_text_content(card["text"], "14", "400")),
             mod_text_change(PAGE_ID, OBJECT_IDS["flavor_text"],
@@ -243,6 +263,16 @@ def main():
                 make_text_content(card["cunning"], "24", "700")),
             mod_text_change(PAGE_ID, OBJECT_IDS["charisma_value"],
                 make_text_content(card["charisma"], "24", "700")),
+            # Update rarity bar color
+            {
+                "type": "mod-obj",
+                "page-id": PAGE_ID,
+                "id": OBJECT_IDS["rarity_bar"],
+                "operations": [
+                    {"type": "set", "attr": "fills",
+                     "val": [{"fill-color": rarity_color, "fill-opacity": 1}]},
+                ],
+            },
         ]
 
         # Update the file

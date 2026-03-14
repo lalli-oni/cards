@@ -214,11 +214,22 @@ reuse and a familiar tech stack.
 
 ### Investigation Steps
 
-#### Phase 1: Penpot viability (start here)
-- [ ] Run Penpot locally via Docker Compose — assess startup time and resource usage
-- [ ] Design a single unit card template in the Penpot UI — evaluate the component/token system
-- [ ] Set up penpot-mcp and connect from Claude Code — test reading/writing design elements
-- [ ] Script batch export: populate a card template with library data via API, export PNG
+#### Phase 1: Penpot viability ✅ Complete
+
+- [x] Run Penpot locally via Docker Compose — assess startup time and resource usage
+  - Penpot 2.13.3 runs via `design/docker-compose.yaml` (6 containers: frontend, backend, exporter, postgres, valkey, mailcatch)
+  - Startup: ~30s, resource usage acceptable for dev
+- [x] Design a single unit card template in the Penpot UI — evaluate the component/token system
+  - Template created programmatically via `design/create-card-template.py` (750×1050px unit card)
+  - Penpot's component/token system is capable but the API is the primary interface for batch work
+- [x] Set up penpot-mcp and connect from Claude Code — test reading/writing design elements
+  - `penpot-mcp` (montevive/penpot-mcp) works for reading designs (object tree, search, schema)
+  - **Bug found:** export failed with 400 on self-hosted Penpot — the `get-resource` command doesn't exist in the exporter. Fix: download from the asset URI returned by `export-shapes` directly. PR submitted upstream: [montevive/penpot-mcp#28](https://github.com/montevive/penpot-mcp/pull/28)
+- [x] Script batch export: populate a card template with library data via API, export PNG
+  - `design/batch-export-test.py` — updates text fields via `update-file` API, exports PNG per card
+  - **Key finding:** must clear `position-data` alongside `content` updates, otherwise the exporter renders stale pre-computed text layout. Fix: `{"type": "set", "attr": "position-data", "val": null}`
+  - Performance: **~2.5s per card** (5 cards in 12.5s). Acceptable for ~100-card sets
+  - All 5 alpha-1 unit cards exported successfully with correct data
 - [ ] Evaluate SVG output quality — can exported SVGs be used in a web client?
 
 #### Phase 2: Decide or fall back
@@ -228,6 +239,6 @@ reuse and a familiar tech stack.
 
 #### Phase 3: Build pipeline
 - [ ] Batch export all cards from chosen approach
-- [ ] Measure export quality at target dimensions (e.g. 750x1050px)
+- [ ] Measure export quality at target dimensions (e.g. 750×1050px)
 - [ ] Verify output consistency across card types and rarities
 - [ ] Integrate export into the build workflow (`bun run export-cards` or similar)

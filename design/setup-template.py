@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 """Create the complete unit card template in Penpot (idempotent).
 
-Replaces: create-card-template.py, setup-design-system.py,
-          improve-template.py, fix-card-design.py
-
 Reads all layout/color/typography values from tokens.json and uses the
 shared penpot.py module. Running this script multiple times produces the
 same result — existing shapes are deleted by name before recreation.
@@ -320,7 +317,7 @@ def main():
     changes = []
     if not frame_id:
         print("Creating card frame...")
-        root_id = list(objects.keys())[0]
+        root_id = file_data["data"]["pagesIndex"][page_id].get("id", list(objects.keys())[0])
         card = tokens["card"]
         frame_id, frame_change = make_frame(
             "Unit Card", 0, 0, card["width"], card["height"],

@@ -1,4 +1,9 @@
 id,name,set,rarity,cost,effect,keywords,text,flavor
-manifest-destiny,Manifest Destiny,alpha-1,epic,0,Your units get +1 strength when at locations you control.,Expansion,Boost strength at controlled locations.,The frontier calls.
+manifest-destiny,Manifest Destiny,alpha-1,epic,0,Your Enter actions cost 0 AP. When you raze a location gain 2 VP.,Expansion,Free Enter actions. Gain 2 VP when razing.,The frontier calls.
 free-trade,Free Trade,alpha-1,epic,0,Market purchases cost 1 less gold (minimum 1).,Commerce,Reduced market prices.,Open borders open wallets.
 war-economy,War Economy,alpha-1,epic,0,You gain 1 gold each time one of your units wins a contest.,Military,Earn gold from contests.,Victory pays for itself.
+patronage,Patronage,alpha-1,epic,0,Your Scientist units cost 1 less gold to deploy (minimum 1).,Science,Reduced Scientist deploy costs.,Knowledge requires investment.
+feudalism,Feudalism,alpha-1,epic,0,Your Warrior units get +1 strength when at a location with one of your other units.,Military,Warriors gain strength near allies.,Loyalty is strength.
+mercantilism,Mercantilism,alpha-1,epic,0,You gain 1 gold whenever you complete a mission.,Commerce,Gold on mission completion.,Trade follows the flag.
+divine-right,Divine Right,alpha-1,epic,0,Your Spiritual units cannot be targeted by trap events.,Spiritual,Spiritual units are trap-immune.,Who dares strike the anointed?
+open-borders,Open Borders,alpha-1,epic,0,Your units treat one blocked edge as open when moving.,Diplomacy,Ignore one blocked edge per move.,Walls are just suggestions.

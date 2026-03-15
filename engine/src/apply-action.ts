@@ -42,6 +42,12 @@ export function applyAction(state: GameState, action: Action): ApplyResult {
 /** Advance to the next player's turn. Advances round when all players have gone. */
 function advanceTurn(draft: GameState, events: GameEvent[]): void {
   const currentIndex = draft.turnOrder.indexOf(draft.turn.activePlayerId);
+  if (currentIndex === -1) {
+    throw new Error(
+      `Active player "${draft.turn.activePlayerId}" not found in turnOrder ` +
+      `[${draft.turnOrder.join(", ")}]`,
+    );
+  }
   const nextIndex = (currentIndex + 1) % draft.turnOrder.length;
 
   if (nextIndex === 0) {

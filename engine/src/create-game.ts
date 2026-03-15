@@ -84,11 +84,23 @@ export function createGame(
     players: playerStates,
     grid: createEmptyGrid(config, players.length),
     market: [],
-    rngState: nextRng.getState!()!,
+    rngState: extractRngState(nextRng),
     seed,
     actionLog: [],
     turnOrder,
   };
+}
+
+/** Extract serializable RNG state. Throws if the generator doesn't support it. */
+function extractRngState(rng: prand.RandomGenerator): readonly number[] {
+  const state = rng.getState?.();
+  if (!state) {
+    throw new Error(
+      "RNG generator does not support getState() — cannot serialize game state. " +
+      "Ensure pure-rand mersenne generator is used.",
+    );
+  }
+  return state;
 }
 
 /** Convert a string seed to a numeric seed for pure-rand (FNV-1a). */

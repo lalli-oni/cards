@@ -54,25 +54,21 @@ describe("GameController", () => {
     it("rejects invalid actions from adapter", async () => {
       const badAdapter: PlayerAdapter = {
         async chooseAction(_vis: VisibleState, _valid: Action[]) {
-          // Return an action type that isn't in validActions
           return { type: "deploy", playerId: "p1", cardId: "fake" };
         },
       };
+      // Install the bad adapter for both players so it fires regardless of turn order
       const controller = new GameController({
         config: DEFAULT_CONFIG,
         players: TWO_PLAYERS,
         seed: SEED,
         adapters: new Map([
           ["p1", badAdapter],
-          ["p2", new BotAdapter(2)],
+          ["p2", badAdapter],
         ]),
       });
 
-      // Ensure p1 is the active player for this test
-      const activeId = controller.getState().turn.activePlayerId;
-      if (activeId === "p1") {
-        expect(controller.playTurn()).rejects.toThrow("invalid action");
-      }
+      await expect(controller.playTurn()).rejects.toThrow("invalid action");
     });
   });
 
@@ -80,7 +76,7 @@ describe("GameController", () => {
     it("terminates with max actions guard", async () => {
       const controller = createController();
       // With only pass implemented, the game never ends — should hit the guard
-      expect(controller.run(10)).rejects.toThrow("exceeded 10 actions");
+      await expect(controller.run(10)).rejects.toThrow("exceeded 10 actions");
     });
   });
 

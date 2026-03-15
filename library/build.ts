@@ -101,7 +101,7 @@ function transformCard(type: CardType, raw: Record<string, string>): Record<stri
     id: raw.id,
     name: raw.name,
     set: raw.set,
-    type: type.replace(/s$/, ""), // units -> unit
+    type: type === "policies" ? "policy" : type.replace(/s$/, ""), // units -> unit, policies -> policy
     rarity: raw.rarity,
     cost: raw.cost.includes("|") ? raw.cost.split("|").map((c) => c.trim()) : raw.cost,
     text: raw.text || null,

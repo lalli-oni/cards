@@ -12,6 +12,17 @@ export type { ControllerOptions } from "./controller";
 // Rules config
 export { buildBaselineConfig, extractVars, parseVarValue, mergeVariant } from "./rules-config";
 
+// Card loader
+export {
+  loadCardDefinitions,
+  loadCardDefinitionsFromBuild,
+  instantiateCard,
+  instantiateCards,
+  resetInstanceCounter,
+  CardValidationError,
+} from "./card-loader";
+export type { CardDefinition } from "./card-loader";
+
 // Adapters
 export { BotAdapter } from "./bot-adapter";
 

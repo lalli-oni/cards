@@ -170,7 +170,11 @@ def clean_class_attrs(root):
 
 def postprocess(svg_path, output_path=None):
     """Run all post-processing steps on an SVG file."""
-    tree = ET.parse(svg_path)
+    try:
+        tree = ET.parse(svg_path)
+    except ET.ParseError as e:
+        print(f"ERROR: Failed to parse SVG '{svg_path}': {e}", file=sys.stderr)
+        raise
     root = tree.getroot()
 
     # Process <style> elements
@@ -225,8 +229,12 @@ def main():
         else:
             output_path = None  # auto-generates .clean.svg
 
-        out = postprocess(svg_path, output_path)
         original_size = os.path.getsize(svg_path)
+        if original_size == 0:
+            print(f"WARNING: {svg_path} is empty (0 bytes), skipping", file=sys.stderr)
+            continue
+
+        out = postprocess(svg_path, output_path)
         clean_size = os.path.getsize(out)
         reduction = (1 - clean_size / original_size) * 100
         print(f"{svg_path} → {out}  ({original_size} → {clean_size} bytes, {reduction:.0f}% smaller)")

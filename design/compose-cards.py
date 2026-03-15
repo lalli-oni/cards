@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Populate the Penpot unit card template with CSV data and export images.
 
-Replaces: batch-export-test.py
-
 Discovers shapes by name (zero hardcoded UUIDs), updates text/fills for
 each card, exports PNG/SVG, and optionally runs postprocess-svg.py on SVGs.
 
@@ -197,6 +195,14 @@ def main():
         print("No cards found in CSV — nothing to export.", file=sys.stderr)
         sys.exit(0)
 
+    required_cols = {"id", "name", "cost", "strength", "cunning", "charisma", "text", "flavor"}
+    actual_cols = set(cards[0].keys())
+    missing_cols = required_cols - actual_cols
+    if missing_cols:
+        print(f"ERROR: CSV missing required columns: {missing_cols}", file=sys.stderr)
+        print(f"  Found columns: {sorted(actual_cols)}", file=sys.stderr)
+        sys.exit(1)
+
     # 5. Export
     os.makedirs(args.output, exist_ok=True)
     export_formats = (["png", "svg"] if args.format == "both"
@@ -212,8 +218,8 @@ def main():
         changes = compose_card(card, shape_ids, shape_geoms, tokens, page_id)
 
         # Update file
-        client.update_file(file_id, changes, revn, vern)
-        revn += 1
+        resp = client.update_file(file_id, changes, revn, vern)
+        revn = resp.get("revn", revn + 1)
 
         # Export each format
         for fmt in export_formats:

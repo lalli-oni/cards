@@ -21,7 +21,7 @@ if os.path.isfile(_ENV_PATH):
             _line = _line.strip()
             if _line and not _line.startswith("#") and "=" in _line:
                 _key, _, _val = _line.partition("=")
-                os.environ.setdefault(_key.strip(), _val.strip())
+                os.environ.setdefault(_key.strip(), _val.strip().strip('"').strip("'"))
 
 
 # ---------------------------------------------------------------------------
@@ -379,8 +379,15 @@ class PenpotClient:
             body = exc.read().decode("utf-8", errors="replace")
             print(f"ERROR {exc.code} from {endpoint}: {body[:500]}", file=sys.stderr)
             sys.exit(1)
+        except urllib.error.URLError as exc:
+            print(f"Connection error reaching {url}: {exc.reason}", file=sys.stderr)
+            print("Is Penpot running? Check: docker compose -f design/docker-compose.yaml ps", file=sys.stderr)
+            sys.exit(1)
 
     def login(self) -> dict:
+        if not self.email or not self.password:
+            print("ERROR: PENPOT_EMAIL and PENPOT_PASSWORD must be set in design/.env or environment", file=sys.stderr)
+            sys.exit(1)
         resp = self.api_post("login-with-password", {
             "email": self.email, "password": self.password,
         })

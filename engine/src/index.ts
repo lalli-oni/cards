@@ -18,10 +18,10 @@ export {
   loadCardDefinitionsFromBuild,
   instantiateCard,
   instantiateCards,
-  resetInstanceCounter,
+  createInstanceCounter,
   CardValidationError,
 } from "./card-loader";
-export type { CardDefinition } from "./card-loader";
+export type { CardDefinition, InstanceCounter } from "./card-loader";
 
 // Adapters
 export { BotAdapter } from "./bot-adapter";

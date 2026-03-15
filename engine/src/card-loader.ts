@@ -52,6 +52,18 @@ export interface CardDefinition {
 }
 
 // ---------------------------------------------------------------------------
+// Instance counter — caller-owned, deterministic
+// ---------------------------------------------------------------------------
+
+export interface InstanceCounter {
+  value: number;
+}
+
+export function createInstanceCounter(): InstanceCounter {
+  return { value: 0 };
+}
+
+// ---------------------------------------------------------------------------
 // Validation
 // ---------------------------------------------------------------------------
 
@@ -89,6 +101,31 @@ function validateDefinition(def: Record<string, unknown>): { cardId: string; mes
   if (!VALID_RARITIES.includes(def.rarity as Rarity)) {
     errors.push({ cardId, message: `invalid rarity: ${def.rarity}` });
   }
+
+  // Cost: required, must be string or string[]
+  if (def.cost === undefined || def.cost === null) {
+    errors.push({ cardId, message: "missing cost" });
+  } else if (typeof def.cost !== "string" && !Array.isArray(def.cost)) {
+    errors.push({ cardId, message: `invalid cost type: ${typeof def.cost}` });
+  }
+
+  // Keywords: required, must be string[]
+  if (!Array.isArray(def.keywords)) {
+    errors.push({ cardId, message: "missing or invalid keywords (expected array)" });
+  }
+
+  // Type-specific validation
+  if (def.type === "unit") {
+    if (typeof def.strength !== "number") {
+      errors.push({ cardId, message: `unit missing numeric strength` });
+    }
+    if (typeof def.cunning !== "number") {
+      errors.push({ cardId, message: `unit missing numeric cunning` });
+    }
+    if (typeof def.charisma !== "number") {
+      errors.push({ cardId, message: `unit missing numeric charisma` });
+    }
+  }
   if (def.type === "event" && !VALID_SUBTYPES.includes(def.subtype as EventSubtype)) {
     errors.push({ cardId, message: `invalid event subtype: ${def.subtype}` });
   }
@@ -113,15 +150,32 @@ export function loadCardDefinitions(jsonPath: string): CardDefinition[] {
   }
 
   const raw = readFileSync(jsonPath, "utf-8");
-  const parsed: unknown[] = JSON.parse(raw);
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (e) {
+    throw new Error(
+      `Failed to parse ${jsonPath}: ${e instanceof Error ? e.message : e}`,
+    );
+  }
 
   if (!Array.isArray(parsed)) {
     throw new Error(`Expected JSON array in ${jsonPath}`);
   }
 
   const allErrors: { cardId: string; message: string }[] = [];
+  const seenIds = new Set<string>();
+
   for (const entry of parsed) {
     allErrors.push(...validateDefinition(entry as Record<string, unknown>));
+    const id = (entry as Record<string, unknown>).id as string;
+    if (id) {
+      if (seenIds.has(id)) {
+        allErrors.push({ cardId: id, message: `duplicate card id` });
+      }
+      seenIds.add(id);
+    }
   }
 
   if (allErrors.length > 0) {
@@ -158,17 +212,6 @@ export function loadCardDefinitionsFromBuild(
 // Instantiation — convert definitions to engine Card instances
 // ---------------------------------------------------------------------------
 
-let instanceCounter = 0;
-
-/** Reset the instance counter (for testing). */
-export function resetInstanceCounter(): void {
-  instanceCounter = 0;
-}
-
-function nextInstanceId(definitionId: string): string {
-  return `${definitionId}-${++instanceCounter}`;
-}
-
 /** Normalize cost to string (join alternatives with |). */
 function normalizeCost(cost: string | string[]): string {
   return Array.isArray(cost) ? cost.join("|") : cost;
@@ -176,11 +219,15 @@ function normalizeCost(cost: string | string[]): string {
 
 /**
  * Convert a card definition into an engine Card instance.
- * Generates a unique instance ID and assigns the owner.
+ * Assigns a sequential instance ID from the provided counter.
  */
-export function instantiateCard(def: CardDefinition, ownerId: string): Card {
+export function instantiateCard(
+  def: CardDefinition,
+  ownerId: string,
+  counter: InstanceCounter,
+): Card {
   const base = {
-    id: nextInstanceId(def.id),
+    id: String(++counter.value),
     definitionId: def.id,
     name: def.name,
     cost: normalizeCost(def.cost),
@@ -220,19 +267,25 @@ export function instantiateCard(def: CardDefinition, ownerId: string): Card {
       } satisfies ItemCard;
 
     case "event":
+      if (!def.subtype) {
+        throw new Error(`Event card "${def.id}" missing required subtype`);
+      }
       return {
         ...base,
         type: "event",
-        subtype: def.subtype!,
+        subtype: def.subtype,
         duration: def.duration ?? undefined,
         trigger: def.trigger ?? undefined,
       } satisfies EventCard;
 
     case "policy":
+      if (!def.effect) {
+        throw new Error(`Policy card "${def.id}" missing required effect`);
+      }
       return {
         ...base,
         type: "policy",
-        effect: def.effect!,
+        effect: def.effect,
       } satisfies PolicyCard;
   }
 }
@@ -241,6 +294,10 @@ export function instantiateCard(def: CardDefinition, ownerId: string): Card {
  * Instantiate an array of card definitions for a given owner.
  * Returns engine Card instances with unique IDs.
  */
-export function instantiateCards(defs: CardDefinition[], ownerId: string): Card[] {
-  return defs.map((def) => instantiateCard(def, ownerId));
+export function instantiateCards(
+  defs: CardDefinition[],
+  ownerId: string,
+  counter: InstanceCounter,
+): Card[] {
+  return defs.map((def) => instantiateCard(def, ownerId, counter));
 }

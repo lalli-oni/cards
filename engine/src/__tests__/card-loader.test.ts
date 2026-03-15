@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach } from "bun:test";
+import { describe, test, expect, beforeEach, afterAll } from "bun:test";
 import { join } from "path";
 import { writeFileSync, mkdirSync, rmSync } from "fs";
 import {
@@ -6,10 +6,10 @@ import {
   loadCardDefinitionsFromBuild,
   instantiateCard,
   instantiateCards,
-  resetInstanceCounter,
+  createInstanceCounter,
   CardValidationError,
 } from "../card-loader";
-import type { CardDefinition } from "../card-loader";
+import type { CardDefinition, InstanceCounter } from "../card-loader";
 
 const TMP_DIR = join(import.meta.dir, "__tmp_card_loader__");
 
@@ -92,8 +92,20 @@ const VALID_POLICY: CardDefinition = {
   effect: "all_players_pay_1",
 };
 
+let counter: InstanceCounter;
+
 beforeEach(() => {
-  resetInstanceCounter();
+  counter = createInstanceCounter();
+  try {
+    rmSync(TMP_DIR, { recursive: true });
+  } catch (e: unknown) {
+    if (e instanceof Error && "code" in e && (e as NodeJS.ErrnoException).code !== "ENOENT") {
+      throw e;
+    }
+  }
+});
+
+afterAll(() => {
   try {
     rmSync(TMP_DIR, { recursive: true });
   } catch {}
@@ -123,6 +135,14 @@ describe("loadCardDefinitions", () => {
     expect(() => loadCardDefinitions(path)).toThrow("Expected JSON array");
   });
 
+  test("includes file path in JSON parse error", () => {
+    mkdirSync(TMP_DIR, { recursive: true });
+    const path = join(TMP_DIR, "broken.json");
+    writeFileSync(path, "{not valid json");
+    expect(() => loadCardDefinitions(path)).toThrow("Failed to parse");
+    expect(() => loadCardDefinitions(path)).toThrow("broken.json");
+  });
+
   test("throws CardValidationError on invalid card data", () => {
     const path = writeTmpJson("bad.json", [
       { id: "ok", name: "OK", set: "s", type: "unit", rarity: "common" },
@@ -131,12 +151,23 @@ describe("loadCardDefinitions", () => {
     expect(() => loadCardDefinitions(path)).toThrow(CardValidationError);
   });
 
+  test("detects duplicate card IDs", () => {
+    const path = writeTmpJson("dup.json", [VALID_UNIT, VALID_UNIT]);
+    try {
+      loadCardDefinitions(path);
+      expect(true).toBe(false);
+    } catch (e) {
+      expect(e).toBeInstanceOf(CardValidationError);
+      expect((e as CardValidationError).errors.some((err) => err.message.includes("duplicate"))).toBe(true);
+    }
+  });
+
   test("validates event subtype", () => {
     const badEvent = { ...VALID_EVENT, subtype: "wrong" };
     const path = writeTmpJson("bad-event.json", [badEvent]);
     try {
       loadCardDefinitions(path);
-      expect(true).toBe(false); // should not reach
+      expect(true).toBe(false);
     } catch (e) {
       expect(e).toBeInstanceOf(CardValidationError);
       expect((e as CardValidationError).errors[0].message).toContain("invalid event subtype");
@@ -152,6 +183,44 @@ describe("loadCardDefinitions", () => {
     } catch (e) {
       expect(e).toBeInstanceOf(CardValidationError);
       expect((e as CardValidationError).errors[0].message).toContain("policy missing effect");
+    }
+  });
+
+  test("validates unit numeric stats", () => {
+    const badUnit = { ...VALID_UNIT, strength: null, cunning: "five" };
+    const path = writeTmpJson("bad-unit.json", [badUnit]);
+    try {
+      loadCardDefinitions(path);
+      expect(true).toBe(false);
+    } catch (e) {
+      expect(e).toBeInstanceOf(CardValidationError);
+      const messages = (e as CardValidationError).errors.map((err) => err.message);
+      expect(messages.some((m) => m.includes("strength"))).toBe(true);
+      expect(messages.some((m) => m.includes("cunning"))).toBe(true);
+    }
+  });
+
+  test("validates cost field", () => {
+    const noCost = { ...VALID_UNIT, cost: undefined };
+    const path = writeTmpJson("no-cost.json", [noCost]);
+    try {
+      loadCardDefinitions(path);
+      expect(true).toBe(false);
+    } catch (e) {
+      expect(e).toBeInstanceOf(CardValidationError);
+      expect((e as CardValidationError).errors.some((err) => err.message.includes("cost"))).toBe(true);
+    }
+  });
+
+  test("validates keywords field", () => {
+    const badKeywords = { ...VALID_UNIT, keywords: "not-an-array" };
+    const path = writeTmpJson("bad-keywords.json", [badKeywords]);
+    try {
+      loadCardDefinitions(path);
+      expect(true).toBe(false);
+    } catch (e) {
+      expect(e).toBeInstanceOf(CardValidationError);
+      expect((e as CardValidationError).errors.some((err) => err.message.includes("keywords"))).toBe(true);
     }
   });
 });
@@ -206,10 +275,10 @@ describe("loadCardDefinitions with real library", () => {
 // ---------------------------------------------------------------------------
 
 describe("instantiateCard", () => {
-  test("creates unit card with unique instance ID", () => {
-    const card = instantiateCard(VALID_UNIT, "player-1");
+  test("creates unit card with sequential instance ID", () => {
+    const card = instantiateCard(VALID_UNIT, "player-1", counter);
     expect(card.type).toBe("unit");
-    expect(card.id).toBe("test-warrior-1");
+    expect(card.id).toBe("1");
     expect(card.definitionId).toBe("test-warrior");
     expect(card.ownerId).toBe("player-1");
     expect(card.name).toBe("Test Warrior");
@@ -219,17 +288,15 @@ describe("instantiateCard", () => {
     expect(card.keywords).toEqual(["Fighter"]);
 
     // Unit-specific
-    if (card.type === "unit") {
-      expect(card.strength).toBe(5);
-      expect(card.cunning).toBe(3);
-      expect(card.charisma).toBe(2);
-      expect(card.attributes).toEqual(["Warrior"]);
-      expect(card.injured).toBe(false);
-    }
+    expect((card as any).strength).toBe(5);
+    expect((card as any).cunning).toBe(3);
+    expect((card as any).charisma).toBe(2);
+    expect((card as any).attributes).toEqual(["Warrior"]);
+    expect((card as any).injured).toBe(false);
   });
 
   test("creates location card with default open edges", () => {
-    const card = instantiateCard(VALID_LOCATION, "player-1");
+    const card = instantiateCard(VALID_LOCATION, "player-1", counter);
     expect(card.type).toBe("location");
     if (card.type === "location") {
       expect(card.edges).toEqual({ n: true, e: true, s: true, w: true });
@@ -239,7 +306,7 @@ describe("instantiateCard", () => {
   });
 
   test("creates item card", () => {
-    const card = instantiateCard(VALID_ITEM, "player-1");
+    const card = instantiateCard(VALID_ITEM, "player-1", counter);
     expect(card.type).toBe("item");
     if (card.type === "item") {
       expect(card.equip).toBe("strength_plus_2");
@@ -249,7 +316,7 @@ describe("instantiateCard", () => {
   });
 
   test("creates event card", () => {
-    const card = instantiateCard(VALID_EVENT, "player-1");
+    const card = instantiateCard(VALID_EVENT, "player-1", counter);
     expect(card.type).toBe("event");
     if (card.type === "event") {
       expect(card.subtype).toBe("trap");
@@ -258,7 +325,7 @@ describe("instantiateCard", () => {
   });
 
   test("creates policy card", () => {
-    const card = instantiateCard(VALID_POLICY, "player-1");
+    const card = instantiateCard(VALID_POLICY, "player-1", counter);
     expect(card.type).toBe("policy");
     if (card.type === "policy") {
       expect(card.effect).toBe("all_players_pay_1");
@@ -267,17 +334,35 @@ describe("instantiateCard", () => {
 
   test("normalizes array cost to pipe-separated string", () => {
     const def = { ...VALID_UNIT, cost: ["3", "5"] };
-    const card = instantiateCard(def, "player-1");
+    const card = instantiateCard(def, "player-1", counter);
     expect(card.cost).toBe("3|5");
   });
 
-  test("generates incrementing unique instance IDs", () => {
-    const card1 = instantiateCard(VALID_UNIT, "p1");
-    const card2 = instantiateCard(VALID_UNIT, "p1");
-    const card3 = instantiateCard(VALID_LOCATION, "p2");
-    expect(card1.id).toBe("test-warrior-1");
-    expect(card2.id).toBe("test-warrior-2");
-    expect(card3.id).toBe("test-castle-3");
+  test("generates incrementing sequential IDs", () => {
+    const card1 = instantiateCard(VALID_UNIT, "p1", counter);
+    const card2 = instantiateCard(VALID_UNIT, "p1", counter);
+    const card3 = instantiateCard(VALID_LOCATION, "p2", counter);
+    expect(card1.id).toBe("1");
+    expect(card2.id).toBe("2");
+    expect(card3.id).toBe("3");
+  });
+
+  test("separate counters produce independent ID sequences", () => {
+    const counter2 = createInstanceCounter();
+    const cardA = instantiateCard(VALID_UNIT, "p1", counter);
+    const cardB = instantiateCard(VALID_UNIT, "p2", counter2);
+    expect(cardA.id).toBe("1");
+    expect(cardB.id).toBe("1");
+  });
+
+  test("throws when event card missing subtype", () => {
+    const badEvent = { ...VALID_EVENT, subtype: undefined } as CardDefinition;
+    expect(() => instantiateCard(badEvent, "p1", counter)).toThrow("missing required subtype");
+  });
+
+  test("throws when policy card missing effect", () => {
+    const badPolicy = { ...VALID_POLICY, effect: undefined } as CardDefinition;
+    expect(() => instantiateCard(badPolicy, "p1", counter)).toThrow("missing required effect");
   });
 });
 
@@ -288,13 +373,13 @@ describe("instantiateCard", () => {
 describe("instantiateCards", () => {
   test("instantiates all definitions for an owner", () => {
     const defs = [VALID_UNIT, VALID_LOCATION, VALID_ITEM, VALID_EVENT, VALID_POLICY];
-    const cards = instantiateCards(defs, "player-1");
+    const cards = instantiateCards(defs, "player-1", counter);
     expect(cards).toHaveLength(5);
     expect(cards.every((c) => c.ownerId === "player-1")).toBe(true);
     expect(new Set(cards.map((c) => c.id)).size).toBe(5);
   });
 
   test("returns empty array for empty definitions", () => {
-    expect(instantiateCards([], "p1")).toEqual([]);
+    expect(instantiateCards([], "p1", counter)).toEqual([]);
   });
 });

@@ -2,5 +2,5 @@ id,name,set,rarity,cost,strength,cunning,charisma,attributes,keywords,actions,te
 alpha1-u001,Cleopatra,alpha-1,legendary,6,4,8,9,Politician;Diplomat,,diplomacy:1:charisma_contest_recruit,Charisma contest: recruit target unit to your side for 1 turn.,The last pharaoh played Rome like a harp.
 alpha1-u002,Nikola Tesla,alpha-1,epic,4,3,9,5,Scientist;Engineer,,invent:1:draw_item,Draw an item from your main deck.,The man who lit the world — then vanished from it.
 alpha1-u003,Miyamoto Musashi,alpha-1,epic,5,9,7,4,Warrior,,duel:1:strength_contest_injure,Strength contest: injure target unit at same location.,Undefeated in sixty duels.
-alpha1-u004,Ada Lovelace,alpha-1,rare,3,3,8,5,Scientist,,analyze:1:look_at_top_3_deck,Look at the top 3 cards of your main deck. Keep one.,The first programmer — before the first computer.
+alpha1-u004,Ada Lovelace,alpha-1,epic,3,3,8,5,Scientist,,analyze:1:look_at_top_3_deck,Look at the top 3 cards of your main deck. Keep one.,The first programmer — before the first computer.
 alpha1-u005,Genghis Khan,alpha-1,legendary,7,8,7,6,Warrior;Politician,,conquer:2:capture_location,Take control of target location for 2 turns.,He did not build. He took.

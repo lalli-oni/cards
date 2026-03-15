@@ -263,7 +263,8 @@ def mod_text_change(page_id, object_id, content, shape_geom=None) -> dict:
     """Build mod-obj change that updates text content.
 
     If shape_geom is provided as (x, y, w, h), sets approximate position-data
-    so the SVG exporter can find text elements. Otherwise nulls it (PNG-only).
+    so the SVG exporter can find text elements. If omitted, position-data is
+    set to None — SVG exports for this shape will fail or time out.
     """
     # Extract text properties from content for position-data
     pos_data = None
@@ -391,11 +392,18 @@ class PenpotClient:
         resp = self.api_post("login-with-password", {
             "email": self.email, "password": self.password,
         })
+        if "id" not in resp:
+            print(f"ERROR: Login response missing 'id' field. Response: {resp}", file=sys.stderr)
+            sys.exit(1)
         self.profile_id = resp["id"]
         for cookie in self.cookie_jar:
             if cookie.name == "auth-token":
                 self.auth_token = cookie.value
                 break
+        if not self.auth_token:
+            print("ERROR: Login succeeded but no auth-token cookie was set.", file=sys.stderr)
+            print("This may indicate a Penpot version mismatch or proxy issue.", file=sys.stderr)
+            sys.exit(1)
         return resp
 
     def get_file(self, file_id) -> dict:
@@ -411,7 +419,12 @@ class PenpotClient:
         })
 
     def get_page_objects(self, file_data, page_id) -> dict:
-        return file_data["data"]["pagesIndex"][page_id]["objects"]
+        try:
+            return file_data["data"]["pagesIndex"][page_id]["objects"]
+        except KeyError:
+            available = list(file_data.get("data", {}).get("pagesIndex", {}).keys())
+            print(f"ERROR: Page {page_id} not found. Available pages: {available}", file=sys.stderr)
+            sys.exit(1)
 
     def find_shapes_by_name(self, objects, names) -> dict:
         """Return {name: shape_id} for each name found in objects.
@@ -422,6 +435,8 @@ class PenpotClient:
         for oid, obj in objects.items():
             n = obj.get("name")
             if n in names:
+                if n in result:
+                    print(f"WARNING: duplicate shape name '{n}' (IDs: {result[n]}, {oid})", file=sys.stderr)
                 result[n] = oid
         return result
 
@@ -454,16 +469,38 @@ class PenpotClient:
             "Accept": "application/transit+json",
             "Cookie": f"auth-token={self.auth_token}",
         })
-        with self.opener.open(req) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
+        try:
+            with self.opener.open(req) as resp:
+                body = resp.read().decode("utf-8")
+                if not body:
+                    print("ERROR: Export API returned empty response", file=sys.stderr)
+                    sys.exit(1)
+                data = json.loads(body)
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="replace")
+            print(f"ERROR {exc.code} from export API: {body[:500]}", file=sys.stderr)
+            sys.exit(1)
+        except urllib.error.URLError as exc:
+            print(f"Connection error reaching export API: {exc.reason}", file=sys.stderr)
+            sys.exit(1)
 
         uri_value = data.get("~:uri", {})
         asset_uri = uri_value.get("~#uri") if isinstance(uri_value, dict) else uri_value
         if not asset_uri:
             raise RuntimeError(f"No asset URI in export response: {data}")
 
+        if not asset_uri.startswith("http"):
+            asset_uri = f"{self.base_url}{asset_uri}"
+
         dl_req = urllib.request.Request(asset_uri, headers={
             "Cookie": f"auth-token={self.auth_token}",
         })
-        with self.opener.open(dl_req) as resp:
-            return resp.read()
+        try:
+            with self.opener.open(dl_req) as resp:
+                return resp.read()
+        except urllib.error.HTTPError as exc:
+            print(f"ERROR {exc.code} downloading exported asset: {asset_uri}", file=sys.stderr)
+            sys.exit(1)
+        except urllib.error.URLError as exc:
+            print(f"Connection error downloading asset: {exc.reason}", file=sys.stderr)
+            sys.exit(1)

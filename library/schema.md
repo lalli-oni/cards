@@ -53,9 +53,11 @@ Every card type includes these columns:
 
 ## Policies
 
-| Column | Type   | Required | Description |
-|--------|--------|----------|-------------|
-| effect | string | yes      | Global modifier text |
+| Column         | Type   | Required | Description |
+|----------------|--------|----------|-------------|
+| effect         | string | yes      | Passive global modifier text |
+| seeding_effect | string | no       | Effect that applies during the seeding phase |
+| actions        | string | no       | Semicolon-separated action definitions. Format: `name:ap_cost:effect` |
 
 ## Delimiter Conventions
 

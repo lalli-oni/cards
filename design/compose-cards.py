@@ -193,6 +193,10 @@ def main():
         cards = list(csv.DictReader(f))
     print(f"Loaded {len(cards)} cards from {args.csv_path}")
 
+    if not cards:
+        print("No cards found in CSV — nothing to export.", file=sys.stderr)
+        sys.exit(0)
+
     # 5. Export
     os.makedirs(args.output, exist_ok=True)
     export_formats = (["png", "svg"] if args.format == "both"

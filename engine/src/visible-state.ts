@@ -1,4 +1,4 @@
-import type { GameState, VisibleState, OpponentView, PlayerState } from "./types";
+import type { GameState, VisibleState, OpponentView, PlayerState, TrapView } from "./types";
 
 /**
  * Return a filtered view of the state for a specific player.
@@ -11,14 +11,16 @@ export function getVisibleState(state: GameState, playerId: string): VisibleStat
     throw new Error(`Player "${playerId}" not found in game state`);
   }
 
+  // When player has no team, all others are opponents.
+  // When player has a team, non-teammates are opponents.
+  const isTeammate = (p: PlayerState) =>
+    p.id !== playerId && self.team != null && p.team === self.team;
+
   const opponents: OpponentView[] = state.players
-    .filter((p) => p.id !== playerId && p.team !== self.team)
+    .filter((p) => p.id !== playerId && !isTeammate(p))
     .map(toOpponentView);
 
-  // Teammates get full visibility
-  const teammates = state.players.filter(
-    (p) => p.id !== playerId && p.team != null && p.team === self.team,
-  );
+  const teammates = state.players.filter(isTeammate);
 
   return {
     config: state.config,
@@ -50,6 +52,11 @@ function toOpponentView(player: PlayerState): OpponentView {
     discardPileSize: player.discardPile.length,
     hq: player.hq,
     activePolicies: player.activePolicies,
-    activeTraps: player.activeTraps,
+    // Traps are face-down: show that they exist and their target, but not the card
+    activeTraps: player.activeTraps.map(redactTrap),
   };
+}
+
+function redactTrap(trap: { targetId?: string }): TrapView {
+  return { targetId: trap.targetId };
 }

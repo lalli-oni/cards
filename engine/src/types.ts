@@ -1,5 +1,3 @@
-import type { RandomGenerator } from "pure-rand";
-
 // ---------------------------------------------------------------------------
 // Config
 // ---------------------------------------------------------------------------
@@ -32,7 +30,7 @@ export interface PlayerState {
   discardPile: Card[];
   removedFromGame: Card[];
   hq: Card[];
-  activePolicies: Card[];
+  activePolicies: PolicyCard[];
   activeTraps: Trap[];
 }
 
@@ -41,7 +39,7 @@ export interface PlayerState {
 // ---------------------------------------------------------------------------
 
 export type CardType = "unit" | "location" | "item" | "event" | "policy";
-export type Rarity = "common" | "uncommon" | "epic" | "legendary";
+export type Rarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
 export type EventSubtype = "instant" | "passive" | "trap";
 
 /** Edge state for location cards. */
@@ -52,63 +50,76 @@ export interface LocationEdges {
   w: boolean;
 }
 
-/** A card instance in the game. */
-export interface Card {
+/** Shared fields for all card instances. */
+interface CardBase {
   id: string;
   definitionId: string;
-  type: CardType;
   name: string;
   cost: string;
   rarity: Rarity;
   text?: string;
   keywords?: string[];
+  ownerId: string;
+}
 
-  // Unit fields
-  strength?: number;
-  cunning?: number;
-  charisma?: number;
-  attributes?: string[];
-  /** true when the unit is injured and returned to HQ */
-  injured?: boolean;
+export interface UnitCard extends CardBase {
+  type: "unit";
+  strength: number;
+  cunning: number;
+  charisma: number;
+  attributes: string[];
+  injured: boolean;
+}
 
-  // Location fields
-  edges?: LocationEdges;
+export interface LocationCard extends CardBase {
+  type: "location";
+  edges: LocationEdges;
   mission?: string;
   passive?: string;
+}
 
-  // Item fields
+export interface ItemCard extends CardBase {
+  type: "item";
   equip?: string;
   stored?: string;
   /** Unit this item is attached to (by card instance id). */
   equippedTo?: string;
+}
 
-  // Event fields
-  subtype?: EventSubtype;
+export interface EventCard extends CardBase {
+  type: "event";
+  subtype: EventSubtype;
   duration?: number;
   trigger?: string;
   /** Remaining turns for passive events. */
   remainingDuration?: number;
-
-  // Policy fields
-  effect?: string;
-
-  // Ownership
-  ownerId: string;
 }
+
+export interface PolicyCard extends CardBase {
+  type: "policy";
+  effect: string;
+}
+
+export type Card = UnitCard | LocationCard | ItemCard | EventCard | PolicyCard;
 
 // ---------------------------------------------------------------------------
 // Board
 // ---------------------------------------------------------------------------
 
 export interface GridCell {
-  location: Card;
-  units: Card[];
-  items: Card[];
+  location: LocationCard | null;
+  units: UnitCard[];
+  items: ItemCard[];
 }
 
 export interface Trap {
-  card: Card;
+  card: EventCard;
   /** Instance id of the targeted card (location, unit, or item), if any. */
+  targetId?: string;
+}
+
+/** Redacted trap view for opponents — card contents hidden. */
+export interface TrapView {
   targetId?: string;
 }
 
@@ -119,6 +130,8 @@ export type Grid = GridCell[][];
 // ---------------------------------------------------------------------------
 
 export type Phase = "seeding" | "main" | "ended";
+
+export type DeckName = "main" | "market" | "prospect" | "seeding";
 
 export interface TurnState {
   activePlayerId: string;
@@ -137,7 +150,8 @@ export interface GameState {
   players: PlayerState[];
   grid: Grid;
   market: Card[];
-  rng: RandomGenerator;
+  /** Serializable RNG state. Reconstruct generator with prand.mersenne.fromState(). */
+  rngState: readonly number[];
   seed: string;
   actionLog: Action[];
   turnOrder: string[];
@@ -177,13 +191,13 @@ export type GameEvent =
   | { type: "card_bought"; playerId: string; cardId: string; cost: number }
   | { type: "card_drawn"; playerId: string; count: number }
   | { type: "unit_entered"; playerId: string; unitId: string; row: number; col: number }
-  | { type: "unit_moved"; unitId: string; fromRow: number; fromCol: number; toRow: number; toCol: number }
+  | { type: "unit_moved"; playerId: string; unitId: string; fromRow: number; fromCol: number; toRow: number; toCol: number }
   | { type: "unit_injured"; unitId: string; ownerId: string }
   | { type: "unit_killed"; unitId: string; ownerId: string }
   | { type: "event_played"; playerId: string; cardId: string }
-  | { type: "trap_set"; playerId: string; targetId?: string }
+  | { type: "trap_set"; playerId: string; cardId: string; targetId?: string }
   | { type: "trap_triggered"; playerId: string; cardId: string; targetId?: string }
-  | { type: "item_equipped"; itemId: string; unitId: string }
+  | { type: "item_equipped"; playerId: string; itemId: string; unitId: string }
   | { type: "item_dropped"; itemId: string; row: number; col: number }
   | { type: "location_placed"; row: number; col: number; cardId: string }
   | { type: "location_razed"; row: number; col: number; cardId: string }
@@ -193,7 +207,7 @@ export type GameEvent =
   | { type: "turn_ended"; playerId: string }
   | { type: "phase_changed"; from: Phase; to: Phase }
   | { type: "game_ended"; winner?: string; scores: Record<string, number> }
-  | { type: "deck_shuffled"; playerId: string; deck: string }
+  | { type: "deck_shuffled"; playerId: string; deck: DeckName }
   | { type: "card_destroyed"; playerId: string; cardId: string };
 
 // ---------------------------------------------------------------------------
@@ -231,8 +245,9 @@ export interface OpponentView {
   prospectDeckSize: number;
   discardPileSize: number;
   hq: Card[];
-  activePolicies: Card[];
-  activeTraps: Trap[];
+  activePolicies: PolicyCard[];
+  /** Traps are visible (face-down) but card contents are hidden. */
+  activeTraps: TrapView[];
 }
 
 // ---------------------------------------------------------------------------
@@ -245,7 +260,7 @@ export interface Session {
   players: PlayerDescriptor[];
   seed: string;
   actions: Action[];
-  /** Optional snapshot for quick resume. */
+  /** Optional snapshot for quick resume. Fully JSON-serializable. */
   snapshot?: GameState;
   result?: {
     winner?: string;

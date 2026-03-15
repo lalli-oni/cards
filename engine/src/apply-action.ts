@@ -11,6 +11,12 @@ export interface ApplyResult {
  * Returns a new immutable state and a list of events describing what happened.
  */
 export function applyAction(state: GameState, action: Action): ApplyResult {
+  if (action.playerId !== state.turn.activePlayerId) {
+    throw new Error(
+      `Action from player "${action.playerId}" rejected: it is player "${state.turn.activePlayerId}"'s turn`,
+    );
+  }
+
   const events: GameEvent[] = [];
 
   const nextState = produce(state, (draft) => {
@@ -19,8 +25,9 @@ export function applyAction(state: GameState, action: Action): ApplyResult {
 
     switch (action.type) {
       case "pass":
-        // End current player's turn
         events.push({ type: "turn_ended", playerId: action.playerId });
+        // Advance to next player
+        advanceTurn(draft, events);
         break;
 
       // TODO: implement all action handlers
@@ -30,4 +37,22 @@ export function applyAction(state: GameState, action: Action): ApplyResult {
   });
 
   return { state: nextState, events };
+}
+
+/** Advance to the next player's turn. Advances round when all players have gone. */
+function advanceTurn(draft: GameState, events: GameEvent[]): void {
+  const currentIndex = draft.turnOrder.indexOf(draft.turn.activePlayerId);
+  const nextIndex = (currentIndex + 1) % draft.turnOrder.length;
+
+  if (nextIndex === 0) {
+    // All players have taken their turn — new round
+    draft.turn.round += 1;
+  }
+
+  draft.turn.activePlayerId = draft.turnOrder[nextIndex];
+  events.push({
+    type: "turn_started",
+    playerId: draft.turn.activePlayerId,
+    round: draft.turn.round,
+  });
 }

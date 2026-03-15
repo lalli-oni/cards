@@ -20,14 +20,14 @@ function createPlayerState(descriptor: PlayerDescriptor): PlayerState {
   };
 }
 
-function createEmptyGrid(_config: GameConfig, _playerCount: number): Grid {
+function createEmptyGrid(config: GameConfig, playerCount: number): Grid {
   // Grid size is (players + grid_padding) x (players + grid_padding)
   // Actual population happens during seeding phase
-  const padding = typeof _config.grid_padding === "number" ? _config.grid_padding : 2;
-  const size = _playerCount + padding;
+  const padding = typeof config.grid_padding === "number" ? config.grid_padding : 2;
+  const size = playerCount + padding;
   return Array.from({ length: size }, () =>
     Array.from({ length: size }, () => ({
-      location: undefined as any, // populated during seeding
+      location: null,
       units: [],
       items: [],
     })),
@@ -43,10 +43,25 @@ export function createGame(
   players: PlayerDescriptor[],
   seed: string,
 ): GameState {
+  if (players.length === 0) {
+    throw new Error("createGame requires at least one player");
+  }
+
+  const ids = players.map((p) => p.id);
+  const uniqueIds = new Set(ids);
+  if (uniqueIds.size !== ids.length) {
+    throw new Error(
+      `Duplicate player IDs: ${ids.filter((id, i) => ids.indexOf(id) !== i).join(", ")}`,
+    );
+  }
+
+  if (!seed) {
+    throw new Error("createGame requires a non-empty seed string");
+  }
+
   const rng = prand.mersenne(hashSeed(seed));
 
   // Determine turn order — shuffle player ids using seeded RNG
-  const ids = players.map((p) => p.id);
   const [turnOrder, nextRng] = seededShuffle(ids, rng);
 
   const startingGold =
@@ -69,20 +84,21 @@ export function createGame(
     players: playerStates,
     grid: createEmptyGrid(config, players.length),
     market: [],
-    rng: nextRng,
+    rngState: nextRng.getState!()!,
     seed,
     actionLog: [],
     turnOrder,
   };
 }
 
-/** Convert a string seed to a numeric seed for pure-rand. */
+/** Convert a string seed to a numeric seed for pure-rand (FNV-1a). */
 function hashSeed(seed: string): number {
-  let hash = 0;
+  let hash = 0x811c9dc5; // FNV offset basis
   for (let i = 0; i < seed.length; i++) {
-    hash = (hash * 31 + seed.charCodeAt(i)) | 0;
+    hash ^= seed.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193); // FNV prime
   }
-  return hash;
+  return hash >>> 0;
 }
 
 /** Fisher-Yates shuffle using seeded RNG. Returns shuffled array and new RNG state. */

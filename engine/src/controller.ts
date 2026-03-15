@@ -21,6 +21,8 @@ export interface ControllerOptions {
   onEvent?: (events: GameEvent[], state: GameState) => void;
 }
 
+const DEFAULT_MAX_ACTIONS = 10_000;
+
 /**
  * Orchestrates the game loop. Manages session state, routes turns to
  * player adapters, and builds the action log.
@@ -59,10 +61,19 @@ export class GameController {
       controller.state = session.snapshot;
     } else {
       // Replay action log
-      for (const action of session.actions) {
-        const { state, events } = applyAction(controller.state, action);
-        controller.state = state;
-        onEvent?.(events, state);
+      for (let i = 0; i < session.actions.length; i++) {
+        const action = session.actions[i];
+        try {
+          const { state, events } = applyAction(controller.state, action);
+          controller.state = state;
+          controller.onEvent?.(events, state);
+        } catch (err) {
+          throw new Error(
+            `Session replay failed at action ${i + 1}/${session.actions.length} ` +
+            `(type: "${action.type}", player: "${action.playerId}"): ` +
+            `${err instanceof Error ? err.message : err}`,
+          );
+        }
       }
     }
 
@@ -70,8 +81,16 @@ export class GameController {
   }
 
   /** Run the game loop until the game ends. */
-  async run(): Promise<Session> {
+  async run(maxActions = DEFAULT_MAX_ACTIONS): Promise<Session> {
+    let actionCount = 0;
     while (this.state.phase !== "ended") {
+      if (++actionCount > maxActions) {
+        throw new Error(
+          `Game loop exceeded ${maxActions} actions without ending. ` +
+          `Phase: "${this.state.phase}", round: ${this.state.turn.round}, ` +
+          `active player: "${this.state.turn.activePlayerId}"`,
+        );
+      }
       await this.playTurn();
     }
     return this.toSession();
@@ -90,6 +109,17 @@ export class GameController {
     const visibleState = getVisibleState(this.state, activePlayerId);
     const validActions = getValidActions(this.state, activePlayerId);
     const action = await adapter.chooseAction(visibleState, validActions);
+
+    // Validate the adapter returned a legal action
+    const isValid = validActions.some(
+      (va) => va.type === action.type && va.playerId === action.playerId,
+    );
+    if (!isValid) {
+      throw new Error(
+        `Adapter for player "${activePlayerId}" returned an invalid action: ` +
+        `${JSON.stringify(action)}`,
+      );
+    }
 
     return this.applyAction(action);
   }

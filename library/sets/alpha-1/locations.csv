@@ -1,6 +1,6 @@
 id,name,set,rarity,cost,mission,passive,edges,actions,keywords,text,flavor
 the-great-library,The Great Library,alpha-1,epic,0,scientist_2>5,Your units here get +1 cunning.,,,Archive,Have 2 units with the Scientist attribute here to complete.,Knowledge is the only treasure that multiplies when shared.
-the-colosseum,The Colosseum,alpha-1,epic,0,warrior_strength_15>4,,,,,Have warriors with combined strength of 15+ here to complete.,The sand remembers every name.
+the-colosseum,The Colosseum,alpha-1,epic,0,warrior_strength_15>4,,,,Arena,Have warriors with combined strength of 15+ here to complete.,The sand remembers every name.
 the-silk-road,The Silk Road,alpha-1,uncommon,0,units_3_different_attributes>3,Units here generate 1 gold at start of your turn.,,,Trade,Have 3 units with different attributes here to complete.,A thread that stitched the world together.
 the-agora,The Agora,alpha-1,uncommon,0,diplomat_charisma_12>3,,,,Market,Have diplomats with combined charisma 12+ here.,Where words were worth more than swords.
 machu-picchu,Machu Picchu,alpha-1,epic,0,units_3>5,Units entering here cannot be targeted by events until your next turn.,,,Sanctuary,Have 3 units here to complete.,Hidden above the clouds.

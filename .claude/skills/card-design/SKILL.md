@@ -21,8 +21,8 @@ Design cards that are historically grounded, mechanically sound, and fun to play
 ### 1. Historical resonance
 Every unit is a real historical figure. The card should make someone say "oh, that's clever" — the mechanics should reflect what the person was actually known for.
 
-- **Stats should tell a story.** Cleopatra has 9 charisma and 4 strength — she ruled through diplomacy, not armies. Genghis Khan is the inverse. A card's stat line should be defensible with a one-sentence historical argument.
-- **Actions should echo the figure's legacy.** Tesla's action draws items (inventions). Musashi duels. Ada Lovelace analyzes (looks at cards). The action name + effect should evoke the person without needing flavor text to explain it.
+- **Stats should tell a story.** Cleopatra has 4 strength, 8 cunning, and 9 charisma — she ruled through intellect and diplomacy, not armies. Miyamoto Musashi has 9 strength and 4 charisma — a swordsman, not a diplomat. A card's stat line should be defensible with a one-sentence historical argument.
+- **Actions should echo the figure's legacy.** Tesla's action buys items from the market for free (inventions). Musashi duels. Ada Lovelace analyzes (looks at cards). The action name + effect should evoke the person without needing flavor text to explain it.
 - **Attributes connect to identity.** Scientist, Warrior, Politician, etc. Pick attributes that reflect what the person *did*, not just who they were. Someone can be Warrior;Politician if they fought and governed.
 - **Flavor text is a bonus, not a crutch.** If the card needs flavor text to make thematic sense, the design is weak. Flavor text should add color to an already-clear design.
 
@@ -39,13 +39,13 @@ Every card should have a reason to exist in a deck.
 #### Units
 - **Total stat budget**: Loosely correlates with cost but not strictly. A 3-cost unit might have ~15 total stats, a 7-cost might have ~22. Stat totals are a starting point, not a formula.
 - **Specialization over flatness**: A unit with 9/3/3 is more interesting than 5/5/5. Specialists create decisions about where to deploy.
-- **Default stat (5) is average**: Stats printed on the card override the default. Only print stats that deviate from 5 to keep cards clean, but always print all three for clarity in CSV.
+- **Default stat (5) is average**: Stats printed on the card override the default.
 - **Strength range**: 2-10. Below 2 is useless in contests; above 10 is format-warping.
 - **Cunning range**: 2-10. High cunning enables card draw and information advantage.
 - **Charisma range**: 2-10. High charisma wins recruitment contests and social interactions.
 
 #### Cost guidelines
-- **0-cost**: Only policies (they're free by design). No other card type should cost 0 unless there's a strong design reason.
+- **0-cost**: Policies (free by design) and locations (placed during seeding, not purchased). No other card type should cost 0 unless there's a strong design reason.
 - **1-2 cost**: Commons and cheap uncommons. Simple effects, modest stats.
 - **3-4 cost**: Core of most decks. Bread-and-butter units, useful items, tactical events.
 - **5-6 cost**: Strong cards with impactful abilities. Epics and some rares.
@@ -54,7 +54,6 @@ Every card should have a reason to exist in a deck.
 #### Rarity guidelines
 - **Common**: Simple, efficient, low decision complexity. The backbone of decks. Limited or no actions.
 - **Uncommon**: One interesting mechanic or mild synergy hook. May have a simple action.
-- **Rare**: Not currently used in alpha-1 but available. Strong single mechanic or notable stat line.
 - **Epic**: Distinctive ability, clear strategic role. Usually has an action.
 - **Legendary**: Unique, build-around potential. High stats or powerful action. Should feel like a centerpiece.
 
@@ -69,9 +68,9 @@ When picking figures for units:
 
 ### 5. Non-unit cards
 
-- **Locations**: Should reference real places. Mission requirements should connect thematically to the place (The Great Library needs Scientists; The Colosseum needs Warriors). Passive effects should feel like "being at this place helps you do X."
-- **Items**: Can be historical artifacts, inventions, or abstract concepts (like "War Banner"). Should have a clear equip or stored use case, not both unless epic/legendary.
-- **Events**: Name after historical events, natural phenomena, or strategic concepts. Instant/passive/trap subtype should match the event's nature (a plague is instant; a golden age is passive; an ambush is a trap).
+- **Locations**: Should reference real places. Mission requirements should connect thematically to the place (The Great Library needs Scientists; The Colosseum needs Warriors). Passive effects should feel like "being at this place helps you do X." Locations can have blocked edges (N, S, E, W) that restrict unit movement — use sparingly to create tactical chokepoints. Locations can also have actions usable by any player with a unit there, using the same `name:ap_cost:effect` format as unit actions.
+- **Items**: Can be historical artifacts, inventions, or concepts. Equip effects apply at the equipped unit's location; stored effects apply at the item's location. Items can have both.
+- **Events**: Name after historical events, natural phenomena, or strategic concepts. Instant/passive/trap subtype should match the event's nature (an earthquake is instant; a plague is passive; an ambush is a trap).
 - **Policies**: Name after real doctrines, philosophies, or economic systems. Effect should be a global modifier that shapes strategy without being mandatory.
 
 ## Design Workflow
@@ -96,7 +95,7 @@ Identify:
 For each card:
 1. Pick the historical reference (for units) or thematic concept (for other types)
 2. Assign stats based on the guidelines above and the figure's identity
-3. Write the action (if any) — name:ap_cost:effect format
+3. Write the action (if any) — `name:ap_cost:effect` format, where effect is a snake_case identifier (e.g. `strength_contest_injure`, `buy_item_free`, `move_and_gain_gold`)
 4. Write card text that explains the mechanic clearly
 5. Write flavor text (short, punchy, historically grounded)
 6. Assign rarity based on complexity and power level

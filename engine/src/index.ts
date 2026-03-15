@@ -9,6 +9,9 @@ export { getVisibleState } from "./visible-state";
 export { GameController } from "./controller";
 export type { ControllerOptions } from "./controller";
 
+// Rules config
+export { buildBaselineConfig, extractVars, parseVarValue, mergeVariant } from "./rules-config";
+
 // Adapters
 export { BotAdapter } from "./bot-adapter";
 

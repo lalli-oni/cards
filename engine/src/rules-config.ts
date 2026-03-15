@@ -3,15 +3,15 @@
  * Extracts [var:id:value] declarations from rules markdown into JSON config.
  *
  * Usage:
- *   bun rules/build.ts
+ *   bun engine/src/rules-config.ts
  *
  * Output goes to rules/build/baseline.json
  */
 
 import { readdirSync, readFileSync, mkdirSync, writeFileSync } from "fs";
-import { join } from "path";
+import { join, resolve } from "path";
 
-const RULES_DIR = import.meta.dir;
+const RULES_DIR = resolve(import.meta.dir, "../../rules");
 const BUILD_DIR = join(RULES_DIR, "build");
 
 // --- Types ---
@@ -76,13 +76,14 @@ export function extractVars(
   return { vars, tbdVars };
 }
 
+// Non-rule markdown files that should not be scanned for var declarations.
+const EXCLUDED = new Set(["CLAUDE.md", "design-principles.md", "open-questions.md"]);
+
 export function buildBaselineConfig(rulesDir: string): BuildResult {
   const config: Record<string, ConfigValue> = {};
   const warnings: string[] = [];
   const errors: string[] = [];
   const seen = new Map<string, { value: ConfigValue; file: string; line: number }>();
-
-  const EXCLUDED = new Set(["CLAUDE.md", "design-principles.md", "open-questions.md"]);
 
   const files = readdirSync(rulesDir)
     .filter((f) => f.endsWith(".md") && !EXCLUDED.has(f))

@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { extractVars, parseVarValue, buildBaselineConfig, mergeVariant } from "./build";
-import { join } from "path";
+import { extractVars, parseVarValue, buildBaselineConfig, mergeVariant } from "../rules-config";
+import { mkdirSync, writeFileSync, rmSync } from "fs";
+import { join, resolve } from "path";
+import { tmpdir } from "os";
 
 describe("parseVarValue", () => {
   test("numeric values", () => {
@@ -50,37 +52,64 @@ Grid is [var:grid_padding:2] wide.`;
 });
 
 describe("buildBaselineConfig", () => {
+  function makeTempDir(files: Record<string, string>): string {
+    const dir = join(tmpdir(), `rules-config-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    mkdirSync(dir, { recursive: true });
+    for (const [name, content] of Object.entries(files)) {
+      writeFileSync(join(dir, name), content);
+    }
+    return dir;
+  }
+
   test("same ID same value across files = no error", () => {
-    // We can't easily mock fs, but we can test the logic by checking
-    // that our actual rules dir works without errors
-    const { errors } = buildBaselineConfig(join(import.meta.dir));
+    const dir = makeTempDir({
+      "a.md": "Value is [var:foo:10]",
+      "b.md": "Value is [var:foo:10]",
+    });
+    const { config, errors } = buildBaselineConfig(dir);
     expect(errors).toHaveLength(0);
+    expect(config.foo).toBe(10);
+    rmSync(dir, { recursive: true });
   });
 
   test("same ID different values = error", () => {
-    // Test via extractVars + manual conflict check to verify logic
-    const md1 = `Value is [var:foo:10]`;
-    const md2 = `Value is [var:foo:20]`;
-    const { vars: vars1 } = extractVars(md1, "a.md");
-    const { vars: vars2 } = extractVars(md2, "b.md");
-    expect(vars1[0].value).toBe(10);
-    expect(vars2[0].value).toBe(20);
-    // Different values for same ID should be flagged
-    expect(vars1[0].value).not.toBe(vars2[0].value);
+    const dir = makeTempDir({
+      "a.md": "Value is [var:foo:10]",
+      "b.md": "Value is [var:foo:20]",
+    });
+    const { errors } = buildBaselineConfig(dir);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("foo");
+    expect(errors[0]).toContain("Conflicting");
+    rmSync(dir, { recursive: true });
   });
 
+  // Update this count when adding/removing [var:...] declarations in rules/*.md
   test("integration: scans actual rules dir and produces 17 keys", () => {
-    const { config, errors } = buildBaselineConfig(join(import.meta.dir));
+    const rulesDir = resolve(import.meta.dir, "../../../rules");
+    const { config, errors } = buildBaselineConfig(rulesDir);
     expect(errors).toHaveLength(0);
     expect(Object.keys(config)).toHaveLength(17);
   });
 
   test("TBD vars are excluded from output", () => {
-    const { config, warnings } = buildBaselineConfig(join(import.meta.dir));
+    const rulesDir = resolve(import.meta.dir, "../../../rules");
+    const { config, warnings } = buildBaselineConfig(rulesDir);
     expect(config).not.toHaveProperty("X");
     expect(config).not.toHaveProperty("Y");
     const tbdWarnings = warnings.filter((w) => w.includes("TBD var"));
     expect(tbdWarnings.length).toBeGreaterThanOrEqual(2);
+  });
+
+  test("excludes CLAUDE.md from scanning", () => {
+    const dir = makeTempDir({
+      "rules.md": "Value is [var:foo:10]",
+      "CLAUDE.md": "Example: [var:bar:99]",
+    });
+    const { config } = buildBaselineConfig(dir);
+    expect(config).toHaveProperty("foo");
+    expect(config).not.toHaveProperty("bar");
+    rmSync(dir, { recursive: true });
   });
 });
 

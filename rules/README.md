@@ -7,7 +7,7 @@
 - Players: 1+ players.
 
 - Victory: Point-based. The game ends at the end of a round in which any
-  player has reached [var:50] VP, or at the end of round [var:20] —
+  player has reached [var:vp_threshold:50] VP, or at the end of round [var:turn_limit:20] —
   whichever comes first. When the game ends, the player with the most VP
   wins. If tied, play additional rounds until one player has the sole
   highest VP at the end of a round.
@@ -20,7 +20,7 @@ All phases consist rounds.
 In each round every player gets a turn, first starting player and then going clockwise until last player ends their turn.
 
 ### Seeding Phase
-Each player brings a **seeding deck** of [var:40] cards (shuffled).
+Each player brings a **seeding deck** of [var:seeding_deck_size:40] cards (shuffled).
 Each seeding deck may contain at most **8 legendary** and **24 epic**
 cards; these rarity limits apply per deck. Policies are not part of
 the seeding deck and do not count toward these totals.
@@ -29,10 +29,10 @@ the seeding deck and do not count toward these totals.
 Repeat seed rounds until all players' seeding decks are empty. Each
 seed round:
 
-1. **Draw**: In turn order, each player draws [var:10] cards from their
-   seeding deck. Keep [var:8] for your **market deck** (face-down).
-   Place [var:2] face-up in the shared **middle area**.
-   [design: If a player has fewer cards remaining than [var:10], they
+1. **Draw**: In turn order, each player draws [var:seed_draw:10] cards from their
+   seeding deck. Keep [var:seed_keep:8] for your **market deck** (face-down).
+   Place [var:seed_expose:2] face-up in the shared **middle area**.
+   [design: If a player has fewer cards remaining than [var:seed_draw:10], they
    draw what they can and split proportionally (round up for market
    deck, remainder to middle area).]
 2. **Steal**: After all players have drawn, players take turns picking
@@ -79,7 +79,7 @@ Each player starts the Main Phase with:
 - Their market deck (remaining seeding deck cards, face-down)
 - Their main deck (seeded during deck construction, face-down)
 - Their two selected policies (active)
-- [var:10] gold
+- [var:starting_gold:10] gold
 
 ## Decks
 
@@ -87,7 +87,7 @@ Each player has four personal decks:
 
 | Deck | Contents | Source | Purpose |
 |------|----------|--------|---------|
-| **Seeding deck** | Full [var:40]-card collection | Pre-game | Drawn through during seed rounds; split into the decks below |
+| **Seeding deck** | Full [var:seeding_deck_size:40]-card collection | Pre-game | Drawn through during seed rounds; split into the decks below |
 | **Prospect deck** | Locations | Extracted from market deck after seeding | Populates and replenishes grid locations |
 | **Market deck** | Units, items, events (undrawn cards) | Seeding deck remainder after deck construction | Purchasable cards in the market |
 | **Main deck** | Units, items, events (drawn cards) | Drawn from market deck during deck construction; later refilled from discard pile | Personal draw source during player turns |
@@ -95,7 +95,7 @@ Each player has four personal decks:
 
 #### The Grid
 
-The field is a shared 2D grid of size (players + [var:2]) x (players + [var:2]).
+The field is a shared 2D grid of size (players + [var:grid_padding:2]) x (players + [var:grid_padding:2]).
 The grid must be fully populated with locations at all times — there
 are no empty slots.
 
@@ -126,7 +126,7 @@ prospect deck to replace it in the same slot, choosing orientation.
 
 #### Zones
 
-- **Hand** — cards held by the player. Maximum hand size: [var:7]. Cards exceeding the limit at end of turn must be discarded.
+- **Hand** — cards held by the player. Maximum hand size: [var:max_hand_size:7]. Cards exceeding the limit at end of turn must be discarded.
 - **HQ** — the player's staging area (off-grid). Units and items enter play here when deployed from hand.
 - **Grid** — shared 2D field containing all active locations. Units move between locations on the grid.
 - **Active trap area** — face-down trap events. Targets are indicated by matching tokens. Visible to all players but contents hidden.
@@ -137,10 +137,10 @@ prospect deck to replace it in the same slot, choosing orientation.
 #### Player turn
 
 At the start of their turn the player:
-1. Receives [var:1] gold.
-2. Draws [var:1] card from their main deck.
+1. Receives [var:turn_gold_income:1] gold.
+2. Draws [var:turn_card_draw:1] card from their main deck.
 
-Each player has [var:3] **action points (AP)** per turn. AP can be spent in any order on the following actions:
+Each player has [var:action_points_per_turn:3] **action points (AP)** per turn. AP can be spent in any order on the following actions:
 
 | Action | AP Cost | Description |
 |--------|---------|-------------|
@@ -153,7 +153,7 @@ Each player has [var:3] **action points (AP)** per turn. AP can be spent in any 
 | Play Event | 1 | Play an event card from hand. Instants resolve immediately; passives enter play; traps go face-down to your active trap area. |
 | Equip | 1 | Attach an item to a unit, or trade an item between two units at the same location (or both at HQ). |
 | Destroy | 1 | Remove a card from your hand from the game permanently. |
-| Raze | [var:3] | Your unit at a location destroys it. No other units may be present. The unit and location are discarded. The active player draws a new location from their prospect deck and places it in the same slot. |
+| Raze | [var:raze_ap_cost:3] | Your unit at a location destroys it. No other units may be present. The unit and location are discarded. The active player draws a new location from their prospect deck and places it in the same slot. |
 
 A player may pass any remaining AP to end their turn early.
 
@@ -164,7 +164,7 @@ A player may pass any remaining AP to end their turn early.
 ### Units
 Based on historical figures.
 Stats (for example; strength, cunning, charisma).
-Any stats not listed on the card are treated as [var:5].
+Any stats not listed on the card are treated as [var:default_stat:5].
 Attributes (for example: Scientist, Politician, Engineer, Warrior, Spiritual)
 Actions: Units can have various actions that players can activate.
 
@@ -231,8 +231,8 @@ Rarity affects deck-building limits and pack distribution only. It has
 no direct effect on gameplay mechanics or card cost — a common can be
 more expensive or powerful than a legendary.
 
-- Legendary: max [var:8] per seeding deck
-- Epic: max [var:24] per seeding deck
+- Legendary: max [var:max_legendary:8] per seeding deck
+- Epic: max [var:max_epic:24] per seeding deck
 - Uncommon: no cap
 - Common: no cap
 
@@ -242,8 +242,8 @@ more expensive or powerful than a legendary.
 - Triggered: Effect is triggered when condition is fulfilled.
 
 ## Economy
-- Each player begins with [var:10] gold.
-- At the start of each turn the active player receives [var:1] gold.
+- Each player begins with [var:starting_gold:10] gold.
+- At the start of each turn the active player receives [var:turn_gold_income:1] gold.
 - **Card costs are printed on the cards** and are independent of rarity;
   a common may cost more than a legendary or vice versa.
   Rarity affects deck-building limits but not gold price.

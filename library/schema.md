@@ -9,9 +9,9 @@ Every card type includes these columns:
 
 | Column   | Type   | Required | Description |
 |----------|--------|----------|-------------|
-| id       | string | yes      | Unique identifier. Format: `{set}-{type_prefix}-{number}` (e.g. `core-u001`) |
+| id       | string | yes      | Unique identifier. Kebab-case of card name (e.g. `cleopatra`, `nikola-tesla`) |
 | name     | string | yes      | Display name |
-| set      | string | yes      | Set identifier (e.g. `core`) |
+| set      | string | yes      | Set identifier (e.g. `baseline`) |
 | rarity   | enum   | yes      | `common`, `uncommon`, `rare`, `epic`, `legendary` |
 | cost     | string | yes      | Gold cost to deploy/play. Multiple costs separated by `\|` (player pays one) |
 | text     | string | no       | Card text — rules text, abilities, effects |
@@ -20,19 +20,15 @@ Every card type includes these columns:
 
 ## Units
 
-Prefix: `u`
-
 | Column     | Type   | Required | Description |
 |------------|--------|----------|-------------|
-| strength   | int    | no       | Defaults to `[var:5]` if omitted |
-| cunning    | int    | no       | Defaults to `[var:5]` if omitted |
-| charisma   | int    | no       | Defaults to `[var:5]` if omitted |
+| strength   | int    | no       | Defaults to `[var:default_stat:5]` if omitted |
+| cunning    | int    | no       | Defaults to `[var:default_stat:5]` if omitted |
+| charisma   | int    | no       | Defaults to `[var:default_stat:5]` if omitted |
 | attributes | string | no       | Semicolon-separated (e.g. `Scientist;Engineer`) |
 | actions    | string | no       | Semicolon-separated action definitions. Format: `name:ap_cost:effect` |
 
 ## Locations
-
-Prefix: `l`
 
 | Column  | Type   | Required | Description |
 |---------|--------|----------|-------------|
@@ -40,8 +36,6 @@ Prefix: `l`
 | passive | string | no       | Passive effect text |
 
 ## Items
-
-Prefix: `i`
 
 | Column  | Type   | Required | Description |
 |---------|--------|----------|-------------|
@@ -51,8 +45,6 @@ Prefix: `i`
 
 ## Events
 
-Prefix: `e`
-
 | Column   | Type   | Required | Description |
 |----------|--------|----------|-------------|
 | subtype  | enum   | yes      | `instant`, `passive`, `trap` |
@@ -60,8 +52,6 @@ Prefix: `e`
 | trigger  | string | no       | Trigger condition (for `trap` subtype) |
 
 ## Policies
-
-Prefix: `p`
 
 | Column | Type   | Required | Description |
 |--------|--------|----------|-------------|

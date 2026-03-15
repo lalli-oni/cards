@@ -1,2 +1,15 @@
 node_modules/
 library/build/
+
+# Environment secrets
+design/.env
+
+# Python
+__pycache__/
+*.pyc
+
+# Generated design exports
+design/exports/
+
+# Claude Code local settings
+.claude/settings.local.json

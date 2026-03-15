@@ -1,4 +1,4 @@
 id,name,set,rarity,cost,subtype,duration,trigger,keywords,text,flavor
-plague,Plague,alpha-1,rare,3,instant,,,Catastrophe,All units at target location get -2 strength for 2 turns.,It spared no one.
+plague,Plague,alpha-1,epic,3,instant,,,Catastrophe,All units at target location get -2 strength for 2 turns.,It spared no one.
 golden-age,Golden Age,alpha-1,epic,5,passive,3,,Prosperity,You gain +1 gold per turn for 3 turns.,The coffers overflow and the people rejoice.
 ambush,Ambush,alpha-1,uncommon,2,trap,,enemy_unit_enters_location,Military,When an enemy unit enters this location: deal 3 damage.,They never saw it coming.

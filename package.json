@@ -8,7 +8,8 @@
     "test"
   ],
   "scripts": {
-    "build:library": "bun library/build.ts"
+    "build:library": "bun library/build.ts",
+    "build:rules": "bun rules/build.ts"
   },
   "devDependencies": {
     "bun-types": "^1.3.10"

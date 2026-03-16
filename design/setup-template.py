@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Create the complete unit card template in Penpot (idempotent).
+"""Create card templates in Penpot for all card types (idempotent).
 
 Reads all layout/color/typography values from tokens.json and uses the
 shared penpot.py module. Running this script multiple times produces the
 same result — existing shapes are deleted by name before recreation.
 
 Usage:
-    python setup-template.py [--file-id FILE_ID] [--page-id PAGE_ID]
+    python setup-template.py [--type unit|location|item|event|policy|all]
+                             [--file-id FILE_ID] [--page-id PAGE_ID]
 """
 
 import argparse
@@ -22,6 +23,71 @@ from penpot import (
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
+# Frame names per card type
+FRAME_NAMES = {
+    "unit": "Unit Card",
+    "location": "Location Card",
+    "item": "Item Card",
+    "event": "Event Card",
+    "policy": "Policy Card",
+}
+
+# Shape names per card type (used for idempotent cleanup)
+SHARED_SHAPE_NAMES = {
+    "Card Background", "Inner Border", "Art Placeholder",
+    "Card Name", "Cost Circle", "Cost Value",
+    "Type Circle", "Type Initial",
+    "Type Banner", "Type Label",
+    "Text Area", "Rarity Bar",
+}
+
+UNIT_SHAPE_NAMES = SHARED_SHAPE_NAMES | {
+    "Action Name", "Rules Text",
+    "Flavor Divider", "Flavor Text",
+    "Strength Box", "Strength Label", "Strength Value",
+    "Cunning Box", "Cunning Label", "Cunning Value",
+    "Charisma Box", "Charisma Label", "Charisma Value",
+    "Action Cost Box", "Action Cost Label", "Action Cost Value",
+}
+
+LOCATION_SHAPE_NAMES = SHARED_SHAPE_NAMES | {
+    "Mission Label", "Mission Text",
+    "Passive Label", "Passive Text",
+    "Flavor Divider", "Flavor Text",
+    "Compass N Box", "Compass N Label",
+    "Compass E Box", "Compass E Label",
+    "Compass S Box", "Compass S Label",
+    "Compass W Box", "Compass W Label",
+}
+
+ITEM_SHAPE_NAMES = SHARED_SHAPE_NAMES | {
+    "Equip Label", "Equip Text",
+    "Stored Label", "Stored Text",
+    "Action Name",
+    "Flavor Divider", "Flavor Text",
+}
+
+EVENT_SHAPE_NAMES = SHARED_SHAPE_NAMES | {
+    "Subtype Badge", "Subtype Label",
+    "Duration Label", "Duration Value",
+    "Trigger Label", "Trigger Text",
+    "Rules Text",
+    "Flavor Divider", "Flavor Text",
+}
+
+POLICY_SHAPE_NAMES = SHARED_SHAPE_NAMES | {
+    "Effect Label", "Effect Text",
+    "Flavor Divider", "Flavor Text",
+}
+
+ALL_SHAPE_NAMES_MAP = {
+    "unit": UNIT_SHAPE_NAMES,
+    "location": LOCATION_SHAPE_NAMES,
+    "item": ITEM_SHAPE_NAMES,
+    "event": EVENT_SHAPE_NAMES,
+    "policy": POLICY_SHAPE_NAMES,
+}
+
 
 def load_tokens() -> dict:
     path = os.path.join(SCRIPT_DIR, "tokens.json")
@@ -29,49 +95,36 @@ def load_tokens() -> dict:
         return json.load(f)
 
 
-# Names of every shape the template creates (used for idempotent cleanup)
-ALL_SHAPE_NAMES = {
-    "Card Background", "Inner Border", "Art Placeholder",
-    "Type Circle", "Type Initial", "Card Name",
-    "Cost Circle", "Cost Value",
-    "Type Banner", "Type Label",
-    "Text Area", "Action Name", "Rules Text",
-    "Flavor Divider", "Flavor Text",
-    "Strength Box", "Strength Label", "Strength Value",
-    "Cunning Box", "Cunning Label", "Cunning Value",
-    "Charisma Box", "Charisma Label", "Charisma Value",
-    "Action Cost Box", "Action Cost Label", "Action Cost Value",
-    "Rarity Bar",
-}
-
-
-def cleanup_existing_shapes(objects, page_id) -> list:
-    """Delete all shapes inside the card frame by name. Makes the script idempotent."""
+def cleanup_existing_shapes(objects, page_id, shape_names) -> list:
+    """Delete all shapes matching the given names. Makes the script idempotent."""
     changes = []
     for oid, obj in objects.items():
-        if obj.get("name") in ALL_SHAPE_NAMES:
+        if obj.get("name") in shape_names:
             changes.append(del_obj_change(page_id, oid))
     return changes
 
 
-def build_template_shapes(tokens, page_id, frame_id) -> list:
-    """Create ALL shapes in correct z-order (bottom to top).
+# ---------------------------------------------------------------------------
+# Shared shape builders (common to all card types)
+# ---------------------------------------------------------------------------
 
-    Shape z-order = add order — later additions render on top.
-    """
+def _fill(color, opacity=1):
+    return [{"fill-color": color, "fill-opacity": opacity}]
+
+
+def _stroke(color, width, opacity=1):
+    return [{"stroke-color": color, "stroke-opacity": opacity,
+             "stroke-width": width, "stroke-alignment": "center",
+             "stroke-style": "solid"}]
+
+
+def build_shared_shapes(tokens, page_id, frame_id, card_type) -> list:
+    """Build shapes shared across all card types."""
     layout = tokens["layout"]
     colors = tokens["colors"]
-    stats_cfg = tokens["stats"]
-    typo = tokens["typography"]
+    typo = tokens["typography"]["roles"]
+    mappings = tokens["mappings"]
     changes = []
-
-    def _fill(color, opacity=1):
-        return [{"fill-color": color, "fill-opacity": opacity}]
-
-    def _stroke(color, width, opacity=1):
-        return [{"stroke-color": color, "stroke-opacity": opacity,
-                 "stroke-width": width, "stroke-alignment": "center",
-                 "stroke-style": "solid"}]
 
     # 1. Card Background
     bg = layout["cardBackground"]
@@ -100,18 +153,23 @@ def build_template_shapes(tokens, page_id, frame_id) -> list:
                        _fill(colors["attributeCircle"]), page_id, frame_id, frame_id)
     changes.append(c)
 
-    ti_role = typo["roles"]["typeInitial"]
+    # Type initial: units use attribute initial, others use card type initial
+    ti_role = typo["typeInitial"]
+    if card_type == "unit":
+        initial_text = "W"
+    else:
+        initial_text = mappings["typeInitials"].get(card_type, "?")
     _, c = make_text("Type Initial", tc["x"], tc["y"], tc["w"], tc["h"],
-                     "W", page_id, frame_id, frame_id,
+                     initial_text, page_id, frame_id, frame_id,
                      font_size=ti_role["size"], font_weight=ti_role["weight"],
                      text_align=ti_role.get("align"))
     changes.append(c)
 
     # 5. Card Name
     cn = layout["cardName"]
-    ct_role = typo["roles"]["cardTitle"]
+    ct_role = typo["cardTitle"]
     _, c = make_text("Card Name", cn["x"], cn["y"], cn["w"], cn["h"],
-                     "Unit Name", page_id, frame_id, frame_id,
+                     f"{card_type.capitalize()} Name", page_id, frame_id, frame_id,
                      font_size=ct_role["size"], font_weight=ct_role["weight"])
     changes.append(c)
 
@@ -121,7 +179,7 @@ def build_template_shapes(tokens, page_id, frame_id) -> list:
                        _fill(colors["costBox"]), page_id, frame_id, frame_id)
     changes.append(c)
 
-    cv_role = typo["roles"]["costValue"]
+    cv_role = typo["costValue"]
     _, c = make_text("Cost Value", cc["x"], cc["y"], cc["w"], cc["h"],
                      "5", page_id, frame_id, frame_id,
                      font_size=cv_role["size"], font_weight=cv_role["weight"],
@@ -134,9 +192,10 @@ def build_template_shapes(tokens, page_id, frame_id) -> list:
                      _fill(colors["typeBanner"]), page_id, frame_id, frame_id)
     changes.append(c)
 
-    tl_role = typo["roles"]["typeLabel"]
+    tl_role = typo["typeLabel"]
+    type_label = card_type.upper() if card_type != "unit" else "WARRIOR"
     _, c = make_text("Type Label", tb["x"], tb["y"], tb["w"], tb["h"],
-                     "WARRIOR", page_id, frame_id, frame_id,
+                     type_label, page_id, frame_id, frame_id,
                      font_size=tl_role["size"], font_weight=tl_role["weight"])
     changes.append(c)
 
@@ -147,89 +206,7 @@ def build_template_shapes(tokens, page_id, frame_id) -> list:
                      r1=ta["r"], r2=ta["r"], r3=ta["r"], r4=ta["r"])
     changes.append(c)
 
-    # 9. Action Name
-    an = layout["actionName"]
-    an_role = typo["roles"]["actionName"]
-    _, c = make_text("Action Name", an["x"], an["y"], an["w"], an["h"],
-                     "CONQUER", page_id, frame_id, frame_id,
-                     font_size=an_role["size"], font_weight=an_role["weight"],
-                     fill_color=colors["actionName"])
-    changes.append(c)
-
-    # 10. Rules Text
-    rt = layout["rulesText"]
-    rt_role = typo["roles"]["rulesText"]
-    _, c = make_text("Rules Text", rt["x"], rt["y"], rt["w"], rt["h"],
-                     "Card ability text goes here", page_id, frame_id, frame_id,
-                     font_size=rt_role["size"], font_weight=rt_role["weight"])
-    changes.append(c)
-
-    # 11. Flavor Divider
-    fd = layout["flavorDivider"]
-    _, c = make_rect("Flavor Divider", fd["x"], fd["y"], fd["w"], fd["h"],
-                     _fill(colors["flavorDivider"], 0.6), page_id, frame_id, frame_id)
-    changes.append(c)
-
-    # 12. Flavor Text
-    ft = layout["flavorText"]
-    ft_role = typo["roles"]["flavorText"]
-    _, c = make_text("Flavor Text", ft["x"], ft["y"], ft["w"], ft["h"],
-                     '"In the vastness of space, courage is the only currency."',
-                     page_id, frame_id, frame_id,
-                     font_size=ft_role["size"], font_weight=ft_role["weight"],
-                     fill_color=colors["textFlavor"],
-                     font_style=ft_role.get("style"))
-    changes.append(c)
-
-    # 13. Stat boxes (4x: box + label + value)
-    stat_layout = layout["stats"]
-    stat_order = ["strength", "cunning", "charisma", "actionCost"]
-    content_w = layout["contentWidth"]
-    stat_gap = stat_layout["gap"]
-    stat_count = len(stat_order)
-    stat_w = (content_w - (stat_count - 1) * stat_gap) // stat_count
-
-    sl_role = typo["roles"]["statLabel"]
-    sv_role = typo["roles"]["statValue"]
-
-    for i, stat_key in enumerate(stat_order):
-        stat = stats_cfg[stat_key]
-        sx = layout["contentX"] + i * (stat_w + stat_gap)
-        sy = stat_layout["y"]
-        sh = stat_layout["h"]
-
-        # Friendly name for shapes: "Strength" / "Action Cost"
-        if stat_key == "actionCost":
-            shape_name = "Action Cost"
-        else:
-            shape_name = stat_key.capitalize()
-
-        # Box
-        _, c = make_rect(f"{shape_name} Box", sx, sy, stat_w, sh,
-                         _fill(stat["color"]), page_id, frame_id, frame_id,
-                         r1=stat_layout["r"], r2=stat_layout["r"],
-                         r3=stat_layout["r"], r4=stat_layout["r"])
-        changes.append(c)
-
-        # Label
-        _, c = make_text(f"{shape_name} Label",
-                         sx, sy + stat_layout["labelOffsetY"],
-                         stat_w, stat_layout["labelHeight"],
-                         stat["label"], page_id, frame_id, frame_id,
-                         font_size=sl_role["size"], font_weight=sl_role["weight"],
-                         text_align=sl_role.get("align"))
-        changes.append(c)
-
-        # Value
-        _, c = make_text(f"{shape_name} Value",
-                         sx, sy + stat_layout["valueOffsetY"],
-                         stat_w, stat_layout["valueHeight"],
-                         "5", page_id, frame_id, frame_id,
-                         font_size=sv_role["size"], font_weight=sv_role["weight"],
-                         text_align=sv_role.get("align"))
-        changes.append(c)
-
-    # 14. Rarity Bar
+    # 9. Rarity Bar
     rb = layout["rarityBar"]
     _, c = make_rect("Rarity Bar", rb["x"], rb["y"], rb["w"], rb["h"],
                      _fill(colors["costBox"]), page_id, frame_id, frame_id,
@@ -239,13 +216,388 @@ def build_template_shapes(tokens, page_id, frame_id) -> list:
     return changes
 
 
-def build_design_tokens(tokens) -> list:
-    """Build set-tokens-lib change.
+# ---------------------------------------------------------------------------
+# Type-specific shape builders
+# ---------------------------------------------------------------------------
 
-    Wraps in JSON string to preserve $-prefixes — Penpot's JSON middleware
-    strips $ from keys, but set-tokens-lib re-parses the string with identity
-    key-fn, preserving $type/$value as required by the DTCG schema.
-    """
+def build_unit_shapes(tokens, page_id, frame_id) -> list:
+    """Build unit-specific shapes: action name, rules, flavor, 4x stat boxes."""
+    layout = tokens["layout"]
+    colors = tokens["colors"]
+    stats_cfg = tokens["stats"]
+    typo = tokens["typography"]["roles"]
+    changes = []
+
+    # Action Name
+    an = layout["actionName"]
+    an_role = typo["actionName"]
+    _, c = make_text("Action Name", an["x"], an["y"], an["w"], an["h"],
+                     "CONQUER", page_id, frame_id, frame_id,
+                     font_size=an_role["size"], font_weight=an_role["weight"],
+                     fill_color=colors["actionName"])
+    changes.append(c)
+
+    # Rules Text
+    rt = layout["rulesText"]
+    rt_role = typo["rulesText"]
+    _, c = make_text("Rules Text", rt["x"], rt["y"], rt["w"], rt["h"],
+                     "Card ability text goes here", page_id, frame_id, frame_id,
+                     font_size=rt_role["size"], font_weight=rt_role["weight"])
+    changes.append(c)
+
+    # Flavor Divider
+    fd = layout["flavorDivider"]
+    _, c = make_rect("Flavor Divider", fd["x"], fd["y"], fd["w"], fd["h"],
+                     _fill(colors["flavorDivider"], 0.6), page_id, frame_id, frame_id)
+    changes.append(c)
+
+    # Flavor Text
+    ft = layout["flavorText"]
+    ft_role = typo["flavorText"]
+    _, c = make_text("Flavor Text", ft["x"], ft["y"], ft["w"], ft["h"],
+                     '"In the vastness of space, courage is the only currency."',
+                     page_id, frame_id, frame_id,
+                     font_size=ft_role["size"], font_weight=ft_role["weight"],
+                     fill_color=colors["textFlavor"],
+                     font_style=ft_role.get("style"))
+    changes.append(c)
+
+    # Stat boxes (4x: box + label + value)
+    stat_layout = layout["stats"]
+    stat_order = ["strength", "cunning", "charisma", "actionCost"]
+    content_w = layout["contentWidth"]
+    stat_gap = stat_layout["gap"]
+    stat_count = len(stat_order)
+    stat_w = (content_w - (stat_count - 1) * stat_gap) // stat_count
+
+    sl_role = typo["statLabel"]
+    sv_role = typo["statValue"]
+
+    for i, stat_key in enumerate(stat_order):
+        stat = stats_cfg[stat_key]
+        sx = layout["contentX"] + i * (stat_w + stat_gap)
+        sy = stat_layout["y"]
+        sh = stat_layout["h"]
+
+        shape_name = "Action Cost" if stat_key == "actionCost" else stat_key.capitalize()
+
+        _, c = make_rect(f"{shape_name} Box", sx, sy, stat_w, sh,
+                         _fill(stat["color"]), page_id, frame_id, frame_id,
+                         r1=stat_layout["r"], r2=stat_layout["r"],
+                         r3=stat_layout["r"], r4=stat_layout["r"])
+        changes.append(c)
+
+        _, c = make_text(f"{shape_name} Label",
+                         sx, sy + stat_layout["labelOffsetY"],
+                         stat_w, stat_layout["labelHeight"],
+                         stat["label"], page_id, frame_id, frame_id,
+                         font_size=sl_role["size"], font_weight=sl_role["weight"],
+                         text_align=sl_role.get("align"))
+        changes.append(c)
+
+        _, c = make_text(f"{shape_name} Value",
+                         sx, sy + stat_layout["valueOffsetY"],
+                         stat_w, stat_layout["valueHeight"],
+                         "5", page_id, frame_id, frame_id,
+                         font_size=sv_role["size"], font_weight=sv_role["weight"],
+                         text_align=sv_role.get("align"))
+        changes.append(c)
+
+    return changes
+
+
+def build_location_shapes(tokens, page_id, frame_id) -> list:
+    """Build location-specific shapes: mission, passive, compass rose."""
+    loc = tokens["locationLayout"]
+    colors = tokens["colors"]
+    typo = tokens["typography"]["roles"]
+    changes = []
+
+    sl_role = typo["sectionLabel"]
+    st_role = typo["sectionText"]
+
+    # Mission Label
+    ml = loc["missionLabel"]
+    _, c = make_text("Mission Label", ml["x"], ml["y"], ml["w"], ml["h"],
+                     "MISSION", page_id, frame_id, frame_id,
+                     font_size=sl_role["size"], font_weight=sl_role["weight"],
+                     fill_color=colors["sectionLabel"])
+    changes.append(c)
+
+    # Mission Text
+    mt = loc["missionText"]
+    _, c = make_text("Mission Text", mt["x"], mt["y"], mt["w"], mt["h"],
+                     "Mission requirement text", page_id, frame_id, frame_id,
+                     font_size=st_role["size"], font_weight=st_role["weight"])
+    changes.append(c)
+
+    # Passive Label
+    pl = loc["passiveLabel"]
+    _, c = make_text("Passive Label", pl["x"], pl["y"], pl["w"], pl["h"],
+                     "PASSIVE", page_id, frame_id, frame_id,
+                     font_size=sl_role["size"], font_weight=sl_role["weight"],
+                     fill_color=colors["sectionLabel"])
+    changes.append(c)
+
+    # Passive Text
+    pt = loc["passiveText"]
+    _, c = make_text("Passive Text", pt["x"], pt["y"], pt["w"], pt["h"],
+                     "Passive effect text", page_id, frame_id, frame_id,
+                     font_size=st_role["size"], font_weight=st_role["weight"])
+    changes.append(c)
+
+    # Flavor Divider
+    fd = loc["flavorDivider"]
+    _, c = make_rect("Flavor Divider", fd["x"], fd["y"], fd["w"], fd["h"],
+                     _fill(colors["flavorDivider"], 0.6), page_id, frame_id, frame_id)
+    changes.append(c)
+
+    # Flavor Text
+    ft = loc["flavorText"]
+    ft_role = typo["flavorText"]
+    _, c = make_text("Flavor Text", ft["x"], ft["y"], ft["w"], ft["h"],
+                     '"Where empires were forged."',
+                     page_id, frame_id, frame_id,
+                     font_size=ft_role["size"], font_weight=ft_role["weight"],
+                     fill_color=colors["textFlavor"],
+                     font_style=ft_role.get("style"))
+    changes.append(c)
+
+    # Compass Rose: 4 direction boxes (N, E, S, W) in cross pattern
+    compass = loc["compass"]
+    cl_role = typo["compassLabel"]
+
+    for direction in ["N", "E", "S", "W"]:
+        d = compass[direction]
+        # Default all edges to open in template
+        box_color = colors["compassOpen"]
+
+        _, c = make_rect(f"Compass {direction} Box",
+                         d["x"], d["y"], d["w"], d["h"],
+                         _fill(box_color), page_id, frame_id, frame_id,
+                         r1=compass["r"], r2=compass["r"],
+                         r3=compass["r"], r4=compass["r"])
+        changes.append(c)
+
+        _, c = make_text(f"Compass {direction} Label",
+                         d["x"], d["y"], d["w"], d["h"],
+                         direction, page_id, frame_id, frame_id,
+                         font_size=cl_role["size"], font_weight=cl_role["weight"],
+                         text_align=cl_role.get("align"))
+        changes.append(c)
+
+    return changes
+
+
+def build_item_shapes(tokens, page_id, frame_id) -> list:
+    """Build item-specific shapes: equip, stored, action, flavor."""
+    item = tokens["itemLayout"]
+    colors = tokens["colors"]
+    typo = tokens["typography"]["roles"]
+    changes = []
+
+    sl_role = typo["sectionLabel"]
+    st_role = typo["sectionText"]
+
+    # Equip Label
+    el = item["equipLabel"]
+    _, c = make_text("Equip Label", el["x"], el["y"], el["w"], el["h"],
+                     "EQUIP", page_id, frame_id, frame_id,
+                     font_size=sl_role["size"], font_weight=sl_role["weight"],
+                     fill_color=colors["sectionLabel"])
+    changes.append(c)
+
+    # Equip Text
+    et = item["equipText"]
+    _, c = make_text("Equip Text", et["x"], et["y"], et["w"], et["h"],
+                     "Effect when equipped by a unit", page_id, frame_id, frame_id,
+                     font_size=st_role["size"], font_weight=st_role["weight"])
+    changes.append(c)
+
+    # Stored Label
+    sl = item["storedLabel"]
+    _, c = make_text("Stored Label", sl["x"], sl["y"], sl["w"], sl["h"],
+                     "STORED", page_id, frame_id, frame_id,
+                     font_size=sl_role["size"], font_weight=sl_role["weight"],
+                     fill_color=colors["sectionLabel"])
+    changes.append(c)
+
+    # Stored Text
+    stt = item["storedText"]
+    _, c = make_text("Stored Text", stt["x"], stt["y"], stt["w"], stt["h"],
+                     "Effect when stored at a location", page_id, frame_id, frame_id,
+                     font_size=st_role["size"], font_weight=st_role["weight"])
+    changes.append(c)
+
+    # Action Name
+    an = item["actionName"]
+    an_role = typo["actionName"]
+    _, c = make_text("Action Name", an["x"], an["y"], an["w"], an["h"],
+                     "USE", page_id, frame_id, frame_id,
+                     font_size=an_role["size"], font_weight=an_role["weight"],
+                     fill_color=colors["actionName"])
+    changes.append(c)
+
+    # Flavor Divider
+    fd = item["flavorDivider"]
+    _, c = make_rect("Flavor Divider", fd["x"], fd["y"], fd["w"], fd["h"],
+                     _fill(colors["flavorDivider"], 0.6), page_id, frame_id, frame_id)
+    changes.append(c)
+
+    # Flavor Text
+    ft = item["flavorText"]
+    ft_role = typo["flavorText"]
+    _, c = make_text("Flavor Text", ft["x"], ft["y"], ft["w"], ft["h"],
+                     '"Every tool has its purpose."',
+                     page_id, frame_id, frame_id,
+                     font_size=ft_role["size"], font_weight=ft_role["weight"],
+                     fill_color=colors["textFlavor"],
+                     font_style=ft_role.get("style"))
+    changes.append(c)
+
+    return changes
+
+
+def build_event_shapes(tokens, page_id, frame_id) -> list:
+    """Build event-specific shapes: subtype badge, duration, trigger, rules, flavor."""
+    evt = tokens["eventLayout"]
+    colors = tokens["colors"]
+    typo = tokens["typography"]["roles"]
+    changes = []
+
+    sl_role = typo["sectionLabel"]
+    st_role = typo["sectionText"]
+
+    # Subtype Badge (background rect)
+    sb = evt["subtypeBadge"]
+    _, c = make_rect("Subtype Badge", sb["x"], sb["y"], sb["w"], sb["h"],
+                     _fill(colors["subtypeInstant"]), page_id, frame_id, frame_id,
+                     r1=sb["r"], r2=sb["r"], r3=sb["r"], r4=sb["r"])
+    changes.append(c)
+
+    # Subtype Label (text on badge)
+    sbl = evt["subtypeLabel"]
+    sub_role = typo["subtypeLabel"]
+    _, c = make_text("Subtype Label", sbl["x"], sbl["y"], sbl["w"], sbl["h"],
+                     "INSTANT", page_id, frame_id, frame_id,
+                     font_size=sub_role["size"], font_weight=sub_role["weight"],
+                     text_align=sub_role.get("align"))
+    changes.append(c)
+
+    # Duration Label
+    dl = evt["durationLabel"]
+    _, c = make_text("Duration Label", dl["x"], dl["y"], dl["w"], dl["h"],
+                     "DURATION", page_id, frame_id, frame_id,
+                     font_size=sl_role["size"], font_weight=sl_role["weight"],
+                     fill_color=colors["sectionLabel"])
+    changes.append(c)
+
+    # Duration Value
+    dv = evt["durationValue"]
+    _, c = make_text("Duration Value", dv["x"], dv["y"], dv["w"], dv["h"],
+                     "3 turns", page_id, frame_id, frame_id,
+                     font_size=st_role["size"], font_weight=st_role["weight"])
+    changes.append(c)
+
+    # Trigger Label
+    tl = evt["triggerLabel"]
+    _, c = make_text("Trigger Label", tl["x"], tl["y"], tl["w"], tl["h"],
+                     "TRIGGER", page_id, frame_id, frame_id,
+                     font_size=sl_role["size"], font_weight=sl_role["weight"],
+                     fill_color=colors["sectionLabel"])
+    changes.append(c)
+
+    # Trigger Text
+    tt = evt["triggerText"]
+    _, c = make_text("Trigger Text", tt["x"], tt["y"], tt["w"], tt["h"],
+                     "Trigger condition", page_id, frame_id, frame_id,
+                     font_size=st_role["size"], font_weight=st_role["weight"])
+    changes.append(c)
+
+    # Rules Text
+    rt = evt["rulesText"]
+    rt_role = typo["rulesText"]
+    _, c = make_text("Rules Text", rt["x"], rt["y"], rt["w"], rt["h"],
+                     "Event effect text goes here", page_id, frame_id, frame_id,
+                     font_size=rt_role["size"], font_weight=rt_role["weight"])
+    changes.append(c)
+
+    # Flavor Divider
+    fd = evt["flavorDivider"]
+    _, c = make_rect("Flavor Divider", fd["x"], fd["y"], fd["w"], fd["h"],
+                     _fill(colors["flavorDivider"], 0.6), page_id, frame_id, frame_id)
+    changes.append(c)
+
+    # Flavor Text
+    ft = evt["flavorText"]
+    ft_role = typo["flavorText"]
+    _, c = make_text("Flavor Text", ft["x"], ft["y"], ft["w"], ft["h"],
+                     '"Fate strikes without warning."',
+                     page_id, frame_id, frame_id,
+                     font_size=ft_role["size"], font_weight=ft_role["weight"],
+                     fill_color=colors["textFlavor"],
+                     font_style=ft_role.get("style"))
+    changes.append(c)
+
+    return changes
+
+
+def build_policy_shapes(tokens, page_id, frame_id) -> list:
+    """Build policy-specific shapes: effect label, effect text, flavor."""
+    pol = tokens["policyLayout"]
+    colors = tokens["colors"]
+    typo = tokens["typography"]["roles"]
+    changes = []
+
+    sl_role = typo["sectionLabel"]
+    st_role = typo["sectionText"]
+
+    # Effect Label
+    el = pol["effectLabel"]
+    _, c = make_text("Effect Label", el["x"], el["y"], el["w"], el["h"],
+                     "EFFECT", page_id, frame_id, frame_id,
+                     font_size=sl_role["size"], font_weight=sl_role["weight"],
+                     fill_color=colors["sectionLabel"])
+    changes.append(c)
+
+    # Effect Text
+    et = pol["effectText"]
+    _, c = make_text("Effect Text", et["x"], et["y"], et["w"], et["h"],
+                     "Global modifier text goes here", page_id, frame_id, frame_id,
+                     font_size=st_role["size"], font_weight=st_role["weight"])
+    changes.append(c)
+
+    # Flavor Divider
+    fd = pol["flavorDivider"]
+    _, c = make_rect("Flavor Divider", fd["x"], fd["y"], fd["w"], fd["h"],
+                     _fill(colors["flavorDivider"], 0.6), page_id, frame_id, frame_id)
+    changes.append(c)
+
+    # Flavor Text
+    ft = pol["flavorText"]
+    ft_role = typo["flavorText"]
+    _, c = make_text("Flavor Text", ft["x"], ft["y"], ft["w"], ft["h"],
+                     '"The pen rules where the sword cannot."',
+                     page_id, frame_id, frame_id,
+                     font_size=ft_role["size"], font_weight=ft_role["weight"],
+                     fill_color=colors["textFlavor"],
+                     font_style=ft_role.get("style"))
+    changes.append(c)
+
+    return changes
+
+
+TYPE_BUILDERS = {
+    "unit": build_unit_shapes,
+    "location": build_location_shapes,
+    "item": build_item_shapes,
+    "event": build_event_shapes,
+    "policy": build_policy_shapes,
+}
+
+
+def build_design_tokens(tokens) -> list:
+    """Build set-tokens-lib change."""
     dtcg_sets = {"core": {}}
     for dotted_name, props in tokens["designTokens"].items():
         parts = dotted_name.split(".")
@@ -266,37 +618,12 @@ def build_design_tokens(tokens) -> list:
     return [{"type": "set-tokens-lib", "tokens-lib": json.dumps(dtcg_sets)}]
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Create unit card template in Penpot")
-    parser.add_argument("--file-id", default=os.environ.get("PENPOT_FILE_ID"))
-    parser.add_argument("--page-id", default=os.environ.get("PENPOT_PAGE_ID"))
-    args = parser.parse_args()
+def setup_card_type(client, file_id, page_id, tokens, card_type):
+    """Set up a single card type template in the file."""
+    frame_name = FRAME_NAMES[card_type]
+    shape_names = ALL_SHAPE_NAMES_MAP[card_type]
 
-    tokens = load_tokens()
-    client = PenpotClient()
-
-    # 1. Login
-    print("Logging in...")
-    client.login()
-
-    file_id = args.file_id
-    page_id = args.page_id
-
-    # If no file specified, create project + file
-    if not file_id:
-        print("No file ID provided — creating new project and file...")
-        profile = client.api_post("get-profile", {})
-        team_id = profile.get("defaultTeamId")
-        project = client.api_post("create-project", {
-            "team-id": team_id, "name": "Card Game",
-        })
-        file_resp = client.api_post("create-file", {
-            "project-id": project["id"], "name": "Unit Card Template",
-        })
-        file_id = file_resp["id"]
-        print(f"  Created file: {file_id}")
-
-    # 2. Get file for revn/vern + existing objects
+    # Get current file state
     file_data = client.get_file(file_id)
     revn = file_data["revn"]
     vern = file_data.get("vern", 0)
@@ -305,64 +632,109 @@ def main():
         page_id = file_data["data"]["pages"][0]
 
     objects = client.get_page_objects(file_data, page_id)
-    print(f"File at revn={revn}, page={page_id}")
 
-    # Find existing card frame, or create one
+    # Find existing frame, or create one
     frame_id = None
     for oid, obj in objects.items():
-        if obj.get("name") == "Unit Card" and obj.get("type") == "frame":
+        if obj.get("name") == frame_name and obj.get("type") == "frame":
             frame_id = oid
             break
 
     changes = []
     if not frame_id:
-        print("Creating card frame...")
+        print(f"  Creating frame '{frame_name}'...")
         root_id = file_data["data"]["pagesIndex"][page_id].get("id", list(objects.keys())[0])
         card = tokens["card"]
+        # Position frames side by side: unit=0, location=850, item=1700, etc.
+        type_index = list(FRAME_NAMES.keys()).index(card_type)
+        frame_x = type_index * (card["width"] + 100)
         frame_id, frame_change = make_frame(
-            "Unit Card", 0, 0, card["width"], card["height"],
+            frame_name, frame_x, 0, card["width"], card["height"],
             page_id, root_id, root_id,
         )
         changes.append(frame_change)
     else:
-        # 3. Cleanup existing shapes (idempotency)
-        cleanup = cleanup_existing_shapes(objects, page_id)
+        # Cleanup existing shapes (idempotency)
+        cleanup = cleanup_existing_shapes(objects, page_id, shape_names)
         if cleanup:
-            print(f"Cleaning up {len(cleanup)} existing shapes...")
+            print(f"  Cleaning up {len(cleanup)} existing shapes...")
             changes.extend(cleanup)
 
-    # 4. Build all template shapes
-    print("Building template shapes...")
-    changes.extend(build_template_shapes(tokens, page_id, frame_id))
+    # Build shared + type-specific shapes
+    changes.extend(build_shared_shapes(tokens, page_id, frame_id, card_type))
+    changes.extend(TYPE_BUILDERS[card_type](tokens, page_id, frame_id))
 
-    # 5. Send changes
-    print(f"Sending {len(changes)} changes...")
+    # Send changes
+    print(f"  Sending {len(changes)} changes...")
     resp = client.update_file(file_id, changes, revn, vern)
     new_revn = resp.get("revn", "?")
-    print(f"Template created! revn={new_revn}")
+    print(f"  Template '{frame_name}' created! revn={new_revn}")
 
-    # 6. Design tokens (separate update to get fresh revn)
-    print("Setting design tokens...")
+    # Verify
     file_data2 = client.get_file(file_id)
+    objects2 = client.get_page_objects(file_data2, page_id)
+    found = client.find_shapes_by_name(objects2, shape_names)
+    print(f"  Verified {len(found)}/{len(shape_names)} shapes")
+
+    missing = shape_names - set(found)
+    if missing:
+        print(f"  WARNING: missing shapes: {missing}", file=sys.stderr)
+        return False
+    return True
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Create card templates in Penpot")
+    parser.add_argument("--type", choices=list(FRAME_NAMES.keys()) + ["all"],
+                        default="all", help="Card type to create (default: all)")
+    parser.add_argument("--file-id", default=os.environ.get("PENPOT_FILE_ID"))
+    parser.add_argument("--page-id", default=os.environ.get("PENPOT_PAGE_ID"))
+    args = parser.parse_args()
+
+    tokens = load_tokens()
+    client = PenpotClient()
+
+    print("Logging in...")
+    client.login()
+
+    file_id = args.file_id
+    page_id = args.page_id
+
+    if not file_id:
+        print("No file ID provided — creating new project and file...")
+        profile = client.api_post("get-profile", {})
+        team_id = profile.get("defaultTeamId")
+        project = client.api_post("create-project", {
+            "team-id": team_id, "name": "Card Game",
+        })
+        file_resp = client.api_post("create-file", {
+            "project-id": project["id"], "name": "Card Templates",
+        })
+        file_id = file_resp["id"]
+        print(f"  Created file: {file_id}")
+
+    # Determine which types to build
+    card_types = list(FRAME_NAMES.keys()) if args.type == "all" else [args.type]
+
+    ok = True
+    for card_type in card_types:
+        print(f"\nSetting up {card_type} template...")
+        if not setup_card_type(client, file_id, page_id, tokens, card_type):
+            ok = False
+
+    # Design tokens (once, after all templates)
+    print("\nSetting design tokens...")
+    file_data = client.get_file(file_id)
     token_changes = build_design_tokens(tokens)
     client.update_file(file_id, token_changes,
-                       file_data2["revn"], file_data2.get("vern", 0))
+                       file_data["revn"], file_data.get("vern", 0))
     print("Design tokens set!")
 
-    # 7. Verify: print shape name -> ID mapping
-    file_data3 = client.get_file(file_id)
-    objects3 = client.get_page_objects(file_data3, page_id)
-    found = client.find_shapes_by_name(objects3, ALL_SHAPE_NAMES)
-    print(f"\nVerified {len(found)}/{len(ALL_SHAPE_NAMES)} shapes:")
-    for name in sorted(found):
-        print(f"  {name}: {found[name]}")
-
-    missing = ALL_SHAPE_NAMES - set(found)
-    if missing:
-        print(f"\nWARNING: missing shapes: {missing}", file=sys.stderr)
+    if not ok:
+        print("\nWARNING: Some templates had missing shapes.", file=sys.stderr)
         sys.exit(1)
 
-    print(f"\nOpen in browser: {client.base_url}/view/{file_id}?page-id={page_id}")
+    print(f"\nAll done! Open in browser: {client.base_url}/view/{file_id}")
 
 
 if __name__ == "__main__":

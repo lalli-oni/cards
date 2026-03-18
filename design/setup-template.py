@@ -95,10 +95,15 @@ def load_tokens() -> dict:
         return json.load(f)
 
 
-def cleanup_existing_shapes(objects, page_id, shape_names) -> list:
-    """Delete all shapes matching the given names. Makes the script idempotent."""
+def cleanup_existing_shapes(objects, page_id, shape_names, frame_id=None) -> list:
+    """Delete all shapes matching the given names. Makes the script idempotent.
+
+    If frame_id is provided, only deletes shapes belonging to that frame.
+    """
     changes = []
     for oid, obj in objects.items():
+        if frame_id and obj.get("frameId", obj.get("frame-id")) != frame_id and oid != frame_id:
+            continue
         if obj.get("name") in shape_names:
             changes.append(del_obj_change(page_id, oid))
     return changes
@@ -633,32 +638,26 @@ def setup_card_type(client, file_id, page_id, tokens, card_type):
 
     objects = client.get_page_objects(file_data, page_id)
 
-    # Find existing frame, or create one
-    frame_id = None
+    # Find existing frame — delete it entirely for clean recreation
+    changes = []
+    root_id = file_data["data"]["pagesIndex"][page_id].get("id", list(objects.keys())[0])
     for oid, obj in objects.items():
         if obj.get("name") == frame_name and obj.get("type") == "frame":
-            frame_id = oid
+            print(f"  Deleting existing frame '{frame_name}'...")
+            # Delete children first, then the frame
+            cleanup = cleanup_existing_shapes(objects, page_id, shape_names, oid)
+            changes.extend(cleanup)
+            changes.append(del_obj_change(page_id, oid))
             break
 
-    changes = []
-    if not frame_id:
-        print(f"  Creating frame '{frame_name}'...")
-        root_id = file_data["data"]["pagesIndex"][page_id].get("id", list(objects.keys())[0])
-        card = tokens["card"]
-        # Position frames side by side: unit=0, location=850, item=1700, etc.
-        type_index = list(FRAME_NAMES.keys()).index(card_type)
-        frame_x = type_index * (card["width"] + 100)
-        frame_id, frame_change = make_frame(
-            frame_name, frame_x, 0, card["width"], card["height"],
-            page_id, root_id, root_id,
-        )
-        changes.append(frame_change)
-    else:
-        # Cleanup existing shapes (idempotency)
-        cleanup = cleanup_existing_shapes(objects, page_id, shape_names)
-        if cleanup:
-            print(f"  Cleaning up {len(cleanup)} existing shapes...")
-            changes.extend(cleanup)
+    # Create fresh frame at origin
+    print(f"  Creating frame '{frame_name}'...")
+    card = tokens["card"]
+    frame_id, frame_change = make_frame(
+        frame_name, 0, 0, card["width"], card["height"],
+        page_id, root_id, root_id,
+    )
+    changes.append(frame_change)
 
     # Build shared + type-specific shapes
     changes.extend(build_shared_shapes(tokens, page_id, frame_id, card_type))
@@ -670,10 +669,10 @@ def setup_card_type(client, file_id, page_id, tokens, card_type):
     new_revn = resp.get("revn", "?")
     print(f"  Template '{frame_name}' created! revn={new_revn}")
 
-    # Verify
+    # Verify — scope to this frame only
     file_data2 = client.get_file(file_id)
     objects2 = client.get_page_objects(file_data2, page_id)
-    found = client.find_shapes_by_name(objects2, shape_names)
+    found = client.find_shapes_by_name(objects2, shape_names, frame_id)
     print(f"  Verified {len(found)}/{len(shape_names)} shapes")
 
     missing = shape_names - set(found)

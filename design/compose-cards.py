@@ -106,11 +106,22 @@ def detect_card_type(csv_path) -> str:
 
 
 def discover_shapes(client, file_data, page_id, card_type) -> dict:
-    """Find all updatable shapes by name. Error if any missing."""
+    """Find all updatable shapes by name, scoped to the card type's frame."""
     frame_name = FRAME_NAMES[card_type]
-    required = set(UPDATABLE_SHAPES[card_type]) | {frame_name}
     objects = client.get_page_objects(file_data, page_id)
-    found = client.find_shapes_by_name(objects, required)
+
+    # First find the frame itself (unscoped search)
+    frame_found = client.find_shapes_by_name(objects, {frame_name})
+    if frame_name not in frame_found:
+        print(f"ERROR: frame '{frame_name}' not found. Run setup-template.py first.", file=sys.stderr)
+        sys.exit(1)
+    frame_id = frame_found[frame_name]
+
+    # Then find updatable shapes scoped to this frame
+    required = set(UPDATABLE_SHAPES[card_type])
+    found = client.find_shapes_by_name(objects, required, frame_id=frame_id)
+    found[frame_name] = frame_id
+
     missing = required - set(found)
     if missing:
         print(f"ERROR: missing shapes in {card_type} template: {missing}", file=sys.stderr)

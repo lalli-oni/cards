@@ -426,13 +426,16 @@ class PenpotClient:
             print(f"ERROR: Page {page_id} not found. Available pages: {available}", file=sys.stderr)
             sys.exit(1)
 
-    def find_shapes_by_name(self, objects, names) -> dict:
+    def find_shapes_by_name(self, objects, names, frame_id=None) -> dict:
         """Return {name: shape_id} for each name found in objects.
 
         Eliminates ALL hardcoded UUIDs — shapes are discovered at runtime.
+        If frame_id is provided, only searches shapes belonging to that frame.
         """
         result = {}
         for oid, obj in objects.items():
+            if frame_id and obj.get("frameId", obj.get("frame-id")) != frame_id and oid != frame_id:
+                continue
             n = obj.get("name")
             if n in names:
                 if n in result:

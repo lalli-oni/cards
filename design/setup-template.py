@@ -91,13 +91,23 @@ ALL_SHAPE_NAMES_MAP = {
 
 def load_tokens() -> dict:
     path = os.path.join(SCRIPT_DIR, "tokens.json")
-    with open(path) as f:
-        return json.load(f)
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except FileNotFoundError:
+        print(f"ERROR: tokens.json not found at {path}", file=sys.stderr)
+        print("  This file defines card layout, colors, and typography.", file=sys.stderr)
+        sys.exit(1)
+    except json.JSONDecodeError as e:
+        print(f"ERROR: tokens.json is not valid JSON: {e}", file=sys.stderr)
+        sys.exit(1)
 
 
 def cleanup_existing_shapes(objects, page_id, shape_names, frame_id=None) -> list:
-    """Delete all shapes matching the given names. Makes the script idempotent.
+    """Delete all shapes matching the given names within a frame.
 
+    Belt-and-suspenders cleanup before the frame itself is deleted.
+    Idempotency is achieved by the frame-level delete+recreate in setup_card_type.
     If frame_id is provided, only deletes shapes belonging to that frame.
     """
     changes = []
@@ -632,6 +642,8 @@ def setup_card_type(client, file_id, page_id, tokens, card_type):
     file_data = client.get_file(file_id)
     revn = file_data["revn"]
     vern = file_data.get("vern", 0)
+    if "vern" not in file_data:
+        print("  NOTE: File data missing 'vern' field (older Penpot version?). Using vern=0.", file=sys.stderr)
 
     if not page_id:
         page_id = file_data["data"]["pages"][0]
@@ -715,11 +727,11 @@ def main():
     # Determine which types to build
     card_types = list(FRAME_NAMES.keys()) if args.type == "all" else [args.type]
 
-    ok = True
+    failed_types = []
     for card_type in card_types:
         print(f"\nSetting up {card_type} template...")
         if not setup_card_type(client, file_id, page_id, tokens, card_type):
-            ok = False
+            failed_types.append(card_type)
 
     # Design tokens (once, after all templates)
     print("\nSetting design tokens...")
@@ -729,8 +741,8 @@ def main():
                        file_data["revn"], file_data.get("vern", 0))
     print("Design tokens set!")
 
-    if not ok:
-        print("\nWARNING: Some templates had missing shapes.", file=sys.stderr)
+    if failed_types:
+        print(f"\nERROR: Templates with missing shapes: {', '.join(failed_types)}", file=sys.stderr)
         sys.exit(1)
 
     print(f"\nAll done! Open in browser: {client.base_url}/view/{file_id}")

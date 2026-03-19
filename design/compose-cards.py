@@ -8,8 +8,10 @@ Supports all 5 card types: unit, location, item, event, policy.
 Auto-detects card type from CSV filename, or accepts --type override.
 
 Usage:
-    python compose-cards.py [csv_path] --format png|svg|both -o exports/
+    python compose-cards.py <csv_path> --format png|svg|both -o exports/
     python compose-cards.py --type location library/sets/alpha-1/locations.csv
+
+Defaults to library/sets/alpha-1/units.csv if csv_path is omitted.
 """
 
 import argparse
@@ -35,7 +37,7 @@ FRAME_NAMES = {
     "policy": "Policy Card",
 }
 
-# Shapes that compose updates per card type (+ the frame for export)
+# Shape names updated per card type during composition
 UPDATABLE_SHAPES = {
     "unit": [
         "Card Name", "Cost Value", "Type Label", "Type Initial",
@@ -89,8 +91,47 @@ FILENAME_TYPE_MAP = {
 
 def load_tokens() -> dict:
     path = os.path.join(SCRIPT_DIR, "tokens.json")
-    with open(path) as f:
-        return json.load(f)
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except FileNotFoundError:
+        print(f"ERROR: tokens.json not found at {path}", file=sys.stderr)
+        print("  This file defines card layout, colors, and typography.", file=sys.stderr)
+        sys.exit(1)
+    except json.JSONDecodeError as e:
+        print(f"ERROR: tokens.json is not valid JSON: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def validate_tokens(tokens, card_type):
+    """Check that tokens.json has all required sections for the card type."""
+    required = ["typography", "colors", "mappings", "card", "layout"]
+    type_sections = {
+        "location": ["locationLayout"],
+        "item": ["itemLayout"],
+        "event": ["eventLayout"],
+        "policy": ["policyLayout"],
+    }
+    required.extend(type_sections.get(card_type, []))
+    missing = [k for k in required if k not in tokens]
+    if missing:
+        print(f"ERROR: tokens.json missing sections for {card_type}: {missing}", file=sys.stderr)
+        sys.exit(1)
+
+
+# Known CSV columns per card type (for typo detection)
+KNOWN_COLUMNS = {
+    "unit": {"id", "name", "set", "rarity", "cost", "text", "flavor", "keywords",
+             "strength", "cunning", "charisma", "attributes", "actions"},
+    "location": {"id", "name", "set", "rarity", "cost", "text", "flavor", "keywords",
+                 "mission", "passive", "edges", "actions"},
+    "item": {"id", "name", "set", "rarity", "cost", "text", "flavor", "keywords",
+             "equip", "stored", "actions"},
+    "event": {"id", "name", "set", "rarity", "cost", "text", "flavor", "keywords",
+              "subtype", "duration", "trigger"},
+    "policy": {"id", "name", "set", "rarity", "cost", "text", "flavor", "keywords",
+               "effect"},
+}
 
 
 def detect_card_type(csv_path) -> str:
@@ -106,7 +147,10 @@ def detect_card_type(csv_path) -> str:
 
 
 def discover_shapes(client, file_data, page_id, card_type) -> dict:
-    """Find all updatable shapes by name, scoped to the card type's frame."""
+    """Find the card type's frame and all its updatable shapes by name.
+
+    Returns a dict mapping shape name to ID, including the frame itself.
+    """
     frame_name = FRAME_NAMES[card_type]
     objects = client.get_page_objects(file_data, page_id)
 
@@ -146,7 +190,7 @@ def compose_unit_card(card, shape_ids, shape_geoms, tokens, page_id) -> list:
     # Parse attributes
     attr_list = card.get("attributes", "").split(";")
     attributes = " \u2022 ".join(attr_list)
-    type_initial = mappings["attributeInitials"].get(attr_list[0], "?") if attr_list else "?"
+    type_initial = mappings["attributeInitials"].get(attr_list[0], "?") if attr_list and attr_list[0] else "?"
 
     # Parse action
     actions = card.get("actions", "")
@@ -500,7 +544,7 @@ def compose_policy_card(card, shape_ids, shape_geoms, tokens, page_id) -> list:
     keywords = card.get("keywords", "")
     type_label = keywords.replace(";", " \u2022 ").upper() if keywords else "POLICY"
 
-    effect = card.get("effect", "")
+    effect = card.get("effect", "") or "No effect"
 
     return [
         mod_text_change(page_id, shape_ids["Card Name"],
@@ -568,6 +612,7 @@ def main():
     print(f"Card type: {card_type}")
 
     tokens = load_tokens()
+    validate_tokens(tokens, card_type)
     client = PenpotClient()
 
     # 1. Login
@@ -585,6 +630,8 @@ def main():
     file_data = client.get_file(file_id)
     revn = file_data["revn"]
     vern = file_data.get("vern", 0)
+    if "vern" not in file_data:
+        print("NOTE: File data missing 'vern' field (older Penpot version?). Using vern=0.", file=sys.stderr)
 
     if not page_id:
         page_id = file_data["data"]["pages"][0]
@@ -601,6 +648,11 @@ def main():
         name = obj.get("name")
         if name in shape_ids:
             shape_geoms[name] = (obj["x"], obj["y"], obj["width"], obj["height"])
+
+    missing_geom = set(shape_ids.keys()) - set(shape_geoms.keys())
+    if missing_geom:
+        print(f"WARNING: Shapes missing geometry data: {missing_geom}", file=sys.stderr)
+        print("  SVG exports may time out for these shapes.", file=sys.stderr)
 
     print(f"  Found {len(shape_ids)} shapes")
 
@@ -621,6 +673,11 @@ def main():
         print(f"  Found columns: {sorted(actual_cols)}", file=sys.stderr)
         sys.exit(1)
 
+    unknown_cols = actual_cols - KNOWN_COLUMNS.get(card_type, actual_cols)
+    if unknown_cols:
+        print(f"WARNING: Unrecognized CSV columns for {card_type}: {unknown_cols}", file=sys.stderr)
+        print("  These columns will be ignored. Check for typos.", file=sys.stderr)
+
     # 5. Export
     compose_fn = COMPOSE_FNS[card_type]
     os.makedirs(args.output, exist_ok=True)
@@ -638,7 +695,11 @@ def main():
 
         # Update file
         resp = client.update_file(file_id, changes, revn, vern)
+        if "revn" not in resp:
+            print(f"  WARNING: update_file response missing 'revn' for {card_id}. "
+                  f"Guessing revn={revn+1}.", file=sys.stderr)
         revn = resp.get("revn", revn + 1)
+        vern = resp.get("vern", vern)
 
         # Export each format
         for fmt in export_formats:
@@ -659,7 +720,11 @@ def main():
             if fmt == "svg":
                 postprocess = os.path.join(SCRIPT_DIR, "postprocess-svg.py")
                 if os.path.exists(postprocess):
-                    subprocess.run([sys.executable, postprocess, out_path], check=True)
+                    try:
+                        subprocess.run([sys.executable, postprocess, out_path], check=True)
+                    except subprocess.CalledProcessError as e:
+                        print(f"ERROR: SVG postprocessing failed for {card_id}: {e}", file=sys.stderr)
+                        sys.exit(1)
 
         elapsed = time.time() - t0
         total_time += elapsed

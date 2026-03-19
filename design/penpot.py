@@ -439,7 +439,10 @@ class PenpotClient:
             n = obj.get("name")
             if n in names:
                 if n in result:
-                    print(f"WARNING: duplicate shape name '{n}' (IDs: {result[n]}, {oid})", file=sys.stderr)
+                    print(f"ERROR: duplicate shape name '{n}' in frame "
+                          f"(IDs: {result[n]}, {oid}). "
+                          f"Delete the duplicate in Penpot and re-run.", file=sys.stderr)
+                    sys.exit(1)
                 result[n] = oid
         return result
 

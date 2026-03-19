@@ -14,3 +14,6 @@ design/exports/
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# Persistent CLI binaries (installed by session-start hook)
+.claude/bin/

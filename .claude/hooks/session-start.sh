@@ -65,10 +65,3 @@ if [ ! -d "engine/node_modules/immer" ]; then
   bun install
 fi
 
-###############################################################################
-# Build card library (output is gitignored, needed for tests)
-###############################################################################
-if [ ! -d "library/build" ]; then
-  echo "Building card library..."
-  bun library/build.ts
-fi

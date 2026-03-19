@@ -13,6 +13,11 @@ PERSISTENT_BIN="$CLAUDE_PROJECT_DIR/.claude/bin"
 mkdir -p "$PERSISTENT_BIN"
 export PATH="$PERSISTENT_BIN:$PATH"
 
+# Persist PATH for all subsequent Bash tool calls in this session
+if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
+  echo "export PATH=\"$PERSISTENT_BIN:\$PATH\"" >> "$CLAUDE_ENV_FILE"
+fi
+
 ###############################################################################
 # GitHub CLI
 ###############################################################################

@@ -737,8 +737,10 @@ def main():
     print("\nSetting design tokens...")
     file_data = client.get_file(file_id)
     token_changes = build_design_tokens(tokens)
-    client.update_file(file_id, token_changes,
-                       file_data["revn"], file_data.get("vern", 0))
+    resp = client.update_file(file_id, token_changes,
+                              file_data["revn"], file_data.get("vern", 0))
+    if "revn" not in resp:
+        print("WARNING: Design tokens update response missing 'revn'.", file=sys.stderr)
     print("Design tokens set!")
 
     if failed_types:

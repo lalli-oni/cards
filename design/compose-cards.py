@@ -107,6 +107,7 @@ def validate_tokens(tokens, card_type):
     """Check that tokens.json has all required sections for the card type."""
     required = ["typography", "colors", "mappings", "card", "layout"]
     type_sections = {
+        "unit": ["stats"],
         "location": ["locationLayout"],
         "item": ["itemLayout"],
         "event": ["eventLayout"],

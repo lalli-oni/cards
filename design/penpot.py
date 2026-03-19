@@ -493,7 +493,9 @@ class PenpotClient:
         uri_value = data.get("~:uri", {})
         asset_uri = uri_value.get("~#uri") if isinstance(uri_value, dict) else uri_value
         if not asset_uri:
-            raise RuntimeError(f"No asset URI in export response: {data}")
+            print(f"ERROR: Export API returned no asset URI for object {object_id}.", file=sys.stderr)
+            print(f"  Response keys: {list(data.keys())}", file=sys.stderr)
+            sys.exit(1)
 
         if not asset_uri.startswith("http"):
             asset_uri = f"{self.base_url}{asset_uri}"

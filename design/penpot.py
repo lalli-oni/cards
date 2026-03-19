@@ -426,17 +426,23 @@ class PenpotClient:
             print(f"ERROR: Page {page_id} not found. Available pages: {available}", file=sys.stderr)
             sys.exit(1)
 
-    def find_shapes_by_name(self, objects, names) -> dict:
+    def find_shapes_by_name(self, objects, names, frame_id=None) -> dict:
         """Return {name: shape_id} for each name found in objects.
 
         Eliminates ALL hardcoded UUIDs — shapes are discovered at runtime.
+        If frame_id is provided, only searches shapes belonging to that frame.
         """
         result = {}
         for oid, obj in objects.items():
+            if frame_id and obj.get("frameId", obj.get("frame-id")) != frame_id and oid != frame_id:
+                continue
             n = obj.get("name")
             if n in names:
                 if n in result:
-                    print(f"WARNING: duplicate shape name '{n}' (IDs: {result[n]}, {oid})", file=sys.stderr)
+                    print(f"ERROR: duplicate shape name '{n}' in frame "
+                          f"(IDs: {result[n]}, {oid}). "
+                          f"Delete the duplicate in Penpot and re-run.", file=sys.stderr)
+                    sys.exit(1)
                 result[n] = oid
         return result
 
@@ -487,7 +493,9 @@ class PenpotClient:
         uri_value = data.get("~:uri", {})
         asset_uri = uri_value.get("~#uri") if isinstance(uri_value, dict) else uri_value
         if not asset_uri:
-            raise RuntimeError(f"No asset URI in export response: {data}")
+            print(f"ERROR: Export API returned no asset URI for object {object_id}.", file=sys.stderr)
+            print(f"  Response keys: {list(data.keys())}", file=sys.stderr)
+            sys.exit(1)
 
         if not asset_uri.startswith("http"):
             asset_uri = f"{self.base_url}{asset_uri}"

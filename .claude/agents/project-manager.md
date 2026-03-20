@@ -57,6 +57,7 @@ You can create, label, close, and organize GitHub issues:
 - `bug` — something is broken
 - `enhancement` — new feature or improvement
 - `documentation` — docs updates
+- `question` — open design questions needing decisions
 - `good first issue` — small, well-scoped tasks
 
 **Creating issues:**

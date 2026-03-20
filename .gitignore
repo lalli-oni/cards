@@ -14,5 +14,4 @@ design/exports/
 
 # Claude Code local settings
 .claude/settings.local.json
-.claude/bin/
 .mcp.json

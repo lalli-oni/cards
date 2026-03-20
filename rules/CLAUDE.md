@@ -24,3 +24,7 @@ This folder contains markdown files defining the card game rules.
 - `README.md` — Master design document (phases, card types, economy, variants)
 - `market.md` — Market and economy rules
 - Additional rule files are linked from README.md when created
+
+## Open Design Questions
+Open design questions are tracked as GitHub issues with the `rules` + `question` labels.
+Use `gh issue list -R lalli-oni/cards --label rules,question` to see them.

@@ -19,8 +19,12 @@ if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
 fi
 
 ###############################################################################
-# GitHub CLI
+# GitHub CLI — default repo so `gh` works despite local-proxy remote
 ###############################################################################
+if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
+  echo "export GH_REPO=lalli-oni/cards" >> "$CLAUDE_ENV_FILE"
+fi
+export GH_REPO="lalli-oni/cards"
 if ! command -v gh &>/dev/null; then
   echo "Installing GitHub CLI..."
   GH_VERSION="2.65.0"

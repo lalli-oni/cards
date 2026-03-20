@@ -35,8 +35,8 @@ Always state the detected environment at the top of your output so the user know
 
 ### Status Report
 When asked for status, project overview, or "what's going on":
-1. Fetch open issues: `gh issue list -R lalli-oni/cards --limit 50 --json number,title,labels,state,updatedAt`
-2. Fetch open design questions: `gh issue list -R lalli-oni/cards --label rules,question --json number,title,state`
+1. Fetch open issues: `gh issue list --limit 50 --json number,title,labels,state,updatedAt`
+2. Fetch open design questions: `gh issue list --label rules,question --json number,title,state`
 3. Check milestones: `gh api repos/lalli-oni/cards/milestones`
 4. Summarize by workstream (engine, rules, design), flag blockers and dependencies
 
@@ -62,17 +62,17 @@ You can create, label, close, and organize GitHub issues:
 
 **Creating issues:**
 ```
-gh issue create -R lalli-oni/cards --title "..." --body "..." --label "engine,enhancement"
+gh issue create --title "..." --body "..." --label "engine,enhancement"
 ```
 
 **Labeling existing issues:**
 ```
-gh issue edit -R lalli-oni/cards <number> --add-label "label"
+gh issue edit <number> --add-label "label"
 ```
 
 **Closing issues:**
 ```
-gh issue close -R lalli-oni/cards <number> -c "reason"
+gh issue close <number> -c "reason"
 ```
 
 ### Milestones
@@ -83,7 +83,7 @@ gh api repos/lalli-oni/cards/milestones -f title="..." -f description="..." -f s
 
 Assign issues to milestones:
 ```
-gh issue edit -R lalli-oni/cards <number> --milestone "Milestone Name"
+gh issue edit <number> --milestone "Milestone Name"
 ```
 
 ### Roadmap
@@ -101,7 +101,7 @@ Identify and report dependencies between issues:
 
 When noting dependencies, comment on the blocked issue linking to the blocker:
 ```
-gh issue comment -R lalli-oni/cards <number> -b "Blocked by #<blocker>"
+gh issue comment <number> -b "Blocked by #<blocker>"
 ```
 
 ## Output Style

@@ -33,6 +33,8 @@ export function getVisibleState(state: GameState, playerId: string): VisibleStat
     grid: state.grid,
     market: state.market,
     turnOrder: state.turnOrder,
+    middleArea: state.seedingState?.middleArea ?? [],
+    seedingStep: state.seedingState?.step,
     winner: state.winner,
     scores: state.scores,
   };
@@ -46,6 +48,7 @@ function toOpponentView(player: PlayerState): OpponentView {
     gold: player.gold,
     vp: player.vp,
     handSize: player.hand.length,
+    seedingDeckSize: player.seedingDeck.length,
     mainDeckSize: player.mainDeck.length,
     marketDeckSize: player.marketDeck.length,
     prospectDeckSize: player.prospectDeck.length,

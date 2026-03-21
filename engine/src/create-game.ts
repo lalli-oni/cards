@@ -1,5 +1,6 @@
 import prand from "pure-rand";
-import type { GameConfig, GameState, PlayerDescriptor, PlayerState, Grid } from "./types";
+import type { GameConfig, GameState, PlayerDescriptor, PlayerState, Grid, DeckInput, SeedingState } from "./types";
+import { shuffle, extractRngState } from "./rng";
 
 function createPlayerState(descriptor: PlayerDescriptor): PlayerState {
   return {
@@ -9,6 +10,7 @@ function createPlayerState(descriptor: PlayerDescriptor): PlayerState {
     gold: 0,
     vp: 0,
     hand: [],
+    seedingDeck: [],
     mainDeck: [],
     marketDeck: [],
     prospectDeck: [],
@@ -17,6 +19,7 @@ function createPlayerState(descriptor: PlayerDescriptor): PlayerState {
     hq: [],
     activePolicies: [],
     activeTraps: [],
+    policyPool: [],
   };
 }
 
@@ -36,12 +39,16 @@ function createEmptyGrid(config: GameConfig, playerCount: number): Grid {
 
 /**
  * Initialize a new game. Returns the starting GameState.
- * The state begins in the "seeding" phase.
+ *
+ * DeckInput determines the starting mode:
+ * - "seeding": populate seeding decks + policy pools, start in seeding phase
+ * - "main": populate pre-built decks, skip directly to main phase
  */
 export function createGame(
   config: GameConfig,
   players: PlayerDescriptor[],
   seed: string,
+  deckInput: DeckInput,
 ): GameState {
   if (players.length === 0) {
     throw new Error("createGame requires at least one player");
@@ -62,7 +69,7 @@ export function createGame(
   const rng = prand.mersenne(hashSeed(seed));
 
   // Determine turn order — shuffle player ids using seeded RNG
-  const [turnOrder, nextRng] = seededShuffle(ids, rng);
+  const [turnOrder, nextRng] = shuffle(ids, rng);
 
   const startingGold =
     typeof config.starting_gold === "number" ? config.starting_gold : 10;
@@ -73,12 +80,55 @@ export function createGame(
     return state;
   });
 
+  // Populate decks based on input mode
+  if (deckInput.mode === "seeding") {
+    for (const ps of playerStates) {
+      const input = deckInput.decks[ps.id];
+      if (!input) {
+        throw new Error(`No seeding deck provided for player "${ps.id}"`);
+      }
+      ps.seedingDeck = [...input.seedingDeck];
+      ps.policyPool = [...input.policyPool];
+    }
+  } else {
+    for (const ps of playerStates) {
+      const input = deckInput.decks[ps.id];
+      if (!input) {
+        throw new Error(`No deck input provided for player "${ps.id}"`);
+      }
+      ps.mainDeck = [...input.mainDeck];
+      ps.hand = [...input.hand];
+      ps.prospectDeck = [...input.prospectDeck];
+      ps.marketDeck = [...input.marketDeck];
+      ps.activePolicies = [...input.activePolicies];
+    }
+  }
+
+  const isSeeding = deckInput.mode === "seeding";
+
+  const seedingState: SeedingState | undefined = isSeeding
+    ? {
+        step: "seed_draw",
+        middleArea: [],
+        stealTurnIndex: 0,
+        keepSubmitted: [],
+        splitSubmitted: [],
+        passedPolicies: {},
+        policyPassSubmitted: [],
+        policyPickSubmitted: [],
+      }
+    : undefined;
+
   return {
     config,
-    phase: "seeding",
+    phase: isSeeding ? "seeding" : "main",
     turn: {
       activePlayerId: turnOrder[0],
-      actionPointsRemaining: 0, // seeding phase doesn't use AP
+      actionPointsRemaining: isSeeding
+        ? 0
+        : (typeof config.action_points_per_turn === "number"
+            ? config.action_points_per_turn
+            : 3),
       round: 1,
     },
     players: playerStates,
@@ -88,19 +138,8 @@ export function createGame(
     seed,
     actionLog: [],
     turnOrder,
+    seedingState,
   };
-}
-
-/** Extract serializable RNG state. Throws if the generator doesn't support it. */
-function extractRngState(rng: prand.RandomGenerator): readonly number[] {
-  const state = rng.getState?.();
-  if (!state) {
-    throw new Error(
-      "RNG generator does not support getState() — cannot serialize game state. " +
-      "Ensure pure-rand mersenne generator is used.",
-    );
-  }
-  return state;
 }
 
 /** Convert a string seed to a numeric seed for pure-rand (FNV-1a). */
@@ -113,17 +152,3 @@ function hashSeed(seed: string): number {
   return hash >>> 0;
 }
 
-/** Fisher-Yates shuffle using seeded RNG. Returns shuffled array and new RNG state. */
-function seededShuffle<T>(
-  array: T[],
-  rng: prand.RandomGenerator,
-): [T[], prand.RandomGenerator] {
-  const result = [...array];
-  let currentRng = rng;
-  for (let i = result.length - 1; i > 0; i--) {
-    const [j, nextRng] = prand.uniformIntDistribution(0, i, currentRng);
-    currentRng = nextRng;
-    [result[i], result[j]] = [result[j], result[i]];
-  }
-  return [result, currentRng];
-}

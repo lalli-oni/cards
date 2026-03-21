@@ -23,8 +23,7 @@ In each round every player gets a turn, first starting player and then going clo
 Each player brings a **seeding deck** of [var:seeding_deck_size:60] cards (shuffled).
 Each seeding deck must contain exactly [var:seeding_locations:16] **locations** and
 [var:seeding_dilemmas:16] **dilemmas**; the remaining [var:seeding_other:28] cards are units, items,
-and events. Each seeding deck may contain at most **8 legendary** and
-**24 epic** cards; these rarity limits apply per deck. Policies are
+and events. Rarity limits apply per deck (see Rarity). Policies are
 not part of the seeding deck and do not count toward these totals.
 
 Each player brings [var:policy_pool_size:3] policy cards (separate from the seeding
@@ -418,7 +417,7 @@ no direct effect on gameplay mechanics or card cost — a common can be
 more expensive or powerful than a legendary.
 
 - Legendary: max [var:max_legendary:8] per seeding deck
-- Epic: max [var:max_epic:24] per seeding deck
+- Epic: max [var:max_epic:16] per seeding deck
 - Uncommon: no cap
 - Common: no cap
 
@@ -479,7 +478,7 @@ differs per card.
 
 #### Seeding
 - Seeding deck size: 60 (16 locations, 16 dilemmas, 28 other)
-- Rarity caps on seeding deck: 8 legendary, 24 epic (applied per-deck)
+- Rarity caps on seeding deck: [var:max_legendary:8] legendary, [var:max_epic:16] epic (applied per-deck)
 - Draft round draw: 10 cards (last 2 to Arena, 8 kept)
 - Claim: pick until Arena is empty; locations placed on grid; starting player token rotates each round
 - Dilemmas per location: 2

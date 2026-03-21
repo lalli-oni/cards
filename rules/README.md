@@ -15,7 +15,7 @@
 ## Phases
 Starting player is picked randomly.
 
-All phases consist rounds.
+All phases consist of rounds.
 
 In each round every player gets a turn, first starting player and then going clockwise until last player ends their turn.
 
@@ -438,7 +438,7 @@ differs per card.
 #### Unit keywords
 | Keyword | Timing | Definition |
 |---------|--------|------------|
-| Commander | Static | Friendly units at the same location get +[var:X] to all stats |
+| Commander | Static | Friendly units at the same location get +X to all stats |
 | Ambush | Triggered | When this unit enters a location with an enemy unit, one enemy unit there is injured |
 | Untouchable | Static | This unit cannot be targeted by the Attack action and is not committed to combat as a defender |
 | Duelist | Static | When this unit is in combat, the matchup it is assigned to is resolved in isolation — no other units' keywords or effects apply to it |
@@ -457,8 +457,8 @@ differs per card.
 #### Location keywords
 | Keyword | Timing | Definition |
 |---------|--------|------------|
-| Radiated | Static | Units at this location get -[var:X] to all stats while present |
-| Fortified | Static | Defender units at this location get +[var:X] to strength when calculating attack power |
+| Radiated | Static | Units at this location get -X to all stats while present |
+| Fortified | Static | Defender units at this location get +X to strength when calculating attack power |
 
 ## Economy
 - Each player begins with [var:starting_gold:10] gold.

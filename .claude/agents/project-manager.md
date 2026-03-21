@@ -82,23 +82,23 @@ Milestones answer "what's in this release." Labels answer "what kind of work is 
 - Assign to milestone only if strictly needed. Ask: "can we reach this milestone without this?"
 - Issues not assigned to a milestone are backlog.
 - Don't create future milestones prematurely — triage when the current one nears completion.
-- Each milestone has a pinned tracking issue with a grouped checklist and dependency order.
+- Each milestone should have a pinned tracking issue with a grouped checklist and dependency order. Pin via GitHub web UI. Structure: sections by workstream, `- [ ] #N — description` checklist items, and an ASCII or text dependency diagram at the bottom.
 
 ```bash
-# List milestones
+# List milestones (returns open only; add ?state=all for closed)
 gh api repos/lalli-oni/cards/milestones
 # Create milestone
-gh api repos/lalli-oni/cards/milestones -f title="..." -f description="..." -f state="open"
+gh api repos/lalli-oni/cards/milestones -f title="..." -f description="..."
 # List milestone progress
 gh issue list --milestone "<name>" --json number,title,state
 # Assign/remove issue
 gh issue edit <number> --milestone "<name>"
-gh issue edit <number> --milestone ""
+gh issue edit <number> --remove-milestone
 ```
 
 ### Roadmap
 The roadmap lives in the pinned tracking issue for the current milestone. When updating:
-- Keep the dependency order diagram current
+- Keep the dependency diagram current
 - Check off completed items
 - Add new issues to the appropriate section
 - Flag blockers in the issue comments

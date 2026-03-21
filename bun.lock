@@ -11,6 +11,10 @@
     "engine": {
       "name": "cards-engine",
       "version": "0.1.0",
+      "dependencies": {
+        "immer": "^11.1.4",
+        "pure-rand": "6",
+      },
     },
     "test": {
       "name": "cards-test",
@@ -28,6 +32,10 @@
     "cards-engine": ["cards-engine@workspace:engine"],
 
     "cards-test": ["cards-test@workspace:test"],
+
+    "immer": ["immer@11.1.4", "", {}, "sha512-XREFCPo6ksxVzP4E0ekD5aMdf8WMwmdNaz6vuvxgI40UaEiu6q3p8X52aU6GdyvLY3XXX/8R7JOTXStz/nBbRw=="],
+
+    "pure-rand": ["pure-rand@6.1.0", "", {}, "sha512-bVWawvoZoBYpp6yIoQtQXHZjmz35RSVHnUOTefl8Vcjr8snTPY1wnpSPMWekcFwbxI6gtmT7rSYPFvz71ldiOA=="],
 
     "undici-types": ["undici-types@7.18.2", "", {}, "sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w=="],
   }

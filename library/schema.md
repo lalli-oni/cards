@@ -34,6 +34,8 @@ Every card type includes these columns:
 |---------|--------|----------|-------------|
 | mission | string | no       | Mission requirements and VP reward. Format: `requirements>vp` |
 | passive | string | no       | Passive effect text |
+| edges   | string | no       | Blocked edges, semicolon-separated (`N`, `S`, `E`, `W`). Unlisted edges are open. Empty = all open. |
+| actions | string | no       | Semicolon-separated action definitions. Format: `name:ap_cost:effect`. Usable by any player with a unit at this location. |
 
 ## Items
 

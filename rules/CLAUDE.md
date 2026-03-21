@@ -30,3 +30,7 @@ This folder contains markdown files defining the card game rules.
 - `policies.md` — Policy rules, structure, and examples
 - `ideas.md` — Feature ideas for post-v1.0 consideration
 - Additional rule files are linked from README.md when created
+
+## Open Design Questions
+Open design questions are tracked as GitHub issues with the `rules` + `question` labels.
+Use `gh issue list -R lalli-oni/cards --label rules,question` to see them.

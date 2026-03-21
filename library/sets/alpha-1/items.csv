@@ -1,4 +1,11 @@
 id,name,set,rarity,cost,equip,stored,keywords,actions,text,flavor
 ancient-scroll,Ancient Scroll,alpha-1,common,2,Equipped unit gets +2 cunning.,,Artifact,,+2 cunning to equipped unit.,Ink fades but ideas endure.
-war-banner,War Banner,alpha-1,uncommon,3,All your units at this location get +1 strength.,,Banner,,+1 strength to all friendly units at this location.,It flew above a hundred fields.
+war-banner,War Banner,alpha-1,uncommon,3,All friendly units at this location get +1 strength.,Units initiating a strength contest at this location get +2 strength.,Banner,,Equip: +1 strength to friendly units here. Stored: +2 strength to attackers here.,It flew above a hundred fields.
 merchant-ledger,Merchant Ledger,alpha-1,epic,4,,Generates 2 gold at start of your turn.,Commerce,,Stored at a location: gain 2 gold per turn.,Every coin accounted for.
+compass,Compass,alpha-1,common,1,Equipped unit can move through one blocked edge.,,Navigation,,Ignore one blocked edge when moving.,It always knows the way home.
+philosophers-stone,Philosopher's Stone,alpha-1,legendary,6,Equipped unit gains +2 to all stats.,,Artifact,transmute:1:gain_3_gold,+2 all stats. Action: gain 3 gold.,The real treasure was understanding.
+spy-glass,Spy Glass,alpha-1,common,1,Equipped unit can look at face-down traps at its location.,,Recon,,Reveal traps at your location.,Knowledge is the best armor.
+holy-relic,Holy Relic,alpha-1,uncommon,3,Equipped Spiritual unit gets +3 charisma.,All Spiritual units at this location get +1 charisma.,Artifact,,+3 charisma to Spiritual (equip) or +1 charisma to Spiritual (stored).,Faith made tangible.
+siege-engine,Siege Engine,alpha-1,epic,5,,,Siege,bombard:1:minus2_strength_all_enemy_location,All enemy units at target adjacent location get -2 strength until end of turn. Must be stored at a location to use.,The walls came down.
+trade-goods,Trade Goods,alpha-1,common,1,,Generates 1 gold at start of your turn.,Commerce,,Stored: gain 1 gold per turn.,Worth more than their weight.
+crowning-jewel,Crowning Jewel,alpha-1,uncommon,3,Equipped Politician gets +2 charisma. When this unit wins a charisma contest gain 2 gold.,,Regalia,,+2 charisma to Politicians; gold on charisma contest wins.,Every throne needs its shine.

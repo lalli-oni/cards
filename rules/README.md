@@ -393,9 +393,9 @@ other non-location cards). Playing any event from hand costs 1 AP.
 - **Trap**: Played face-down into the player's **active trap area**.
   If the trap has a target (location, unit, item), the player places a
   matching token on the target. All players can see the face-down trap
-  and its target token, but not the card itself. The owner may trigger
-  the trap on **any player's turn** (including opponents') as long as
-  the printed condition is met. Triggering a trap does not cost AP —
+  and its target token, but not the card itself. When the trap's printed
+  condition is triggered, the owner may activate it on **any player's
+  turn** (including opponents'). Activating a trap does not cost AP —
   it interrupts the current action's resolution. Traps are the only
   card type that can interrupt an opponent's turn. Discarded to owner's
   discard pile after resolution.
@@ -430,7 +430,8 @@ differs per card.
 
 ### Timing
 - **Static**: Always active while the card is in play.
-- **Triggered**: Activates when a specific condition is met.
+- **Triggered**: Fires automatically when a specific condition is met.
+- **Activated**: Initiated by player.
 
 ### Keyword Glossary
 

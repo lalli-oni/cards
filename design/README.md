@@ -20,6 +20,11 @@ Penpot-based pipeline that renders card data from `library/` CSVs into PNG and S
 - Copy `design/.env.example` → `design/.env` and fill in credentials
 - Generate a secret key: `python3 -c "import secrets; print(secrets.token_urlsafe(64))"`
 
+## URLs
+
+- **Penpot UI**: http://localhost:9001
+- **Mailcatch** (dev email): http://localhost:1080
+
 ## Quick start
 
 ```bash
@@ -29,6 +34,12 @@ docker compose -f design/docker-compose.yaml up -d
 # Create .env with your credentials
 cp design/.env.example design/.env
 # Edit design/.env with your email, password, and generated secret key
+
+# Register an account at http://localhost:9001 (verification emails appear at http://localhost:1080)
+
+# Setup Claude Code MCP integration (uses credentials from design/.env)
+cp .mcp.json.example .mcp.json
+# Edit .mcp.json and fill in PENPOT_USERNAME and PENPOT_PASSWORD from design/.env
 
 # Build the template (first time only)
 python3 design/setup-template.py

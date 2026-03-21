@@ -7,14 +7,14 @@ This folder contains markdown files defining the card game rules.
 - Be critical and ask questions for clarification
 - Only create or modify `.md` files in this directory
 - Avoid duplication of rules or definitions across files
-- Any values that can be affected by variants: `[var:X]` (e.g. `[var:5]` = baseline value 5)
-- Entire sections that can be replaced by variants: `[var:name]` on section headings (e.g. `[var:seeding-phase]`)
+- Any values that can be affected by variants: `[var:id:baseline_value]` (e.g. `[var:starting_gold:10]`). The `id` is a human-readable snake_case key for consumers to look up.
+- Entire sections that can be replaced by variants: `[var:section-id]` on section headings (e.g. `[var:seeding-phase]`)
 - Non-rule content (design comments, interactions to note): `[design:...]`
 - When sections become long or overly specific, split into a dedicated `.md` file and add a link in the original
 
 ## Key Terminology
 - **Deploy** — playing a unit or item from hand to HQ
-- **Seeding deck** — the [var:60]-card collection each player brings to the game (16 locations, 16 dilemmas, 28 other)
+- **Seeding deck** — the [var:seeding_deck_size:60]-card collection each player brings to the game (16 locations, 16 dilemmas, 28 other)
 - **Prospect deck** — personal face-down deck of locations and dilemmas (for grid replacement and dilemma placement)
 - **Market deck** — cards available for purchase in the market
 - **Main deck** — personal draw deck, seeded from market deck during deck construction

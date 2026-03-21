@@ -7,7 +7,7 @@
 - Players: 1+ players.
 
 - Victory: Point-based. The game ends at the end of a round in which any
-  player has reached [var:50] VP, or at the end of round [var:20] —
+  player has reached [var:vp_threshold:50] VP, or at the end of round [var:turn_limit:20] —
   whichever comes first. When the game ends, the player with the most VP
   wins. If tied, play additional rounds until one player has the sole
   highest VP at the end of a round.
@@ -20,14 +20,14 @@ All phases consist rounds.
 In each round every player gets a turn, first starting player and then going clockwise until last player ends their turn.
 
 ### Seeding Phase [var:seeding-phase]
-Each player brings a **seeding deck** of [var:60] cards (shuffled).
-Each seeding deck must contain exactly [var:16] **locations** and
-[var:16] **dilemmas**; the remaining [var:28] cards are units, items,
+Each player brings a **seeding deck** of [var:seeding_deck_size:60] cards (shuffled).
+Each seeding deck must contain exactly [var:seeding_locations:16] **locations** and
+[var:seeding_dilemmas:16] **dilemmas**; the remaining [var:seeding_other:28] cards are units, items,
 and events. Each seeding deck may contain at most **8 legendary** and
 **24 epic** cards; these rarity limits apply per deck. Policies are
 not part of the seeding deck and do not count toward these totals.
 
-Each player brings [var:3] policy cards (separate from the seeding
+Each player brings [var:policy_pool_size:3] policy cards (separate from the seeding
 deck).
 
 #### 1. First policy selection
@@ -37,18 +37,18 @@ Each player picks 1 policy from their pool (face-up, visible to all).
 Repeat draft rounds until all players' seeding decks are empty. Each
 draft round:
 
-1. **Draw**: In turn order, each player draws [var:10] cards from their
-   seeding deck. The last [var:2] drawn are placed face-up in the
+1. **Draw**: In turn order, each player draws [var:seed_draw:10] cards from their
+   seeding deck. The last [var:seed_expose:2] drawn are placed face-up in the
    shared **Arena**. Of the remaining 8 kept cards:
    - **Locations** are placed on the grid immediately (player chooses
      slot and orientation). If the grid is full, the location goes to
      the player's prospect deck (player chooses early reserves or late reserves).
    - **Dilemmas** are placed face-down under a mission location on
-     the grid (max [var:2] per mission). If no mission has room, the
+     the grid (max [var:dilemmas_per_mission:2] per mission). If no mission has room, the
      dilemma goes to the player's prospect deck (player chooses early
      reserves or late reserves).
    - All other cards go to the player's **market deck** (face-down).
-   [design: If a player has fewer cards remaining than [var:10], they
+   [design: If a player has fewer cards remaining than [var:seed_draw:10], they
    draw what they can and split proportionally (round up for kept,
    remainder to Arena).]
 2. **Claim**: Starting with the player holding the **starting player
@@ -60,7 +60,7 @@ draft round:
      is already full, the claimed location goes to the player's
      prospect deck instead (player chooses early reserves or late reserves).
    - Claimed **dilemmas** must be placed face-down under a mission
-     location on the grid (max [var:2] per mission). If no mission
+     location on the grid (max [var:dilemmas_per_mission:2] per mission). If no mission
      has room, the dilemma goes to the player's prospect deck
      instead (player chooses early reserves or late reserves).
    - Other claimed cards go to the player's market deck.
@@ -76,9 +76,9 @@ After all draft rounds are complete:
    assigned to early or late reserves throughout seeding as they were
    drawn/claimed.)
 2. **Main deck**: Each player shuffles their market deck, then draws
-   [var:10] cards from it into their **main deck**. Shuffle the main
+   [var:main_deck_seed:10] cards from it into their **main deck**. Shuffle the main
    deck.
-3. **Starting hand**: Each player draws [var:5] cards from their main
+3. **Starting hand**: Each player draws [var:starting_hand:5] cards from their main
    deck.
 
 #### 4. Second policy selection
@@ -94,7 +94,7 @@ Each player starts the Main Phase with:
 - Their market deck (remaining seeding deck cards, face-down)
 - Their main deck (seeded during deck construction, face-down)
 - Their two selected policies (active)
-- [var:10] gold
+- [var:starting_gold:10] gold
 
 ## Decks
 
@@ -102,15 +102,15 @@ Each player has four personal decks:
 
 | Deck | Contents | Source | Purpose |
 |------|----------|--------|---------|
-| **Seeding deck** | Full [var:60]-card collection | Pre-game | Drawn through during draft rounds; split into the decks below |
+| **Seeding deck** | Full [var:seeding_deck_size:60]-card collection | Pre-game | Drawn through during draft rounds; split into the decks below |
 | **Prospect deck** | Locations, dilemmas | Built during seeding (locations/dilemmas go here when grid is full or no room) | Populates and replenishes grid locations; provides dilemmas for placement |
 | **Market deck** | Units, items, events (undrawn cards) | Seeding deck remainder after deck construction | Purchasable cards in the market |
 | **Main deck** | Units, items, events (drawn cards) | Drawn from market deck during deck construction; later refilled from discard pile | Personal draw source during player turns |
-| **Discard pile** | Played, killed, completed cards | During play | Shuffled to form a new main deck when a draw is attempted and the main deck is empty |
+| **Discard pile** | Played, killed, completed cards | During play | Recycled into the main deck when needed (see Drawing cards) |
 
 #### The Grid
 
-The field is a shared 2D grid of size (players + [var:2]) x (players + [var:2]).
+The field is a shared 2D grid of size (players + [var:grid_padding:2]) x (players + [var:grid_padding:2]).
 The grid must be fully populated with locations at all times — there
 are no empty slots.
 
@@ -132,33 +132,33 @@ action; it is provided by specific card effects (unit actions, events).
 **Initial population:** During draft rounds, locations are placed on the
 grid immediately — whether drawn (kept) or claimed. If the grid is
 full, excess locations go to the player's prospect deck. The grid is
-guaranteed to fill during draft rounds (each player brings [var:16]
+guaranteed to fill during draft rounds (each player brings [var:seeding_locations:16]
 locations, exceeding available grid slots for all player counts).
 
 **Replacement:** When a location is removed from the grid (e.g. mission
 completed, razed), the active player draws from their prospect deck
 until a location is drawn and places it in the same slot, choosing
 orientation. Any dilemmas drawn this way are placed face-down under a
-mission location on the grid (max [var:2] per mission); if no mission
+mission location on the grid (max [var:dilemmas_per_mission:2] per mission); if no mission
 has room, the dilemma goes to the bottom of the prospect deck.
 
 #### Zones
 
-- **Hand** — cards held by the player. Maximum hand size: [var:7]. Cards exceeding the limit at end of turn must be discarded.
+- **Hand** — cards held by the player. Maximum hand size: [var:max_hand_size:7]. Cards exceeding the limit at end of turn must be discarded.
 - **HQ** — the player's staging area (off-grid). Units and items enter play here when deployed from hand.
 - **Grid** — shared 2D field containing all active locations. Units move between locations on the grid.
 - **Active trap area** — face-down trap events. Targets are indicated by matching tokens. Visible to all players but contents hidden.
 - **Scoring area** — completed mission locations are placed here. Worth their printed VP.
-- **Discard pile** — cards removed from play. When a draw from the main deck is attempted and the main deck is empty, the discard pile is shuffled to form a new main deck. If both are empty, the draw fails (no card drawn, no penalty).
+- **Discard pile** — cards removed from play. Recycled into the main deck when needed (see Drawing cards).
 - **Removed from game** — cards that are permanently removed. They do not cycle back into any deck.
 
 #### Player turn
 
 At the start of their turn the player:
-1. Receives [var:1] gold.
-2. Draws [var:1] card from their main deck.
+1. Receives [var:turn_gold_income:1] gold.
+2. Draws [var:turn_card_draw:1] card from their main deck.
 
-Each player has [var:3] **action points (AP)** per turn. AP can be spent in any order on the following actions:
+Each player has [var:action_points_per_turn:3] **action points (AP)** per turn. AP can be spent in any order on the following actions:
 
 | Action | AP Cost | Description |
 |--------|---------|-------------|
@@ -173,9 +173,27 @@ Each player has [var:3] **action points (AP)** per turn. AP can be spent in any 
 | Destroy | 1 | Remove a card from your hand from the game permanently. |
 | Attempt Mission | 1 | Initiate a mission attempt at a location where you have at least one unit. All friendly units at the location contribute to requirement checks. Dilemmas are resolved one at a time (top first). If all dilemmas are overcome, mission requirements are checked — if met, mission completes. See Missions for details. |
 | Attack | 1 | Initiate combat at a location where you have at least one unit and an opponent has at least one unit. See Combat for details. |
-| Raze | [var:3] | Your unit at a location destroys it. No enemy units may be present. All friendly units at the location, the location, and any items there are discarded. The active player draws a new location from their prospect deck and places it in the same slot. |
+| Raze | [var:raze_ap_cost:3] | Your unit at a location destroys it. No enemy units may be present. All friendly units at the location, the location, and any items there are discarded. The active player draws a new location from their prospect deck and places it in the same slot. |
 
 A player may pass any remaining AP to end their turn early.
+
+#### Drawing cards
+
+Each deck has its own draw behavior:
+
+- **Main deck**: The default draw source for players. When a draw is
+  attempted and the main deck is empty, the **discard pile** is shuffled
+  to form a new main deck, then the draw proceeds. If both are empty,
+  the draw fails (no card drawn, no penalty). Start-of-turn draws, the
+  Draw action, and card effects that say "draw a card" all draw from
+  here unless stated otherwise.
+- **Market deck**: Drawn from to populate and refill the market (see
+  [Market Rules](market.md)). If the market deck is empty, the market
+  slot remains empty.
+- **Prospect deck**: Drawn when a grid location must be replaced. Draw
+  until a location is found; dilemmas drawn along the way are placed
+  under a mission (see Populating locations). If the prospect deck is
+  empty, no replacement occurs.
 
 #### Combat
 
@@ -199,7 +217,7 @@ be present.
    - Higher attack power wins. **Tie = nothing happens.**
    - Loser is **injured** (see Unit status). Items are dropped at the
      location.
-   - If the winner's attack power is [var:2]x or more the loser's
+   - If the winner's attack power is [var:combat_kill_ratio:2]x or more the loser's
      attack power, the loser is **killed** instead (see Unit status).
      Items are dropped at the location.
 6. **Next round or end**: After all pairs resolve, if both sides still
@@ -226,15 +244,15 @@ be present.
 ### Units
 Based on historical figures.
 Stats (for example; strength, cunning, charisma).
-Any stats not listed on the card are treated as [var:5].
+Any stats not listed on the card are treated as [var:default_stat:5].
 Attributes (for example: Scientist, Politician, Engineer, Warrior, Spiritual)
 Actions: Units can have various actions that players can activate.
 
 #### Unit status
 - **Injured**: The unit remains where it is but suffers the following
   effects until healed:
-  - **-[var:1] to all stats**
-  - **+[var:1] AP cost to Move** (Move costs 2 AP instead of 1)
+  - **-[var:injury_stat_penalty:1] to all stats**
+  - **+[var:injury_move_penalty:1] AP cost to Move** (Move costs 2 AP instead of 1)
   - An already-injured unit that is injured again is **killed** instead.
   - Equipped items stay on the unit (items are only dropped when a unit
     is killed, or by specific card effects).
@@ -300,7 +318,7 @@ Example: "While a unit with the Warrior attribute is here: +1 strength to all yo
 
 ### Dilemmas
 Inspired by the Star Trek CCG dilemma system. Dilemmas are placed
-face-down under **mission locations** on the grid (max [var:2] per
+face-down under **mission locations** on the grid (max [var:dilemmas_per_mission:2] per
 mission). They add challenges that players must overcome before
 completing a mission, and can award VP to the player who solves them.
 
@@ -399,8 +417,8 @@ Rarity affects deck-building limits and pack distribution only. It has
 no direct effect on gameplay mechanics or card cost — a common can be
 more expensive or powerful than a legendary.
 
-- Legendary: max [var:8] per seeding deck
-- Epic: max [var:24] per seeding deck
+- Legendary: max [var:max_legendary:8] per seeding deck
+- Epic: max [var:max_epic:24] per seeding deck
 - Uncommon: no cap
 - Common: no cap
 
@@ -443,8 +461,8 @@ differs per card.
 | Fortified | Static | Defender units at this location get +[var:X] to strength when calculating attack power |
 
 ## Economy
-- Each player begins with [var:10] gold.
-- At the start of each turn the active player receives [var:1] gold.
+- Each player begins with [var:starting_gold:10] gold.
+- At the start of each turn the active player receives [var:turn_gold_income:1] gold.
 - **Card costs are printed on the cards** and are independent of rarity;
   a common may cost more than a legendary or vice versa.
   Rarity affects deck-building limits but not gold price.

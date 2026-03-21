@@ -12,11 +12,11 @@ Every card type includes these columns:
 | id       | string | yes      | Unique identifier. Kebab-case of card name (e.g. `cleopatra`, `nikola-tesla`) |
 | name     | string | yes      | Display name |
 | set      | string | yes      | Set identifier (e.g. `baseline`) |
-| rarity   | enum   | yes      | `common`, `uncommon`, `rare`, `epic`, `legendary` |
+| rarity   | enum   | yes      | `common`, `uncommon`, `epic`, `legendary` |
 | cost     | string | yes      | Gold cost to deploy/play. Multiple costs separated by `\|` (player pays one) |
 | text     | string | no       | Card text — rules text, abilities, effects |
 | flavor   | string | no       | Flavor text |
-| keywords | string | no       | Semicolon-separated keywords (e.g. `Stealth;Fortify`) |
+| keywords | string | no       | Semicolon-separated keywords (e.g. `Ambush;Lethal`) |
 
 ## Units
 
@@ -55,9 +55,11 @@ Every card type includes these columns:
 
 ## Policies
 
-| Column | Type   | Required | Description |
-|--------|--------|----------|-------------|
-| effect | string | yes      | Global modifier text |
+| Column         | Type   | Required | Description |
+|----------------|--------|----------|-------------|
+| effect         | string | yes      | Passive global modifier text |
+| seeding_effect | string | no       | Effect that applies during the seeding phase |
+| actions        | string | no       | Semicolon-separated action definitions. Format: `name:ap_cost:effect` |
 
 ## Delimiter Conventions
 

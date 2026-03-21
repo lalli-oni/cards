@@ -21,11 +21,11 @@ these dimensions:
 - **Resource position** — economic starting state
 - **Timing control** — when key cards become available
 
-## Stealing Decisions
+## Claim Decisions
 
-During the seeding steal phase, players choose from a shared middle area.
-The value of stealing lies in competing priorities — all resolved by
-the same action:
+During the Claim step of each draft round, players pick cards from the
+shared Arena. The value of claiming lies in competing priorities — all
+resolved by the same action:
 
 - Take a strong unit/item to strengthen your own deck
 - Take a mission location and place it near your position for early VP

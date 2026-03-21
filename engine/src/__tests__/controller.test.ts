@@ -1,8 +1,16 @@
 import { describe, expect, it } from "bun:test";
 import { GameController } from "../controller";
 import { BotAdapter } from "../bot-adapter";
-import type { GameEvent, GameState, PlayerAdapter, Session, Action, VisibleState } from "../types";
+import type { GameEvent, GameState, PlayerAdapter, Session, Action, VisibleState, DeckInput } from "../types";
 import { DEFAULT_CONFIG, TWO_PLAYERS, SEED } from "./helpers";
+
+const MAIN_DECK_INPUT: DeckInput = {
+  mode: "main",
+  decks: {
+    p1: { mainDeck: [], hand: [], prospectDeck: [], marketDeck: [], activePolicies: [] },
+    p2: { mainDeck: [], hand: [], prospectDeck: [], marketDeck: [], activePolicies: [] },
+  },
+};
 
 function createAdapters(): Map<string, PlayerAdapter> {
   return new Map([
@@ -16,6 +24,7 @@ function createController(onEvent?: (events: GameEvent[], state: GameState) => v
     config: DEFAULT_CONFIG,
     players: TWO_PLAYERS,
     seed: SEED,
+    deckInput: MAIN_DECK_INPUT,
     adapters: createAdapters(),
     onEvent,
   });
@@ -25,7 +34,7 @@ describe("GameController", () => {
   it("initializes with a valid game state", () => {
     const controller = createController();
     const state = controller.getState();
-    expect(state.phase).toBe("seeding");
+    expect(state.phase).toBe("main");
     expect(state.players).toHaveLength(2);
   });
 
@@ -57,11 +66,11 @@ describe("GameController", () => {
           return { type: "deploy", playerId: "p1", cardId: "fake" };
         },
       };
-      // Install the bad adapter for both players so it fires regardless of turn order
       const controller = new GameController({
         config: DEFAULT_CONFIG,
         players: TWO_PLAYERS,
         seed: SEED,
+        deckInput: MAIN_DECK_INPUT,
         adapters: new Map([
           ["p1", badAdapter],
           ["p2", badAdapter],
@@ -95,7 +104,7 @@ describe("GameController", () => {
       const controller = createController();
       const session = controller.toSession(true);
       expect(session.snapshot).toBeDefined();
-      expect(session.snapshot!.phase).toBe("seeding");
+      expect(session.snapshot!.phase).toBe("main");
     });
 
     it("snapshot is JSON-serializable", () => {
@@ -103,7 +112,7 @@ describe("GameController", () => {
       const session = controller.toSession(true);
       const json = JSON.stringify(session);
       const parsed = JSON.parse(json);
-      expect(parsed.snapshot.phase).toBe("seeding");
+      expect(parsed.snapshot.phase).toBe("main");
       expect(parsed.snapshot.rngState.length).toBeGreaterThan(0);
     });
 
@@ -114,8 +123,7 @@ describe("GameController", () => {
       const session = controller.toSession();
       expect(session.actions).toHaveLength(2);
 
-      // Replay
-      const replayed = GameController.fromSession(session, createAdapters());
+      const replayed = GameController.fromSession(session, MAIN_DECK_INPUT, createAdapters());
       expect(replayed.getState().turn.round).toBe(
         controller.getState().turn.round,
       );
@@ -129,7 +137,7 @@ describe("GameController", () => {
       await controller.playTurn();
       const session = controller.toSession(true);
 
-      const resumed = GameController.fromSession(session, createAdapters());
+      const resumed = GameController.fromSession(session, MAIN_DECK_INPUT, createAdapters());
       expect(resumed.getState().turn.activePlayerId).toBe(
         controller.getState().turn.activePlayerId,
       );
@@ -142,7 +150,7 @@ describe("GameController", () => {
       await controller.playTurn();
 
       const session = controller.toSession();
-      const replayed = GameController.fromSession(session, createAdapters());
+      const replayed = GameController.fromSession(session, MAIN_DECK_INPUT, createAdapters());
 
       const liveState = controller.getState();
       const replayState = replayed.getState();
@@ -168,7 +176,7 @@ describe("GameController", () => {
       };
 
       expect(() =>
-        GameController.fromSession(session, createAdapters()),
+        GameController.fromSession(session, MAIN_DECK_INPUT, createAdapters()),
       ).toThrow(/action 1\/1/);
     });
   });

@@ -9,6 +9,8 @@ import type {
   EventCard,
   PolicyCard,
   LocationEdges,
+  Card,
+  DeckInput,
 } from "../types";
 import { createGame } from "../create-game";
 
@@ -102,6 +104,11 @@ export const DEFAULT_CONFIG: GameConfig = {
   action_points_per_turn: 3,
   vp_threshold: 50,
   turn_limit: 20,
+  seed_draw: 10,
+  seed_keep: 8,
+  seed_expose: 2,
+  seed_main_deck_draw: 15,
+  starting_hand_size: 5,
 };
 
 export const TWO_PLAYERS: PlayerDescriptor[] = [
@@ -111,18 +118,82 @@ export const TWO_PLAYERS: PlayerDescriptor[] = [
 
 export const SEED = "test-seed";
 
-/** Create a standard 2-player game with default config. */
+/** Create a standard 2-player game with pre-built decks (main phase). */
 export function createTestGame(
   overrides?: {
     config?: GameConfig;
     players?: PlayerDescriptor[];
     seed?: string;
+    deckInput?: DeckInput;
   },
 ): GameState {
+  const players = overrides?.players ?? TWO_PLAYERS;
+  const deckInput: DeckInput = overrides?.deckInput ?? {
+    mode: "main",
+    decks: Object.fromEntries(
+      players.map((p) => [p.id, {
+        mainDeck: [],
+        hand: [],
+        prospectDeck: [],
+        marketDeck: [],
+        activePolicies: [],
+      }]),
+    ),
+  };
   return createGame(
     overrides?.config ?? DEFAULT_CONFIG,
-    overrides?.players ?? TWO_PLAYERS,
+    players,
     overrides?.seed ?? SEED,
+    deckInput,
+  );
+}
+
+/** Build a seeding deck with a mix of card types for a player. */
+export function makeSeedingDeck(ownerId: string, count: number): Card[] {
+  const cards: Card[] = [];
+  for (let i = 0; i < count; i++) {
+    // Alternate between units, items, locations, events
+    const mod = i % 4;
+    if (mod === 0) {
+      cards.push(makeUnit({ ownerId }));
+    } else if (mod === 1) {
+      cards.push(makeItem({ ownerId }));
+    } else if (mod === 2) {
+      cards.push(makeLocation({ ownerId }));
+    } else {
+      cards.push(makeEvent({ ownerId, subtype: "instant" }));
+    }
+  }
+  return cards;
+}
+
+/** Create a 2-player game in seeding phase with populated seeding decks. */
+export function createSeedingGame(
+  overrides?: {
+    config?: GameConfig;
+    players?: PlayerDescriptor[];
+    seed?: string;
+    deckSize?: number;
+    policyCount?: number;
+  },
+): GameState {
+  const players = overrides?.players ?? TWO_PLAYERS;
+  const deckSize = overrides?.deckSize ?? 10;
+  const policyCount = overrides?.policyCount ?? 3;
+
+  const decks: Record<string, { seedingDeck: Card[]; policyPool: PolicyCard[] }> = {};
+  for (const p of players) {
+    decks[p.id] = {
+      seedingDeck: makeSeedingDeck(p.id, deckSize),
+      policyPool: Array.from({ length: policyCount }, () => makePolicy({ ownerId: p.id })),
+    };
+  }
+
+  return createGame(
+    overrides?.config ?? DEFAULT_CONFIG,
+    players,
+    overrides?.seed ?? SEED,
+    { mode: "seeding", decks },
   );
 }
 

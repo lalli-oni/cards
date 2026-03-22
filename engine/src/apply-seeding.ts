@@ -33,12 +33,18 @@ function validateUniqueIds(label: string, ...arrays: string[][]): void {
 /** Compute the recipient for policy pass (next player in turn order). */
 function getPassRecipient(draft: GameState, playerId: string): string {
   const idx = draft.turnOrder.indexOf(playerId);
+  if (idx === -1) {
+    throw new Error(`Player "${playerId}" not found in turnOrder`);
+  }
   return draft.turnOrder[(idx + 1) % draft.turnOrder.length];
 }
 
 /** Find which player passed policies to the given recipient (previous in turn order). */
 function getPasser(draft: GameState, recipientId: string): string {
   const idx = draft.turnOrder.indexOf(recipientId);
+  if (idx === -1) {
+    throw new Error(`Player "${recipientId}" not found in turnOrder`);
+  }
   return draft.turnOrder[(idx - 1 + draft.turnOrder.length) % draft.turnOrder.length];
 }
 

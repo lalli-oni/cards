@@ -35,8 +35,8 @@ Always state the detected environment at the top of your output so the user know
 
 ### Status Report
 When asked for status, project overview, or "what's going on":
-1. Fetch open issues: `gh issue list --limit 50 --json number,title,labels,state,updatedAt`
-2. Fetch open design questions: `gh issue list --label rules,question --json number,title,state`
+1. Fetch open issues: `gh issue list --limit 50 --json number,title,labels,state,updatedAt,body`
+2. Fetch open design questions: `gh issue list --label rules,question --json number,title,state,body`
 3. Check milestones: `gh api repos/lalli-oni/cards/milestones`
 4. Summarize by workstream (engine, rules, design), flag blockers and dependencies
 

@@ -30,23 +30,6 @@ function validateUniqueIds(label: string, ...arrays: string[][]): void {
   }
 }
 
-/** Compute the recipient for policy pass (next player in turn order). */
-function getPassRecipient(draft: GameState, playerId: string): string {
-  const idx = draft.turnOrder.indexOf(playerId);
-  if (idx === -1) {
-    throw new Error(`Player "${playerId}" not found in turnOrder`);
-  }
-  return draft.turnOrder[(idx + 1) % draft.turnOrder.length];
-}
-
-/** Find which player passed policies to the given recipient (previous in turn order). */
-function getPasser(draft: GameState, recipientId: string): string {
-  const idx = draft.turnOrder.indexOf(recipientId);
-  if (idx === -1) {
-    throw new Error(`Player "${recipientId}" not found in turnOrder`);
-  }
-  return draft.turnOrder[(idx - 1 + draft.turnOrder.length) % draft.turnOrder.length];
-}
 
 // ---------------------------------------------------------------------------
 // Entry point
@@ -78,11 +61,8 @@ export function applySeedingAction(
       case "seed_place_location":
         handleSeedPlaceLocation(draft, ds, action.playerId, action.row, action.col, action.rotation, events);
         break;
-      case "policy_pass":
-        handlePolicyPass(draft, ds, action.playerId, action.policyIds, events);
-        break;
-      case "policy_pick":
-        handlePolicyPick(draft, ds, action.playerId, action.policyId, events);
+      case "policy_select":
+        handlePolicySelection(draft, ds, events);
         break;
     }
   });
@@ -328,10 +308,9 @@ function handleSeedSplitProspect(
       draft.turn.activePlayerId = draft.turnOrder[0];
       events.push({ type: "seeding_step_changed", step: "seed_place_location" });
     } else {
-      seeding.step = "policy_pass";
-      seeding.policyPassSubmitted = [];
-      draft.turn.activePlayerId = draft.turnOrder[0];
-      events.push({ type: "seeding_step_changed", step: "policy_pass" });
+      seeding.step = "policy_selection";
+            draft.turn.activePlayerId = draft.turnOrder[0];
+      events.push({ type: "seeding_step_changed", step: "policy_selection" });
     }
   }
 }
@@ -402,121 +381,54 @@ function handleSeedPlaceLocation(
 
   const hasEmptyCells = draft.grid.some((r) => r.some((cell) => cell.location === null));
   if (!hasEmptyCells) {
-    seeding.step = "policy_pass";
-    seeding.policyPassSubmitted = [];
-    seeding.passedPolicies = {};
+    seeding.step = "policy_selection";
     draft.turn.activePlayerId = draft.turnOrder[0];
-    events.push({ type: "seeding_step_changed", step: "policy_pass" });
+    events.push({ type: "seeding_step_changed", step: "policy_selection" });
   }
 }
 
-// -- policy_pass -------------------------------------------------------------
+// -- policy_selection (random assignment placeholder) -------------------------
+// TODO(#29): Replace with policy selection draft mechanic
 
-function handlePolicyPass(
+function handlePolicySelection(
   draft: GameState,
   seeding: SeedingState,
-  playerId: string,
-  policyIds: string[],
   events: GameEvent[],
 ): void {
-  if (seeding.step !== "policy_pass") {
-    throw new Error(`policy_pass not valid during step "${seeding.step}"`);
+  if (seeding.step !== "policy_selection") {
+    throw new Error(`policy_select not valid during step "${seeding.step}"`);
   }
 
-  if (policyIds.length !== 3) {
-    throw new Error(`policy_pass requires exactly 3 policy IDs, got ${policyIds.length}`);
-  }
+  let rng = prand.mersenne.fromState(draft.rngState);
 
-  validateUniqueIds("policy pass", policyIds);
-
-  const player = getPlayer(draft, playerId);
-  const recipientId = getPassRecipient(draft, playerId);
-
-  const policies: PolicyCard[] = [];
-  for (const id of policyIds) {
-    const idx = player.policyPool.findIndex((p) => p.id === id);
-    if (idx === -1) {
-      throw new Error(`Policy "${id}" not found in player "${playerId}"'s policy pool`);
-    }
-    policies.push(player.policyPool.splice(idx, 1)[0]);
-  }
-
-  seeding.passedPolicies[recipientId] = policies;
-
-  seeding.policyPassSubmitted.push(playerId);
-  advanceTurn(draft, events);
-
-  if (seeding.policyPassSubmitted.length === draft.players.length) {
-    seeding.step = "policy_pick";
-    seeding.policyPickSubmitted = [];
-    draft.turn.activePlayerId = draft.turnOrder[0];
-    events.push({ type: "seeding_step_changed", step: "policy_pick" });
-  }
-}
-
-// -- policy_pick -------------------------------------------------------------
-
-function handlePolicyPick(
-  draft: GameState,
-  seeding: SeedingState,
-  playerId: string,
-  policyId: string,
-  events: GameEvent[],
-): void {
-  if (seeding.step !== "policy_pick") {
-    throw new Error(`policy_pick not valid during step "${seeding.step}"`);
-  }
-
-  const player = getPlayer(draft, playerId);
-  const passed = seeding.passedPolicies[playerId];
-  if (!passed) {
-    throw new Error(`No policies were passed to player "${playerId}"`);
-  }
-
-  const idx = passed.findIndex((p) => p.id === policyId);
-  if (idx === -1) {
-    throw new Error(`Policy "${policyId}" was not passed to player "${playerId}"`);
-  }
-
-  const picked = passed.splice(idx, 1)[0];
-  player.activePolicies.push(picked);
-
-  // Return unchosen policies to the passer
-  const passerId = getPasser(draft, playerId);
-  const passer = getPlayer(draft, passerId);
-  passer.policyPool.push(...passed);
-  delete seeding.passedPolicies[playerId];
-
-  seeding.policyPickSubmitted.push(playerId);
-  advanceTurn(draft, events);
-
-  if (seeding.policyPickSubmitted.length === draft.players.length) {
-    // Each player picks one more from their returned pool
-    for (const p of draft.players) {
-      if (p.policyPool.length === 0) {
-        throw new Error(
-          `Player "${p.id}" has no remaining policies for second pick — ` +
-          `this indicates a bug in policy pass/return logic`,
-        );
-      }
-      const secondPick = p.policyPool.shift()!;
-      p.activePolicies.push(secondPick);
+  for (const player of draft.players) {
+    if (player.policyPool.length < 2) {
+      throw new Error(
+        `Player "${player.id}" has ${player.policyPool.length} policies in pool, need at least 2`,
+      );
     }
 
-    for (const p of draft.players) {
-      events.push({
-        type: "policies_assigned",
-        playerId: p.id,
-        policyIds: p.activePolicies.map((pol) => pol.id),
-      });
-    }
+    // Shuffle and pick 2
+    let shuffled: PolicyCard[];
+    [shuffled, rng] = shuffle(player.policyPool, rng);
+    player.activePolicies.push(shuffled[0], shuffled[1]);
+    player.policyPool = shuffled.slice(2);
 
-    draft.phase = "main";
-    draft.seedingState = undefined;
-    draft.turn.activePlayerId = draft.turnOrder[0];
-    draft.turn.round = 1;
-    draft.turn.actionPointsRemaining =
-      getConfigNumber(draft, "action_points_per_turn", 3);
-    events.push({ type: "phase_changed", from: "seeding", to: "main" });
+    events.push({
+      type: "policies_assigned",
+      playerId: player.id,
+      policyIds: player.activePolicies.map((pol) => pol.id),
+    });
   }
+
+  draft.rngState = extractRngState(rng);
+
+  // Transition to main phase
+  draft.phase = "main";
+  draft.seedingState = undefined;
+  draft.turn.activePlayerId = draft.turnOrder[0];
+  draft.turn.round = 1;
+  draft.turn.actionPointsRemaining =
+    getConfigNumber(draft, "action_points_per_turn", 3);
+  events.push({ type: "phase_changed", from: "seeding", to: "main" });
 }

@@ -67,17 +67,8 @@ function getSeedingValidActions(state: GameState, playerId: string): SeedingActi
       return actions;
     }
 
-    case "policy_pass":
-      return [{ type: "policy_pass", playerId, policyIds: [] }];
-
-    case "policy_pick": {
-      const passed = seeding.passedPolicies[playerId] ?? [];
-      return passed.map((p) => ({
-        type: "policy_pick" as const,
-        playerId,
-        policyId: p.id,
-      }));
-    }
+    case "policy_selection":
+      return [{ type: "policy_select", playerId }];
   }
 }
 

@@ -113,9 +113,6 @@ export function createGame(
         stealTurnIndex: 0,
         keepSubmitted: [],
         splitSubmitted: [],
-        passedPolicies: {},
-        policyPassSubmitted: [],
-        policyPickSubmitted: [],
       }
     : undefined;
 

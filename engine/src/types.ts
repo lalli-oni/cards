@@ -143,8 +143,7 @@ export type SeedingStep =
   | "seed_steal"
   | "seed_split_prospect"
   | "seed_place_location"
-  | "policy_pass"
-  | "policy_pick";
+  | "policy_selection";
 
 export interface SeedingState {
   step: SeedingStep;
@@ -155,12 +154,6 @@ export interface SeedingState {
   keepSubmitted: string[];
   /** Players who have submitted seed_split_prospect. */
   splitSubmitted: string[];
-  /** Policies passed to each player (keyed by recipient playerId). */
-  passedPolicies: Record<string, PolicyCard[]>;
-  /** Players who have submitted policy_pass. */
-  policyPassSubmitted: string[];
-  /** Players who have submitted policy_pick. */
-  policyPickSubmitted: string[];
 }
 
 export interface TurnState {
@@ -201,8 +194,7 @@ export type SeedingAction =
   | { type: "seed_steal"; playerId: string; cardId: string; row?: number; col?: number; rotation?: number }
   | { type: "seed_split_prospect"; playerId: string; topHalf: string[]; bottomHalf: string[] }
   | { type: "seed_place_location"; playerId: string; row: number; col: number; rotation?: number }
-  | { type: "policy_pass"; playerId: string; policyIds: string[] }
-  | { type: "policy_pick"; playerId: string; policyId: string };
+  | { type: "policy_select"; playerId: string };
 
 export type MainAction =
   | { type: "deploy"; playerId: string; cardId: string }
@@ -222,7 +214,7 @@ export type Action = SeedingAction | MainAction;
 /** Discriminator sets for phase-action validation. */
 export const SEEDING_ACTION_TYPES = new Set<SeedingAction["type"]>([
   "seed_draw", "seed_keep", "seed_steal", "seed_split_prospect",
-  "seed_place_location", "policy_pass", "policy_pick",
+  "seed_place_location", "policy_select",
 ] as const);
 
 export function isSeedingAction(action: Action): action is SeedingAction {

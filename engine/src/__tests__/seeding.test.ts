@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeEach } from "bun:test";
 import { applyAction } from "../apply-action";
 import { getValidActions } from "../valid-actions";
+import { fillAction } from "../action-helpers";
 import type { GameState, SeedingAction } from "../types";
 import {
   createSeedingGame,
@@ -35,7 +36,7 @@ function drawAllPlayers(state: GameState): GameState {
 
 /**
  * Play through the entire seeding phase by picking valid actions.
- * For actions with choices, picks the first valid option.
+ * Uses fillAction to complete template actions with real card IDs.
  * Returns the final state (should be in main phase).
  */
 function playThroughSeeding(state: GameState): GameState {
@@ -48,38 +49,11 @@ function playThroughSeeding(state: GameState): GameState {
         `Step: ${s.seedingState?.step}, active: ${s.turn.activePlayerId}`,
       );
     }
-    const actions = getValidActions(s, s.turn.activePlayerId) as SeedingAction[];
+    const actions = getValidActions(s, s.turn.activePlayerId);
     if (actions.length === 0) {
       throw new Error(`No valid actions at step ${s.seedingState?.step}`);
     }
-
-    const action = actions[0];
-
-    // For seed_keep, we need to fill in actual card IDs
-    if (action.type === "seed_keep") {
-      const player = s.players.find((p) => p.id === action.playerId)!;
-      const keepCount = Math.min(s.config.seed_keep as number ?? 8, player.hand.length);
-      const exposeCount = Math.min(s.config.seed_expose as number ?? 2, player.hand.length - keepCount);
-      s = apply(s, {
-        type: "seed_keep",
-        playerId: action.playerId,
-        keepIds: player.hand.slice(0, keepCount).map((c) => c.id),
-        exposeIds: player.hand.slice(keepCount, keepCount + exposeCount).map((c) => c.id),
-      });
-    } else if (action.type === "seed_split_prospect") {
-      // Split locations from market deck into top/bottom halves
-      const player = s.players.find((p) => p.id === action.playerId)!;
-      const locations = player.marketDeck.filter((c) => c.type === "location");
-      const half = Math.ceil(locations.length / 2);
-      s = apply(s, {
-        type: "seed_split_prospect",
-        playerId: action.playerId,
-        topHalf: locations.slice(0, half).map((c) => c.id),
-        bottomHalf: locations.slice(half).map((c) => c.id),
-      });
-    } else {
-      s = apply(s, action);
-    }
+    s = apply(s, fillAction(s, actions[0]) as SeedingAction);
   }
   return s;
 }

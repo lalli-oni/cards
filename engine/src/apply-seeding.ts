@@ -309,7 +309,7 @@ function handleSeedSplitProspect(
       events.push({ type: "seeding_step_changed", step: "seed_place_location" });
     } else {
       seeding.step = "policy_selection";
-            draft.turn.activePlayerId = draft.turnOrder[0];
+      draft.turn.activePlayerId = draft.turnOrder[0];
       events.push({ type: "seeding_step_changed", step: "policy_selection" });
     }
   }

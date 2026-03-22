@@ -8,19 +8,24 @@ import type { GameState, Action, VisibleState, PlayerState } from "./types";
  * Returns the action unchanged if it doesn't need filling.
  */
 export function fillAction(state: GameState | VisibleState, action: Action): Action {
-  const player = "self" in state
-    ? state.self
-    : state.players.find((p) => p.id === action.playerId);
+  let player: PlayerState | undefined;
+  if ("self" in state) {
+    // VisibleState only has full data for self — can't fill other players' actions
+    if (state.playerId !== action.playerId) return action;
+    player = state.self;
+  } else {
+    player = state.players.find((p) => p.id === action.playerId);
+  }
   if (!player) return action;
 
   switch (action.type) {
     case "seed_keep": {
       if (action.keepIds.length > 0) return action;
-      const keepCount = getKeepExposeCount(state, player);
+      const { keep, expose } = getKeepExposeCount(state, player);
       return {
         ...action,
-        keepIds: player.hand.slice(0, keepCount.keep).map((c) => c.id),
-        exposeIds: player.hand.slice(keepCount.keep, keepCount.keep + keepCount.expose).map((c) => c.id),
+        keepIds: player.hand.slice(0, keep).map((c) => c.id),
+        exposeIds: player.hand.slice(keep, keep + expose).map((c) => c.id),
       };
     }
 
@@ -44,9 +49,8 @@ function getKeepExposeCount(
   state: GameState | VisibleState,
   player: PlayerState,
 ): { keep: number; expose: number } {
-  const config = state.config;
-  const keepCount = typeof config.seed_keep === "number" ? config.seed_keep : 8;
-  const exposeCount = typeof config.seed_expose === "number" ? config.seed_expose : 2;
+  const keepCount = typeof state.config.seed_keep === "number" ? state.config.seed_keep : 8;
+  const exposeCount = typeof state.config.seed_expose === "number" ? state.config.seed_expose : 2;
   const total = player.hand.length;
 
   if (total < keepCount + exposeCount) {

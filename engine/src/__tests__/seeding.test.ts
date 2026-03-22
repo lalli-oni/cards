@@ -11,12 +11,10 @@ import {
 
 beforeEach(() => resetIds());
 
-// Helper: apply an action and return the new state
 function apply(state: GameState, action: SeedingAction): GameState {
   return applyAction(state, action).state;
 }
 
-// Helper: get the first valid action of a given type
 function firstAction(state: GameState, type: string): SeedingAction {
   const actions = getValidActions(state, state.turn.activePlayerId);
   const found = actions.find((a) => a.type === type);
@@ -24,14 +22,31 @@ function firstAction(state: GameState, type: string): SeedingAction {
   return found as SeedingAction;
 }
 
-// Helper: run seed_draw for all players
 function drawAllPlayers(state: GameState): GameState {
   let s = state;
   for (let i = 0; i < s.players.length; i++) {
-    const action = firstAction(s, "seed_draw");
-    s = apply(s, action);
+    s = apply(s, firstAction(s, "seed_draw"));
   }
   return s;
+}
+
+/** Submit seed_keep for all players using fillAction to pick defaults. */
+function keepAllPlayers(state: GameState): GameState {
+  let s = state;
+  for (let i = 0; i < s.players.length; i++) {
+    s = apply(s, fillAction(s, firstAction(s, "seed_keep")) as SeedingAction);
+  }
+  return s;
+}
+
+/** Find a steal action targeting a non-location card (avoids grid placement). */
+function findNonLocationSteal(state: GameState, actions: SeedingAction[]): SeedingAction | undefined {
+  const middle = state.seedingState!.middleArea;
+  return actions.find((a) => {
+    if (a.type !== "seed_steal") return false;
+    const card = middle.find((c) => c.id === (a as any).cardId);
+    return card?.type !== "location";
+  });
 }
 
 /**
@@ -137,35 +152,14 @@ describe("seeding phase", () => {
     });
 
     it("transitions to seed_steal after all players keep", () => {
-      let state = stateAtKeep();
-
-      // All players submit seed_keep
-      for (let i = 0; i < state.players.length; i++) {
-        const activeId = state.turn.activePlayerId;
-        const player = state.players.find((p) => p.id === activeId)!;
-        const keepIds = player.hand.slice(0, 8).map((c) => c.id);
-        const exposeIds = player.hand.slice(8, 10).map((c) => c.id);
-        state = apply(state, { type: "seed_keep", playerId: activeId, keepIds, exposeIds });
-      }
-
+      const state = keepAllPlayers(stateAtKeep());
       expect(state.seedingState!.step).toBe("seed_steal");
     });
   });
 
   describe("seed_steal", () => {
     function stateAtSteal(): GameState {
-      let state = drawAllPlayers(createSeedingGame({ deckSize: 20 }));
-
-      // All players submit seed_keep
-      for (let i = 0; i < state.players.length; i++) {
-        const activeId = state.turn.activePlayerId;
-        const player = state.players.find((p) => p.id === activeId)!;
-        const keepIds = player.hand.slice(0, 8).map((c) => c.id);
-        const exposeIds = player.hand.slice(8, 10).map((c) => c.id);
-        state = apply(state, { type: "seed_keep", playerId: activeId, keepIds, exposeIds });
-      }
-
-      return state;
+      return keepAllPlayers(drawAllPlayers(createSeedingGame({ deckSize: 20 })));
     }
 
     it("has valid steal actions for each middle area card", () => {
@@ -179,7 +173,7 @@ describe("seeding phase", () => {
       const state = stateAtSteal();
       const initialMiddleSize = state.seedingState!.middleArea.length;
       const actions = getValidActions(state, state.turn.activePlayerId) as SeedingAction[];
-      const stealAction = actions.find((a) => a.type === "seed_steal" && state.seedingState!.middleArea.find((c) => c.id === (a as any).cardId)?.type !== "location")!;
+      const stealAction = findNonLocationSteal(state, actions);
 
       if (stealAction) {
         const next = apply(state, stealAction);
@@ -190,13 +184,9 @@ describe("seeding phase", () => {
     it("transitions to seed_draw when middle area empty and decks remain", () => {
       let state = stateAtSteal();
 
-      // Steal all cards from middle area
       while (state.seedingState!.middleArea.length > 0) {
         const actions = getValidActions(state, state.turn.activePlayerId) as SeedingAction[];
-        // Pick a non-location steal to avoid grid placement issues
-        const stealAction = actions.find(
-          (a) => a.type === "seed_steal" && state.seedingState!.middleArea.find((c) => c.id === (a as any).cardId)?.type !== "location"
-        ) ?? actions[0];
+        const stealAction = findNonLocationSteal(state, actions) ?? actions[0];
         state = apply(state, stealAction);
       }
 

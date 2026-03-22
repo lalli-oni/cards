@@ -285,9 +285,11 @@ describe("seeding phase", () => {
   });
 
   describe("phase validation", () => {
-    it("rejects seeding actions during main phase", () => {
+    it("rejects seeding actions during main phase via type system", () => {
+      // This is now enforced at compile time by ActionForState<S>.
+      // Passing a SeedingAction to a MainGameState is a type error.
+      // Verify that even if bypassed at runtime, a default case catches it.
       const state = createSeedingGame();
-      // Force to main phase — need a valid MainGameState
       const mainState = {
         config: state.config,
         players: state.players,
@@ -305,6 +307,7 @@ describe("seeding phase", () => {
         },
       };
       expect(() =>
+        // @ts-expect-error — deliberately bypassing type safety to test runtime guard
         applyAction(mainState, {
           type: "seed_draw",
           playerId: mainState.turn.activePlayerId,

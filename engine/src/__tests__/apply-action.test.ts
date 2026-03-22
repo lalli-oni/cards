@@ -70,13 +70,15 @@ describe("applyAction", () => {
       expect(s2Main.turn.round).toBe(2);
     });
 
-    it("emits turn_ended and turn_started events", () => {
+    it("emits turn lifecycle events including turn_ended and turn_started", () => {
       const state = createTestGame();
       const { events } = applyAction(state, {
         type: "pass",
         playerId: state.turn.activePlayerId,
       });
-      expect(events.map((e) => e.type)).toEqual(["turn_ended", "turn_started"]);
+      const types = events.map((e) => e.type);
+      expect(types[0]).toBe("turn_ended");
+      expect(types).toContain("turn_started");
     });
 
     it("wraps turn order back to first player", () => {
@@ -116,13 +118,14 @@ describe("applyAction", () => {
   });
 
   describe("unimplemented actions", () => {
-    it("throws for unimplemented action types", () => {
+    it("throws for activate action (deferred to #20)", () => {
       const state = createTestGame();
       expect(() =>
         applyAction(state, {
-          type: "deploy",
+          type: "activate",
           playerId: state.turn.activePlayerId,
           cardId: "some-card",
+          actionName: "test",
         }),
       ).toThrow("not yet implemented");
     });

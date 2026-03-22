@@ -7,11 +7,12 @@ import { createSeedingGame, createTestGame } from "./helpers";
 
 describe("getValidActions", () => {
   describe("main phase", () => {
-    it("returns pass for the active player", () => {
+    it("always includes pass and draw for the active player", () => {
       const state = createTestGame();
       const actions = getValidActions(state, state.turn.activePlayerId);
-      expect(actions).toHaveLength(1);
-      expect(actions[0].type).toBe("pass");
+      const types = actions.map((a) => a.type);
+      expect(types).toContain("pass");
+      expect(types).toContain("draw");
       expect(actions[0].playerId).toBe(state.turn.activePlayerId);
     });
 

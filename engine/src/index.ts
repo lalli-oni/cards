@@ -28,6 +28,7 @@ export {
 // Types
 export type {
   Action,
+  ActionForState,
   Card,
   CardType,
   DeckName,

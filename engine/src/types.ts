@@ -33,6 +33,8 @@ export interface PlayerState {
   hq: Card[];
   activePolicies: PolicyCard[];
   activeTraps: Trap[];
+  /** Passive events currently in play, with remaining duration tracking. */
+  passiveEvents: EventCard[];
   /** Policy cards available for selection during seeding. Not part of decks. */
   policyPool: PolicyCard[];
 }
@@ -272,24 +274,32 @@ export type MainAction =
   | { type: "play_event"; playerId: string; cardId: string; targetId?: string }
   | { type: "equip"; playerId: string; itemId: string; unitId: string }
   | { type: "destroy"; playerId: string; cardId: string }
-  | { type: "raze"; playerId: string; unitId: string; row: number; col: number }
+  | {
+      type: "raze";
+      playerId: string;
+      unitId: string;
+      row: number;
+      col: number;
+      rotation?: number;
+    }
+  | {
+      type: "attack";
+      playerId: string;
+      unitIds: string[];
+      row: number;
+      col: number;
+    }
   | { type: "pass"; playerId: string };
 
 export type Action = SeedingAction | MainAction;
 
-/** Discriminator sets for phase-action validation. */
-export const SEEDING_ACTION_TYPES = new Set<SeedingAction["type"]>([
-  "seed_draw",
-  "seed_keep",
-  "seed_steal",
-  "seed_split_prospect",
-  "seed_place_location",
-  "policy_select",
-] as const);
-
-export function isSeedingAction(action: Action): action is SeedingAction {
-  return (SEEDING_ACTION_TYPES as ReadonlySet<string>).has(action.type);
-}
+/** Maps a GameState subtype to its valid action type. */
+export type ActionForState<S extends GameState> =
+  S extends SeedingGameState
+    ? SeedingAction
+    : S extends MainGameState
+      ? MainAction
+      : never;
 
 // ---------------------------------------------------------------------------
 // Apply Result
@@ -374,6 +384,27 @@ export type GameEvent =
   | { type: "game_ended"; winner?: string; scores: Record<string, number> }
   | { type: "deck_shuffled"; playerId: string; deck: DeckName }
   | { type: "card_destroyed"; playerId: string; cardId: string }
+  | {
+      type: "combat_started";
+      row: number;
+      col: number;
+      attackerId: string;
+      defenderId: string;
+    }
+  | {
+      type: "combat_resolved";
+      row: number;
+      col: number;
+      winnerId: string | null;
+    }
+  | {
+      type: "market_replenished";
+      playerId: string;
+      cardId: string;
+      slotIndex: number;
+    }
+  | { type: "passive_expired"; playerId: string; cardId: string }
+  | { type: "unit_healed"; playerId: string; unitId: string }
   // Seeding phase events
   | { type: "seed_cards_drawn"; playerId: string; count: number }
   | {

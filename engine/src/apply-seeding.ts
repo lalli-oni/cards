@@ -1,6 +1,7 @@
 import type { Draft } from "immer";
 import { produce } from "immer";
 import prand from "pure-rand";
+import { runStartOfTurn } from "./apply-main";
 import { extractRngState, shuffle } from "./rng";
 import {
   advanceSeedingCursor,
@@ -541,5 +542,10 @@ function handlePolicySelection(
     round: 1,
   });
 
-  return { state: mainState, events };
+  // Run first player's start-of-turn (gold income, card draw, market population)
+  const readyState = produce(mainState, (draft) => {
+    runStartOfTurn(draft, events);
+  });
+
+  return { state: readyState, events };
 }

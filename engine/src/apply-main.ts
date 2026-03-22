@@ -31,8 +31,23 @@ import type {
 // Turn lifecycle
 // ---------------------------------------------------------------------------
 
-function runStartOfTurn(draft: Draft<MainGameState>, events: GameEvent[]): void {
+export function runStartOfTurn(draft: Draft<MainGameState>, events: GameEvent[]): void {
   const player = getPlayer(draft, draft.turn.activePlayerId);
+
+  // Market population — once, when market is empty (first turn of main phase)
+  if (draft.market.length === 0) {
+    const drawCount = getConfigNumber(draft, "market_draw_count", 3);
+    for (const p of draft.players) {
+      for (let i = 0; i < drawCount; i++) {
+        const slotIndex = draft.market.length;
+        draft.market.push(null as unknown as Card);
+        replenishMarketSlot(draft, p, slotIndex, events);
+        if (draft.market[slotIndex] === null) {
+          draft.market.splice(slotIndex, 1);
+        }
+      }
+    }
+  }
 
   // Reset AP
   draft.turn.actionPointsRemaining = getConfigNumber(
@@ -52,8 +67,8 @@ function runStartOfTurn(draft: Draft<MainGameState>, events: GameEvent[]): void 
   });
 
   // Draw card
-  const drawCount = getConfigNumber(draft, "turn_card_draw", 1);
-  for (let i = 0; i < drawCount; i++) {
+  const cardDrawCount = getConfigNumber(draft, "turn_card_draw", 1);
+  for (let i = 0; i < cardDrawCount; i++) {
     drawOneCard(draft, player, events);
   }
 
@@ -64,6 +79,7 @@ function runStartOfTurn(draft: Draft<MainGameState>, events: GameEvent[]): void 
       events.push({ type: "unit_healed", playerId: player.id, unitId: card.id });
     }
   }
+
 }
 
 function runEndOfTurn(draft: Draft<MainGameState>, events: GameEvent[]): void {
@@ -90,7 +106,7 @@ function runEndOfTurn(draft: Draft<MainGameState>, events: GameEvent[]): void {
   }
 }
 
-/** End the current turn and start the next player's turn. */
+/** End the current turn and advance to the next player. */
 function endTurnAndAdvance(draft: Draft<MainGameState>, events: GameEvent[]): void {
   events.push({ type: "turn_ended", playerId: draft.turn.activePlayerId });
   runEndOfTurn(draft, events);

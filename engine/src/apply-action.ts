@@ -1,12 +1,9 @@
-import type { GameState, Action, GameEvent, MainAction } from "./types";
+import type { GameState, Action, MainAction, ApplyResult } from "./types";
 import { isSeedingAction } from "./types";
 import { applySeedingAction } from "./apply-seeding";
 import { applyMainAction } from "./apply-main";
 
-export interface ApplyResult {
-  state: GameState;
-  events: GameEvent[];
-}
+export type { ApplyResult };
 
 /**
  * Apply a player action to the game state.
@@ -24,6 +21,9 @@ export function applyAction(state: GameState, action: Action): ApplyResult {
       throw new Error(
         `Action type "${action.type}" is not valid during seeding phase`,
       );
+    }
+    if (!state.seedingState) {
+      throw new Error("seedingState is not initialized");
     }
     return applySeedingAction(state, action);
   }

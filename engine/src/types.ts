@@ -141,8 +141,8 @@ export type SeedingStep =
   | "seed_draw"
   | "seed_keep"
   | "seed_steal"
-  | "prospect_split"
-  | "grid_populate"
+  | "seed_split_prospect"
+  | "seed_place_location"
   | "policy_pass"
   | "policy_pick";
 
@@ -200,8 +200,8 @@ export type SeedingAction =
   | { type: "seed_keep"; playerId: string; keepIds: string[]; exposeIds: string[] }
   | { type: "seed_steal"; playerId: string; cardId: string; row?: number; col?: number; rotation?: number }
   | { type: "seed_split_prospect"; playerId: string; topHalf: string[]; bottomHalf: string[] }
-  | { type: "seed_place_location"; playerId: string; cardId: string; row: number; col: number; rotation?: number }
-  | { type: "policy_pass"; playerId: string; policyIds: string[]; toPlayerId: string }
+  | { type: "seed_place_location"; playerId: string; row: number; col: number; rotation?: number }
+  | { type: "policy_pass"; playerId: string; policyIds: string[] }
   | { type: "policy_pick"; playerId: string; policyId: string };
 
 export type MainAction =
@@ -220,13 +220,22 @@ export type MainAction =
 export type Action = SeedingAction | MainAction;
 
 /** Discriminator sets for phase-action validation. */
-export const SEEDING_ACTION_TYPES: ReadonlySet<string> = new Set<SeedingAction["type"]>([
+export const SEEDING_ACTION_TYPES = new Set<SeedingAction["type"]>([
   "seed_draw", "seed_keep", "seed_steal", "seed_split_prospect",
   "seed_place_location", "policy_pass", "policy_pick",
-]);
+] as const);
 
 export function isSeedingAction(action: Action): action is SeedingAction {
-  return SEEDING_ACTION_TYPES.has(action.type);
+  return (SEEDING_ACTION_TYPES as ReadonlySet<string>).has(action.type);
+}
+
+// ---------------------------------------------------------------------------
+// Apply Result
+// ---------------------------------------------------------------------------
+
+export interface ApplyResult {
+  state: GameState;
+  events: GameEvent[];
 }
 
 // ---------------------------------------------------------------------------

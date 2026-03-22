@@ -5,6 +5,7 @@ import type {
   GameEvent,
   SeedingAction,
   SeedingState,
+  ApplyResult,
   Card,
   LocationCard,
   PolicyCard,
@@ -12,39 +13,70 @@ import type {
 import { getPlayer, getConfigNumber, placeLocationOnGrid, advanceTurn } from "./state-helpers";
 import { shuffle, extractRngState } from "./rng";
 
-export interface ApplyResult {
-  state: GameState;
-  events: GameEvent[];
+// ---------------------------------------------------------------------------
+// Validation helpers
+// ---------------------------------------------------------------------------
+
+/** Validate that ID arrays have no duplicates and no overlap between them. */
+function validateUniqueIds(label: string, ...arrays: string[][]): void {
+  const seen = new Set<string>();
+  for (const arr of arrays) {
+    for (const id of arr) {
+      if (seen.has(id)) {
+        throw new Error(`Duplicate ID "${id}" in ${label}`);
+      }
+      seen.add(id);
+    }
+  }
 }
 
-export function applySeedingAction(state: GameState, action: SeedingAction): ApplyResult {
+/** Compute the recipient for policy pass (next player in turn order). */
+function getPassRecipient(draft: GameState, playerId: string): string {
+  const idx = draft.turnOrder.indexOf(playerId);
+  return draft.turnOrder[(idx + 1) % draft.turnOrder.length];
+}
+
+/** Find which player passed policies to the given recipient (previous in turn order). */
+function getPasser(draft: GameState, recipientId: string): string {
+  const idx = draft.turnOrder.indexOf(recipientId);
+  return draft.turnOrder[(idx - 1 + draft.turnOrder.length) % draft.turnOrder.length];
+}
+
+// ---------------------------------------------------------------------------
+// Entry point
+// ---------------------------------------------------------------------------
+
+export function applySeedingAction(
+  state: GameState,
+  action: SeedingAction,
+): ApplyResult {
   const events: GameEvent[] = [];
 
   const nextState = produce(state, (draft) => {
-    const seeding = draft.seedingState!;
+    const ds = draft.seedingState!;
     draft.actionLog.push(action);
 
     switch (action.type) {
       case "seed_draw":
-        handleSeedDraw(draft, seeding, action.playerId, events);
+        handleSeedDraw(draft, ds, action.playerId, events);
         break;
       case "seed_keep":
-        handleSeedKeep(draft, seeding, action.playerId, action.keepIds, action.exposeIds, events);
+        handleSeedKeep(draft, ds, action.playerId, action.keepIds, action.exposeIds, events);
         break;
       case "seed_steal":
-        handleSeedSteal(draft, seeding, action.playerId, action.cardId, action.row, action.col, action.rotation, events);
+        handleSeedSteal(draft, ds, action.playerId, action.cardId, action.row, action.col, action.rotation, events);
         break;
       case "seed_split_prospect":
-        handleSeedSplitProspect(draft, seeding, action.playerId, action.topHalf, action.bottomHalf, events);
+        handleSeedSplitProspect(draft, ds, action.playerId, action.topHalf, action.bottomHalf, events);
         break;
       case "seed_place_location":
-        handleSeedPlaceLocation(draft, seeding, action.playerId, action.cardId, action.row, action.col, action.rotation, events);
+        handleSeedPlaceLocation(draft, ds, action.playerId, action.row, action.col, action.rotation, events);
         break;
       case "policy_pass":
-        handlePolicyPass(draft, seeding, action.playerId, action.policyIds, action.toPlayerId, events);
+        handlePolicyPass(draft, ds, action.playerId, action.policyIds, events);
         break;
       case "policy_pick":
-        handlePolicyPick(draft, seeding, action.playerId, action.policyId, events);
+        handlePolicyPick(draft, ds, action.playerId, action.policyId, events);
         break;
     }
   });
@@ -95,6 +127,8 @@ function handleSeedKeep(
   if (seeding.step !== "seed_keep") {
     throw new Error(`seed_keep not valid during step "${seeding.step}"`);
   }
+
+  validateUniqueIds("keep/expose", keepIds, exposeIds);
 
   const player = getPlayer(draft, playerId);
   const keepCount = getConfigNumber(draft, "seed_keep", 8);
@@ -199,10 +233,10 @@ function handleSeedSteal(
       draft.turn.activePlayerId = draft.turnOrder[0];
       events.push({ type: "seeding_step_changed", step: "seed_draw" });
     } else {
-      seeding.step = "prospect_split";
+      seeding.step = "seed_split_prospect";
       seeding.splitSubmitted = [];
       draft.turn.activePlayerId = draft.turnOrder[0];
-      events.push({ type: "seeding_step_changed", step: "prospect_split" });
+      events.push({ type: "seeding_step_changed", step: "seed_split_prospect" });
     }
   }
 }
@@ -217,9 +251,11 @@ function handleSeedSplitProspect(
   bottomHalf: string[],
   events: GameEvent[],
 ): void {
-  if (seeding.step !== "prospect_split") {
+  if (seeding.step !== "seed_split_prospect") {
     throw new Error(`seed_split_prospect not valid during step "${seeding.step}"`);
   }
+
+  validateUniqueIds("prospect split", topHalf, bottomHalf);
 
   const player = getPlayer(draft, playerId);
 
@@ -282,9 +318,9 @@ function handleSeedSplitProspect(
 
     const hasEmptyCells = draft.grid.some((row) => row.some((cell) => cell.location === null));
     if (hasEmptyCells) {
-      seeding.step = "grid_populate";
+      seeding.step = "seed_place_location";
       draft.turn.activePlayerId = draft.turnOrder[0];
-      events.push({ type: "seeding_step_changed", step: "grid_populate" });
+      events.push({ type: "seeding_step_changed", step: "seed_place_location" });
     } else {
       seeding.step = "policy_pass";
       seeding.policyPassSubmitted = [];
@@ -331,13 +367,12 @@ function handleSeedPlaceLocation(
   draft: GameState,
   seeding: SeedingState,
   playerId: string,
-  _cardId: string,
   row: number,
   col: number,
   rotation: number | undefined,
   events: GameEvent[],
 ): void {
-  if (seeding.step !== "grid_populate") {
+  if (seeding.step !== "seed_place_location") {
     throw new Error(`seed_place_location not valid during step "${seeding.step}"`);
   }
 
@@ -376,7 +411,6 @@ function handlePolicyPass(
   seeding: SeedingState,
   playerId: string,
   policyIds: string[],
-  toPlayerId: string,
   events: GameEvent[],
 ): void {
   if (seeding.step !== "policy_pass") {
@@ -387,7 +421,10 @@ function handlePolicyPass(
     throw new Error(`policy_pass requires exactly 3 policy IDs, got ${policyIds.length}`);
   }
 
+  validateUniqueIds("policy pass", policyIds);
+
   const player = getPlayer(draft, playerId);
+  const recipientId = getPassRecipient(draft, playerId);
 
   const policies: PolicyCard[] = [];
   for (const id of policyIds) {
@@ -398,7 +435,7 @@ function handlePolicyPass(
     policies.push(player.policyPool.splice(idx, 1)[0]);
   }
 
-  seeding.passedPolicies[toPlayerId] = policies;
+  seeding.passedPolicies[recipientId] = policies;
 
   seeding.policyPassSubmitted.push(playerId);
   advanceTurn(draft, events);
@@ -438,7 +475,8 @@ function handlePolicyPick(
   const picked = passed.splice(idx, 1)[0];
   player.activePolicies.push(picked);
 
-  const passerId = findPasser(draft, playerId);
+  // Return unchosen policies to the passer
+  const passerId = getPasser(draft, playerId);
   const passer = getPlayer(draft, passerId);
   passer.policyPool.push(...passed);
   delete seeding.passedPolicies[playerId];
@@ -447,11 +485,16 @@ function handlePolicyPick(
   advanceTurn(draft, events);
 
   if (seeding.policyPickSubmitted.length === draft.players.length) {
+    // Each player picks one more from their returned pool
     for (const p of draft.players) {
-      if (p.policyPool.length > 0) {
-        const secondPick = p.policyPool.shift()!;
-        p.activePolicies.push(secondPick);
+      if (p.policyPool.length === 0) {
+        throw new Error(
+          `Player "${p.id}" has no remaining policies for second pick — ` +
+          `this indicates a bug in policy pass/return logic`,
+        );
       }
+      const secondPick = p.policyPool.shift()!;
+      p.activePolicies.push(secondPick);
     }
 
     for (const p of draft.players) {
@@ -470,11 +513,4 @@ function handlePolicyPick(
       getConfigNumber(draft, "action_points_per_turn", 3);
     events.push({ type: "phase_changed", from: "seeding", to: "main" });
   }
-}
-
-/** Find which player passed policies to the given recipient (previous in turn order). */
-function findPasser(draft: GameState, recipientId: string): string {
-  const idx = draft.turnOrder.indexOf(recipientId);
-  const passerIdx = (idx - 1 + draft.turnOrder.length) % draft.turnOrder.length;
-  return draft.turnOrder[passerIdx];
 }

@@ -60,6 +60,7 @@ export function extractVars(
   for (let i = 0; i < lines.length; i++) {
     let match: RegExpExecArray | null;
     const linePattern = new RegExp(VAR_PATTERN.source, "g");
+    // biome-ignore lint/suspicious/noAssignInExpressions: standard regex iteration pattern
     while ((match = linePattern.exec(lines[i])) !== null) {
       const content = match[1];
       const parts = content.split(":");

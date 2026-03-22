@@ -121,6 +121,7 @@ function withCardsInHand(
   count: number,
 ): GameState {
   return produce(state, (draft) => {
+    // biome-ignore lint/style/noNonNullAssertion: test helper with known player IDs
     const player = draft.players.find((p) => p.id === playerId)!;
     for (let i = 0; i < count; i++) {
       player.hand.push(makeUnit({ ownerId: playerId }));
@@ -134,6 +135,7 @@ function withTrap(
   targetId: string,
 ): GameState {
   return produce(state, (draft) => {
+    // biome-ignore lint/style/noNonNullAssertion: test helper with known player IDs
     const player = draft.players.find((p) => p.id === playerId)!;
     player.activeTraps.push({
       card: makeEvent({ ownerId: playerId, subtype: "trap", trigger: "test" }),

@@ -46,6 +46,7 @@ export function applySeedingAction(
   const events: GameEvent[] = [];
 
   const nextState = produce(state, (draft) => {
+    // biome-ignore lint/style/noNonNullAssertion: seedingState validated by applyAction router (#54)
     const ds = draft.seedingState!;
     draft.actionLog.push(action);
 
@@ -334,15 +335,14 @@ function handleSeedSplitProspect(
   // Build prospect deck: shuffle each half, stack top on bottom
   let rng = prand.mersenne.fromState(draft.rngState);
 
-  const topCards = topHalf.map((id) => locations.find((l) => l.id === id)!);
-  const bottomCards = bottomHalf.map(
-    (id) => locations.find((l) => l.id === id)!,
-  );
+  // biome-ignore lint/style/noNonNullAssertion: IDs validated by validateUniqueIds + locationIds check above
+  const getLocation = (id: string) => locations.find((l) => l.id === id)!;
+  const topCards = topHalf.map(getLocation);
+  const bottomCards = bottomHalf.map(getLocation);
 
-  let shuffledTop: Card[];
-  let shuffledBottom: Card[];
-  [shuffledTop, rng] = shuffle(topCards, rng);
-  [shuffledBottom, rng] = shuffle(bottomCards, rng);
+  const [shuffledTop, rng2] = shuffle(topCards, rng);
+  const [shuffledBottom, rng3] = shuffle(bottomCards, rng2);
+  rng = rng3;
 
   player.prospectDeck = [...shuffledTop, ...shuffledBottom];
   player.marketDeck = remaining;

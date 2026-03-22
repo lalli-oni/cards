@@ -11,6 +11,12 @@ function apply(state: GameState, action: SeedingAction): GameState {
   return applyAction(state, action).state;
 }
 
+function getPlayer(state: GameState, playerId: string) {
+  const p = state.players.find((p) => p.id === playerId);
+  if (!p) throw new Error(`Player "${playerId}" not found in test state`);
+  return p;
+}
+
 function firstAction(state: GameState, type: string): SeedingAction {
   const actions = getValidActions(state, state.turn.activePlayerId);
   const found = actions.find((a) => a.type === type);
@@ -84,11 +90,11 @@ describe("seeding phase", () => {
     it("draws cards from seeding deck to hand", () => {
       const state = createSeedingGame({ deckSize: 20 });
       const activeId = state.turn.activePlayerId;
-      const player = state.players.find((p) => p.id === activeId)!;
+      const player = getPlayer(state, activeId);
       const initialDeckSize = player.seedingDeck.length;
 
       const next = apply(state, firstAction(state, "seed_draw"));
-      const updatedPlayer = next.players.find((p) => p.id === activeId)!;
+      const updatedPlayer = getPlayer(next, activeId);
 
       const drawCount = (DEFAULT_CONFIG.seed_draw as number) ?? 10;
       const expected = Math.min(drawCount, initialDeckSize);
@@ -119,7 +125,7 @@ describe("seeding phase", () => {
     it("requires correct keep/expose counts", () => {
       const state = stateAtKeep();
       const activeId = state.turn.activePlayerId;
-      const player = state.players.find((p) => p.id === activeId)!;
+      const player = getPlayer(state, activeId);
 
       // Wrong counts should fail
       expect(() =>
@@ -135,7 +141,7 @@ describe("seeding phase", () => {
     it("moves kept cards to market deck and exposed to middle area", () => {
       const state = stateAtKeep();
       const activeId = state.turn.activePlayerId;
-      const player = state.players.find((p) => p.id === activeId)!;
+      const player = getPlayer(state, activeId);
 
       const keepIds = player.hand.slice(0, 8).map((c) => c.id);
       const exposeIds = player.hand.slice(8, 10).map((c) => c.id);
@@ -147,7 +153,7 @@ describe("seeding phase", () => {
         exposeIds,
       });
 
-      const updatedPlayer = next.players.find((p) => p.id === activeId)!;
+      const updatedPlayer = getPlayer(next, activeId);
       expect(updatedPlayer.marketDeck).toHaveLength(8);
       expect(next.seedingState?.middleArea.length).toBeGreaterThanOrEqual(2);
     });

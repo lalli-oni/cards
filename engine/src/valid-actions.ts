@@ -28,6 +28,7 @@ function getSeedingValidActions(
   state: GameState,
   playerId: string,
 ): SeedingAction[] {
+  // biome-ignore lint/style/noNonNullAssertion: only called when phase === "seeding" (#54)
   const seeding = state.seedingState!;
 
   switch (seeding.step) {

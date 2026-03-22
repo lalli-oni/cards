@@ -15,6 +15,7 @@ describe("getValidActions", () => {
 
     it("returns empty array for non-active player", () => {
       const state = createTestGame();
+      // biome-ignore lint/style/noNonNullAssertion: 2-player game always has a non-active player
       const nonActive = state.turnOrder.find(
         (id) => id !== state.turn.activePlayerId,
       )!;
@@ -47,6 +48,7 @@ describe("getValidActions", () => {
 
     it("returns seed_keep at seed_keep step", () => {
       const state = produce(createSeedingGame(), (draft) => {
+        // biome-ignore lint/style/noNonNullAssertion: seeding game always has seedingState
         draft.seedingState!.step = "seed_keep";
       });
       const actions = getValidActions(state, state.turn.activePlayerId);

@@ -6,6 +6,7 @@ describe("applyAction", () => {
   describe("active player validation", () => {
     it("rejects actions from non-active player", () => {
       const state = createTestGame();
+      // biome-ignore lint/style/noNonNullAssertion: test setup — 2-player game always has a non-active player
       const nonActivePlayer = state.turnOrder.find(
         (id) => id !== state.turn.activePlayerId,
       )!;

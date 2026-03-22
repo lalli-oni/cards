@@ -16,16 +16,21 @@
 	"linter": {
 		"enabled": true,
 		"rules": {
-			"recommended": true,
-			"style": {
-				"noNonNullAssertion": "warn"
-			},
-			"suspicious": {
-				"noAssignInExpressions": "warn",
-				"noExplicitAny": "warn"
-			}
+			"recommended": true
 		}
 	},
+	"overrides": [
+		{
+			"includes": ["**/__tests__/**"],
+			"linter": {
+				"rules": {
+					"suspicious": {
+						"noExplicitAny": "warn"
+					}
+				}
+			}
+		}
+	],
 	"javascript": {
 		"formatter": {
 			"quoteStyle": "double"

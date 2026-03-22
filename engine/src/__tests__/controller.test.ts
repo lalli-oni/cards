@@ -1,14 +1,34 @@
 import { describe, expect, it } from "bun:test";
-import { GameController } from "../controller";
 import { BotAdapter } from "../bot-adapter";
-import type { GameEvent, GameState, PlayerAdapter, Session, Action, VisibleState, DeckInput } from "../types";
-import { DEFAULT_CONFIG, TWO_PLAYERS, SEED } from "./helpers";
+import { GameController } from "../controller";
+import type {
+  Action,
+  DeckInput,
+  GameEvent,
+  GameState,
+  PlayerAdapter,
+  Session,
+  VisibleState,
+} from "../types";
+import { DEFAULT_CONFIG, SEED, TWO_PLAYERS } from "./helpers";
 
 const MAIN_DECK_INPUT: DeckInput = {
   mode: "main",
   decks: {
-    p1: { mainDeck: [], hand: [], prospectDeck: [], marketDeck: [], activePolicies: [] },
-    p2: { mainDeck: [], hand: [], prospectDeck: [], marketDeck: [], activePolicies: [] },
+    p1: {
+      mainDeck: [],
+      hand: [],
+      prospectDeck: [],
+      marketDeck: [],
+      activePolicies: [],
+    },
+    p2: {
+      mainDeck: [],
+      hand: [],
+      prospectDeck: [],
+      marketDeck: [],
+      activePolicies: [],
+    },
   },
 };
 
@@ -19,7 +39,9 @@ function createAdapters(): Map<string, PlayerAdapter> {
   ]);
 }
 
-function createController(onEvent?: (events: GameEvent[], state: GameState) => void) {
+function createController(
+  onEvent?: (events: GameEvent[], state: GameState) => void,
+) {
   return new GameController({
     config: DEFAULT_CONFIG,
     players: TWO_PLAYERS,
@@ -54,7 +76,9 @@ describe("GameController", () => {
 
     it("calls onEvent callback", async () => {
       const receivedEvents: GameEvent[][] = [];
-      const controller = createController((events) => receivedEvents.push(events));
+      const controller = createController((events) =>
+        receivedEvents.push(events),
+      );
       await controller.playTurn();
       expect(receivedEvents).toHaveLength(1);
       expect(receivedEvents[0].length).toBeGreaterThan(0);
@@ -104,7 +128,7 @@ describe("GameController", () => {
       const controller = createController();
       const session = controller.toSession(true);
       expect(session.snapshot).toBeDefined();
-      expect(session.snapshot!.phase).toBe("main");
+      expect(session.snapshot?.phase).toBe("main");
     });
 
     it("snapshot is JSON-serializable", () => {
@@ -123,7 +147,11 @@ describe("GameController", () => {
       const session = controller.toSession();
       expect(session.actions).toHaveLength(2);
 
-      const replayed = GameController.fromSession(session, MAIN_DECK_INPUT, createAdapters());
+      const replayed = GameController.fromSession(
+        session,
+        MAIN_DECK_INPUT,
+        createAdapters(),
+      );
       expect(replayed.getState().turn.round).toBe(
         controller.getState().turn.round,
       );
@@ -137,7 +165,11 @@ describe("GameController", () => {
       await controller.playTurn();
       const session = controller.toSession(true);
 
-      const resumed = GameController.fromSession(session, MAIN_DECK_INPUT, createAdapters());
+      const resumed = GameController.fromSession(
+        session,
+        MAIN_DECK_INPUT,
+        createAdapters(),
+      );
       expect(resumed.getState().turn.activePlayerId).toBe(
         controller.getState().turn.activePlayerId,
       );
@@ -150,14 +182,18 @@ describe("GameController", () => {
       await controller.playTurn();
 
       const session = controller.toSession();
-      const replayed = GameController.fromSession(session, MAIN_DECK_INPUT, createAdapters());
+      const replayed = GameController.fromSession(
+        session,
+        MAIN_DECK_INPUT,
+        createAdapters(),
+      );
 
       const liveState = controller.getState();
       const replayState = replayed.getState();
 
       expect(replayState.turn).toEqual(liveState.turn);
-      expect(replayState.players.map(p => p.gold)).toEqual(
-        liveState.players.map(p => p.gold),
+      expect(replayState.players.map((p) => p.gold)).toEqual(
+        liveState.players.map((p) => p.gold),
       );
       expect(replayState.actionLog).toEqual(liveState.actionLog);
     });
@@ -170,9 +206,7 @@ describe("GameController", () => {
         config: DEFAULT_CONFIG,
         players: TWO_PLAYERS,
         seed: SEED,
-        actions: [
-          { type: "pass", playerId: "wrong-player" },
-        ],
+        actions: [{ type: "pass", playerId: "wrong-player" }],
       };
 
       expect(() =>

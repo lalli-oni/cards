@@ -1,4 +1,4 @@
-import type { GameState, Action, SeedingAction, MainAction } from "./types";
+import type { Action, GameState, MainAction, SeedingAction } from "./types";
 
 /**
  * Return all legal actions for a player given the current state.
@@ -24,7 +24,10 @@ export function getValidActions(state: GameState, playerId: string): Action[] {
 // Seeding phase
 // ---------------------------------------------------------------------------
 
-function getSeedingValidActions(state: GameState, playerId: string): SeedingAction[] {
+function getSeedingValidActions(
+  state: GameState,
+  playerId: string,
+): SeedingAction[] {
   const seeding = state.seedingState!;
 
   switch (seeding.step) {
@@ -41,7 +44,13 @@ function getSeedingValidActions(state: GameState, playerId: string): SeedingActi
           for (let r = 0; r < state.grid.length; r++) {
             for (let c = 0; c < state.grid[r].length; c++) {
               if (state.grid[r][c].location === null) {
-                actions.push({ type: "seed_steal", playerId, cardId: card.id, row: r, col: c });
+                actions.push({
+                  type: "seed_steal",
+                  playerId,
+                  cardId: card.id,
+                  row: r,
+                  col: c,
+                });
               }
             }
           }
@@ -53,14 +62,21 @@ function getSeedingValidActions(state: GameState, playerId: string): SeedingActi
     }
 
     case "seed_split_prospect":
-      return [{ type: "seed_split_prospect", playerId, topHalf: [], bottomHalf: [] }];
+      return [
+        { type: "seed_split_prospect", playerId, topHalf: [], bottomHalf: [] },
+      ];
 
     case "seed_place_location": {
       const actions: SeedingAction[] = [];
       for (let r = 0; r < state.grid.length; r++) {
         for (let c = 0; c < state.grid[r].length; c++) {
           if (state.grid[r][c].location === null) {
-            actions.push({ type: "seed_place_location", playerId, row: r, col: c });
+            actions.push({
+              type: "seed_place_location",
+              playerId,
+              row: r,
+              col: c,
+            });
           }
         }
       }
@@ -76,7 +92,10 @@ function getSeedingValidActions(state: GameState, playerId: string): SeedingActi
 // Main phase
 // ---------------------------------------------------------------------------
 
-function getMainValidActions(_state: GameState, playerId: string): MainAction[] {
+function getMainValidActions(
+  _state: GameState,
+  playerId: string,
+): MainAction[] {
   const actions: MainAction[] = [];
 
   actions.push({ type: "pass", playerId });

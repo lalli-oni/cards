@@ -1,16 +1,16 @@
-import type {
-  GameConfig,
-  GameState,
-  PlayerDescriptor,
-  PlayerAdapter,
-  Action,
-  GameEvent,
-  Session,
-  DeckInput,
-} from "./types";
-import { createGame } from "./create-game";
-import { getValidActions } from "./valid-actions";
 import { applyAction } from "./apply-action";
+import { createGame } from "./create-game";
+import type {
+  Action,
+  DeckInput,
+  GameConfig,
+  GameEvent,
+  GameState,
+  PlayerAdapter,
+  PlayerDescriptor,
+  Session,
+} from "./types";
+import { getValidActions } from "./valid-actions";
 import { getVisibleState } from "./visible-state";
 
 export interface ControllerOptions {
@@ -37,7 +37,12 @@ export class GameController {
   private readonly playerDescriptors: PlayerDescriptor[];
 
   constructor(options: ControllerOptions) {
-    this.state = createGame(options.config, options.players, options.seed, options.deckInput);
+    this.state = createGame(
+      options.config,
+      options.players,
+      options.seed,
+      options.deckInput,
+    );
     this.adapters = options.adapters;
     this.onEvent = options.onEvent;
     this.seed = options.seed;
@@ -74,8 +79,8 @@ export class GameController {
         } catch (err) {
           throw new Error(
             `Session replay failed at action ${i + 1}/${session.actions.length} ` +
-            `(type: "${action.type}", player: "${action.playerId}"): ` +
-            `${err instanceof Error ? err.message : err}`,
+              `(type: "${action.type}", player: "${action.playerId}"): ` +
+              `${err instanceof Error ? err.message : err}`,
           );
         }
       }
@@ -91,8 +96,8 @@ export class GameController {
       if (++actionCount > maxActions) {
         throw new Error(
           `Game loop exceeded ${maxActions} actions without ending. ` +
-          `Phase: "${this.state.phase}", round: ${this.state.turn.round}, ` +
-          `active player: "${this.state.turn.activePlayerId}"`,
+            `Phase: "${this.state.phase}", round: ${this.state.turn.round}, ` +
+            `active player: "${this.state.turn.activePlayerId}"`,
         );
       }
       await this.playTurn();
@@ -105,9 +110,7 @@ export class GameController {
     const { activePlayerId } = this.state.turn;
     const adapter = this.adapters.get(activePlayerId);
     if (!adapter) {
-      throw new Error(
-        `No adapter registered for player "${activePlayerId}"`,
-      );
+      throw new Error(`No adapter registered for player "${activePlayerId}"`);
     }
 
     const visibleState = getVisibleState(this.state, activePlayerId);
@@ -121,7 +124,7 @@ export class GameController {
     if (!isValid) {
       throw new Error(
         `Adapter for player "${activePlayerId}" returned an invalid action: ` +
-        `${JSON.stringify(action)}`,
+          `${JSON.stringify(action)}`,
       );
     }
 

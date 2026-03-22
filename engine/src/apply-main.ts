@@ -1,8 +1,11 @@
 import { produce } from "immer";
-import type { GameState, GameEvent, MainAction, ApplyResult } from "./types";
 import { advanceTurn } from "./state-helpers";
+import type { ApplyResult, GameEvent, GameState, MainAction } from "./types";
 
-export function applyMainAction(state: GameState, action: MainAction): ApplyResult {
+export function applyMainAction(
+  state: GameState,
+  action: MainAction,
+): ApplyResult {
   const events: GameEvent[] = [];
 
   const nextState = produce(state, (draft) => {

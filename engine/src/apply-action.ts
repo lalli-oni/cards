@@ -1,7 +1,7 @@
-import type { GameState, Action, MainAction, ApplyResult } from "./types";
-import { isSeedingAction } from "./types";
-import { applySeedingAction } from "./apply-seeding";
 import { applyMainAction } from "./apply-main";
+import { applySeedingAction } from "./apply-seeding";
+import type { Action, ApplyResult, GameState, MainAction } from "./types";
+import { isSeedingAction } from "./types";
 
 export type { ApplyResult };
 

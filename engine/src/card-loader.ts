@@ -1,15 +1,15 @@
-import { readFileSync, existsSync } from "fs";
-import { join } from "path";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import type {
   Card,
   CardType,
-  Rarity,
-  EventSubtype,
-  UnitCard,
-  LocationCard,
-  ItemCard,
   EventCard,
+  EventSubtype,
+  ItemCard,
+  LocationCard,
   PolicyCard,
+  Rarity,
+  UnitCard,
 } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -68,13 +68,17 @@ export function createInstanceCounter(): InstanceCounter {
 // ---------------------------------------------------------------------------
 
 const VALID_TYPES: CardType[] = ["unit", "location", "item", "event", "policy"];
-const VALID_RARITIES: Rarity[] = ["common", "uncommon", "rare", "epic", "legendary"];
+const VALID_RARITIES: Rarity[] = [
+  "common",
+  "uncommon",
+  "rare",
+  "epic",
+  "legendary",
+];
 const VALID_SUBTYPES: EventSubtype[] = ["instant", "passive", "trap"];
 
 export class CardValidationError extends Error {
-  constructor(
-    public readonly errors: { cardId: string; message: string }[],
-  ) {
+  constructor(public readonly errors: { cardId: string; message: string }[]) {
     super(
       `Card validation failed:\n${errors.map((e) => `  [${e.cardId}] ${e.message}`).join("\n")}`,
     );
@@ -82,7 +86,9 @@ export class CardValidationError extends Error {
   }
 }
 
-function validateDefinition(def: Record<string, unknown>): { cardId: string; message: string }[] {
+function validateDefinition(
+  def: Record<string, unknown>,
+): { cardId: string; message: string }[] {
   const errors: { cardId: string; message: string }[] = [];
   const cardId = (def.id as string) || "unknown";
 
@@ -111,7 +117,10 @@ function validateDefinition(def: Record<string, unknown>): { cardId: string; mes
 
   // Keywords: required, must be string[]
   if (!Array.isArray(def.keywords)) {
-    errors.push({ cardId, message: "missing or invalid keywords (expected array)" });
+    errors.push({
+      cardId,
+      message: "missing or invalid keywords (expected array)",
+    });
   }
 
   // Type-specific validation
@@ -126,10 +135,16 @@ function validateDefinition(def: Record<string, unknown>): { cardId: string; mes
       errors.push({ cardId, message: `unit missing numeric charisma` });
     }
   }
-  if (def.type === "event" && !VALID_SUBTYPES.includes(def.subtype as EventSubtype)) {
+  if (
+    def.type === "event" &&
+    !VALID_SUBTYPES.includes(def.subtype as EventSubtype)
+  ) {
     errors.push({ cardId, message: `invalid event subtype: ${def.subtype}` });
   }
-  if (def.type === "policy" && (!def.effect || typeof def.effect !== "string")) {
+  if (
+    def.type === "policy" &&
+    (!def.effect || typeof def.effect !== "string")
+  ) {
     errors.push({ cardId, message: "policy missing effect" });
   }
 
@@ -194,7 +209,9 @@ export function loadCardDefinitionsFromBuild(
   sets?: string[],
 ): CardDefinition[] {
   if (!existsSync(buildDir)) {
-    throw new Error(`Build directory not found: ${buildDir}. Run 'bun library/build.ts' first.`);
+    throw new Error(
+      `Build directory not found: ${buildDir}. Run 'bun library/build.ts' first.`,
+    );
   }
 
   if (sets && sets.length > 0) {

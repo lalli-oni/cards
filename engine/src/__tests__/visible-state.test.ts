@@ -1,8 +1,8 @@
-import { describe, expect, it, beforeEach } from "bun:test";
-import { getVisibleState } from "../visible-state";
-import { createTestGame, makeUnit, makeEvent, resetIds } from "./helpers";
-import type { GameState } from "../types";
+import { beforeEach, describe, expect, it } from "bun:test";
 import { produce } from "immer";
+import type { GameState } from "../types";
+import { getVisibleState } from "../visible-state";
+import { createTestGame, makeEvent, makeUnit, resetIds } from "./helpers";
 
 describe("getVisibleState", () => {
   beforeEach(() => resetIds());
@@ -115,7 +115,11 @@ describe("getVisibleState", () => {
 
 // ---- Helpers to set up specific state for tests ----
 
-function withCardsInHand(state: GameState, playerId: string, count: number): GameState {
+function withCardsInHand(
+  state: GameState,
+  playerId: string,
+  count: number,
+): GameState {
   return produce(state, (draft) => {
     const player = draft.players.find((p) => p.id === playerId)!;
     for (let i = 0; i < count; i++) {
@@ -124,7 +128,11 @@ function withCardsInHand(state: GameState, playerId: string, count: number): Gam
   });
 }
 
-function withTrap(state: GameState, playerId: string, targetId: string): GameState {
+function withTrap(
+  state: GameState,
+  playerId: string,
+  targetId: string,
+): GameState {
   return produce(state, (draft) => {
     const player = draft.players.find((p) => p.id === playerId)!;
     player.activeTraps.push({

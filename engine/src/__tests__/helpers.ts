@@ -1,18 +1,18 @@
 import prand from "pure-rand";
+import { createGame } from "../create-game";
 import type {
-  GameConfig,
-  GameState,
-  PlayerDescriptor,
-  UnitCard,
-  LocationCard,
-  ItemCard,
-  EventCard,
-  PolicyCard,
-  LocationEdges,
   Card,
   DeckInput,
+  EventCard,
+  GameConfig,
+  GameState,
+  ItemCard,
+  LocationCard,
+  LocationEdges,
+  PlayerDescriptor,
+  PolicyCard,
+  UnitCard,
 } from "../types";
-import { createGame } from "../create-game";
 
 let instanceCounter = 0;
 
@@ -29,7 +29,9 @@ export function resetIds(): void {
 
 const defaultEdges: LocationEdges = { n: true, e: true, s: true, w: true };
 
-export function makeUnit(overrides: Partial<UnitCard> & { ownerId: string }): UnitCard {
+export function makeUnit(
+  overrides: Partial<UnitCard> & { ownerId: string },
+): UnitCard {
   return {
     id: nextId(),
     definitionId: "test-unit",
@@ -46,7 +48,9 @@ export function makeUnit(overrides: Partial<UnitCard> & { ownerId: string }): Un
   };
 }
 
-export function makeLocation(overrides: Partial<LocationCard> & { ownerId: string }): LocationCard {
+export function makeLocation(
+  overrides: Partial<LocationCard> & { ownerId: string },
+): LocationCard {
   return {
     id: nextId(),
     definitionId: "test-location",
@@ -59,7 +63,9 @@ export function makeLocation(overrides: Partial<LocationCard> & { ownerId: strin
   };
 }
 
-export function makeItem(overrides: Partial<ItemCard> & { ownerId: string }): ItemCard {
+export function makeItem(
+  overrides: Partial<ItemCard> & { ownerId: string },
+): ItemCard {
   return {
     id: nextId(),
     definitionId: "test-item",
@@ -71,7 +77,12 @@ export function makeItem(overrides: Partial<ItemCard> & { ownerId: string }): It
   };
 }
 
-export function makeEvent(overrides: Partial<EventCard> & { ownerId: string; subtype: EventCard["subtype"] }): EventCard {
+export function makeEvent(
+  overrides: Partial<EventCard> & {
+    ownerId: string;
+    subtype: EventCard["subtype"];
+  },
+): EventCard {
   return {
     id: nextId(),
     definitionId: "test-event",
@@ -83,7 +94,9 @@ export function makeEvent(overrides: Partial<EventCard> & { ownerId: string; sub
   };
 }
 
-export function makePolicy(overrides: Partial<PolicyCard> & { ownerId: string }): PolicyCard {
+export function makePolicy(
+  overrides: Partial<PolicyCard> & { ownerId: string },
+): PolicyCard {
   return {
     id: nextId(),
     definitionId: "test-policy",
@@ -119,25 +132,26 @@ export const TWO_PLAYERS: PlayerDescriptor[] = [
 export const SEED = "test-seed";
 
 /** Create a standard 2-player game with pre-built decks (main phase). */
-export function createTestGame(
-  overrides?: {
-    config?: GameConfig;
-    players?: PlayerDescriptor[];
-    seed?: string;
-    deckInput?: DeckInput;
-  },
-): GameState {
+export function createTestGame(overrides?: {
+  config?: GameConfig;
+  players?: PlayerDescriptor[];
+  seed?: string;
+  deckInput?: DeckInput;
+}): GameState {
   const players = overrides?.players ?? TWO_PLAYERS;
   const deckInput: DeckInput = overrides?.deckInput ?? {
     mode: "main",
     decks: Object.fromEntries(
-      players.map((p) => [p.id, {
-        mainDeck: [],
-        hand: [],
-        prospectDeck: [],
-        marketDeck: [],
-        activePolicies: [],
-      }]),
+      players.map((p) => [
+        p.id,
+        {
+          mainDeck: [],
+          hand: [],
+          prospectDeck: [],
+          marketDeck: [],
+          activePolicies: [],
+        },
+      ]),
     ),
   };
   return createGame(
@@ -168,24 +182,27 @@ export function makeSeedingDeck(ownerId: string, count: number): Card[] {
 }
 
 /** Create a 2-player game in seeding phase with populated seeding decks. */
-export function createSeedingGame(
-  overrides?: {
-    config?: GameConfig;
-    players?: PlayerDescriptor[];
-    seed?: string;
-    deckSize?: number;
-    policyCount?: number;
-  },
-): GameState {
+export function createSeedingGame(overrides?: {
+  config?: GameConfig;
+  players?: PlayerDescriptor[];
+  seed?: string;
+  deckSize?: number;
+  policyCount?: number;
+}): GameState {
   const players = overrides?.players ?? TWO_PLAYERS;
   const deckSize = overrides?.deckSize ?? 10;
   const policyCount = overrides?.policyCount ?? 3;
 
-  const decks: Record<string, { seedingDeck: Card[]; policyPool: PolicyCard[] }> = {};
+  const decks: Record<
+    string,
+    { seedingDeck: Card[]; policyPool: PolicyCard[] }
+  > = {};
   for (const p of players) {
     decks[p.id] = {
       seedingDeck: makeSeedingDeck(p.id, deckSize),
-      policyPool: Array.from({ length: policyCount }, () => makePolicy({ ownerId: p.id })),
+      policyPool: Array.from({ length: policyCount }, () =>
+        makePolicy({ ownerId: p.id }),
+      ),
     };
   }
 

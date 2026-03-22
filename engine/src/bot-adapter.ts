@@ -1,6 +1,6 @@
 import prand from "pure-rand";
-import type { PlayerAdapter, VisibleState, Action } from "./types";
 import { fillAction } from "./action-helpers";
+import type { Action, PlayerAdapter, VisibleState } from "./types";
 
 /**
  * Bot player adapter. Picks actions using heuristics and a seeded RNG.

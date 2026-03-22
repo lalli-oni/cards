@@ -1,6 +1,14 @@
 import prand from "pure-rand";
-import type { GameConfig, GameState, PlayerDescriptor, PlayerState, Grid, DeckInput, SeedingState } from "./types";
-import { shuffle, extractRngState } from "./rng";
+import { extractRngState, shuffle } from "./rng";
+import type {
+  DeckInput,
+  GameConfig,
+  GameState,
+  Grid,
+  PlayerDescriptor,
+  PlayerState,
+  SeedingState,
+} from "./types";
 
 function createPlayerState(descriptor: PlayerDescriptor): PlayerState {
   return {
@@ -26,7 +34,8 @@ function createPlayerState(descriptor: PlayerDescriptor): PlayerState {
 function createEmptyGrid(config: GameConfig, playerCount: number): Grid {
   // Grid size is (players + grid_padding) x (players + grid_padding)
   // Actual population happens during seeding phase
-  const padding = typeof config.grid_padding === "number" ? config.grid_padding : 2;
+  const padding =
+    typeof config.grid_padding === "number" ? config.grid_padding : 2;
   const size = playerCount + padding;
   return Array.from({ length: size }, () =>
     Array.from({ length: size }, () => ({
@@ -123,9 +132,9 @@ export function createGame(
       activePlayerId: turnOrder[0],
       actionPointsRemaining: isSeeding
         ? 0
-        : (typeof config.action_points_per_turn === "number"
-            ? config.action_points_per_turn
-            : 3),
+        : typeof config.action_points_per_turn === "number"
+          ? config.action_points_per_turn
+          : 3,
       round: 1,
     },
     players: playerStates,
@@ -148,4 +157,3 @@ function hashSeed(seed: string): number {
   }
   return hash >>> 0;
 }
-

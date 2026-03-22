@@ -1,13 +1,31 @@
 import { describe, expect, it } from "bun:test";
 import { createGame } from "../create-game";
 import type { DeckInput } from "../types";
-import { createTestGame, createSeedingGame, DEFAULT_CONFIG, TWO_PLAYERS, SEED } from "./helpers";
+import {
+  createSeedingGame,
+  createTestGame,
+  DEFAULT_CONFIG,
+  SEED,
+  TWO_PLAYERS,
+} from "./helpers";
 
 const MAIN_DECK_INPUT: DeckInput = {
   mode: "main",
   decks: {
-    p1: { mainDeck: [], hand: [], prospectDeck: [], marketDeck: [], activePolicies: [] },
-    p2: { mainDeck: [], hand: [], prospectDeck: [], marketDeck: [], activePolicies: [] },
+    p1: {
+      mainDeck: [],
+      hand: [],
+      prospectDeck: [],
+      marketDeck: [],
+      activePolicies: [],
+    },
+    p2: {
+      mainDeck: [],
+      hand: [],
+      prospectDeck: [],
+      marketDeck: [],
+      activePolicies: [],
+    },
   },
 };
 
@@ -21,7 +39,7 @@ describe("createGame", () => {
     const state = createSeedingGame();
     expect(state.phase).toBe("seeding");
     expect(state.seedingState).toBeDefined();
-    expect(state.seedingState!.step).toBe("seed_draw");
+    expect(state.seedingState?.step).toBe("seed_draw");
   });
 
   it("populates seeding decks from input", () => {
@@ -110,16 +128,19 @@ describe("createGame", () => {
 
   describe("validation", () => {
     it("rejects empty players array", () => {
-      expect(() => createGame(DEFAULT_CONFIG, [], SEED, MAIN_DECK_INPUT)).toThrow(
-        "at least one player",
-      );
+      expect(() =>
+        createGame(DEFAULT_CONFIG, [], SEED, MAIN_DECK_INPUT),
+      ).toThrow("at least one player");
     });
 
     it("rejects duplicate player IDs", () => {
       expect(() =>
         createGame(
           DEFAULT_CONFIG,
-          [{ id: "p1", name: "A" }, { id: "p1", name: "B" }],
+          [
+            { id: "p1", name: "A" },
+            { id: "p1", name: "B" },
+          ],
           SEED,
           MAIN_DECK_INPUT,
         ),
@@ -127,9 +148,9 @@ describe("createGame", () => {
     });
 
     it("rejects empty seed", () => {
-      expect(() => createGame(DEFAULT_CONFIG, TWO_PLAYERS, "", MAIN_DECK_INPUT)).toThrow(
-        "non-empty seed",
-      );
+      expect(() =>
+        createGame(DEFAULT_CONFIG, TWO_PLAYERS, "", MAIN_DECK_INPUT),
+      ).toThrow("non-empty seed");
     });
   });
 

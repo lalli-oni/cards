@@ -1,17 +1,22 @@
 import { produce } from "immer";
 import prand from "pure-rand";
+import { extractRngState, shuffle } from "./rng";
+import {
+  advanceTurn,
+  getConfigNumber,
+  getPlayer,
+  placeLocationOnGrid,
+} from "./state-helpers";
 import type {
-  GameState,
-  GameEvent,
-  SeedingAction,
-  SeedingState,
   ApplyResult,
   Card,
+  GameEvent,
+  GameState,
   LocationCard,
   PolicyCard,
+  SeedingAction,
+  SeedingState,
 } from "./types";
-import { getPlayer, getConfigNumber, placeLocationOnGrid, advanceTurn } from "./state-helpers";
-import { shuffle, extractRngState } from "./rng";
 
 // ---------------------------------------------------------------------------
 // Validation helpers
@@ -29,7 +34,6 @@ function validateUniqueIds(label: string, ...arrays: string[][]): void {
     }
   }
 }
-
 
 // ---------------------------------------------------------------------------
 // Entry point
@@ -50,16 +54,47 @@ export function applySeedingAction(
         handleSeedDraw(draft, ds, action.playerId, events);
         break;
       case "seed_keep":
-        handleSeedKeep(draft, ds, action.playerId, action.keepIds, action.exposeIds, events);
+        handleSeedKeep(
+          draft,
+          ds,
+          action.playerId,
+          action.keepIds,
+          action.exposeIds,
+          events,
+        );
         break;
       case "seed_steal":
-        handleSeedSteal(draft, ds, action.playerId, action.cardId, action.row, action.col, action.rotation, events);
+        handleSeedSteal(
+          draft,
+          ds,
+          action.playerId,
+          action.cardId,
+          action.row,
+          action.col,
+          action.rotation,
+          events,
+        );
         break;
       case "seed_split_prospect":
-        handleSeedSplitProspect(draft, ds, action.playerId, action.topHalf, action.bottomHalf, events);
+        handleSeedSplitProspect(
+          draft,
+          ds,
+          action.playerId,
+          action.topHalf,
+          action.bottomHalf,
+          events,
+        );
         break;
       case "seed_place_location":
-        handleSeedPlaceLocation(draft, ds, action.playerId, action.row, action.col, action.rotation, events);
+        handleSeedPlaceLocation(
+          draft,
+          ds,
+          action.playerId,
+          action.row,
+          action.col,
+          action.rotation,
+          events,
+        );
         break;
       case "policy_select":
         handlePolicySelection(draft, ds, events);
@@ -123,12 +158,17 @@ function handleSeedKeep(
   // Handle proportional split when fewer cards were drawn
   const totalInHand = player.hand.length;
   if (totalInHand < keepCount + exposeCount) {
-    const adjustedKeep = Math.ceil(totalInHand * (keepCount / (keepCount + exposeCount)));
+    const adjustedKeep = Math.ceil(
+      totalInHand * (keepCount / (keepCount + exposeCount)),
+    );
     const adjustedExpose = totalInHand - adjustedKeep;
-    if (keepIds.length !== adjustedKeep || exposeIds.length !== adjustedExpose) {
+    if (
+      keepIds.length !== adjustedKeep ||
+      exposeIds.length !== adjustedExpose
+    ) {
       throw new Error(
         `With ${totalInHand} cards in hand, expected ${adjustedKeep} keep + ${adjustedExpose} expose, ` +
-        `got ${keepIds.length} keep + ${exposeIds.length} expose`,
+          `got ${keepIds.length} keep + ${exposeIds.length} expose`,
       );
     }
   } else if (keepIds.length !== keepCount || exposeIds.length !== exposeCount) {
@@ -157,7 +197,12 @@ function handleSeedKeep(
     seeding.middleArea.push(player.hand.splice(idx, 1)[0]);
   }
 
-  events.push({ type: "seed_kept", playerId, keptCount: keepIds.length, exposedCount: exposeIds.length });
+  events.push({
+    type: "seed_kept",
+    playerId,
+    keptCount: keepIds.length,
+    exposedCount: exposeIds.length,
+  });
 
   seeding.keepSubmitted.push(playerId);
   advanceTurn(draft, events);
@@ -197,7 +242,9 @@ function handleSeedSteal(
 
   if (card.type === "location") {
     if (row == null || col == null) {
-      throw new Error("Stolen location requires row and col for grid placement");
+      throw new Error(
+        "Stolen location requires row and col for grid placement",
+      );
     }
     placeLocationOnGrid(draft, card as LocationCard, row, col, rotation);
     events.push({ type: "location_placed", row, col, cardId: card.id });
@@ -208,7 +255,8 @@ function handleSeedSteal(
   events.push({ type: "seed_stolen", playerId, cardId: card.id });
 
   // Advance steal turn
-  seeding.stealTurnIndex = (seeding.stealTurnIndex + 1) % draft.turnOrder.length;
+  seeding.stealTurnIndex =
+    (seeding.stealTurnIndex + 1) % draft.turnOrder.length;
   draft.turn.activePlayerId = draft.turnOrder[seeding.stealTurnIndex];
 
   // If middle area is empty, determine next step
@@ -222,7 +270,10 @@ function handleSeedSteal(
       seeding.step = "seed_split_prospect";
       seeding.splitSubmitted = [];
       draft.turn.activePlayerId = draft.turnOrder[0];
-      events.push({ type: "seeding_step_changed", step: "seed_split_prospect" });
+      events.push({
+        type: "seeding_step_changed",
+        step: "seed_split_prospect",
+      });
     }
   }
 }
@@ -238,7 +289,9 @@ function handleSeedSplitProspect(
   events: GameEvent[],
 ): void {
   if (seeding.step !== "seed_split_prospect") {
-    throw new Error(`seed_split_prospect not valid during step "${seeding.step}"`);
+    throw new Error(
+      `seed_split_prospect not valid during step "${seeding.step}"`,
+    );
   }
 
   validateUniqueIds("prospect split", topHalf, bottomHalf);
@@ -264,10 +317,14 @@ function handleSeedSplitProspect(
   if (locations.length !== locationIds.size) {
     const found = new Set(locations.map((l) => l.id));
     const missing = [...locationIds].filter((id) => !found.has(id));
-    throw new Error(`Location IDs not found in market deck: ${missing.join(", ")}`);
+    throw new Error(
+      `Location IDs not found in market deck: ${missing.join(", ")}`,
+    );
   }
 
-  const marketLocations = player.marketDeck.filter((c) => c.type === "location");
+  const marketLocations = player.marketDeck.filter(
+    (c) => c.type === "location",
+  );
   if (marketLocations.length !== locations.length) {
     throw new Error(
       `All ${marketLocations.length} locations in market deck must be split, but only ${locations.length} were provided`,
@@ -278,7 +335,9 @@ function handleSeedSplitProspect(
   let rng = prand.mersenne.fromState(draft.rngState);
 
   const topCards = topHalf.map((id) => locations.find((l) => l.id === id)!);
-  const bottomCards = bottomHalf.map((id) => locations.find((l) => l.id === id)!);
+  const bottomCards = bottomHalf.map(
+    (id) => locations.find((l) => l.id === id)!,
+  );
 
   let shuffledTop: Card[];
   let shuffledBottom: Card[];
@@ -302,11 +361,16 @@ function handleSeedSplitProspect(
     rng = buildMainDecksAndHands(draft, rng, events);
     draft.rngState = extractRngState(rng);
 
-    const hasEmptyCells = draft.grid.some((row) => row.some((cell) => cell.location === null));
+    const hasEmptyCells = draft.grid.some((row) =>
+      row.some((cell) => cell.location === null),
+    );
     if (hasEmptyCells) {
       seeding.step = "seed_place_location";
       draft.turn.activePlayerId = draft.turnOrder[0];
-      events.push({ type: "seeding_step_changed", step: "seed_place_location" });
+      events.push({
+        type: "seeding_step_changed",
+        step: "seed_place_location",
+      });
     } else {
       seeding.step = "policy_selection";
       draft.turn.activePlayerId = draft.turnOrder[0];
@@ -358,7 +422,9 @@ function handleSeedPlaceLocation(
   events: GameEvent[],
 ): void {
   if (seeding.step !== "seed_place_location") {
-    throw new Error(`seed_place_location not valid during step "${seeding.step}"`);
+    throw new Error(
+      `seed_place_location not valid during step "${seeding.step}"`,
+    );
   }
 
   const player = getPlayer(draft, playerId);
@@ -371,7 +437,9 @@ function handleSeedPlaceLocation(
   }
 
   if (!card) {
-    throw new Error(`Player "${playerId}" has no locations left in prospect deck`);
+    throw new Error(
+      `Player "${playerId}" has no locations left in prospect deck`,
+    );
   }
 
   placeLocationOnGrid(draft, card as LocationCard, row, col, rotation);
@@ -379,7 +447,9 @@ function handleSeedPlaceLocation(
 
   advanceTurn(draft, events);
 
-  const hasEmptyCells = draft.grid.some((r) => r.some((cell) => cell.location === null));
+  const hasEmptyCells = draft.grid.some((r) =>
+    r.some((cell) => cell.location === null),
+  );
   if (!hasEmptyCells) {
     seeding.step = "policy_selection";
     draft.turn.activePlayerId = draft.turnOrder[0];
@@ -428,7 +498,10 @@ function handlePolicySelection(
   draft.seedingState = undefined;
   draft.turn.activePlayerId = draft.turnOrder[0];
   draft.turn.round = 1;
-  draft.turn.actionPointsRemaining =
-    getConfigNumber(draft, "action_points_per_turn", 3);
+  draft.turn.actionPointsRemaining = getConfigNumber(
+    draft,
+    "action_points_per_turn",
+    3,
+  );
   events.push({ type: "phase_changed", from: "seeding", to: "main" });
 }

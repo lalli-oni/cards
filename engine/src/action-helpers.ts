@@ -1,4 +1,4 @@
-import type { GameState, Action, VisibleState, PlayerState } from "./types";
+import type { Action, GameState, PlayerState, VisibleState } from "./types";
 
 /**
  * Complete a template action with real card IDs.
@@ -7,7 +7,10 @@ import type { GameState, Action, VisibleState, PlayerState } from "./types";
  *
  * Returns the action unchanged if it doesn't need filling.
  */
-export function fillAction(state: GameState | VisibleState, action: Action): Action {
+export function fillAction(
+  state: GameState | VisibleState,
+  action: Action,
+): Action {
   let player: PlayerState | undefined;
   if ("self" in state) {
     // VisibleState only has full data for self — can't fill other players' actions
@@ -49,12 +52,16 @@ function getKeepExposeCount(
   state: GameState | VisibleState,
   player: PlayerState,
 ): { keep: number; expose: number } {
-  const keepCount = typeof state.config.seed_keep === "number" ? state.config.seed_keep : 8;
-  const exposeCount = typeof state.config.seed_expose === "number" ? state.config.seed_expose : 2;
+  const keepCount =
+    typeof state.config.seed_keep === "number" ? state.config.seed_keep : 8;
+  const exposeCount =
+    typeof state.config.seed_expose === "number" ? state.config.seed_expose : 2;
   const total = player.hand.length;
 
   if (total < keepCount + exposeCount) {
-    const adjustedKeep = Math.ceil(total * (keepCount / (keepCount + exposeCount)));
+    const adjustedKeep = Math.ceil(
+      total * (keepCount / (keepCount + exposeCount)),
+    );
     return { keep: adjustedKeep, expose: total - adjustedKeep };
   }
 

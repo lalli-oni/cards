@@ -1,13 +1,9 @@
-import { describe, expect, it, beforeEach } from "bun:test";
-import { applyAction } from "../apply-action";
-import { getValidActions } from "../valid-actions";
+import { beforeEach, describe, expect, it } from "bun:test";
 import { fillAction } from "../action-helpers";
+import { applyAction } from "../apply-action";
 import type { GameState, SeedingAction } from "../types";
-import {
-  createSeedingGame,
-  resetIds,
-  DEFAULT_CONFIG,
-} from "./helpers";
+import { getValidActions } from "../valid-actions";
+import { createSeedingGame, DEFAULT_CONFIG, resetIds } from "./helpers";
 
 beforeEach(() => resetIds());
 
@@ -40,8 +36,11 @@ function keepAllPlayers(state: GameState): GameState {
 }
 
 /** Find a steal action targeting a non-location card (avoids grid placement). */
-function findNonLocationSteal(state: GameState, actions: SeedingAction[]): SeedingAction | undefined {
-  const middle = state.seedingState!.middleArea;
+function findNonLocationSteal(
+  state: GameState,
+  actions: SeedingAction[],
+): SeedingAction | undefined {
+  const middle = state.seedingState?.middleArea;
   return actions.find((a) => {
     if (a.type !== "seed_steal") return false;
     const card = middle.find((c) => c.id === (a as any).cardId);
@@ -61,7 +60,7 @@ function playThroughSeeding(state: GameState): GameState {
     if (++safety > 500) {
       throw new Error(
         `Seeding phase did not complete after 500 actions. ` +
-        `Step: ${s.seedingState?.step}, active: ${s.turn.activePlayerId}`,
+          `Step: ${s.seedingState?.step}, active: ${s.turn.activePlayerId}`,
       );
     }
     const actions = getValidActions(s, s.turn.activePlayerId);
@@ -94,13 +93,15 @@ describe("seeding phase", () => {
       const drawCount = (DEFAULT_CONFIG.seed_draw as number) ?? 10;
       const expected = Math.min(drawCount, initialDeckSize);
       expect(updatedPlayer.hand).toHaveLength(expected);
-      expect(updatedPlayer.seedingDeck).toHaveLength(initialDeckSize - expected);
+      expect(updatedPlayer.seedingDeck).toHaveLength(
+        initialDeckSize - expected,
+      );
     });
 
     it("transitions to seed_keep after all players draw", () => {
       const state = createSeedingGame({ deckSize: 20 });
       const next = drawAllPlayers(state);
-      expect(next.seedingState!.step).toBe("seed_keep");
+      expect(next.seedingState?.step).toBe("seed_keep");
     });
 
     it("emits seed_cards_drawn event", () => {
@@ -148,18 +149,20 @@ describe("seeding phase", () => {
 
       const updatedPlayer = next.players.find((p) => p.id === activeId)!;
       expect(updatedPlayer.marketDeck).toHaveLength(8);
-      expect(next.seedingState!.middleArea.length).toBeGreaterThanOrEqual(2);
+      expect(next.seedingState?.middleArea.length).toBeGreaterThanOrEqual(2);
     });
 
     it("transitions to seed_steal after all players keep", () => {
       const state = keepAllPlayers(stateAtKeep());
-      expect(state.seedingState!.step).toBe("seed_steal");
+      expect(state.seedingState?.step).toBe("seed_steal");
     });
   });
 
   describe("seed_steal", () => {
     function stateAtSteal(): GameState {
-      return keepAllPlayers(drawAllPlayers(createSeedingGame({ deckSize: 20 })));
+      return keepAllPlayers(
+        drawAllPlayers(createSeedingGame({ deckSize: 20 })),
+      );
     }
 
     it("has valid steal actions for each middle area card", () => {
@@ -171,29 +174,39 @@ describe("seeding phase", () => {
 
     it("removes card from middle area", () => {
       const state = stateAtSteal();
-      const initialMiddleSize = state.seedingState!.middleArea.length;
-      const actions = getValidActions(state, state.turn.activePlayerId) as SeedingAction[];
+      const initialMiddleSize = state.seedingState?.middleArea.length;
+      const actions = getValidActions(
+        state,
+        state.turn.activePlayerId,
+      ) as SeedingAction[];
       const stealAction = findNonLocationSteal(state, actions);
 
       if (stealAction) {
         const next = apply(state, stealAction);
-        expect(next.seedingState!.middleArea.length).toBe(initialMiddleSize - 1);
+        expect(next.seedingState?.middleArea.length).toBe(
+          initialMiddleSize - 1,
+        );
       }
     });
 
     it("transitions to seed_draw when middle area empty and decks remain", () => {
       let state = stateAtSteal();
 
-      while (state.seedingState!.middleArea.length > 0) {
-        const actions = getValidActions(state, state.turn.activePlayerId) as SeedingAction[];
+      while (state.seedingState?.middleArea.length > 0) {
+        const actions = getValidActions(
+          state,
+          state.turn.activePlayerId,
+        ) as SeedingAction[];
         const stealAction = findNonLocationSteal(state, actions) ?? actions[0];
         state = apply(state, stealAction);
       }
 
       // With 20 card decks and 10 drawn, there are still 10 left
-      const anyDeckHasCards = state.players.some((p) => p.seedingDeck.length > 0);
+      const anyDeckHasCards = state.players.some(
+        (p) => p.seedingDeck.length > 0,
+      );
       if (anyDeckHasCards) {
-        expect(state.seedingState!.step).toBe("seed_draw");
+        expect(state.seedingState?.step).toBe("seed_draw");
       }
     });
   });
@@ -201,14 +214,17 @@ describe("seeding phase", () => {
   describe("immutability", () => {
     it("does not mutate the original state during seed_draw", () => {
       const state = createSeedingGame({ deckSize: 20 });
-      const originalStep = state.seedingState!.step;
+      const originalStep = state.seedingState?.step;
       const activeId = state.turn.activePlayerId;
-      const originalDeckSize = state.players.find((p) => p.id === activeId)!.seedingDeck.length;
+      const originalDeckSize = state.players.find((p) => p.id === activeId)
+        ?.seedingDeck.length;
 
       apply(state, firstAction(state, "seed_draw"));
 
-      expect(state.seedingState!.step).toBe(originalStep);
-      expect(state.players.find((p) => p.id === activeId)!.seedingDeck.length).toBe(originalDeckSize);
+      expect(state.seedingState?.step).toBe(originalStep);
+      expect(
+        state.players.find((p) => p.id === activeId)?.seedingDeck.length,
+      ).toBe(originalDeckSize);
     });
   });
 
@@ -238,9 +254,16 @@ describe("seeding phase", () => {
     it("rejects seeding actions during main phase", () => {
       const state = createSeedingGame();
       // Force to main phase
-      const mainState = { ...state, phase: "main" as const, seedingState: undefined };
+      const mainState = {
+        ...state,
+        phase: "main" as const,
+        seedingState: undefined,
+      };
       expect(() =>
-        applyAction(mainState, { type: "seed_draw", playerId: mainState.turn.activePlayerId }),
+        applyAction(mainState, {
+          type: "seed_draw",
+          playerId: mainState.turn.activePlayerId,
+        }),
       ).toThrow();
     });
   });
@@ -251,7 +274,12 @@ describe("seeding phase", () => {
     const e2eConfig = { ...DEFAULT_CONFIG, grid_padding: 2 };
 
     function e2eGame(seed?: string) {
-      return createSeedingGame({ deckSize: 40, policyCount: 3, seed, config: e2eConfig });
+      return createSeedingGame({
+        deckSize: 40,
+        policyCount: 3,
+        seed,
+        config: e2eConfig,
+      });
     }
 
     it("completes full seeding phase and transitions to main", () => {
@@ -304,7 +332,9 @@ describe("seeding phase", () => {
       const r2 = playThroughSeeding(e2eGame("e2e-det"));
 
       expect(r1.rngState).toEqual(r2.rngState);
-      expect(r1.players.map((p) => p.activePolicies.map((pol) => pol.definitionId))).toEqual(
+      expect(
+        r1.players.map((p) => p.activePolicies.map((pol) => pol.definitionId)),
+      ).toEqual(
         r2.players.map((p) => p.activePolicies.map((pol) => pol.definitionId)),
       );
       expect(r1.actionLog.length).toEqual(r2.actionLog.length);

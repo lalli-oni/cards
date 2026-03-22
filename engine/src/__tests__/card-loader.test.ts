@@ -1,15 +1,15 @@
-import { describe, test, expect, beforeEach, afterAll } from "bun:test";
-import { join } from "path";
-import { writeFileSync, mkdirSync, rmSync } from "fs";
+import { afterAll, beforeEach, describe, expect, test } from "bun:test";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import type { CardDefinition, InstanceCounter } from "../card-loader";
 import {
-  loadCardDefinitions,
-  loadCardDefinitionsFromBuild,
+  CardValidationError,
+  createInstanceCounter,
   instantiateCard,
   instantiateCards,
-  createInstanceCounter,
-  CardValidationError,
+  loadCardDefinitions,
+  loadCardDefinitionsFromBuild,
 } from "../card-loader";
-import type { CardDefinition, InstanceCounter } from "../card-loader";
 
 const TMP_DIR = join(import.meta.dir, "__tmp_card_loader__");
 
@@ -99,7 +99,11 @@ beforeEach(() => {
   try {
     rmSync(TMP_DIR, { recursive: true });
   } catch (e: unknown) {
-    if (e instanceof Error && "code" in e && (e as NodeJS.ErrnoException).code !== "ENOENT") {
+    if (
+      e instanceof Error &&
+      "code" in e &&
+      (e as NodeJS.ErrnoException).code !== "ENOENT"
+    ) {
       throw e;
     }
   }
@@ -158,7 +162,11 @@ describe("loadCardDefinitions", () => {
       expect(true).toBe(false);
     } catch (e) {
       expect(e).toBeInstanceOf(CardValidationError);
-      expect((e as CardValidationError).errors.some((err) => err.message.includes("duplicate"))).toBe(true);
+      expect(
+        (e as CardValidationError).errors.some((err) =>
+          err.message.includes("duplicate"),
+        ),
+      ).toBe(true);
     }
   });
 
@@ -170,7 +178,9 @@ describe("loadCardDefinitions", () => {
       expect(true).toBe(false);
     } catch (e) {
       expect(e).toBeInstanceOf(CardValidationError);
-      expect((e as CardValidationError).errors[0].message).toContain("invalid event subtype");
+      expect((e as CardValidationError).errors[0].message).toContain(
+        "invalid event subtype",
+      );
     }
   });
 
@@ -182,7 +192,9 @@ describe("loadCardDefinitions", () => {
       expect(true).toBe(false);
     } catch (e) {
       expect(e).toBeInstanceOf(CardValidationError);
-      expect((e as CardValidationError).errors[0].message).toContain("policy missing effect");
+      expect((e as CardValidationError).errors[0].message).toContain(
+        "policy missing effect",
+      );
     }
   });
 
@@ -194,7 +206,9 @@ describe("loadCardDefinitions", () => {
       expect(true).toBe(false);
     } catch (e) {
       expect(e).toBeInstanceOf(CardValidationError);
-      const messages = (e as CardValidationError).errors.map((err) => err.message);
+      const messages = (e as CardValidationError).errors.map(
+        (err) => err.message,
+      );
       expect(messages.some((m) => m.includes("strength"))).toBe(true);
       expect(messages.some((m) => m.includes("cunning"))).toBe(true);
     }
@@ -208,7 +222,11 @@ describe("loadCardDefinitions", () => {
       expect(true).toBe(false);
     } catch (e) {
       expect(e).toBeInstanceOf(CardValidationError);
-      expect((e as CardValidationError).errors.some((err) => err.message.includes("cost"))).toBe(true);
+      expect(
+        (e as CardValidationError).errors.some((err) =>
+          err.message.includes("cost"),
+        ),
+      ).toBe(true);
     }
   });
 
@@ -220,7 +238,11 @@ describe("loadCardDefinitions", () => {
       expect(true).toBe(false);
     } catch (e) {
       expect(e).toBeInstanceOf(CardValidationError);
-      expect((e as CardValidationError).errors.some((err) => err.message.includes("keywords"))).toBe(true);
+      expect(
+        (e as CardValidationError).errors.some((err) =>
+          err.message.includes("keywords"),
+        ),
+      ).toBe(true);
     }
   });
 });
@@ -357,12 +379,16 @@ describe("instantiateCard", () => {
 
   test("throws when event card missing subtype", () => {
     const badEvent = { ...VALID_EVENT, subtype: undefined } as CardDefinition;
-    expect(() => instantiateCard(badEvent, "p1", counter)).toThrow("missing required subtype");
+    expect(() => instantiateCard(badEvent, "p1", counter)).toThrow(
+      "missing required subtype",
+    );
   });
 
   test("throws when policy card missing effect", () => {
     const badPolicy = { ...VALID_POLICY, effect: undefined } as CardDefinition;
-    expect(() => instantiateCard(badPolicy, "p1", counter)).toThrow("missing required effect");
+    expect(() => instantiateCard(badPolicy, "p1", counter)).toThrow(
+      "missing required effect",
+    );
   });
 });
 
@@ -372,7 +398,13 @@ describe("instantiateCard", () => {
 
 describe("instantiateCards", () => {
   test("instantiates all definitions for an owner", () => {
-    const defs = [VALID_UNIT, VALID_LOCATION, VALID_ITEM, VALID_EVENT, VALID_POLICY];
+    const defs = [
+      VALID_UNIT,
+      VALID_LOCATION,
+      VALID_ITEM,
+      VALID_EVENT,
+      VALID_POLICY,
+    ];
     const cards = instantiateCards(defs, "player-1", counter);
     expect(cards).toHaveLength(5);
     expect(cards.every((c) => c.ownerId === "player-1")).toBe(true);

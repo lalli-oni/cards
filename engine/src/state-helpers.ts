@@ -1,4 +1,4 @@
-import type { GameState, GameEvent, LocationCard } from "./types";
+import type { GameEvent, GameState, LocationCard } from "./types";
 
 export function getPlayer(draft: GameState, playerId: string) {
   const player = draft.players.find((p) => p.id === playerId);
@@ -8,7 +8,11 @@ export function getPlayer(draft: GameState, playerId: string) {
   return player;
 }
 
-export function getConfigNumber(draft: GameState, key: string, defaultValue: number): number {
+export function getConfigNumber(
+  draft: GameState,
+  key: string,
+  defaultValue: number,
+): number {
   const val = draft.config[key];
   return typeof val === "number" ? val : defaultValue;
 }
@@ -20,7 +24,12 @@ export function placeLocationOnGrid(
   col: number,
   rotation?: number,
 ): void {
-  if (row < 0 || row >= draft.grid.length || col < 0 || col >= draft.grid[0].length) {
+  if (
+    row < 0 ||
+    row >= draft.grid.length ||
+    col < 0 ||
+    col >= draft.grid[0].length
+  ) {
     throw new Error(`Grid position (${row}, ${col}) is out of bounds`);
   }
   if (draft.grid[row][col].location !== null) {
@@ -44,7 +53,7 @@ export function advanceTurn(draft: GameState, events: GameEvent[]): void {
   if (currentIndex === -1) {
     throw new Error(
       `Active player "${draft.turn.activePlayerId}" not found in turnOrder ` +
-      `[${draft.turnOrder.join(", ")}]`,
+        `[${draft.turnOrder.join(", ")}]`,
     );
   }
   const nextIndex = (currentIndex + 1) % draft.turnOrder.length;

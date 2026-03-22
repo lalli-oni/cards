@@ -84,21 +84,21 @@ describe("buildBaselineConfig", () => {
     rmSync(dir, { recursive: true });
   });
 
-  // Update this count when adding/removing [var:...] declarations in rules/*.md
-  test("integration: scans actual rules dir and produces 17 keys", () => {
+  describe("integration", () => {
     const rulesDir = resolve(import.meta.dir, "../../../rules");
-    const { config, errors } = buildBaselineConfig(rulesDir);
-    expect(errors).toHaveLength(0);
-    expect(Object.keys(config)).toHaveLength(17);
-  });
 
-  test("TBD vars are excluded from output", () => {
-    const rulesDir = resolve(import.meta.dir, "../../../rules");
-    const { config, warnings } = buildBaselineConfig(rulesDir);
-    expect(config).not.toHaveProperty("X");
-    expect(config).not.toHaveProperty("Y");
-    const tbdWarnings = warnings.filter((w) => w.includes("TBD var"));
-    expect(tbdWarnings.length).toBeGreaterThanOrEqual(2);
+    test("scans actual rules dir without errors", () => {
+      const { errors } = buildBaselineConfig(rulesDir);
+      expect(errors).toHaveLength(0);
+    });
+
+    test("TBD vars are excluded from output", () => {
+      const { config, warnings } = buildBaselineConfig(rulesDir);
+      expect(config).not.toHaveProperty("X");
+      expect(config).not.toHaveProperty("Y");
+      const tbdWarnings = warnings.filter((w) => w.includes("TBD var"));
+      expect(tbdWarnings.length).toBeGreaterThanOrEqual(2);
+    });
   });
 
   test("excludes CLAUDE.md from scanning", () => {

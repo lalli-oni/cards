@@ -5,9 +5,10 @@ import type {
   GameConfig,
   GameState,
   Grid,
+  MainGameState,
   PlayerDescriptor,
   PlayerState,
-  SeedingState,
+  SeedingGameState,
 } from "./types";
 
 function createPlayerState(descriptor: PlayerDescriptor): PlayerState {
@@ -113,30 +114,8 @@ export function createGame(
     }
   }
 
-  const isSeeding = deckInput.mode === "seeding";
-
-  const seedingState: SeedingState | undefined = isSeeding
-    ? {
-        step: "seed_draw",
-        middleArea: [],
-        stealTurnIndex: 0,
-        keepSubmitted: [],
-        splitSubmitted: [],
-      }
-    : undefined;
-
-  return {
+  const base = {
     config,
-    phase: isSeeding ? "seeding" : "main",
-    turn: {
-      activePlayerId: turnOrder[0],
-      actionPointsRemaining: isSeeding
-        ? 0
-        : typeof config.action_points_per_turn === "number"
-          ? config.action_points_per_turn
-          : 3,
-      round: 1,
-    },
     players: playerStates,
     grid: createEmptyGrid(config, players.length),
     market: [],
@@ -144,8 +123,35 @@ export function createGame(
     seed,
     actionLog: [],
     turnOrder,
-    seedingState,
   };
+
+  if (deckInput.mode === "seeding") {
+    return {
+      ...base,
+      phase: "seeding",
+      seedingState: {
+        step: "seed_draw",
+        currentPlayerId: turnOrder[0],
+        middleArea: [],
+        stealTurnIndex: 0,
+        keepSubmitted: [],
+        splitSubmitted: [],
+      },
+    } satisfies SeedingGameState;
+  }
+
+  return {
+    ...base,
+    phase: "main",
+    turn: {
+      activePlayerId: turnOrder[0],
+      actionPointsRemaining:
+        typeof config.action_points_per_turn === "number"
+          ? config.action_points_per_turn
+          : 3,
+      round: 1,
+    },
+  } satisfies MainGameState;
 }
 
 /** Convert a string seed to a numeric seed for pure-rand (FNV-1a). */

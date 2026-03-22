@@ -147,12 +147,14 @@ export type SeedingStep =
 
 export interface SeedingState {
   step: SeedingStep;
+  /** Whose input is needed next during seeding. */
+  currentPlayerId: string;
   middleArea: Card[];
   /** Index into turnOrder for whose turn it is to steal. */
   stealTurnIndex: number;
-  /** Players who have submitted seed_keep this round. */
+  /** Players who have submitted seed_keep this round. Reset at step entry. */
   keepSubmitted: string[];
-  /** Players who have submitted seed_split_prospect. */
+  /** Players who have submitted seed_split_prospect. Reset at step entry. */
   splitSubmitted: string[];
 }
 
@@ -163,13 +165,11 @@ export interface TurnState {
 }
 
 // ---------------------------------------------------------------------------
-// Game State
+// Game State (discriminated union on phase)
 // ---------------------------------------------------------------------------
 
-export interface GameState {
+interface GameStateBase {
   config: GameConfig;
-  phase: Phase;
-  turn: TurnState;
   players: PlayerState[];
   grid: Grid;
   market: Card[];
@@ -178,10 +178,41 @@ export interface GameState {
   seed: string;
   actionLog: Action[];
   turnOrder: string[];
-  /** Present during seeding phase, cleared on transition to main. */
-  seedingState?: SeedingState;
+}
+
+export interface SeedingGameState extends GameStateBase {
+  phase: "seeding";
+  seedingState: SeedingState;
+}
+
+export interface MainGameState extends GameStateBase {
+  phase: "main";
+  turn: TurnState;
+}
+
+export interface EndedGameState extends GameStateBase {
+  phase: "ended";
+  turn: TurnState;
   winner?: string;
   scores?: Record<string, number>;
+}
+
+export type GameState = SeedingGameState | MainGameState | EndedGameState;
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Get the active player ID regardless of phase. */
+export function getActivePlayerId(state: GameState): string {
+  switch (state.phase) {
+    case "seeding":
+      return state.seedingState.currentPlayerId;
+    case "main":
+      return state.turn.activePlayerId;
+    case "ended":
+      throw new Error("No active player in ended phase");
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -353,6 +384,11 @@ export type GameEvent =
     }
   | { type: "seed_stolen"; playerId: string; cardId: string }
   | { type: "seeding_step_changed"; step: SeedingStep }
+  | {
+      type: "seeding_player_changed";
+      playerId: string;
+      step: SeedingStep;
+    }
   | { type: "prospect_deck_built"; playerId: string }
   | { type: "deck_constructed"; playerId: string }
   | { type: "policies_assigned"; playerId: string; policyIds: string[] };
@@ -365,7 +401,10 @@ export type GameEvent =
 export interface VisibleState {
   config: GameConfig;
   phase: Phase;
-  turn: TurnState;
+  /** Present during main and ended phases. */
+  turn?: TurnState;
+  /** Always populated — the player whose input is needed. */
+  currentPlayerId: string;
   playerId: string;
   /** Full state for this player. */
   self: PlayerState;

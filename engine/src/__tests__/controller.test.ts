@@ -6,6 +6,7 @@ import type {
   DeckInput,
   GameEvent,
   GameState,
+  MainGameState,
   PlayerAdapter,
   Session,
   VisibleState,
@@ -69,9 +70,12 @@ describe("GameController", () => {
 
     it("advances the active player", async () => {
       const controller = createController();
-      const firstPlayer = controller.getState().turn.activePlayerId;
+      const firstPlayer = (controller.getState() as MainGameState).turn
+        .activePlayerId;
       await controller.playTurn();
-      expect(controller.getState().turn.activePlayerId).not.toBe(firstPlayer);
+      expect(
+        (controller.getState() as MainGameState).turn.activePlayerId,
+      ).not.toBe(firstPlayer);
     });
 
     it("calls onEvent callback", async () => {
@@ -152,8 +156,8 @@ describe("GameController", () => {
         MAIN_DECK_INPUT,
         createAdapters(),
       );
-      expect(replayed.getState().turn.round).toBe(
-        controller.getState().turn.round,
+      expect((replayed.getState() as MainGameState).turn.round).toBe(
+        (controller.getState() as MainGameState).turn.round,
       );
       expect(replayed.getState().actionLog).toEqual(
         controller.getState().actionLog,
@@ -170,8 +174,8 @@ describe("GameController", () => {
         MAIN_DECK_INPUT,
         createAdapters(),
       );
-      expect(resumed.getState().turn.activePlayerId).toBe(
-        controller.getState().turn.activePlayerId,
+      expect((resumed.getState() as MainGameState).turn.activePlayerId).toBe(
+        (controller.getState() as MainGameState).turn.activePlayerId,
       );
     });
 
@@ -188,8 +192,8 @@ describe("GameController", () => {
         createAdapters(),
       );
 
-      const liveState = controller.getState();
-      const replayState = replayed.getState();
+      const liveState = controller.getState() as MainGameState;
+      const replayState = replayed.getState() as MainGameState;
 
       expect(replayState.turn).toEqual(liveState.turn);
       expect(replayState.players.map((p) => p.gold)).toEqual(

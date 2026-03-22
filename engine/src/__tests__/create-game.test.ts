@@ -33,13 +33,25 @@ describe("createGame", () => {
   it("creates a game in main phase with main deck input", () => {
     const state = createTestGame();
     expect(state.phase).toBe("main");
+    expect(state.turn).toBeDefined();
   });
 
   it("creates a game in seeding phase with seeding deck input", () => {
     const state = createSeedingGame();
     expect(state.phase).toBe("seeding");
     expect(state.seedingState).toBeDefined();
-    expect(state.seedingState?.step).toBe("seed_draw");
+    expect(state.seedingState.step).toBe("seed_draw");
+    expect(state.seedingState.currentPlayerId).toBe(state.turnOrder[0]);
+  });
+
+  it("seeding mode returns no turn property", () => {
+    const state = createSeedingGame();
+    expect("turn" in state).toBe(false);
+  });
+
+  it("main mode returns no seedingState property", () => {
+    const state = createTestGame();
+    expect("seedingState" in state).toBe(false);
   });
 
   it("populates seeding decks from input", () => {

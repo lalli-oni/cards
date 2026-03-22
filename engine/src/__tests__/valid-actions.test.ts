@@ -1,5 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { produce } from "immer";
+import type { EndedGameState } from "../types";
+import { getActivePlayerId } from "../types";
 import { getValidActions } from "../valid-actions";
 import { createSeedingGame, createTestGame } from "./helpers";
 
@@ -24,10 +26,15 @@ describe("getValidActions", () => {
     });
 
     it("returns empty array when game has ended", () => {
-      const state = produce(createTestGame(), (draft) => {
-        draft.phase = "ended";
-      });
-      const actions = getValidActions(state, state.turn.activePlayerId);
+      const base = createTestGame();
+      const endedState: EndedGameState = {
+        ...base,
+        phase: "ended",
+      };
+      const actions = getValidActions(
+        endedState,
+        endedState.turn.activePlayerId,
+      );
       expect(actions).toEqual([]);
     });
 
@@ -38,20 +45,41 @@ describe("getValidActions", () => {
     });
   });
 
+  describe("getActivePlayerId", () => {
+    it("returns activePlayerId for main phase", () => {
+      const state = createTestGame();
+      expect(getActivePlayerId(state)).toBe(state.turn.activePlayerId);
+    });
+
+    it("returns currentPlayerId for seeding phase", () => {
+      const state = createSeedingGame();
+      expect(getActivePlayerId(state)).toBe(state.seedingState.currentPlayerId);
+    });
+
+    it("throws for ended phase", () => {
+      const base = createTestGame();
+      const endedState: EndedGameState = { ...base, phase: "ended" };
+      expect(() => getActivePlayerId(endedState)).toThrow(
+        "No active player in ended phase",
+      );
+    });
+  });
+
   describe("seeding phase", () => {
     it("returns seed_draw at seed_draw step", () => {
       const state = createSeedingGame();
-      const actions = getValidActions(state, state.turn.activePlayerId);
+      const activeId = state.seedingState.currentPlayerId;
+      const actions = getValidActions(state, activeId);
       expect(actions).toHaveLength(1);
       expect(actions[0].type).toBe("seed_draw");
     });
 
     it("returns seed_keep at seed_keep step", () => {
       const state = produce(createSeedingGame(), (draft) => {
-        // biome-ignore lint/style/noNonNullAssertion: seeding game always has seedingState
-        draft.seedingState!.step = "seed_keep";
+        draft.seedingState.step = "seed_keep";
       });
-      const actions = getValidActions(state, state.turn.activePlayerId);
+      const activeId = state.seedingState.currentPlayerId;
+      const actions = getValidActions(state, activeId);
       expect(actions).toHaveLength(1);
       expect(actions[0].type).toBe("seed_keep");
     });

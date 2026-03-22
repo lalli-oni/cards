@@ -1,8 +1,14 @@
 import { beforeEach, describe, expect, it } from "bun:test";
 import { produce } from "immer";
-import type { GameState } from "../types";
+import type { EndedGameState, MainGameState } from "../types";
 import { getVisibleState } from "../visible-state";
-import { createTestGame, makeEvent, makeUnit, resetIds } from "./helpers";
+import {
+  createSeedingGame,
+  createTestGame,
+  makeEvent,
+  makeUnit,
+  resetIds,
+} from "./helpers";
 
 describe("getVisibleState", () => {
   beforeEach(() => resetIds());
@@ -17,6 +23,12 @@ describe("getVisibleState", () => {
     const vis = getVisibleState(state, "p1");
     expect(vis.self.id).toBe("p1");
     expect(vis.playerId).toBe("p1");
+  });
+
+  it("populates currentPlayerId", () => {
+    const state = createTestGame();
+    const vis = getVisibleState(state, "p1");
+    expect(vis.currentPlayerId).toBe(state.turn.activePlayerId);
   });
 
   describe("no teams (free-for-all)", () => {
@@ -110,16 +122,53 @@ describe("getVisibleState", () => {
       const vis = getVisibleState(state, "p1");
       expect(vis.turnOrder).toEqual(state.turnOrder);
     });
+
+    it("includes turn for main phase", () => {
+      const state = createTestGame();
+      const vis = getVisibleState(state, "p1");
+      expect(vis.turn).toBeDefined();
+      expect(vis.turn?.activePlayerId).toBe(state.turn.activePlayerId);
+    });
+  });
+
+  describe("seeding phase", () => {
+    it("has turn undefined during seeding", () => {
+      const state = createSeedingGame();
+      const vis = getVisibleState(state, state.seedingState.currentPlayerId);
+      expect(vis.turn).toBeUndefined();
+    });
+
+    it("populates currentPlayerId from seedingState", () => {
+      const state = createSeedingGame();
+      const vis = getVisibleState(state, state.seedingState.currentPlayerId);
+      expect(vis.currentPlayerId).toBe(state.seedingState.currentPlayerId);
+    });
+
+    it("includes seedingStep", () => {
+      const state = createSeedingGame();
+      const vis = getVisibleState(state, state.seedingState.currentPlayerId);
+      expect(vis.seedingStep).toBe("seed_draw");
+    });
+  });
+
+  describe("ended phase", () => {
+    it("does not throw for ended game", () => {
+      const base = createTestGame();
+      const endedState: EndedGameState = { ...base, phase: "ended" };
+      const vis = getVisibleState(endedState, "p1");
+      expect(vis.phase).toBe("ended");
+      expect(vis.currentPlayerId).toBe(base.turn.activePlayerId);
+    });
   });
 });
 
 // ---- Helpers to set up specific state for tests ----
 
 function withCardsInHand(
-  state: GameState,
+  state: MainGameState,
   playerId: string,
   count: number,
-): GameState {
+): MainGameState {
   return produce(state, (draft) => {
     // biome-ignore lint/style/noNonNullAssertion: test helper with known player IDs
     const player = draft.players.find((p) => p.id === playerId)!;
@@ -130,10 +179,10 @@ function withCardsInHand(
 }
 
 function withTrap(
-  state: GameState,
+  state: MainGameState,
   playerId: string,
   targetId: string,
-): GameState {
+): MainGameState {
   return produce(state, (draft) => {
     // biome-ignore lint/style/noNonNullAssertion: test helper with known player IDs
     const player = draft.players.find((p) => p.id === playerId)!;

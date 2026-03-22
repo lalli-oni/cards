@@ -10,6 +10,7 @@ import type {
   PlayerDescriptor,
   Session,
 } from "./types";
+import { getActivePlayerId } from "./types";
 import { getValidActions } from "./valid-actions";
 import { getVisibleState } from "./visible-state";
 
@@ -94,10 +95,13 @@ export class GameController {
     let actionCount = 0;
     while (this.state.phase !== "ended") {
       if (++actionCount > maxActions) {
+        const activePlayer = getActivePlayerId(this.state);
+        const round =
+          this.state.phase === "main" ? this.state.turn.round : "N/A";
         throw new Error(
           `Game loop exceeded ${maxActions} actions without ending. ` +
-            `Phase: "${this.state.phase}", round: ${this.state.turn.round}, ` +
-            `active player: "${this.state.turn.activePlayerId}"`,
+            `Phase: "${this.state.phase}", round: ${round}, ` +
+            `active player: "${activePlayer}"`,
         );
       }
       await this.playTurn();
@@ -107,7 +111,7 @@ export class GameController {
 
   /** Execute a single turn: get action from adapter, validate, apply. */
   async playTurn(): Promise<GameEvent[]> {
-    const { activePlayerId } = this.state.turn;
+    const activePlayerId = getActivePlayerId(this.state);
     const adapter = this.adapters.get(activePlayerId);
     if (!adapter) {
       throw new Error(`No adapter registered for player "${activePlayerId}"`);
@@ -146,6 +150,11 @@ export class GameController {
 
   /** Serialize the current game as a session. */
   toSession(includeSnapshot = false): Session {
+    const round =
+      this.state.phase === "main" || this.state.phase === "ended"
+        ? this.state.turn.round
+        : 0;
+
     return {
       version: "0.1.0",
       config: this.state.config,
@@ -158,7 +167,7 @@ export class GameController {
           ? {
               winner: this.state.winner,
               scores: this.state.scores ?? {},
-              rounds: this.state.turn.round,
+              rounds: round,
             }
           : undefined,
     };

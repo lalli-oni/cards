@@ -33,6 +33,57 @@ function drawAllPlayers(state: GameState): GameState {
   return s;
 }
 
+/**
+ * Play through the entire seeding phase by picking valid actions.
+ * For actions with choices, picks the first valid option.
+ * Returns the final state (should be in main phase).
+ */
+function playThroughSeeding(state: GameState): GameState {
+  let s = state;
+  let safety = 0;
+  while (s.phase === "seeding") {
+    if (++safety > 500) {
+      throw new Error(
+        `Seeding phase did not complete after 500 actions. ` +
+        `Step: ${s.seedingState?.step}, active: ${s.turn.activePlayerId}`,
+      );
+    }
+    const actions = getValidActions(s, s.turn.activePlayerId) as SeedingAction[];
+    if (actions.length === 0) {
+      throw new Error(`No valid actions at step ${s.seedingState?.step}`);
+    }
+
+    const action = actions[0];
+
+    // For seed_keep, we need to fill in actual card IDs
+    if (action.type === "seed_keep") {
+      const player = s.players.find((p) => p.id === action.playerId)!;
+      const keepCount = Math.min(s.config.seed_keep as number ?? 8, player.hand.length);
+      const exposeCount = Math.min(s.config.seed_expose as number ?? 2, player.hand.length - keepCount);
+      s = apply(s, {
+        type: "seed_keep",
+        playerId: action.playerId,
+        keepIds: player.hand.slice(0, keepCount).map((c) => c.id),
+        exposeIds: player.hand.slice(keepCount, keepCount + exposeCount).map((c) => c.id),
+      });
+    } else if (action.type === "seed_split_prospect") {
+      // Split locations from market deck into top/bottom halves
+      const player = s.players.find((p) => p.id === action.playerId)!;
+      const locations = player.marketDeck.filter((c) => c.type === "location");
+      const half = Math.ceil(locations.length / 2);
+      s = apply(s, {
+        type: "seed_split_prospect",
+        playerId: action.playerId,
+        topHalf: locations.slice(0, half).map((c) => c.id),
+        bottomHalf: locations.slice(half).map((c) => c.id),
+      });
+    } else {
+      s = apply(s, action);
+    }
+  }
+  return s;
+}
+
 describe("seeding phase", () => {
   describe("seed_draw", () => {
     it("is a forced action (single valid action)", () => {
@@ -227,6 +278,72 @@ describe("seeding phase", () => {
       expect(() =>
         applyAction(mainState, { type: "seed_draw", playerId: mainState.turn.activePlayerId }),
       ).toThrow();
+    });
+  });
+
+  describe("end-to-end", () => {
+    // 40 cards per player = 10 locations each (20 total).
+    // Grid is 4x4 = 16 cells. Enough locations to fill.
+    const e2eConfig = { ...DEFAULT_CONFIG, grid_padding: 2 };
+
+    function e2eGame(seed?: string) {
+      return createSeedingGame({ deckSize: 40, policyCount: 3, seed, config: e2eConfig });
+    }
+
+    it("completes full seeding phase and transitions to main", () => {
+      const result = playThroughSeeding(e2eGame());
+
+      expect(result.phase).toBe("main");
+      expect(result.seedingState).toBeUndefined();
+    });
+
+    it("each player ends up with 2 active policies", () => {
+      const result = playThroughSeeding(e2eGame());
+
+      for (const player of result.players) {
+        expect(player.activePolicies).toHaveLength(2);
+      }
+    });
+
+    it("each player has a starting hand and main deck", () => {
+      const result = playThroughSeeding(e2eGame());
+
+      for (const player of result.players) {
+        expect(player.hand.length).toBeGreaterThan(0);
+        expect(player.mainDeck.length).toBeGreaterThan(0);
+      }
+    });
+
+    it("grid is fully populated with locations", () => {
+      const result = playThroughSeeding(e2eGame());
+
+      for (const row of result.grid) {
+        for (const cell of row) {
+          expect(cell.location).not.toBeNull();
+        }
+      }
+    });
+
+    it("seeding decks are empty after completion", () => {
+      const result = playThroughSeeding(e2eGame());
+
+      for (const player of result.players) {
+        expect(player.seedingDeck).toHaveLength(0);
+      }
+    });
+
+    it("is deterministic with the same seed", () => {
+      resetIds();
+      const r1 = playThroughSeeding(e2eGame("e2e-det"));
+
+      resetIds();
+      const r2 = playThroughSeeding(e2eGame("e2e-det"));
+
+      expect(r1.rngState).toEqual(r2.rngState);
+      expect(r1.players.map((p) => p.activePolicies.map((pol) => pol.definitionId))).toEqual(
+        r2.players.map((p) => p.activePolicies.map((pol) => pol.definitionId)),
+      );
+      expect(r1.actionLog.length).toEqual(r2.actionLog.length);
     });
   });
 });

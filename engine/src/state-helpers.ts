@@ -14,7 +14,13 @@ export function getConfigNumber(
   defaultValue: number,
 ): number {
   const val = draft.config[key];
-  return typeof val === "number" ? val : defaultValue;
+  if (val === undefined) return defaultValue;
+  if (typeof val !== "number") {
+    throw new Error(
+      `Config "${key}" expected number, got ${typeof val}: ${JSON.stringify(val)}`,
+    );
+  }
+  return val;
 }
 
 export function placeLocationOnGrid(
@@ -36,7 +42,7 @@ export function placeLocationOnGrid(
     throw new Error(`Grid position (${row}, ${col}) is already occupied`);
   }
 
-  if (rotation && rotation > 0) {
+  if (rotation) {
     const steps = ((rotation % 4) + 4) % 4;
     for (let i = 0; i < steps; i++) {
       const { n, e, s, w } = card.edges;

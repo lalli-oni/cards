@@ -119,6 +119,11 @@ function handleSeedDraw(
   }
 
   const player = getPlayer(draft, playerId);
+  if (player.seedingDeck.length === 0) {
+    throw new Error(
+      `Player "${playerId}" has no cards left in seeding deck during seed_draw`,
+    );
+  }
   const drawCount = getConfigNumber(draft, "seed_draw", 10);
   const actual = Math.min(drawCount, player.seedingDeck.length);
   const drawn = player.seedingDeck.splice(0, actual);

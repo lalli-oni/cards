@@ -45,6 +45,12 @@ export function applySeedingAction(
   state: SeedingGameState,
   action: SeedingAction,
 ): ApplyResult {
+  // policy_select triggers a phase transition — handled separately
+  // so we can construct MainGameState explicitly with full type checking.
+  if (action.type === "policy_select") {
+    return handlePolicySelection(state, action);
+  }
+
   const events: GameEvent[] = [];
 
   const nextState = produce(state, (draft) => {
@@ -97,9 +103,6 @@ export function applySeedingAction(
           action.rotation,
           events,
         );
-        break;
-      case "policy_select":
-        handlePolicySelection(draft, ds, events);
         break;
     }
   });
@@ -470,53 +473,73 @@ function handleSeedPlaceLocation(
 // TODO(#29): Replace with policy selection draft mechanic
 
 function handlePolicySelection(
-  draft: Draft<SeedingGameState>,
-  seeding: Draft<SeedingState>,
-  events: GameEvent[],
-): void {
-  if (seeding.step !== "policy_selection") {
-    throw new Error(`policy_select not valid during step "${seeding.step}"`);
+  state: SeedingGameState,
+  action: SeedingAction,
+): ApplyResult {
+  if (state.seedingState.step !== "policy_selection") {
+    throw new Error(
+      `policy_select not valid during step "${state.seedingState.step}"`,
+    );
   }
 
-  let rng = prand.mersenne.fromState(draft.rngState);
+  const events: GameEvent[] = [];
 
-  for (const player of draft.players) {
-    if (player.policyPool.length < 2) {
-      throw new Error(
-        `Player "${player.id}" has ${player.policyPool.length} policies in pool, need at least 2`,
-      );
+  // Step 1: Apply policy assignment within seeding state (Immer)
+  const final = produce(state, (draft) => {
+    draft.actionLog.push(action);
+
+    let rng = prand.mersenne.fromState(draft.rngState);
+
+    for (const player of draft.players) {
+      if (player.policyPool.length < 2) {
+        throw new Error(
+          `Player "${player.id}" has ${player.policyPool.length} policies in pool, need at least 2`,
+        );
+      }
+
+      let shuffled: PolicyCard[];
+      [shuffled, rng] = shuffle(player.policyPool, rng);
+      player.activePolicies.push(shuffled[0], shuffled[1]);
+      player.policyPool = shuffled.slice(2);
+
+      events.push({
+        type: "policies_assigned",
+        playerId: player.id,
+        policyIds: player.activePolicies.map((pol) => pol.id),
+      });
     }
 
-    // Shuffle and pick 2
-    let shuffled: PolicyCard[];
-    [shuffled, rng] = shuffle(player.policyPool, rng);
-    player.activePolicies.push(shuffled[0], shuffled[1]);
-    player.policyPool = shuffled.slice(2);
+    draft.rngState = extractRngState(rng) as number[];
+  });
 
-    events.push({
-      type: "policies_assigned",
-      playerId: player.id,
-      policyIds: player.activePolicies.map((pol) => pol.id),
-    });
-  }
-
-  draft.rngState = extractRngState(rng) as number[];
-
-  // Transition seeding -> main phase via type assertion
-  const d = draft as unknown as Draft<MainGameState>;
-  d.phase = "main";
-  d.turn = {
-    activePlayerId: draft.turnOrder[0],
-    round: 1,
-    actionPointsRemaining: getConfigNumber(draft, "action_points_per_turn", 3),
+  // Step 2: Construct MainGameState explicitly (full type checking)
+  const mainState: MainGameState = {
+    config: final.config,
+    phase: "main",
+    turn: {
+      activePlayerId: final.turnOrder[0],
+      round: 1,
+      actionPointsRemaining: getConfigNumber(
+        final,
+        "action_points_per_turn",
+        3,
+      ),
+    },
+    players: final.players,
+    grid: final.grid,
+    market: final.market,
+    rngState: final.rngState,
+    seed: final.seed,
+    actionLog: final.actionLog,
+    turnOrder: final.turnOrder,
   };
-  // Clean up seeding-only fields
-  delete (draft as any).seedingState;
 
   events.push({ type: "phase_changed", from: "seeding", to: "main" });
   events.push({
     type: "turn_started",
-    playerId: draft.turnOrder[0],
+    playerId: final.turnOrder[0],
     round: 1,
   });
+
+  return { state: mainState, events };
 }

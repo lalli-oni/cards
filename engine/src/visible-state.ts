@@ -1,11 +1,20 @@
-import type { GameState, VisibleState, OpponentView, PlayerState, TrapView } from "./types";
+import type {
+  GameState,
+  OpponentView,
+  PlayerState,
+  TrapView,
+  VisibleState,
+} from "./types";
 
 /**
  * Return a filtered view of the state for a specific player.
  * Hides opponent hands, deck contents, and other hidden information.
  * Teammates share full visibility.
  */
-export function getVisibleState(state: GameState, playerId: string): VisibleState {
+export function getVisibleState(
+  state: GameState,
+  playerId: string,
+): VisibleState {
   const self = state.players.find((p) => p.id === playerId);
   if (!self) {
     throw new Error(`Player "${playerId}" not found in game state`);
@@ -33,6 +42,8 @@ export function getVisibleState(state: GameState, playerId: string): VisibleStat
     grid: state.grid,
     market: state.market,
     turnOrder: state.turnOrder,
+    middleArea: state.seedingState?.middleArea ?? [],
+    seedingStep: state.seedingState?.step,
     winner: state.winner,
     scores: state.scores,
   };
@@ -46,6 +57,7 @@ function toOpponentView(player: PlayerState): OpponentView {
     gold: player.gold,
     vp: player.vp,
     handSize: player.hand.length,
+    seedingDeckSize: player.seedingDeck.length,
     mainDeckSize: player.mainDeck.length,
     marketDeckSize: player.marketDeck.length,
     prospectDeckSize: player.prospectDeck.length,

@@ -8,8 +8,8 @@
  * Output goes to rules/build/baseline.json
  */
 
-import { readdirSync, readFileSync, mkdirSync, writeFileSync } from "fs";
-import { join, resolve } from "path";
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 
 const RULES_DIR = resolve(import.meta.dir, "../../rules");
 const BUILD_DIR = join(RULES_DIR, "build");
@@ -43,7 +43,7 @@ const VAR_PATTERN = /\[var:([^\]]+)\]/g;
 
 export function parseVarValue(raw: string): ConfigValue {
   const num = Number(raw);
-  if (!isNaN(num) && raw.trim() !== "") return num;
+  if (!Number.isNaN(num) && raw.trim() !== "") return num;
   if (raw === "true") return true;
   if (raw === "false") return false;
   return raw;
@@ -60,13 +60,19 @@ export function extractVars(
   for (let i = 0; i < lines.length; i++) {
     let match: RegExpExecArray | null;
     const linePattern = new RegExp(VAR_PATTERN.source, "g");
+    // biome-ignore lint/suspicious/noAssignInExpressions: standard regex iteration pattern
     while ((match = linePattern.exec(lines[i])) !== null) {
       const content = match[1];
       const parts = content.split(":");
       if (parts.length >= 2 && parts[1] !== "") {
         const id = parts[0];
         const rawValue = parts.slice(1).join(":");
-        vars.push({ id, value: parseVarValue(rawValue), file: filePath, line: i + 1 });
+        vars.push({
+          id,
+          value: parseVarValue(rawValue),
+          file: filePath,
+          line: i + 1,
+        });
       } else {
         tbdVars.push({ id: parts[0], file: filePath, line: i + 1 });
       }
@@ -77,13 +83,20 @@ export function extractVars(
 }
 
 // Non-rule markdown files that should not be scanned for var declarations.
-const EXCLUDED = new Set(["CLAUDE.md", "design-principles.md", "open-questions.md"]);
+const EXCLUDED = new Set([
+  "CLAUDE.md",
+  "design-principles.md",
+  "open-questions.md",
+]);
 
 export function buildBaselineConfig(rulesDir: string): BuildResult {
   const config: Record<string, ConfigValue> = {};
   const warnings: string[] = [];
   const errors: string[] = [];
-  const seen = new Map<string, { value: ConfigValue; file: string; line: number }>();
+  const seen = new Map<
+    string,
+    { value: ConfigValue; file: string; line: number }
+  >();
 
   const files = readdirSync(rulesDir)
     .filter((f) => f.endsWith(".md") && !EXCLUDED.has(f))
@@ -95,7 +108,9 @@ export function buildBaselineConfig(rulesDir: string): BuildResult {
     const { vars, tbdVars } = extractVars(content, file);
 
     for (const tbd of tbdVars) {
-      warnings.push(`TBD var [var:${tbd.id}] at ${tbd.file}:${tbd.line} — excluded from output`);
+      warnings.push(
+        `TBD var [var:${tbd.id}] at ${tbd.file}:${tbd.line} — excluded from output`,
+      );
     }
 
     for (const v of vars) {
@@ -154,7 +169,7 @@ function main() {
 
   mkdirSync(BUILD_DIR, { recursive: true });
   const outPath = join(BUILD_DIR, "baseline.json");
-  writeFileSync(outPath, JSON.stringify(config, null, 2) + "\n");
+  writeFileSync(outPath, `${JSON.stringify(config, null, 2)}\n`);
 
   const keys = Object.keys(config);
   console.log(`\nDone. ${keys.length} config keys written to ${outPath}`);

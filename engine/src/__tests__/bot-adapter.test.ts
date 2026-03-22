@@ -1,8 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import { BotAdapter } from "../bot-adapter";
+import type { Action, VisibleState } from "../types";
 import { getVisibleState } from "../visible-state";
 import { createTestGame } from "./helpers";
-import type { Action, VisibleState } from "../types";
 
 function makeVisibleState(): VisibleState {
   const state = createTestGame();
@@ -24,9 +24,7 @@ describe("BotAdapter", () => {
   it("throws when no valid actions available", async () => {
     const bot = new BotAdapter(42);
     const vis = makeVisibleState();
-    await expect(bot.chooseAction(vis, [])).rejects.toThrow(
-      "no valid actions",
-    );
+    await expect(bot.chooseAction(vis, [])).rejects.toThrow("no valid actions");
   });
 
   it("is deterministic with the same seed", async () => {

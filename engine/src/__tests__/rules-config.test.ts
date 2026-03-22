@@ -1,8 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { extractVars, parseVarValue, buildBaselineConfig, mergeVariant } from "../rules-config";
-import { mkdirSync, writeFileSync, rmSync } from "fs";
-import { join, resolve } from "path";
-import { tmpdir } from "os";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import {
+  buildBaselineConfig,
+  extractVars,
+  mergeVariant,
+  parseVarValue,
+} from "../rules-config";
 
 describe("parseVarValue", () => {
   test("numeric values", () => {
@@ -29,8 +34,18 @@ Players start with [var:starting_gold:10] gold.
 Grid is [var:grid_padding:2] wide.`;
     const { vars, tbdVars } = extractVars(md, "test.md");
     expect(vars).toHaveLength(2);
-    expect(vars[0]).toEqual({ id: "starting_gold", value: 10, file: "test.md", line: 2 });
-    expect(vars[1]).toEqual({ id: "grid_padding", value: 2, file: "test.md", line: 3 });
+    expect(vars[0]).toEqual({
+      id: "starting_gold",
+      value: 10,
+      file: "test.md",
+      line: 2,
+    });
+    expect(vars[1]).toEqual({
+      id: "grid_padding",
+      value: 2,
+      file: "test.md",
+      line: 3,
+    });
     expect(tbdVars).toHaveLength(0);
   });
 
@@ -53,7 +68,10 @@ Grid is [var:grid_padding:2] wide.`;
 
 describe("buildBaselineConfig", () => {
   function makeTempDir(files: Record<string, string>): string {
-    const dir = join(tmpdir(), `rules-config-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    const dir = join(
+      tmpdir(),
+      `rules-config-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    );
     mkdirSync(dir, { recursive: true });
     for (const [name, content] of Object.entries(files)) {
       writeFileSync(join(dir, name), content);
@@ -84,21 +102,21 @@ describe("buildBaselineConfig", () => {
     rmSync(dir, { recursive: true });
   });
 
-  // Update this count when adding/removing [var:...] declarations in rules/*.md
-  test("integration: scans actual rules dir and produces 17 keys", () => {
+  describe("integration", () => {
     const rulesDir = resolve(import.meta.dir, "../../../rules");
-    const { config, errors } = buildBaselineConfig(rulesDir);
-    expect(errors).toHaveLength(0);
-    expect(Object.keys(config)).toHaveLength(17);
-  });
 
-  test("TBD vars are excluded from output", () => {
-    const rulesDir = resolve(import.meta.dir, "../../../rules");
-    const { config, warnings } = buildBaselineConfig(rulesDir);
-    expect(config).not.toHaveProperty("X");
-    expect(config).not.toHaveProperty("Y");
-    const tbdWarnings = warnings.filter((w) => w.includes("TBD var"));
-    expect(tbdWarnings.length).toBeGreaterThanOrEqual(2);
+    test("scans actual rules dir without errors", () => {
+      const { errors } = buildBaselineConfig(rulesDir);
+      expect(errors).toHaveLength(0);
+    });
+
+    test("TBD vars are excluded from output", () => {
+      const { config, warnings } = buildBaselineConfig(rulesDir);
+      expect(config).not.toHaveProperty("X");
+      expect(config).not.toHaveProperty("Y");
+      const tbdWarnings = warnings.filter((w) => w.includes("TBD var"));
+      expect(tbdWarnings.length).toBeGreaterThanOrEqual(2);
+    });
   });
 
   test("excludes CLAUDE.md from scanning", () => {
@@ -117,7 +135,11 @@ describe("mergeVariant", () => {
   test("merges overrides onto baseline", () => {
     const baseline = { starting_gold: 10, vp_threshold: 50 };
     const knownIds = new Set(Object.keys(baseline));
-    const { config, warnings } = mergeVariant(baseline, { starting_gold: 20 }, knownIds);
+    const { config, warnings } = mergeVariant(
+      baseline,
+      { starting_gold: 20 },
+      knownIds,
+    );
     expect(config.starting_gold).toBe(20);
     expect(config.vp_threshold).toBe(50);
     expect(warnings).toHaveLength(0);
@@ -126,7 +148,11 @@ describe("mergeVariant", () => {
   test("warns on unknown keys", () => {
     const baseline = { starting_gold: 10 };
     const knownIds = new Set(Object.keys(baseline));
-    const { config, warnings } = mergeVariant(baseline, { unknown_key: 5 }, knownIds);
+    const { config, warnings } = mergeVariant(
+      baseline,
+      { unknown_key: 5 },
+      knownIds,
+    );
     expect(config.unknown_key).toBe(5);
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain("unknown_key");

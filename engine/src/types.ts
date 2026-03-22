@@ -24,6 +24,7 @@ export interface PlayerState {
   gold: number;
   vp: number;
   hand: Card[];
+  seedingDeck: Card[];
   mainDeck: Card[];
   marketDeck: Card[];
   prospectDeck: Card[];
@@ -32,6 +33,8 @@ export interface PlayerState {
   hq: Card[];
   activePolicies: PolicyCard[];
   activeTraps: Trap[];
+  /** Policy cards available for selection during seeding. Not part of decks. */
+  policyPool: PolicyCard[];
 }
 
 // ---------------------------------------------------------------------------
@@ -133,6 +136,26 @@ export type Phase = "seeding" | "main" | "ended";
 
 export type DeckName = "main" | "market" | "prospect" | "seeding";
 
+/** Each seeding step maps 1:1 to the action the active player must submit. */
+export type SeedingStep =
+  | "seed_draw"
+  | "seed_keep"
+  | "seed_steal"
+  | "seed_split_prospect"
+  | "seed_place_location"
+  | "policy_selection";
+
+export interface SeedingState {
+  step: SeedingStep;
+  middleArea: Card[];
+  /** Index into turnOrder for whose turn it is to steal. */
+  stealTurnIndex: number;
+  /** Players who have submitted seed_keep this round. */
+  keepSubmitted: string[];
+  /** Players who have submitted seed_split_prospect. */
+  splitSubmitted: string[];
+}
+
 export interface TurnState {
   activePlayerId: string;
   actionPointsRemaining: number;
@@ -155,6 +178,8 @@ export interface GameState {
   seed: string;
   actionLog: Action[];
   turnOrder: string[];
+  /** Present during seeding phase, cleared on transition to main. */
+  seedingState?: SeedingState;
   winner?: string;
   scores?: Record<string, number>;
 }
@@ -163,24 +188,109 @@ export interface GameState {
 // Actions
 // ---------------------------------------------------------------------------
 
-export type Action =
+export type SeedingAction =
+  | { type: "seed_draw"; playerId: string }
+  | {
+      type: "seed_keep";
+      playerId: string;
+      keepIds: string[];
+      exposeIds: string[];
+    }
+  | {
+      type: "seed_steal";
+      playerId: string;
+      cardId: string;
+      row?: number;
+      col?: number;
+      rotation?: number;
+    }
+  | {
+      type: "seed_split_prospect";
+      playerId: string;
+      topHalf: string[];
+      bottomHalf: string[];
+    }
+  | {
+      type: "seed_place_location";
+      playerId: string;
+      row: number;
+      col: number;
+      rotation?: number;
+    }
+  | { type: "policy_select"; playerId: string };
+
+export type MainAction =
   | { type: "deploy"; playerId: string; cardId: string }
   | { type: "buy"; playerId: string; cardId: string; costIndex?: number }
-  | { type: "activate"; playerId: string; cardId: string; actionName: string; targetId?: string }
+  | {
+      type: "activate";
+      playerId: string;
+      cardId: string;
+      actionName: string;
+      targetId?: string;
+    }
   | { type: "draw"; playerId: string }
-  | { type: "enter"; playerId: string; unitId: string; row: number; col: number }
+  | {
+      type: "enter";
+      playerId: string;
+      unitId: string;
+      row: number;
+      col: number;
+    }
   | { type: "move"; playerId: string; unitId: string; row: number; col: number }
   | { type: "play_event"; playerId: string; cardId: string; targetId?: string }
   | { type: "equip"; playerId: string; itemId: string; unitId: string }
   | { type: "destroy"; playerId: string; cardId: string }
   | { type: "raze"; playerId: string; unitId: string; row: number; col: number }
-  | { type: "pass"; playerId: string }
-  // Seeding phase actions
-  | { type: "seed_keep"; playerId: string; keepIds: string[]; exposeIds: string[] }
-  | { type: "seed_steal"; playerId: string; cardId: string; row?: number; col?: number; rotation?: number }
-  | { type: "seed_place_location"; playerId: string; cardId: string; row: number; col: number; rotation?: number }
-  | { type: "policy_pass"; playerId: string; policyIds: string[]; toPlayerId: string }
-  | { type: "policy_pick"; playerId: string; policyId: string };
+  | { type: "pass"; playerId: string };
+
+export type Action = SeedingAction | MainAction;
+
+/** Discriminator sets for phase-action validation. */
+export const SEEDING_ACTION_TYPES = new Set<SeedingAction["type"]>([
+  "seed_draw",
+  "seed_keep",
+  "seed_steal",
+  "seed_split_prospect",
+  "seed_place_location",
+  "policy_select",
+] as const);
+
+export function isSeedingAction(action: Action): action is SeedingAction {
+  return (SEEDING_ACTION_TYPES as ReadonlySet<string>).has(action.type);
+}
+
+// ---------------------------------------------------------------------------
+// Apply Result
+// ---------------------------------------------------------------------------
+
+export interface ApplyResult {
+  state: GameState;
+  events: GameEvent[];
+}
+
+// ---------------------------------------------------------------------------
+// Deck Input (for createGame)
+// ---------------------------------------------------------------------------
+
+export type DeckInput =
+  | {
+      mode: "seeding";
+      decks: Record<string, { seedingDeck: Card[]; policyPool: PolicyCard[] }>;
+    }
+  | {
+      mode: "main";
+      decks: Record<
+        string,
+        {
+          mainDeck: Card[];
+          hand: Card[];
+          prospectDeck: Card[];
+          marketDeck: Card[];
+          activePolicies: PolicyCard[];
+        }
+      >;
+    };
 
 // ---------------------------------------------------------------------------
 // Events (output of applyAction)
@@ -190,25 +300,62 @@ export type GameEvent =
   | { type: "card_deployed"; playerId: string; cardId: string }
   | { type: "card_bought"; playerId: string; cardId: string; cost: number }
   | { type: "card_drawn"; playerId: string; count: number }
-  | { type: "unit_entered"; playerId: string; unitId: string; row: number; col: number }
-  | { type: "unit_moved"; playerId: string; unitId: string; fromRow: number; fromCol: number; toRow: number; toCol: number }
+  | {
+      type: "unit_entered";
+      playerId: string;
+      unitId: string;
+      row: number;
+      col: number;
+    }
+  | {
+      type: "unit_moved";
+      playerId: string;
+      unitId: string;
+      fromRow: number;
+      fromCol: number;
+      toRow: number;
+      toCol: number;
+    }
   | { type: "unit_injured"; unitId: string; ownerId: string }
   | { type: "unit_killed"; unitId: string; ownerId: string }
   | { type: "event_played"; playerId: string; cardId: string }
   | { type: "trap_set"; playerId: string; cardId: string; targetId?: string }
-  | { type: "trap_triggered"; playerId: string; cardId: string; targetId?: string }
+  | {
+      type: "trap_triggered";
+      playerId: string;
+      cardId: string;
+      targetId?: string;
+    }
   | { type: "item_equipped"; playerId: string; itemId: string; unitId: string }
   | { type: "item_dropped"; itemId: string; row: number; col: number }
   | { type: "location_placed"; row: number; col: number; cardId: string }
   | { type: "location_razed"; row: number; col: number; cardId: string }
-  | { type: "mission_completed"; playerId: string; locationId: string; vp: number }
+  | {
+      type: "mission_completed";
+      playerId: string;
+      locationId: string;
+      vp: number;
+    }
   | { type: "gold_changed"; playerId: string; amount: number; reason: string }
   | { type: "turn_started"; playerId: string; round: number }
   | { type: "turn_ended"; playerId: string }
   | { type: "phase_changed"; from: Phase; to: Phase }
   | { type: "game_ended"; winner?: string; scores: Record<string, number> }
   | { type: "deck_shuffled"; playerId: string; deck: DeckName }
-  | { type: "card_destroyed"; playerId: string; cardId: string };
+  | { type: "card_destroyed"; playerId: string; cardId: string }
+  // Seeding phase events
+  | { type: "seed_cards_drawn"; playerId: string; count: number }
+  | {
+      type: "seed_kept";
+      playerId: string;
+      keptCount: number;
+      exposedCount: number;
+    }
+  | { type: "seed_stolen"; playerId: string; cardId: string }
+  | { type: "seeding_step_changed"; step: SeedingStep }
+  | { type: "prospect_deck_built"; playerId: string }
+  | { type: "deck_constructed"; playerId: string }
+  | { type: "policies_assigned"; playerId: string; policyIds: string[] };
 
 // ---------------------------------------------------------------------------
 // Visibility
@@ -229,6 +376,10 @@ export interface VisibleState {
   grid: Grid;
   market: Card[];
   turnOrder: string[];
+  /** Shared middle area during seed rounds (face-up cards). */
+  middleArea: Card[];
+  /** Current seeding step, if in seeding phase. */
+  seedingStep?: SeedingStep;
   winner?: string;
   scores?: Record<string, number>;
 }
@@ -240,6 +391,7 @@ export interface OpponentView {
   gold: number;
   vp: number;
   handSize: number;
+  seedingDeckSize: number;
   mainDeckSize: number;
   marketDeckSize: number;
   prospectDeckSize: number;

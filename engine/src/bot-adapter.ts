@@ -1,5 +1,6 @@
 import prand from "pure-rand";
-import type { PlayerAdapter, VisibleState, Action } from "./types";
+import { fillAction } from "./action-helpers";
+import type { Action, PlayerAdapter, VisibleState } from "./types";
 
 /**
  * Bot player adapter. Picks actions using heuristics and a seeded RNG.
@@ -14,14 +15,14 @@ export class BotAdapter implements PlayerAdapter {
   }
 
   async chooseAction(
-    _visibleState: VisibleState,
+    visibleState: VisibleState,
     validActions: Action[],
   ): Promise<Action> {
     if (validActions.length === 0) {
       throw new Error("BotAdapter: no valid actions available");
     }
 
-    // Stub: pick a random action
+    // Pick a random action and fill in template fields
     const [index, nextRng] = prand.uniformIntDistribution(
       0,
       validActions.length - 1,
@@ -29,6 +30,6 @@ export class BotAdapter implements PlayerAdapter {
     );
     this.rng = nextRng;
 
-    return validActions[index];
+    return fillAction(visibleState, validActions[index]);
   }
 }

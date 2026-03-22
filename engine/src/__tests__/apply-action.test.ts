@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { applyAction } from "../apply-action";
+import type { MainGameState } from "../types";
 import { createTestGame } from "./helpers";
 
 describe("applyAction", () => {
@@ -44,7 +45,8 @@ describe("applyAction", () => {
         type: "pass",
         playerId: firstPlayer,
       });
-      expect(next.turn.activePlayerId).not.toBe(firstPlayer);
+      const nextMain = next as MainGameState;
+      expect(nextMain.turn.activePlayerId).not.toBe(firstPlayer);
     });
 
     it("advances the round when all players have passed", () => {
@@ -56,14 +58,16 @@ describe("applyAction", () => {
         type: "pass",
         playerId: state.turn.activePlayerId,
       });
-      expect(s1.turn.round).toBe(1);
+      const s1Main = s1 as MainGameState;
+      expect(s1Main.turn.round).toBe(1);
 
       // Second player passes — round advances
       const { state: s2 } = applyAction(s1, {
         type: "pass",
-        playerId: s1.turn.activePlayerId,
+        playerId: s1Main.turn.activePlayerId,
       });
-      expect(s2.turn.round).toBe(2);
+      const s2Main = s2 as MainGameState;
+      expect(s2Main.turn.round).toBe(2);
     });
 
     it("emits turn_ended and turn_started events", () => {
@@ -86,10 +90,10 @@ describe("applyAction", () => {
       });
       const { state: s2 } = applyAction(s1, {
         type: "pass",
-        playerId: s1.turn.activePlayerId,
+        playerId: (s1 as MainGameState).turn.activePlayerId,
       });
 
-      expect(s2.turn.activePlayerId).toBe(firstPlayer);
+      expect((s2 as MainGameState).turn.activePlayerId).toBe(firstPlayer);
     });
   });
 

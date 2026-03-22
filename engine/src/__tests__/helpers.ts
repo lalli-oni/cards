@@ -9,8 +9,10 @@ import type {
   ItemCard,
   LocationCard,
   LocationEdges,
+  MainGameState,
   PlayerDescriptor,
   PolicyCard,
+  SeedingGameState,
   UnitCard,
 } from "../types";
 
@@ -137,7 +139,7 @@ export function createTestGame(overrides?: {
   players?: PlayerDescriptor[];
   seed?: string;
   deckInput?: DeckInput;
-}): GameState {
+}): MainGameState {
   const players = overrides?.players ?? TWO_PLAYERS;
   const deckInput: DeckInput = overrides?.deckInput ?? {
     mode: "main",
@@ -159,7 +161,7 @@ export function createTestGame(overrides?: {
     players,
     overrides?.seed ?? SEED,
     deckInput,
-  );
+  ) as MainGameState;
 }
 
 /** Build a seeding deck with a mix of card types for a player. */
@@ -188,7 +190,7 @@ export function createSeedingGame(overrides?: {
   seed?: string;
   deckSize?: number;
   policyCount?: number;
-}): GameState {
+}): SeedingGameState {
   const players = overrides?.players ?? TWO_PLAYERS;
   const deckSize = overrides?.deckSize ?? 10;
   const policyCount = overrides?.policyCount ?? 3;
@@ -211,7 +213,7 @@ export function createSeedingGame(overrides?: {
     players,
     overrides?.seed ?? SEED,
     { mode: "seeding", decks },
-  );
+  ) as SeedingGameState;
 }
 
 /** Get the RNG from a game state (reconstructed from stored state). */

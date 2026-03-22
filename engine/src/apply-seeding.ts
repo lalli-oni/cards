@@ -1,8 +1,9 @@
+import type { Draft } from "immer";
 import { produce } from "immer";
 import prand from "pure-rand";
 import { extractRngState, shuffle } from "./rng";
 import {
-  advanceTurn,
+  advanceSeedingCursor,
   getConfigNumber,
   getPlayer,
   placeLocationOnGrid,
@@ -11,10 +12,11 @@ import type {
   ApplyResult,
   Card,
   GameEvent,
-  GameState,
   LocationCard,
+  MainGameState,
   PolicyCard,
   SeedingAction,
+  SeedingGameState,
   SeedingState,
 } from "./types";
 
@@ -40,14 +42,13 @@ function validateUniqueIds(label: string, ...arrays: string[][]): void {
 // ---------------------------------------------------------------------------
 
 export function applySeedingAction(
-  state: GameState,
+  state: SeedingGameState,
   action: SeedingAction,
 ): ApplyResult {
   const events: GameEvent[] = [];
 
   const nextState = produce(state, (draft) => {
-    // biome-ignore lint/style/noNonNullAssertion: seedingState validated by applyAction router (#54)
-    const ds = draft.seedingState!;
+    const ds = draft.seedingState;
     draft.actionLog.push(action);
 
     switch (action.type) {
@@ -109,8 +110,8 @@ export function applySeedingAction(
 // -- seed_draw ---------------------------------------------------------------
 
 function handleSeedDraw(
-  draft: GameState,
-  seeding: SeedingState,
+  draft: Draft<SeedingGameState>,
+  seeding: Draft<SeedingState>,
   playerId: string,
   events: GameEvent[],
 ): void {
@@ -131,10 +132,10 @@ function handleSeedDraw(
 
   events.push({ type: "seed_cards_drawn", playerId, count: actual });
 
-  advanceTurn(draft, events);
+  advanceSeedingCursor(draft, events);
 
   // If we've looped back to the first player, all have drawn
-  if (draft.turn.activePlayerId === draft.turnOrder[0]) {
+  if (seeding.currentPlayerId === draft.turnOrder[0]) {
     seeding.step = "seed_keep";
     seeding.keepSubmitted = [];
     events.push({ type: "seeding_step_changed", step: "seed_keep" });
@@ -144,8 +145,8 @@ function handleSeedDraw(
 // -- seed_keep ---------------------------------------------------------------
 
 function handleSeedKeep(
-  draft: GameState,
-  seeding: SeedingState,
+  draft: Draft<SeedingGameState>,
+  seeding: Draft<SeedingState>,
   playerId: string,
   keepIds: string[],
   exposeIds: string[],
@@ -211,13 +212,13 @@ function handleSeedKeep(
   });
 
   seeding.keepSubmitted.push(playerId);
-  advanceTurn(draft, events);
+  advanceSeedingCursor(draft, events);
 
   // After all players have kept, transition to steal
   if (seeding.keepSubmitted.length === draft.players.length) {
     seeding.step = "seed_steal";
     seeding.stealTurnIndex = 0;
-    draft.turn.activePlayerId = draft.turnOrder[0];
+    seeding.currentPlayerId = draft.turnOrder[0];
     events.push({ type: "seeding_step_changed", step: "seed_steal" });
   }
 }
@@ -225,8 +226,8 @@ function handleSeedKeep(
 // -- seed_steal --------------------------------------------------------------
 
 function handleSeedSteal(
-  draft: GameState,
-  seeding: SeedingState,
+  draft: Draft<SeedingGameState>,
+  seeding: Draft<SeedingState>,
   playerId: string,
   cardId: string,
   row: number | undefined,
@@ -263,19 +264,19 @@ function handleSeedSteal(
   // Advance steal turn
   seeding.stealTurnIndex =
     (seeding.stealTurnIndex + 1) % draft.turnOrder.length;
-  draft.turn.activePlayerId = draft.turnOrder[seeding.stealTurnIndex];
+  seeding.currentPlayerId = draft.turnOrder[seeding.stealTurnIndex];
 
   // If middle area is empty, determine next step
   if (seeding.middleArea.length === 0) {
     const anyDeckHasCards = draft.players.some((p) => p.seedingDeck.length > 0);
     if (anyDeckHasCards) {
       seeding.step = "seed_draw";
-      draft.turn.activePlayerId = draft.turnOrder[0];
+      seeding.currentPlayerId = draft.turnOrder[0];
       events.push({ type: "seeding_step_changed", step: "seed_draw" });
     } else {
       seeding.step = "seed_split_prospect";
       seeding.splitSubmitted = [];
-      draft.turn.activePlayerId = draft.turnOrder[0];
+      seeding.currentPlayerId = draft.turnOrder[0];
       events.push({
         type: "seeding_step_changed",
         step: "seed_split_prospect",
@@ -287,8 +288,8 @@ function handleSeedSteal(
 // -- seed_split_prospect -----------------------------------------------------
 
 function handleSeedSplitProspect(
-  draft: GameState,
-  seeding: SeedingState,
+  draft: Draft<SeedingGameState>,
+  seeding: Draft<SeedingState>,
   playerId: string,
   topHalf: string[],
   bottomHalf: string[],
@@ -340,8 +341,11 @@ function handleSeedSplitProspect(
   // Build prospect deck: shuffle each half, stack top on bottom
   let rng = prand.mersenne.fromState(draft.rngState);
 
-  // biome-ignore lint/style/noNonNullAssertion: IDs validated by validateUniqueIds + locationIds check above
-  const getLocation = (id: string) => locations.find((l) => l.id === id)!;
+  const getLocation = (id: string) => {
+    const loc = locations.find((l) => l.id === id);
+    if (!loc) throw new Error(`Location "${id}" not found`);
+    return loc;
+  };
   const topCards = topHalf.map(getLocation);
   const bottomCards = bottomHalf.map(getLocation);
 
@@ -352,33 +356,33 @@ function handleSeedSplitProspect(
   player.prospectDeck = [...shuffledTop, ...shuffledBottom];
   player.marketDeck = remaining;
 
-  draft.rngState = extractRngState(rng);
+  draft.rngState = extractRngState(rng) as number[];
 
   events.push({ type: "prospect_deck_built", playerId });
   events.push({ type: "deck_shuffled", playerId, deck: "prospect" });
 
   seeding.splitSubmitted.push(playerId);
-  advanceTurn(draft, events);
+  advanceSeedingCursor(draft, events);
 
   // After all players submit, do automatic deck construction
   if (seeding.splitSubmitted.length === draft.players.length) {
     rng = prand.mersenne.fromState(draft.rngState);
     rng = buildMainDecksAndHands(draft, rng, events);
-    draft.rngState = extractRngState(rng);
+    draft.rngState = extractRngState(rng) as number[];
 
     const hasEmptyCells = draft.grid.some((row) =>
       row.some((cell) => cell.location === null),
     );
     if (hasEmptyCells) {
       seeding.step = "seed_place_location";
-      draft.turn.activePlayerId = draft.turnOrder[0];
+      seeding.currentPlayerId = draft.turnOrder[0];
       events.push({
         type: "seeding_step_changed",
         step: "seed_place_location",
       });
     } else {
       seeding.step = "policy_selection";
-      draft.turn.activePlayerId = draft.turnOrder[0];
+      seeding.currentPlayerId = draft.turnOrder[0];
       events.push({ type: "seeding_step_changed", step: "policy_selection" });
     }
   }
@@ -386,7 +390,7 @@ function handleSeedSplitProspect(
 
 /** After all prospect splits: shuffle market deck, draw main deck, draw starting hand. */
 function buildMainDecksAndHands(
-  draft: GameState,
+  draft: Draft<SeedingGameState>,
   rng: prand.RandomGenerator,
   events: GameEvent[],
 ): prand.RandomGenerator {
@@ -418,8 +422,8 @@ function buildMainDecksAndHands(
 // -- seed_place_location -----------------------------------------------------
 
 function handleSeedPlaceLocation(
-  draft: GameState,
-  seeding: SeedingState,
+  draft: Draft<SeedingGameState>,
+  seeding: Draft<SeedingState>,
   playerId: string,
   row: number,
   col: number,
@@ -450,14 +454,14 @@ function handleSeedPlaceLocation(
   placeLocationOnGrid(draft, card as LocationCard, row, col, rotation);
   events.push({ type: "location_placed", row, col, cardId: card.id });
 
-  advanceTurn(draft, events);
+  advanceSeedingCursor(draft, events);
 
   const hasEmptyCells = draft.grid.some((r) =>
     r.some((cell) => cell.location === null),
   );
   if (!hasEmptyCells) {
     seeding.step = "policy_selection";
-    draft.turn.activePlayerId = draft.turnOrder[0];
+    seeding.currentPlayerId = draft.turnOrder[0];
     events.push({ type: "seeding_step_changed", step: "policy_selection" });
   }
 }
@@ -466,8 +470,8 @@ function handleSeedPlaceLocation(
 // TODO(#29): Replace with policy selection draft mechanic
 
 function handlePolicySelection(
-  draft: GameState,
-  seeding: SeedingState,
+  draft: Draft<SeedingGameState>,
+  seeding: Draft<SeedingState>,
   events: GameEvent[],
 ): void {
   if (seeding.step !== "policy_selection") {
@@ -496,17 +500,23 @@ function handlePolicySelection(
     });
   }
 
-  draft.rngState = extractRngState(rng);
+  draft.rngState = extractRngState(rng) as number[];
 
-  // Transition to main phase
-  draft.phase = "main";
-  draft.seedingState = undefined;
-  draft.turn.activePlayerId = draft.turnOrder[0];
-  draft.turn.round = 1;
-  draft.turn.actionPointsRemaining = getConfigNumber(
-    draft,
-    "action_points_per_turn",
-    3,
-  );
+  // Transition seeding -> main phase via type assertion
+  const d = draft as unknown as Draft<MainGameState>;
+  d.phase = "main";
+  d.turn = {
+    activePlayerId: draft.turnOrder[0],
+    round: 1,
+    actionPointsRemaining: getConfigNumber(draft, "action_points_per_turn", 3),
+  };
+  // Clean up seeding-only fields
+  delete (draft as any).seedingState;
+
   events.push({ type: "phase_changed", from: "seeding", to: "main" });
+  events.push({
+    type: "turn_started",
+    playerId: draft.turnOrder[0],
+    round: 1,
+  });
 }

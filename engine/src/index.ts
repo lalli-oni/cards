@@ -31,6 +31,7 @@ export type {
   Card,
   CardType,
   DeckName,
+  EndedGameState,
   EventCard,
   EventSubtype,
   GameConfig,
@@ -41,6 +42,7 @@ export type {
   ItemCard,
   LocationCard,
   LocationEdges,
+  MainGameState,
   OpponentView,
   Phase,
   PlayerAdapter,
@@ -48,6 +50,7 @@ export type {
   PlayerState,
   PolicyCard,
   Rarity,
+  SeedingGameState,
   Session,
   Trap,
   TrapView,
@@ -55,5 +58,6 @@ export type {
   UnitCard,
   VisibleState,
 } from "./types";
+export { getActivePlayerId } from "./types";
 export { getValidActions } from "./valid-actions";
 export { getVisibleState } from "./visible-state";

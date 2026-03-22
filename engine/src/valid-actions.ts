@@ -1,15 +1,23 @@
-import type { Action, GameState, MainAction, SeedingAction } from "./types";
+import type {
+  Action,
+  GameState,
+  MainAction,
+  SeedingAction,
+  SeedingGameState,
+} from "./types";
+import { getActivePlayerId } from "./types";
 
 /**
  * Return all legal actions for a player given the current state.
  * Used by clients (to show available moves) and bots (to choose a move).
  */
 export function getValidActions(state: GameState, playerId: string): Action[] {
-  if (state.turn.activePlayerId !== playerId) {
+  if (state.phase === "ended") {
     return [];
   }
 
-  if (state.phase === "ended") {
+  const activePlayerId = getActivePlayerId(state);
+  if (activePlayerId !== playerId) {
     return [];
   }
 
@@ -25,11 +33,10 @@ export function getValidActions(state: GameState, playerId: string): Action[] {
 // ---------------------------------------------------------------------------
 
 function getSeedingValidActions(
-  state: GameState,
+  state: SeedingGameState,
   playerId: string,
 ): SeedingAction[] {
-  // biome-ignore lint/style/noNonNullAssertion: only called when phase === "seeding" (#54)
-  const seeding = state.seedingState!;
+  const seeding = state.seedingState;
 
   switch (seeding.step) {
     case "seed_draw":

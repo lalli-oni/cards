@@ -5,6 +5,7 @@ import type {
   TrapView,
   VisibleState,
 } from "./types";
+import { getActivePlayerId } from "./types";
 
 /**
  * Return a filtered view of the state for a specific player.
@@ -31,10 +32,19 @@ export function getVisibleState(
 
   const teammates = state.players.filter(isTeammate);
 
+  const currentPlayerId =
+    state.phase === "ended"
+      ? state.turn.activePlayerId
+      : getActivePlayerId(state);
+
   return {
     config: state.config,
     phase: state.phase,
-    turn: state.turn,
+    turn:
+      state.phase === "main" || state.phase === "ended"
+        ? state.turn
+        : undefined,
+    currentPlayerId,
     playerId,
     self,
     teammates,
@@ -42,10 +52,11 @@ export function getVisibleState(
     grid: state.grid,
     market: state.market,
     turnOrder: state.turnOrder,
-    middleArea: state.seedingState?.middleArea ?? [],
-    seedingStep: state.seedingState?.step,
-    winner: state.winner,
-    scores: state.scores,
+    middleArea: state.phase === "seeding" ? state.seedingState.middleArea : [],
+    seedingStep:
+      state.phase === "seeding" ? state.seedingState.step : undefined,
+    winner: state.phase === "ended" ? state.winner : undefined,
+    scores: state.phase === "ended" ? state.scores : undefined,
   };
 }
 

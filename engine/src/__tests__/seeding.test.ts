@@ -1,13 +1,14 @@
 import { beforeEach, describe, expect, it } from "bun:test";
 import { fillAction } from "../action-helpers";
 import { applyAction } from "../apply-action";
-import type { GameState, SeedingAction } from "../types";
+import type { GameState, SeedingAction, SeedingGameState } from "../types";
+import { getActivePlayerId } from "../types";
 import { getValidActions } from "../valid-actions";
 import { createSeedingGame, DEFAULT_CONFIG, resetIds } from "./helpers";
 
 beforeEach(() => resetIds());
 
-function apply(state: GameState, action: SeedingAction): GameState {
+function apply(state: SeedingGameState, action: SeedingAction): GameState {
   return applyAction(state, action).state;
 }
 
@@ -18,38 +19,46 @@ function getPlayer(state: GameState, playerId: string) {
 }
 
 function firstAction(state: GameState, type: string): SeedingAction {
-  const actions = getValidActions(state, state.turn.activePlayerId);
+  const activeId = getActivePlayerId(state);
+  const actions = getValidActions(state, activeId);
   const found = actions.find((a) => a.type === type);
   if (!found) throw new Error(`No valid action of type "${type}" found`);
   return found as SeedingAction;
 }
 
-function drawAllPlayers(state: GameState): GameState {
-  let s = state;
+function drawAllPlayers(state: SeedingGameState): SeedingGameState {
+  let s: GameState = state;
   for (let i = 0; i < s.players.length; i++) {
-    s = apply(s, firstAction(s, "seed_draw"));
+    s = apply(s as SeedingGameState, firstAction(s, "seed_draw"));
   }
+  if (s.phase !== "seeding")
+    throw new Error("Expected seeding phase after drawAllPlayers");
   return s;
 }
 
 /** Submit seed_keep for all players using fillAction to pick defaults. */
-function keepAllPlayers(state: GameState): GameState {
-  let s = state;
+function keepAllPlayers(state: SeedingGameState): SeedingGameState {
+  let s: GameState = state;
   for (let i = 0; i < s.players.length; i++) {
-    s = apply(s, fillAction(s, firstAction(s, "seed_keep")) as SeedingAction);
+    s = apply(
+      s as SeedingGameState,
+      fillAction(s, firstAction(s, "seed_keep")) as SeedingAction,
+    );
   }
+  if (s.phase !== "seeding")
+    throw new Error("Expected seeding phase after keepAllPlayers");
   return s;
 }
 
 /** Find a steal action targeting a non-location card (avoids grid placement). */
 function findNonLocationSteal(
-  state: GameState,
+  state: SeedingGameState,
   actions: SeedingAction[],
 ): SeedingAction | undefined {
-  const middle = state.seedingState?.middleArea;
+  const middle = state.seedingState.middleArea;
   return actions.find((a) => {
     if (a.type !== "seed_steal") return false;
-    const card = middle.find((c) => c.id === (a as any).cardId);
+    const card = middle.find((c: { id: string }) => c.id === (a as any).cardId);
     return card?.type !== "location";
   });
 }
@@ -59,19 +68,20 @@ function findNonLocationSteal(
  * Uses fillAction to complete template actions with real card IDs.
  * Returns the final state (should be in main phase).
  */
-function playThroughSeeding(state: GameState): GameState {
-  let s = state;
+function playThroughSeeding(state: SeedingGameState): GameState {
+  let s: GameState = state;
   let safety = 0;
   while (s.phase === "seeding") {
     if (++safety > 500) {
       throw new Error(
         `Seeding phase did not complete after 500 actions. ` +
-          `Step: ${s.seedingState?.step}, active: ${s.turn.activePlayerId}`,
+          `Step: ${s.seedingState.step}, active: ${s.seedingState.currentPlayerId}`,
       );
     }
-    const actions = getValidActions(s, s.turn.activePlayerId);
+    const activeId = getActivePlayerId(s);
+    const actions = getValidActions(s, activeId);
     if (actions.length === 0) {
-      throw new Error(`No valid actions at step ${s.seedingState?.step}`);
+      throw new Error(`No valid actions at step ${s.seedingState.step}`);
     }
     s = apply(s, fillAction(s, actions[0]) as SeedingAction);
   }
@@ -82,14 +92,15 @@ describe("seeding phase", () => {
   describe("seed_draw", () => {
     it("is a forced action (single valid action)", () => {
       const state = createSeedingGame();
-      const actions = getValidActions(state, state.turn.activePlayerId);
+      const activeId = getActivePlayerId(state);
+      const actions = getValidActions(state, activeId);
       expect(actions).toHaveLength(1);
       expect(actions[0].type).toBe("seed_draw");
     });
 
     it("draws cards from seeding deck to hand", () => {
       const state = createSeedingGame({ deckSize: 20 });
-      const activeId = state.turn.activePlayerId;
+      const activeId = getActivePlayerId(state);
       const player = getPlayer(state, activeId);
       const initialDeckSize = player.seedingDeck.length;
 
@@ -107,7 +118,7 @@ describe("seeding phase", () => {
     it("transitions to seed_keep after all players draw", () => {
       const state = createSeedingGame({ deckSize: 20 });
       const next = drawAllPlayers(state);
-      expect(next.seedingState?.step).toBe("seed_keep");
+      expect(next.seedingState.step).toBe("seed_keep");
     });
 
     it("emits seed_cards_drawn event", () => {
@@ -115,16 +126,30 @@ describe("seeding phase", () => {
       const { events } = applyAction(state, firstAction(state, "seed_draw"));
       expect(events.some((e) => e.type === "seed_cards_drawn")).toBe(true);
     });
+
+    it("emits seeding_player_changed with correct payload instead of turn_started", () => {
+      const state = createSeedingGame({ deckSize: 20 });
+      const { events } = applyAction(state, firstAction(state, "seed_draw"));
+      const playerChanged = events.find(
+        (e) => e.type === "seeding_player_changed",
+      );
+      expect(playerChanged).toBeDefined();
+      if (playerChanged && playerChanged.type === "seeding_player_changed") {
+        expect(state.turnOrder).toContain(playerChanged.playerId);
+        expect(playerChanged.step).toBe("seed_draw");
+      }
+      expect(events.some((e) => e.type === "turn_started")).toBe(false);
+    });
   });
 
   describe("seed_keep", () => {
-    function stateAtKeep(): GameState {
+    function stateAtKeep(): SeedingGameState {
       return drawAllPlayers(createSeedingGame({ deckSize: 20 }));
     }
 
     it("requires correct keep/expose counts", () => {
       const state = stateAtKeep();
-      const activeId = state.turn.activePlayerId;
+      const activeId = getActivePlayerId(state);
       const player = getPlayer(state, activeId);
 
       // Wrong counts should fail
@@ -140,7 +165,7 @@ describe("seeding phase", () => {
 
     it("moves kept cards to market deck and exposed to middle area", () => {
       const state = stateAtKeep();
-      const activeId = state.turn.activePlayerId;
+      const activeId = getActivePlayerId(state);
       const player = getPlayer(state, activeId);
 
       const keepIds = player.hand.slice(0, 8).map((c) => c.id);
@@ -155,17 +180,19 @@ describe("seeding phase", () => {
 
       const updatedPlayer = getPlayer(next, activeId);
       expect(updatedPlayer.marketDeck).toHaveLength(8);
-      expect(next.seedingState?.middleArea.length).toBeGreaterThanOrEqual(2);
+      if (next.phase === "seeding") {
+        expect(next.seedingState.middleArea.length).toBeGreaterThanOrEqual(2);
+      }
     });
 
     it("transitions to seed_steal after all players keep", () => {
       const state = keepAllPlayers(stateAtKeep());
-      expect(state.seedingState?.step).toBe("seed_steal");
+      expect(state.seedingState.step).toBe("seed_steal");
     });
   });
 
   describe("seed_steal", () => {
-    function stateAtSteal(): GameState {
+    function stateAtSteal(): SeedingGameState {
       return keepAllPlayers(
         drawAllPlayers(createSeedingGame({ deckSize: 20 })),
       );
@@ -173,46 +200,47 @@ describe("seeding phase", () => {
 
     it("has valid steal actions for each middle area card", () => {
       const state = stateAtSteal();
-      const actions = getValidActions(state, state.turn.activePlayerId);
+      const activeId = getActivePlayerId(state);
+      const actions = getValidActions(state, activeId);
       expect(actions.length).toBeGreaterThan(0);
       expect(actions.every((a) => a.type === "seed_steal")).toBe(true);
     });
 
     it("removes card from middle area", () => {
       const state = stateAtSteal();
-      const initialMiddleSize = state.seedingState?.middleArea.length;
-      const actions = getValidActions(
-        state,
-        state.turn.activePlayerId,
-      ) as SeedingAction[];
+      const initialMiddleSize = state.seedingState.middleArea.length;
+      const activeId = getActivePlayerId(state);
+      const actions = getValidActions(state, activeId) as SeedingAction[];
       const stealAction = findNonLocationSteal(state, actions);
 
       if (stealAction) {
         const next = apply(state, stealAction);
-        expect(next.seedingState?.middleArea.length).toBe(
-          initialMiddleSize - 1,
-        );
+        if (next.phase === "seeding") {
+          expect(next.seedingState.middleArea.length).toBe(
+            initialMiddleSize - 1,
+          );
+        }
       }
     });
 
     it("transitions to seed_draw when middle area empty and decks remain", () => {
       let state = stateAtSteal();
 
-      while (state.seedingState?.middleArea.length > 0) {
-        const actions = getValidActions(
-          state,
-          state.turn.activePlayerId,
-        ) as SeedingAction[];
+      while (state.seedingState.middleArea.length > 0) {
+        const activeId = getActivePlayerId(state);
+        const actions = getValidActions(state, activeId) as SeedingAction[];
         const stealAction = findNonLocationSteal(state, actions) ?? actions[0];
-        state = apply(state, stealAction);
+        const next = apply(state, stealAction);
+        if (next.phase !== "seeding") break;
+        state = next;
       }
 
       // With 20 card decks and 10 drawn, there are still 10 left
       const anyDeckHasCards = state.players.some(
         (p) => p.seedingDeck.length > 0,
       );
-      if (anyDeckHasCards) {
-        expect(state.seedingState?.step).toBe("seed_draw");
+      if (anyDeckHasCards && state.phase === "seeding") {
+        expect(state.seedingState.step).toBe("seed_draw");
       }
     });
   });
@@ -220,14 +248,14 @@ describe("seeding phase", () => {
   describe("immutability", () => {
     it("does not mutate the original state during seed_draw", () => {
       const state = createSeedingGame({ deckSize: 20 });
-      const originalStep = state.seedingState?.step;
-      const activeId = state.turn.activePlayerId;
+      const originalStep = state.seedingState.step;
+      const activeId = getActivePlayerId(state);
       const originalDeckSize = state.players.find((p) => p.id === activeId)
         ?.seedingDeck.length;
 
       apply(state, firstAction(state, "seed_draw"));
 
-      expect(state.seedingState?.step).toBe(originalStep);
+      expect(state.seedingState.step).toBe(originalStep);
       expect(
         state.players.find((p) => p.id === activeId)?.seedingDeck.length,
       ).toBe(originalDeckSize);
@@ -259,11 +287,22 @@ describe("seeding phase", () => {
   describe("phase validation", () => {
     it("rejects seeding actions during main phase", () => {
       const state = createSeedingGame();
-      // Force to main phase
+      // Force to main phase — need a valid MainGameState
       const mainState = {
-        ...state,
+        config: state.config,
+        players: state.players,
+        grid: state.grid,
+        market: state.market,
+        rngState: state.rngState,
+        seed: state.seed,
+        actionLog: state.actionLog,
+        turnOrder: state.turnOrder,
         phase: "main" as const,
-        seedingState: undefined,
+        turn: {
+          activePlayerId: state.seedingState.currentPlayerId,
+          actionPointsRemaining: 3,
+          round: 1,
+        },
       };
       expect(() =>
         applyAction(mainState, {
@@ -292,7 +331,29 @@ describe("seeding phase", () => {
       const result = playThroughSeeding(e2eGame());
 
       expect(result.phase).toBe("main");
-      expect(result.seedingState).toBeUndefined();
+      expect("seedingState" in result).toBe(false);
+    });
+
+    it("emits turn_started for first main-phase turn", () => {
+      const allEvents: any[] = [];
+      let s: GameState = e2eGame();
+      while (s.phase === "seeding") {
+        const activeId = getActivePlayerId(s);
+        const actions = getValidActions(s, activeId);
+        const { state, events } = applyAction(
+          s,
+          fillAction(s, actions[0]) as SeedingAction,
+        );
+        allEvents.push(...events);
+        s = state;
+      }
+
+      const turnStartedEvents = allEvents.filter(
+        (e) => e.type === "turn_started",
+      );
+      // Should have exactly one turn_started — the first main-phase turn
+      expect(turnStartedEvents).toHaveLength(1);
+      expect(turnStartedEvents[0].round).toBe(1);
     });
 
     it("each player ends up with 2 active policies", () => {

@@ -13,25 +13,13 @@ import {
 
 beforeEach(() => resetIds());
 
-/**
- * Create a test game and apply mutations to the active player's state.
- * The callback receives the draft, the active player's index, and their ID.
- */
-function gameWith(
-  fn: (draft: MainGameState, activeIdx: number, activePlayerId: string) => void,
-): MainGameState {
-  const base = createTestGame();
-  return produce(base, (draft) => {
-    const idx = draft.players.findIndex(
-      (p) => p.id === draft.turn.activePlayerId,
-    );
-    fn(draft, idx, draft.turn.activePlayerId);
-  });
-}
+// With SEED="test-seed", turnOrder is ["p2","p1"] — p2 goes first (players[1]).
+const ACTIVE = "p2";
+const OTHER = "p1";
+const ACTIVE_IDX = 1;
 
-/** Get the non-active player ID. */
-function otherPlayerId(state: MainGameState): string {
-  return state.turnOrder.find((id) => id !== state.turn.activePlayerId)!;
+function gameWith(fn: (draft: MainGameState) => void): MainGameState {
+  return produce(createTestGame(), fn);
 }
 
 // ---------------------------------------------------------------------------
@@ -40,92 +28,71 @@ function otherPlayerId(state: MainGameState): string {
 
 describe("deploy", () => {
   it("moves a unit from hand to HQ and deducts gold", () => {
-    let unitId: string;
-    const state = gameWith((d, ai, pid) => {
-      const unit = makeUnit({ ownerId: pid, cost: "3" });
-      unitId = unit.id;
-      d.players[ai].hand.push(unit);
-      d.players[ai].gold = 10;
+    const unit = makeUnit({ ownerId: ACTIVE, cost: "3" });
+    const state = gameWith((d) => {
+      d.players[ACTIVE_IDX].hand.push(unit);
+      d.players[ACTIVE_IDX].gold = 10;
     });
 
     const { state: next, events } = applyAction(state, {
       type: "deploy",
-      playerId: state.turn.activePlayerId,
-      cardId: unitId!,
+      playerId: ACTIVE,
+      cardId: unit.id,
     });
     const ns = next as MainGameState;
-    const p = ns.players.find((p) => p.id === state.turn.activePlayerId)!;
+    const p = ns.players[ACTIVE_IDX];
 
     expect(p.hand).toHaveLength(0);
     expect(p.hq).toHaveLength(1);
-    expect(p.hq[0].id).toBe(unitId!);
+    expect(p.hq[0].id).toBe(unit.id);
     expect(p.gold).toBe(7);
     expect(ns.turn.actionPointsRemaining).toBe(2);
     expect(events.some((e) => e.type === "card_deployed")).toBe(true);
   });
 
   it("moves an item from hand to HQ", () => {
-    let itemId: string;
-    const state = gameWith((d, ai, pid) => {
-      const item = makeItem({ ownerId: pid, cost: "0" });
-      itemId = item.id;
-      d.players[ai].hand.push(item);
+    const item = makeItem({ ownerId: ACTIVE, cost: "0" });
+    const state = gameWith((d) => {
+      d.players[ACTIVE_IDX].hand.push(item);
     });
 
     const { state: next } = applyAction(state, {
       type: "deploy",
-      playerId: state.turn.activePlayerId,
-      cardId: itemId!,
+      playerId: ACTIVE,
+      cardId: item.id,
     });
     const ns = next as MainGameState;
-    const p = ns.players.find((p) => p.id === state.turn.activePlayerId)!;
-    expect(p.hq).toHaveLength(1);
-    expect(p.hq[0].type).toBe("item");
+    expect(ns.players[ACTIVE_IDX].hq).toHaveLength(1);
+    expect(ns.players[ACTIVE_IDX].hq[0].type).toBe("item");
   });
 
   it("rejects deploying a non-unit/item card", () => {
-    let eventId: string;
-    const state = gameWith((d, ai, pid) => {
-      const event = makeEvent({ ownerId: pid, subtype: "instant" });
-      eventId = event.id;
-      d.players[ai].hand.push(event);
+    const event = makeEvent({ ownerId: ACTIVE, subtype: "instant" });
+    const state = gameWith((d) => {
+      d.players[ACTIVE_IDX].hand.push(event);
     });
 
     expect(() =>
-      applyAction(state, {
-        type: "deploy",
-        playerId: state.turn.activePlayerId,
-        cardId: eventId!,
-      }),
+      applyAction(state, { type: "deploy", playerId: ACTIVE, cardId: event.id }),
     ).toThrow("only units and items");
   });
 
   it("rejects deploying when gold is insufficient", () => {
-    let unitId: string;
-    const state = gameWith((d, ai, pid) => {
-      const unit = makeUnit({ ownerId: pid, cost: "99" });
-      unitId = unit.id;
-      d.players[ai].hand.push(unit);
-      d.players[ai].gold = 5;
+    const unit = makeUnit({ ownerId: ACTIVE, cost: "99" });
+    const state = gameWith((d) => {
+      d.players[ACTIVE_IDX].hand.push(unit);
+      d.players[ACTIVE_IDX].gold = 5;
     });
 
     expect(() =>
-      applyAction(state, {
-        type: "deploy",
-        playerId: state.turn.activePlayerId,
-        cardId: unitId!,
-      }),
+      applyAction(state, { type: "deploy", playerId: ACTIVE, cardId: unit.id }),
     ).toThrow("cannot afford");
   });
 
   it("rejects deploying a card not in hand", () => {
     const state = createTestGame();
     expect(() =>
-      applyAction(state, {
-        type: "deploy",
-        playerId: state.turn.activePlayerId,
-        cardId: "nonexistent",
-      }),
+      applyAction(state, { type: "deploy", playerId: ACTIVE, cardId: "nonexistent" }),
     ).toThrow("not found");
   });
 });
@@ -137,36 +104,36 @@ describe("deploy", () => {
 describe("buy", () => {
   it("purchases a card from market and adds to hand", () => {
     const marketCard = makeUnit({ ownerId: "neutral", cost: "4" });
-    const state = gameWith((d, ai) => {
+    const state = gameWith((d) => {
       d.market.push(marketCard);
-      d.players[ai].gold = 10;
+      d.players[ACTIVE_IDX].gold = 10;
     });
 
     const { state: next, events } = applyAction(state, {
       type: "buy",
-      playerId: state.turn.activePlayerId,
+      playerId: ACTIVE,
       cardId: marketCard.id,
     });
     const ns = next as MainGameState;
-    const p = ns.players.find((p) => p.id === state.turn.activePlayerId)!;
+    const p = ns.players[ACTIVE_IDX];
 
     expect(p.hand.some((c) => c.id === marketCard.id)).toBe(true);
     expect(p.gold).toBe(6);
-    expect(ns.turn.actionPointsRemaining).toBe(3); // 0 AP
+    expect(ns.turn.actionPointsRemaining).toBe(3); // 0 AP cost
     expect(events.some((e) => e.type === "card_bought")).toBe(true);
   });
 
   it("replenishes market slot from active player's market deck", () => {
     const marketCard = makeUnit({ ownerId: "neutral", cost: "1" });
     const replacementCard = makeItem({ ownerId: "neutral", cost: "2" });
-    const state = gameWith((d, ai) => {
+    const state = gameWith((d) => {
       d.market.push(marketCard);
-      d.players[ai].marketDeck.push(replacementCard);
+      d.players[ACTIVE_IDX].marketDeck.push(replacementCard);
     });
 
     const { state: next } = applyAction(state, {
       type: "buy",
-      playerId: state.turn.activePlayerId,
+      playerId: ACTIVE,
       cardId: marketCard.id,
     });
     const ns = next as MainGameState;
@@ -178,18 +145,18 @@ describe("buy", () => {
     const marketCard = makeUnit({ ownerId: "neutral", cost: "0" });
     const eventCard = makeEvent({ ownerId: "neutral", subtype: "instant" });
     const nonEventCard = makeItem({ ownerId: "neutral", cost: "1" });
-    const state = gameWith((d, ai) => {
+    const state = gameWith((d) => {
       d.market.push(marketCard);
-      d.players[ai].marketDeck.push(eventCard, nonEventCard);
+      d.players[ACTIVE_IDX].marketDeck.push(eventCard, nonEventCard);
     });
 
     const { state: next } = applyAction(state, {
       type: "buy",
-      playerId: state.turn.activePlayerId,
+      playerId: ACTIVE,
       cardId: marketCard.id,
     });
     const ns = next as MainGameState;
-    const p = ns.players.find((p) => p.id === state.turn.activePlayerId)!;
+    const p = ns.players[ACTIVE_IDX];
 
     expect(p.hand.some((c) => c.id === marketCard.id)).toBe(true);
     expect(p.hand.some((c) => c.id === eventCard.id)).toBe(true);
@@ -198,29 +165,22 @@ describe("buy", () => {
 
   it("supports alternative costs via costIndex", () => {
     const card = makeUnit({ ownerId: "neutral", cost: "10|2" });
-    const state = gameWith((d, ai) => {
+    const state = gameWith((d) => {
       d.market.push(card);
-      d.players[ai].gold = 5;
+      d.players[ACTIVE_IDX].gold = 5;
     });
 
     expect(() =>
-      applyAction(state, {
-        type: "buy",
-        playerId: state.turn.activePlayerId,
-        cardId: card.id,
-        costIndex: 0,
-      }),
+      applyAction(state, { type: "buy", playerId: ACTIVE, cardId: card.id, costIndex: 0 }),
     ).toThrow("cannot afford");
 
     const { state: next } = applyAction(state, {
       type: "buy",
-      playerId: state.turn.activePlayerId,
+      playerId: ACTIVE,
       cardId: card.id,
       costIndex: 1,
     });
-    const ns = next as MainGameState;
-    const p = ns.players.find((p) => p.id === state.turn.activePlayerId)!;
-    expect(p.gold).toBe(3);
+    expect((next as MainGameState).players[ACTIVE_IDX].gold).toBe(3);
   });
 });
 
@@ -230,38 +190,37 @@ describe("buy", () => {
 
 describe("draw", () => {
   it("draws a card from main deck to hand", () => {
-    let cardId: string;
-    const state = gameWith((d, ai, pid) => {
-      const card = makeUnit({ ownerId: pid });
-      cardId = card.id;
-      d.players[ai].mainDeck.push(card);
+    const card = makeUnit({ ownerId: ACTIVE });
+    const state = gameWith((d) => {
+      d.players[ACTIVE_IDX].mainDeck.push(card);
     });
 
     const { state: next, events } = applyAction(state, {
       type: "draw",
-      playerId: state.turn.activePlayerId,
+      playerId: ACTIVE,
     });
     const ns = next as MainGameState;
-    const p = ns.players.find((p) => p.id === state.turn.activePlayerId)!;
+    const p = ns.players[ACTIVE_IDX];
 
     expect(p.hand).toHaveLength(1);
-    expect(p.hand[0].id).toBe(cardId!);
+    expect(p.hand[0].id).toBe(card.id);
     expect(p.mainDeck).toHaveLength(0);
     expect(ns.turn.actionPointsRemaining).toBe(2);
     expect(events.some((e) => e.type === "card_drawn")).toBe(true);
   });
 
   it("shuffles discard into main deck when empty", () => {
-    const state = gameWith((d, ai, pid) => {
-      d.players[ai].discardPile.push(makeUnit({ ownerId: pid }));
+    const card = makeUnit({ ownerId: ACTIVE });
+    const state = gameWith((d) => {
+      d.players[ACTIVE_IDX].discardPile.push(card);
     });
 
     const { state: next, events } = applyAction(state, {
       type: "draw",
-      playerId: state.turn.activePlayerId,
+      playerId: ACTIVE,
     });
     const ns = next as MainGameState;
-    const p = ns.players.find((p) => p.id === state.turn.activePlayerId)!;
+    const p = ns.players[ACTIVE_IDX];
 
     expect(p.hand).toHaveLength(1);
     expect(p.discardPile).toHaveLength(0);
@@ -272,11 +231,10 @@ describe("draw", () => {
     const state = createTestGame();
     const { state: next } = applyAction(state, {
       type: "draw",
-      playerId: state.turn.activePlayerId,
+      playerId: ACTIVE,
     });
     const ns = next as MainGameState;
-    const p = ns.players.find((p) => p.id === state.turn.activePlayerId)!;
-    expect(p.hand).toHaveLength(0);
+    expect(ns.players[ACTIVE_IDX].hand).toHaveLength(0);
     expect(ns.turn.actionPointsRemaining).toBe(2);
   });
 });
@@ -287,24 +245,22 @@ describe("draw", () => {
 
 describe("destroy", () => {
   it("removes a card from hand permanently", () => {
-    let cardId: string;
-    const state = gameWith((d, ai, pid) => {
-      const card = makeUnit({ ownerId: pid });
-      cardId = card.id;
-      d.players[ai].hand.push(card);
+    const card = makeUnit({ ownerId: ACTIVE });
+    const state = gameWith((d) => {
+      d.players[ACTIVE_IDX].hand.push(card);
     });
 
     const { state: next, events } = applyAction(state, {
       type: "destroy",
-      playerId: state.turn.activePlayerId,
-      cardId: cardId!,
+      playerId: ACTIVE,
+      cardId: card.id,
     });
     const ns = next as MainGameState;
-    const p = ns.players.find((p) => p.id === state.turn.activePlayerId)!;
+    const p = ns.players[ACTIVE_IDX];
 
     expect(p.hand).toHaveLength(0);
     expect(p.removedFromGame).toHaveLength(1);
-    expect(p.removedFromGame[0].id).toBe(cardId!);
+    expect(p.removedFromGame[0].id).toBe(card.id);
     expect(ns.turn.actionPointsRemaining).toBe(2);
     expect(events.some((e) => e.type === "card_destroyed")).toBe(true);
   });
@@ -316,71 +272,55 @@ describe("destroy", () => {
 
 describe("enter", () => {
   it("moves a unit from HQ to a perimeter grid cell", () => {
-    let unitId: string;
-    const state = gameWith((d, ai, pid) => {
-      const unit = makeUnit({ ownerId: pid });
-      unitId = unit.id;
-      d.players[ai].hq.push(unit);
-      d.grid[0][0].location = makeLocation({ ownerId: pid });
+    const unit = makeUnit({ ownerId: ACTIVE });
+    const location = makeLocation({ ownerId: ACTIVE });
+    const state = gameWith((d) => {
+      d.players[ACTIVE_IDX].hq.push(unit);
+      d.grid[0][0].location = location;
     });
 
     const { state: next, events } = applyAction(state, {
       type: "enter",
-      playerId: state.turn.activePlayerId,
-      unitId: unitId!,
+      playerId: ACTIVE,
+      unitId: unit.id,
       row: 0,
       col: 0,
     });
     const ns = next as MainGameState;
-    const p = ns.players.find((p) => p.id === state.turn.activePlayerId)!;
 
-    expect(p.hq).toHaveLength(0);
+    expect(ns.players[ACTIVE_IDX].hq).toHaveLength(0);
     expect(ns.grid[0][0].units).toHaveLength(1);
-    expect(ns.grid[0][0].units[0].id).toBe(unitId!);
+    expect(ns.grid[0][0].units[0].id).toBe(unit.id);
     expect(ns.turn.actionPointsRemaining).toBe(2);
     expect(events.some((e) => e.type === "unit_entered")).toBe(true);
   });
 
   it("rejects entering a non-perimeter cell", () => {
-    let unitId: string;
-    const state = gameWith((d, ai, pid) => {
-      const unit = makeUnit({ ownerId: pid });
-      unitId = unit.id;
-      d.players[ai].hq.push(unit);
-      d.grid[1][1].location = makeLocation({ ownerId: pid });
+    const unit = makeUnit({ ownerId: ACTIVE });
+    const location = makeLocation({ ownerId: ACTIVE });
+    const state = gameWith((d) => {
+      d.players[ACTIVE_IDX].hq.push(unit);
+      d.grid[1][1].location = location;
     });
 
     expect(() =>
-      applyAction(state, {
-        type: "enter",
-        playerId: state.turn.activePlayerId,
-        unitId: unitId!,
-        row: 1,
-        col: 1,
-      }),
+      applyAction(state, { type: "enter", playerId: ACTIVE, unitId: unit.id, row: 1, col: 1 }),
     ).toThrow("not on the grid perimeter");
   });
 
   it("rejects entering when boundary edge is blocked", () => {
-    let unitId: string;
-    const state = gameWith((d, ai, pid) => {
-      const unit = makeUnit({ ownerId: pid });
-      unitId = unit.id;
-      d.players[ai].hq.push(unit);
-      d.grid[0][0].location = makeLocation({
-        ownerId: pid,
-        edges: { n: false, e: false, s: false, w: false },
-      });
+    const unit = makeUnit({ ownerId: ACTIVE });
+    const location = makeLocation({
+      ownerId: ACTIVE,
+      edges: { n: false, e: false, s: false, w: false },
+    });
+    const state = gameWith((d) => {
+      d.players[ACTIVE_IDX].hq.push(unit);
+      d.grid[0][0].location = location;
     });
 
     expect(() =>
-      applyAction(state, {
-        type: "enter",
-        playerId: state.turn.activePlayerId,
-        unitId: unitId!,
-        row: 0,
-        col: 0,
-      }),
+      applyAction(state, { type: "enter", playerId: ACTIVE, unitId: unit.id, row: 0, col: 0 }),
     ).toThrow("no open edges facing the grid boundary");
   });
 });
@@ -391,19 +331,17 @@ describe("enter", () => {
 
 describe("move", () => {
   it("moves a unit to an adjacent cell with open facing edges", () => {
-    let unitId: string;
-    const state = gameWith((d, _ai, pid) => {
-      const unit = makeUnit({ ownerId: pid });
-      unitId = unit.id;
-      d.grid[0][0].location = makeLocation({ ownerId: pid });
-      d.grid[0][1].location = makeLocation({ ownerId: pid });
+    const unit = makeUnit({ ownerId: ACTIVE });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][1].location = makeLocation({ ownerId: ACTIVE });
       d.grid[0][0].units.push(unit);
     });
 
     const { state: next, events } = applyAction(state, {
       type: "move",
-      playerId: state.turn.activePlayerId,
-      unitId: unitId!,
+      playerId: ACTIVE,
+      unitId: unit.id,
       row: 0,
       col: 1,
     });
@@ -411,76 +349,62 @@ describe("move", () => {
 
     expect(ns.grid[0][0].units).toHaveLength(0);
     expect(ns.grid[0][1].units).toHaveLength(1);
-    expect(ns.grid[0][1].units[0].id).toBe(unitId!);
+    expect(ns.grid[0][1].units[0].id).toBe(unit.id);
     expect(events.some((e) => e.type === "unit_moved")).toBe(true);
   });
 
   it("rejects move when facing edges are blocked", () => {
-    let unitId: string;
-    const state = gameWith((d, _ai, pid) => {
-      const unit = makeUnit({ ownerId: pid });
-      unitId = unit.id;
+    const unit = makeUnit({ ownerId: ACTIVE });
+    const state = gameWith((d) => {
       d.grid[0][0].location = makeLocation({
-        ownerId: pid,
+        ownerId: ACTIVE,
         edges: { n: true, e: false, s: true, w: true },
       });
-      d.grid[0][1].location = makeLocation({ ownerId: pid });
+      d.grid[0][1].location = makeLocation({ ownerId: ACTIVE });
       d.grid[0][0].units.push(unit);
     });
 
     expect(() =>
-      applyAction(state, {
-        type: "move",
-        playerId: state.turn.activePlayerId,
-        unitId: unitId!,
-        row: 0,
-        col: 1,
-      }),
+      applyAction(state, { type: "move", playerId: ACTIVE, unitId: unit.id, row: 0, col: 1 }),
     ).toThrow("blocked");
   });
 
   it("costs 2 AP for injured units", () => {
-    let unitId: string;
-    const state = gameWith((d, _ai, pid) => {
-      const unit = makeUnit({ ownerId: pid, injured: true });
-      unitId = unit.id;
-      d.grid[0][0].location = makeLocation({ ownerId: pid });
-      d.grid[0][1].location = makeLocation({ ownerId: pid });
+    const unit = makeUnit({ ownerId: ACTIVE, injured: true });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][1].location = makeLocation({ ownerId: ACTIVE });
       d.grid[0][0].units.push(unit);
     });
 
     const { state: next } = applyAction(state, {
       type: "move",
-      playerId: state.turn.activePlayerId,
-      unitId: unitId!,
+      playerId: ACTIVE,
+      unitId: unit.id,
       row: 0,
       col: 1,
     });
-    const ns = next as MainGameState;
-    expect(ns.turn.actionPointsRemaining).toBe(1); // 3 - 2
+    expect((next as MainGameState).turn.actionPointsRemaining).toBe(1); // 3 - 2
   });
 
   it("allows retreat to HQ from perimeter with open boundary edge", () => {
-    let unitId: string;
-    const state = gameWith((d, _ai, pid) => {
-      const unit = makeUnit({ ownerId: pid });
-      unitId = unit.id;
-      d.grid[0][0].location = makeLocation({ ownerId: pid });
+    const unit = makeUnit({ ownerId: ACTIVE });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
       d.grid[0][0].units.push(unit);
     });
 
     const { state: next } = applyAction(state, {
       type: "move",
-      playerId: state.turn.activePlayerId,
-      unitId: unitId!,
+      playerId: ACTIVE,
+      unitId: unit.id,
       row: -1,
       col: -1,
     });
     const ns = next as MainGameState;
-    const p = ns.players.find((p) => p.id === state.turn.activePlayerId)!;
 
     expect(ns.grid[0][0].units).toHaveLength(0);
-    expect(p.hq.some((c) => c.id === unitId!)).toBe(true);
+    expect(ns.players[ACTIVE_IDX].hq.some((c) => c.id === unit.id)).toBe(true);
   });
 });
 
@@ -490,20 +414,18 @@ describe("move", () => {
 
 describe("play_event", () => {
   it("plays an instant event and discards it", () => {
-    let eventId: string;
-    const state = gameWith((d, ai, pid) => {
-      const event = makeEvent({ ownerId: pid, subtype: "instant", cost: "0" });
-      eventId = event.id;
-      d.players[ai].hand.push(event);
+    const event = makeEvent({ ownerId: ACTIVE, subtype: "instant", cost: "0" });
+    const state = gameWith((d) => {
+      d.players[ACTIVE_IDX].hand.push(event);
     });
 
     const { state: next, events } = applyAction(state, {
       type: "play_event",
-      playerId: state.turn.activePlayerId,
-      cardId: eventId!,
+      playerId: ACTIVE,
+      cardId: event.id,
     });
     const ns = next as MainGameState;
-    const p = ns.players.find((p) => p.id === state.turn.activePlayerId)!;
+    const p = ns.players[ACTIVE_IDX];
 
     expect(p.hand).toHaveLength(0);
     expect(p.discardPile).toHaveLength(1);
@@ -511,20 +433,18 @@ describe("play_event", () => {
   });
 
   it("plays a passive event with duration tracking", () => {
-    let eventId: string;
-    const state = gameWith((d, ai, pid) => {
-      const event = makeEvent({ ownerId: pid, subtype: "passive", cost: "0", duration: 3 });
-      eventId = event.id;
-      d.players[ai].hand.push(event);
+    const event = makeEvent({ ownerId: ACTIVE, subtype: "passive", cost: "0", duration: 3 });
+    const state = gameWith((d) => {
+      d.players[ACTIVE_IDX].hand.push(event);
     });
 
     const { state: next } = applyAction(state, {
       type: "play_event",
-      playerId: state.turn.activePlayerId,
-      cardId: eventId!,
+      playerId: ACTIVE,
+      cardId: event.id,
     });
     const ns = next as MainGameState;
-    const p = ns.players.find((p) => p.id === state.turn.activePlayerId)!;
+    const p = ns.players[ACTIVE_IDX];
 
     expect(p.hand).toHaveLength(0);
     expect(p.passiveEvents).toHaveLength(1);
@@ -532,25 +452,23 @@ describe("play_event", () => {
   });
 
   it("plays a trap event face-down", () => {
-    let eventId: string;
-    const state = gameWith((d, ai, pid) => {
-      const event = makeEvent({ ownerId: pid, subtype: "trap", cost: "0" });
-      eventId = event.id;
-      d.players[ai].hand.push(event);
+    const event = makeEvent({ ownerId: ACTIVE, subtype: "trap", cost: "0" });
+    const state = gameWith((d) => {
+      d.players[ACTIVE_IDX].hand.push(event);
     });
 
     const { state: next, events } = applyAction(state, {
       type: "play_event",
-      playerId: state.turn.activePlayerId,
-      cardId: eventId!,
+      playerId: ACTIVE,
+      cardId: event.id,
       targetId: "some-target",
     });
     const ns = next as MainGameState;
-    const p = ns.players.find((p) => p.id === state.turn.activePlayerId)!;
+    const p = ns.players[ACTIVE_IDX];
 
     expect(p.hand).toHaveLength(0);
     expect(p.activeTraps).toHaveLength(1);
-    expect(p.activeTraps[0].card.id).toBe(eventId!);
+    expect(p.activeTraps[0].card.id).toBe(event.id);
     expect(p.activeTraps[0].targetId).toBe("some-target");
     expect(events.some((e) => e.type === "trap_set")).toBe(true);
   });
@@ -562,51 +480,37 @@ describe("play_event", () => {
 
 describe("equip", () => {
   it("equips an item in HQ to a unit in HQ", () => {
-    let unitId: string;
-    let itemId: string;
-    const state = gameWith((d, ai, pid) => {
-      const unit = makeUnit({ ownerId: pid });
-      const item = makeItem({ ownerId: pid });
-      unitId = unit.id;
-      itemId = item.id;
-      d.players[ai].hq.push(unit, item);
+    const unit = makeUnit({ ownerId: ACTIVE });
+    const item = makeItem({ ownerId: ACTIVE });
+    const state = gameWith((d) => {
+      d.players[ACTIVE_IDX].hq.push(unit, item);
     });
 
     const { state: next, events } = applyAction(state, {
       type: "equip",
-      playerId: state.turn.activePlayerId,
-      itemId: itemId!,
-      unitId: unitId!,
+      playerId: ACTIVE,
+      itemId: item.id,
+      unitId: unit.id,
     });
     const ns = next as MainGameState;
-    const p = ns.players.find((p) => p.id === state.turn.activePlayerId)!;
-    const equipped = p.hq.find((c) => c.id === itemId!);
+    const equipped = ns.players[ACTIVE_IDX].hq.find((c) => c.id === item.id);
 
     expect(equipped?.type).toBe("item");
-    expect((equipped as any).equippedTo).toBe(unitId!);
+    expect((equipped as any).equippedTo).toBe(unit.id);
     expect(events.some((e) => e.type === "item_equipped")).toBe(true);
   });
 
   it("rejects equipping when unit and item are not co-located", () => {
-    let unitId: string;
-    let itemId: string;
-    const state = gameWith((d, ai, pid) => {
-      const unit = makeUnit({ ownerId: pid });
-      const item = makeItem({ ownerId: pid });
-      unitId = unit.id;
-      itemId = item.id;
-      d.players[ai].hq.push(unit);
-      d.grid[0][0].location = makeLocation({ ownerId: pid });
+    const unit = makeUnit({ ownerId: ACTIVE });
+    const item = makeItem({ ownerId: ACTIVE });
+    const state = gameWith((d) => {
+      d.players[ACTIVE_IDX].hq.push(unit);
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
       d.grid[0][0].items.push(item);
     });
 
     expect(() =>
-      applyAction(state, {
-        type: "equip",
-        playerId: state.turn.activePlayerId,
-        itemId: itemId!,
-        unitId: unitId!,
-      }),
+      applyAction(state, { type: "equip", playerId: ACTIVE, itemId: item.id, unitId: unit.id }),
     ).toThrow("not co-located");
   });
 });
@@ -617,55 +521,43 @@ describe("equip", () => {
 
 describe("raze", () => {
   it("destroys a location and all cards there", () => {
-    let unitId: string;
-    let replacementId: string;
-    const state = gameWith((d, ai, pid) => {
-      const unit = makeUnit({ ownerId: pid });
-      unitId = unit.id;
-      d.grid[0][0].location = makeLocation({ ownerId: pid });
+    const unit = makeUnit({ ownerId: ACTIVE });
+    const location = makeLocation({ ownerId: ACTIVE });
+    const replacement = makeLocation({ ownerId: ACTIVE });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = location;
       d.grid[0][0].units.push(unit);
-      const replacement = makeLocation({ ownerId: pid });
-      replacementId = replacement.id;
-      d.players[ai].prospectDeck.push(replacement);
+      d.players[ACTIVE_IDX].prospectDeck.push(replacement);
     });
 
     const { state: next, events } = applyAction(state, {
       type: "raze",
-      playerId: state.turn.activePlayerId,
-      unitId: unitId!,
+      playerId: ACTIVE,
+      unitId: unit.id,
       row: 0,
       col: 0,
     });
     const ns = next as MainGameState;
-    const p = ns.players.find((p) => p.id === state.turn.activePlayerId)!;
 
-    expect(p.discardPile.length).toBeGreaterThan(0);
-    expect(ns.grid[0][0].location?.id).toBe(replacementId!);
+    expect(ns.players[ACTIVE_IDX].discardPile.length).toBeGreaterThan(0);
+    expect(ns.grid[0][0].location?.id).toBe(replacement.id);
     expect(ns.grid[0][0].units).toHaveLength(0);
-    // Raze costs 3 AP (all), triggering auto-advance → AP reset to 3 for next player
+    // Raze costs 3 AP (all), triggering auto-advance
     expect(events.some((e) => e.type === "turn_ended")).toBe(true);
     expect(events.some((e) => e.type === "location_razed")).toBe(true);
     expect(events.some((e) => e.type === "location_placed")).toBe(true);
   });
 
   it("rejects raze when enemy units are present", () => {
-    let unitId: string;
-    const state = gameWith((d, _ai, pid) => {
-      const unit = makeUnit({ ownerId: pid });
-      unitId = unit.id;
-      const other = otherPlayerId(d as unknown as MainGameState);
-      d.grid[0][0].location = makeLocation({ ownerId: pid });
-      d.grid[0][0].units.push(unit, makeUnit({ ownerId: other }));
+    const unit = makeUnit({ ownerId: ACTIVE });
+    const enemy = makeUnit({ ownerId: OTHER });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][0].units.push(unit, enemy);
     });
 
     expect(() =>
-      applyAction(state, {
-        type: "raze",
-        playerId: state.turn.activePlayerId,
-        unitId: unitId!,
-        row: 0,
-        col: 0,
-      }),
+      applyAction(state, { type: "raze", playerId: ACTIVE, unitId: unit.id, row: 0, col: 0 }),
     ).toThrow("enemy units present");
   });
 });
@@ -676,94 +568,70 @@ describe("raze", () => {
 
 describe("attack", () => {
   it("resolves combat between units at same location", () => {
-    let attackerId: string;
-    const state = gameWith((d, _ai, pid) => {
-      const other = otherPlayerId(d as unknown as MainGameState);
-      const attacker = makeUnit({ ownerId: pid, strength: 10 });
-      attackerId = attacker.id;
-      d.grid[0][0].location = makeLocation({ ownerId: pid });
-      d.grid[0][0].units.push(attacker, makeUnit({ ownerId: other, strength: 1 }));
-    });
-
-    const { state: next, events } = applyAction(state, {
-      type: "attack",
-      playerId: state.turn.activePlayerId,
-      unitIds: [attackerId!],
-      row: 0,
-      col: 0,
-    });
-    const ns = next as MainGameState;
-    const types = events.map((e) => e.type);
-
-    expect(types).toContain("combat_started");
-    expect(types).toContain("combat_resolved");
-    expect(ns.turn.actionPointsRemaining).toBe(2);
-  });
-
-  it("rejects attack with no enemy units", () => {
-    let unitId: string;
-    const state = gameWith((d, _ai, pid) => {
-      const unit = makeUnit({ ownerId: pid });
-      unitId = unit.id;
-      d.grid[0][0].location = makeLocation({ ownerId: pid });
-      d.grid[0][0].units.push(unit);
-    });
-
-    expect(() =>
-      applyAction(state, {
-        type: "attack",
-        playerId: state.turn.activePlayerId,
-        unitIds: [unitId!],
-        row: 0,
-        col: 0,
-      }),
-    ).toThrow("No enemy units");
-  });
-
-  it("rejects attack with empty unitIds", () => {
-    const state = gameWith((d, _ai, pid) => {
-      d.grid[0][0].location = makeLocation({ ownerId: pid });
-    });
-
-    expect(() =>
-      applyAction(state, {
-        type: "attack",
-        playerId: state.turn.activePlayerId,
-        unitIds: [],
-        row: 0,
-        col: 0,
-      }),
-    ).toThrow("at least one unit");
-  });
-
-  it("kills a vastly weaker defender", () => {
-    let attackerId: string;
-    let defenderId: string;
-    let defenderOwner: string;
-    const state = gameWith((d, _ai, pid) => {
-      const other = otherPlayerId(d as unknown as MainGameState);
-      defenderOwner = other;
-      const attacker = makeUnit({ ownerId: pid, strength: 20 });
-      const defender = makeUnit({ ownerId: other, strength: 1 });
-      attackerId = attacker.id;
-      defenderId = defender.id;
-      d.grid[0][0].location = makeLocation({ ownerId: pid });
+    const attacker = makeUnit({ ownerId: ACTIVE, strength: 10 });
+    const defender = makeUnit({ ownerId: OTHER, strength: 1 });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
       d.grid[0][0].units.push(attacker, defender);
     });
 
     const { state: next, events } = applyAction(state, {
       type: "attack",
-      playerId: state.turn.activePlayerId,
-      unitIds: [attackerId!],
+      playerId: ACTIVE,
+      unitIds: [attacker.id],
       row: 0,
       col: 0,
     });
     const ns = next as MainGameState;
-    const p2 = ns.players.find((p) => p.id === defenderOwner!)!;
+
+    expect(events.map((e) => e.type)).toContain("combat_started");
+    expect(events.map((e) => e.type)).toContain("combat_resolved");
+    expect(ns.turn.actionPointsRemaining).toBe(2);
+  });
+
+  it("rejects attack with no enemy units", () => {
+    const unit = makeUnit({ ownerId: ACTIVE });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][0].units.push(unit);
+    });
+
+    expect(() =>
+      applyAction(state, { type: "attack", playerId: ACTIVE, unitIds: [unit.id], row: 0, col: 0 }),
+    ).toThrow("No enemy units");
+  });
+
+  it("rejects attack with empty unitIds", () => {
+    const state = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+    });
+
+    expect(() =>
+      applyAction(state, { type: "attack", playerId: ACTIVE, unitIds: [], row: 0, col: 0 }),
+    ).toThrow("at least one unit");
+  });
+
+  it("kills a vastly weaker defender", () => {
+    const attacker = makeUnit({ ownerId: ACTIVE, strength: 20 });
+    const defender = makeUnit({ ownerId: OTHER, strength: 1 });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][0].units.push(attacker, defender);
+    });
+
+    const { state: next, events } = applyAction(state, {
+      type: "attack",
+      playerId: ACTIVE,
+      unitIds: [attacker.id],
+      row: 0,
+      col: 0,
+    });
+    const ns = next as MainGameState;
+    const p1 = ns.players[0]; // OTHER = p1 = players[0]
 
     expect(events.some((e) => e.type === "unit_killed")).toBe(true);
-    expect(p2.discardPile.some((c) => c.id === defenderId!)).toBe(true);
-    expect(ns.grid[0][0].units.every((u) => u.id !== defenderId!)).toBe(true);
+    expect(p1.discardPile.some((c) => c.id === defender.id)).toBe(true);
+    expect(ns.grid[0][0].units.every((u) => u.id !== defender.id)).toBe(true);
   });
 });
 
@@ -772,125 +640,99 @@ describe("attack", () => {
 // ---------------------------------------------------------------------------
 
 describe("turn lifecycle", () => {
-  it("grants gold income at start of turn", () => {
+  it("grants gold income at start of next player's turn", () => {
     const state = createTestGame();
-    const firstPlayer = state.turn.activePlayerId;
-    const initialGold = state.players.find((p) => p.id === firstPlayer)!.gold;
+    const initialGold = state.players[0].gold; // p1's gold
 
-    const { state: s1 } = applyAction(state, {
-      type: "pass",
-      playerId: firstPlayer,
-    });
+    // p2 passes → p1's turn starts (gets income)
+    const { state: s1 } = applyAction(state, { type: "pass", playerId: ACTIVE });
     const ns = s1 as MainGameState;
-    const secondPlayer = ns.turn.activePlayerId;
-    const secondPlayerGold = ns.players.find((p) => p.id === secondPlayer)!.gold;
-    expect(secondPlayerGold).toBe(initialGold + 1);
+    expect(ns.turn.activePlayerId).toBe(OTHER);
+    expect(ns.players[0].gold).toBe(initialGold + 1);
   });
 
   it("resets AP at start of turn", () => {
-    let cardId: string;
-    const state = gameWith((d, ai, pid) => {
-      const card = makeUnit({ ownerId: pid, cost: "0" });
-      cardId = card.id;
-      d.players[ai].hand.push(card);
+    const card = makeUnit({ ownerId: ACTIVE, cost: "0" });
+    const state = gameWith((d) => {
+      d.players[ACTIVE_IDX].hand.push(card);
     });
 
-    // Deploy uses 1 AP (now at 2), then pass
+    // p2 deploys (2 AP left), then passes → p1's turn
     const { state: s1 } = applyAction(state, {
       type: "deploy",
-      playerId: state.turn.activePlayerId,
-      cardId: cardId!,
+      playerId: ACTIVE,
+      cardId: card.id,
     });
-    // Second player passes
+    // p1 passes → p2's turn starts with full AP
     const { state: s2 } = applyAction(s1, {
       type: "pass",
       playerId: (s1 as MainGameState).turn.activePlayerId,
     });
-    // Back to first player — AP should be 3
-    const final = s2 as MainGameState;
-    expect(final.turn.actionPointsRemaining).toBe(3);
+    expect((s2 as MainGameState).turn.actionPointsRemaining).toBe(3);
   });
 
   it("heals injured units in HQ at start of turn", () => {
-    let unitId: string;
-    const state = gameWith((d, ai, pid) => {
-      const unit = makeUnit({ ownerId: pid, injured: true });
-      unitId = unit.id;
-      d.players[ai].hq.push(unit);
+    const unit = makeUnit({ ownerId: ACTIVE, injured: true });
+    const state = gameWith((d) => {
+      d.players[ACTIVE_IDX].hq.push(unit);
     });
 
-    // Pass both players to get back to first player's turn
-    const { state: s1 } = applyAction(state, {
-      type: "pass",
-      playerId: state.turn.activePlayerId,
-    });
+    // p2 passes → p1 passes → p2's turn starts (heals HQ units)
+    const { state: s1 } = applyAction(state, { type: "pass", playerId: ACTIVE });
     const { state: s2 } = applyAction(s1, {
       type: "pass",
       playerId: (s1 as MainGameState).turn.activePlayerId,
     });
     const ns = s2 as MainGameState;
-    const p = ns.players.find((p) => p.id === state.turn.activePlayerId)!;
-    const healedUnit = p.hq.find((c) => c.id === unitId!) as UnitCard;
+    const healedUnit = ns.players[ACTIVE_IDX].hq.find((c) => c.id === unit.id) as UnitCard;
     expect(healedUnit).toBeDefined();
     expect(healedUnit.injured).toBe(false);
   });
 
   it("enforces hand size limit at end of turn", () => {
-    const state = gameWith((d, ai, pid) => {
+    const state = gameWith((d) => {
       for (let i = 0; i < 10; i++) {
-        d.players[ai].hand.push(makeUnit({ ownerId: pid }));
+        d.players[ACTIVE_IDX].hand.push(makeUnit({ ownerId: ACTIVE }));
       }
     });
 
-    const { state: next } = applyAction(state, {
-      type: "pass",
-      playerId: state.turn.activePlayerId,
-    });
+    const { state: next } = applyAction(state, { type: "pass", playerId: ACTIVE });
     const ns = next as MainGameState;
-    const p = ns.players.find((p) => p.id === state.turn.activePlayerId)!;
-    expect(p.hand.length).toBeLessThanOrEqual(7);
+    expect(ns.players[ACTIVE_IDX].hand.length).toBeLessThanOrEqual(7);
   });
 
   it("auto-advances turn when AP exhausted", () => {
     const state = createTestGame();
-    const firstPlayer = state.turn.activePlayerId;
 
+    // 3 draws exhaust AP → auto-advance to p1
     let s = state as MainGameState;
     for (let i = 0; i < 3; i++) {
-      const { state: next } = applyAction(s, {
-        type: "draw",
-        playerId: s.turn.activePlayerId,
-      });
+      const { state: next } = applyAction(s, { type: "draw", playerId: ACTIVE });
       s = next as MainGameState;
     }
 
-    expect(s.turn.activePlayerId).not.toBe(firstPlayer);
+    expect(s.turn.activePlayerId).toBe(OTHER);
     expect(s.turn.actionPointsRemaining).toBe(3);
   });
 
   it("decrements passive event duration and expires them", () => {
-    let eventId: string;
-    const state = gameWith((d, ai, pid) => {
-      const passiveEvent = makeEvent({
-        ownerId: pid,
-        subtype: "passive",
-        cost: "0",
-        duration: 1,
-        remainingDuration: 1,
-      });
-      eventId = passiveEvent.id;
-      d.players[ai].passiveEvents.push(passiveEvent);
+    const passiveEvent = makeEvent({
+      ownerId: ACTIVE,
+      subtype: "passive",
+      cost: "0",
+      duration: 1,
+      remainingDuration: 1,
+    });
+    const state = gameWith((d) => {
+      d.players[ACTIVE_IDX].passiveEvents.push(passiveEvent);
     });
 
-    const { state: next, events } = applyAction(state, {
-      type: "pass",
-      playerId: state.turn.activePlayerId,
-    });
+    const { state: next, events } = applyAction(state, { type: "pass", playerId: ACTIVE });
     const ns = next as MainGameState;
-    const p = ns.players.find((p) => p.id === state.turn.activePlayerId)!;
+    const p = ns.players[ACTIVE_IDX];
 
     expect(p.passiveEvents).toHaveLength(0);
-    expect(p.discardPile.some((c) => c.id === eventId!)).toBe(true);
+    expect(p.discardPile.some((c) => c.id === passiveEvent.id)).toBe(true);
     expect(events.some((e) => e.type === "passive_expired")).toBe(true);
   });
 });
@@ -906,10 +748,7 @@ describe("AP validation", () => {
     });
 
     expect(() =>
-      applyAction(state, {
-        type: "draw",
-        playerId: state.turn.activePlayerId,
-      }),
+      applyAction(state, { type: "draw", playerId: ACTIVE }),
     ).toThrow("Not enough AP");
   });
 });

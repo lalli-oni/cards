@@ -289,6 +289,7 @@ export type MainAction =
       row: number;
       col: number;
     }
+  | { type: "attempt_mission"; playerId: string; row: number; col: number }
   | { type: "pass"; playerId: string };
 
 export type Action = SeedingAction | MainAction;

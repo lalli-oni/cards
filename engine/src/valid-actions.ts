@@ -308,6 +308,19 @@ function getMainValidActions(
     }
   }
 
+  // attempt_mission — locations with missions where player has units (1 AP)
+  if (ap >= 1) {
+    for (let r = 0; r < gridRows; r++) {
+      for (let c = 0; c < gridCols; c++) {
+        const cell = state.grid[r][c];
+        if (!cell.location?.mission) continue;
+        if (cell.units.some((u) => u.ownerId === playerId)) {
+          actions.push({ type: "attempt_mission", playerId, row: r, col: c });
+        }
+      }
+    }
+  }
+
   // activate — deferred to #20
 
   return actions;

@@ -741,6 +741,205 @@ describe("turn lifecycle", () => {
 // AP validation
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// traps
+// ---------------------------------------------------------------------------
+
+describe("traps", () => {
+  it("auto-triggers ambush trap when enemy unit enters location", () => {
+    const trap = makeEvent({ ownerId: OTHER, subtype: "trap", definitionId: "ambush", trigger: "enemy_unit_enters_location" });
+    const unit = makeUnit({ ownerId: ACTIVE });
+    const location = makeLocation({ ownerId: OTHER });
+    const state = gameWith((d) => {
+      // OTHER (p1) has a trap targeting the location
+      d.players[0].activeTraps.push({ card: trap, targetId: location.id });
+      d.players[ACTIVE_IDX].hq.push(unit);
+      d.grid[0][0].location = location;
+    });
+
+    const { state: next, events } = applyAction(state, {
+      type: "enter",
+      playerId: ACTIVE,
+      unitId: unit.id,
+      row: 0,
+      col: 0,
+    });
+    const ns = next as MainGameState;
+
+    expect(events.some((e) => e.type === "trap_triggered")).toBe(true);
+    expect(events.some((e) => e.type === "unit_injured")).toBe(true);
+    // Trap is discarded
+    expect(ns.players[0].activeTraps).toHaveLength(0);
+    expect(ns.players[0].discardPile.some((c) => c.id === trap.id)).toBe(true);
+    // Unit is injured
+    const injuredUnit = ns.grid[0][0].units.find((u) => u.id === unit.id);
+    expect(injuredUnit?.injured).toBe(true);
+  });
+
+  it("assassination-attempt kills weak unit", () => {
+    const trap = makeEvent({ ownerId: OTHER, subtype: "trap", definitionId: "assassination-attempt", trigger: "enemy_unit_enters_location" });
+    const weakUnit = makeUnit({ ownerId: ACTIVE, strength: 4 });
+    const location = makeLocation({ ownerId: OTHER });
+    const state = gameWith((d) => {
+      d.players[0].activeTraps.push({ card: trap, targetId: location.id });
+      d.players[ACTIVE_IDX].hq.push(weakUnit);
+      d.grid[0][0].location = location;
+    });
+
+    const { state: next, events } = applyAction(state, {
+      type: "enter",
+      playerId: ACTIVE,
+      unitId: weakUnit.id,
+      row: 0,
+      col: 0,
+    });
+    const ns = next as MainGameState;
+
+    expect(events.some((e) => e.type === "unit_killed")).toBe(true);
+    expect(ns.grid[0][0].units.every((u) => u.id !== weakUnit.id)).toBe(true);
+    expect(ns.players[ACTIVE_IDX].discardPile.some((c) => c.id === weakUnit.id)).toBe(true);
+  });
+
+  it("does not trigger trap at wrong location", () => {
+    const trap = makeEvent({ ownerId: OTHER, subtype: "trap", definitionId: "ambush", trigger: "enemy_unit_enters_location" });
+    const loc1 = makeLocation({ ownerId: OTHER });
+    const loc2 = makeLocation({ ownerId: OTHER });
+    const unit = makeUnit({ ownerId: ACTIVE });
+    const state = gameWith((d) => {
+      // Trap targets loc1 but unit enters loc2
+      d.players[0].activeTraps.push({ card: trap, targetId: loc1.id });
+      d.players[ACTIVE_IDX].hq.push(unit);
+      d.grid[0][0].location = loc1;
+      d.grid[0][1].location = loc2;
+    });
+
+    const { events } = applyAction(state, {
+      type: "enter",
+      playerId: ACTIVE,
+      unitId: unit.id,
+      row: 0,
+      col: 1,
+    });
+
+    expect(events.some((e) => e.type === "trap_triggered")).toBe(false);
+  });
+
+  it("does not trigger own traps", () => {
+    const trap = makeEvent({ ownerId: ACTIVE, subtype: "trap", definitionId: "ambush", trigger: "enemy_unit_enters_location" });
+    const location = makeLocation({ ownerId: ACTIVE });
+    const unit = makeUnit({ ownerId: ACTIVE });
+    const state = gameWith((d) => {
+      d.players[ACTIVE_IDX].activeTraps.push({ card: trap, targetId: location.id });
+      d.players[ACTIVE_IDX].hq.push(unit);
+      d.grid[0][0].location = location;
+    });
+
+    const { events } = applyAction(state, {
+      type: "enter",
+      playerId: ACTIVE,
+      unitId: unit.id,
+      row: 0,
+      col: 0,
+    });
+
+    expect(events.some((e) => e.type === "trap_triggered")).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// attempt_mission
+// ---------------------------------------------------------------------------
+
+describe("attempt_mission", () => {
+  it("awards VP and replaces location on completion", () => {
+    const unit1 = makeUnit({ ownerId: ACTIVE, attributes: ["Scientist"] });
+    const unit2 = makeUnit({ ownerId: ACTIVE, attributes: ["Scientist"] });
+    const location = makeLocation({ ownerId: OTHER, mission: "scientist_2>5" });
+    const replacement = makeLocation({ ownerId: ACTIVE });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = location;
+      d.grid[0][0].units.push(unit1, unit2);
+      d.players[ACTIVE_IDX].prospectDeck.push(replacement);
+    });
+
+    const { state: next, events } = applyAction(state, {
+      type: "attempt_mission",
+      playerId: ACTIVE,
+      row: 0,
+      col: 0,
+    });
+    const ns = next as MainGameState;
+    const p = ns.players[ACTIVE_IDX];
+
+    // VP awarded
+    expect(p.vp).toBe(5);
+    // Units and location discarded to completing player
+    expect(p.discardPile.some((c) => c.id === unit1.id)).toBe(true);
+    expect(p.discardPile.some((c) => c.id === unit2.id)).toBe(true);
+    expect(p.discardPile.some((c) => c.id === location.id)).toBe(true);
+    // Replacement location placed
+    expect(ns.grid[0][0].location?.id).toBe(replacement.id);
+    expect(ns.grid[0][0].units).toHaveLength(0);
+    // Events
+    expect(events.some((e) => e.type === "mission_completed")).toBe(true);
+    expect(events.some((e) => e.type === "location_placed")).toBe(true);
+  });
+
+  it("fails gracefully when requirements not met", () => {
+    const unit = makeUnit({ ownerId: ACTIVE, attributes: ["Warrior"] });
+    const location = makeLocation({ ownerId: OTHER, mission: "scientist_2>5" });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = location;
+      d.grid[0][0].units.push(unit);
+    });
+
+    const { state: next, events } = applyAction(state, {
+      type: "attempt_mission",
+      playerId: ACTIVE,
+      row: 0,
+      col: 0,
+    });
+    const ns = next as MainGameState;
+
+    // No VP, no mission_completed event
+    expect(ns.players[ACTIVE_IDX].vp).toBe(0);
+    expect(events.some((e) => e.type === "mission_completed")).toBe(false);
+    // Units and location stay
+    expect(ns.grid[0][0].units).toHaveLength(1);
+    expect(ns.grid[0][0].location?.id).toBe(location.id);
+    // AP still spent
+    expect(ns.turn.actionPointsRemaining).toBe(2);
+  });
+
+  it("rejects when no friendly units at location", () => {
+    const location = makeLocation({ ownerId: OTHER, mission: "scientist_2>5" });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = location;
+    });
+
+    expect(() =>
+      applyAction(state, { type: "attempt_mission", playerId: ACTIVE, row: 0, col: 0 }),
+    ).toThrow("No friendly units");
+  });
+
+  it("rejects when location has no mission", () => {
+    const unit = makeUnit({ ownerId: ACTIVE });
+    const location = makeLocation({ ownerId: OTHER }); // no mission field
+    const state = gameWith((d) => {
+      d.grid[0][0].location = location;
+      d.grid[0][0].units.push(unit);
+    });
+
+    expect(() =>
+      applyAction(state, { type: "attempt_mission", playerId: ACTIVE, row: 0, col: 0 }),
+    ).toThrow("no mission");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// AP validation
+// ---------------------------------------------------------------------------
+
 describe("AP validation", () => {
   it("rejects actions when AP is insufficient", () => {
     const state = gameWith((d) => {

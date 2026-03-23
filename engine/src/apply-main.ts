@@ -3,6 +3,7 @@ import { produce } from "immer";
 import prand from "pure-rand";
 import { parseCost, spendAP, spendGold } from "./cost-helpers";
 import { drawLocationFromProspect, drawOneCard, replenishMarketSlot } from "./deck-helpers";
+import { checkMissionRequirements, parseMission } from "./mission-helpers";
 import {
   areFacingEdgesOpen,
   findUnitOnGrid,
@@ -238,6 +239,7 @@ function handleEnter(
   cell.units.push(unit);
 
   events.push({ type: "unit_entered", playerId, unitId, row, col });
+  checkTraps(draft, playerId, "enemy_unit_enters_location", row, col, unitId, events);
   checkAutoAdvance(draft, events);
 }
 
@@ -329,6 +331,7 @@ function handleMove(
   draft.grid[toRow][toCol].units.push(removed);
 
   events.push({ type: "unit_moved", playerId, unitId, fromRow, fromCol, toRow, toCol });
+  checkTraps(draft, playerId, "enemy_unit_enters_location", toRow, toCol, unitId, events);
   checkAutoAdvance(draft, events);
 }
 
@@ -702,6 +705,153 @@ function dropEquippedItems(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Trap auto-trigger
+// ---------------------------------------------------------------------------
+
+function checkTraps(
+  draft: Draft<MainGameState>,
+  playerId: string,
+  triggerType: string,
+  row: number,
+  col: number,
+  unitId: string,
+  events: GameEvent[],
+): void {
+  const location = draft.grid[row]?.[col]?.location;
+
+  for (const player of draft.players) {
+    if (player.id === playerId) continue; // only enemy traps fire
+    for (let i = player.activeTraps.length - 1; i >= 0; i--) {
+      const trap = player.activeTraps[i];
+      if (trap.card.trigger !== triggerType) continue;
+      // If trap has a targetId, it must match the location at (row, col)
+      if (trap.targetId && location && trap.targetId !== location.id) continue;
+
+      resolveTrapEffect(draft, trap, unitId, row, col, events);
+
+      // Discard the trap
+      player.activeTraps.splice(i, 1);
+      player.discardPile.push(trap.card);
+      events.push({
+        type: "trap_triggered",
+        playerId: player.id,
+        cardId: trap.card.id,
+        targetId: trap.targetId,
+      });
+    }
+  }
+}
+
+function resolveTrapEffect(
+  draft: Draft<MainGameState>,
+  trap: Draft<{ card: { definitionId: string } }>,
+  unitId: string,
+  row: number,
+  col: number,
+  events: GameEvent[],
+): void {
+  const cell = draft.grid[row][col];
+  const unit = cell.units.find((u) => u.id === unitId);
+  if (!unit) return;
+
+  switch (trap.card.definitionId) {
+    case "ambush":
+      if (unit.injured) {
+        killUnit(draft, cell, unit, row, col, events);
+      } else {
+        unit.injured = true;
+        dropEquippedItems(cell, unit, row, col, events);
+        events.push({ type: "unit_injured", unitId: unit.id, ownerId: unit.ownerId });
+      }
+      break;
+
+    case "assassination-attempt":
+      if (unit.strength <= 6) {
+        killUnit(draft, cell, unit, row, col, events);
+      } else if (unit.injured) {
+        killUnit(draft, cell, unit, row, col, events);
+      } else {
+        unit.injured = true;
+        dropEquippedItems(cell, unit, row, col, events);
+        events.push({ type: "unit_injured", unitId: unit.id, ownerId: unit.ownerId });
+      }
+      break;
+
+    case "sabotage":
+      // Action already resolved — no-op for v0.1
+      break;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Mission attempt
+// ---------------------------------------------------------------------------
+
+function handleAttemptMission(
+  draft: Draft<MainGameState>,
+  playerId: string,
+  row: number,
+  col: number,
+  events: GameEvent[],
+): void {
+  const cell = draft.grid[row][col];
+  if (!cell.location) {
+    throw new Error(`Cell (${row},${col}) has no location`);
+  }
+  if (!cell.location.mission) {
+    throw new Error(`Location at (${row},${col}) has no mission`);
+  }
+
+  const friendlyUnits = cell.units.filter((u) => u.ownerId === playerId);
+  if (friendlyUnits.length === 0) {
+    throw new Error(`No friendly units at (${row},${col})`);
+  }
+
+  spendAP(draft, 1);
+
+  const { requirements, vp } = parseMission(cell.location.mission);
+
+  if (!checkMissionRequirements(requirements, friendlyUnits)) {
+    // Mission not met — no penalty, attempt ends
+    checkAutoAdvance(draft, events);
+    return;
+  }
+
+  const player = getPlayer(draft, playerId);
+  const locationId = cell.location.id;
+
+  // Award VP
+  player.vp += vp;
+
+  // All units at location → completing player's discard (regardless of owner)
+  for (const u of cell.units) {
+    player.discardPile.push(u);
+  }
+  cell.units = [];
+
+  // All items at location → completing player's discard
+  for (const item of cell.items) {
+    player.discardPile.push(item);
+  }
+  cell.items = [];
+
+  // Location → completing player's discard
+  player.discardPile.push(cell.location);
+  cell.location = null;
+
+  events.push({ type: "mission_completed", playerId, locationId, vp });
+
+  // Draw replacement location from prospect deck
+  const newLocation = drawLocationFromProspect(draft, player, events);
+  if (newLocation) {
+    placeLocationOnGrid(draft, newLocation, row, col);
+    events.push({ type: "location_placed", row, col, cardId: newLocation.id });
+  }
+
+  checkAutoAdvance(draft, events);
+}
+
 function handleActivate(
   _draft: Draft<MainGameState>,
   _playerId: string,
@@ -782,6 +932,10 @@ export function applyMainAction(
           draft, action.playerId, action.cardId,
           action.actionName, action.targetId, events,
         );
+        break;
+
+      case "attempt_mission":
+        handleAttemptMission(draft, action.playerId, action.row, action.col, events);
         break;
 
       default: {

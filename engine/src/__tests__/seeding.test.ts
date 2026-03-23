@@ -307,8 +307,8 @@ describe("seeding phase", () => {
         },
       };
       expect(() =>
-        // @ts-expect-error — deliberately bypassing type safety to test runtime guard
         applyAction(mainState, {
+          // @ts-ignore — deliberately bypassing type safety to test runtime guard
           type: "seed_draw",
           playerId: mainState.turn.activePlayerId,
         }),

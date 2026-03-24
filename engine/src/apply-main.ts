@@ -4,6 +4,7 @@ import prand from "pure-rand";
 import { parseCost, spendAP, spendGold } from "./cost-helpers";
 import { drawLocationFromProspect, drawMarketCard, drawOneCard } from "./deck-helpers";
 import { checkMissionRequirements, parseMission } from "./mission-helpers";
+import { findItemPosition, findUnitPosition, getUnitsAtPosition, samePosition } from "./position-helpers";
 import {
   areFacingEdgesOpen,
   findUnitOnGrid,
@@ -79,10 +80,11 @@ export function runStartOfTurn(draft: Draft<MainGameState>, events: GameEvent[])
   }
 
   // Heal injured units in HQ
-  for (const card of player.hq) {
-    if (card.type === "unit" && (card as UnitCard).injured) {
-      (card as UnitCard).injured = false;
-      events.push({ type: "unit_healed", playerId: player.id, unitId: card.id });
+  const hqPosition = { type: "hq" as const, playerId: player.id };
+  for (const unit of getUnitsAtPosition(draft.players, draft.grid, hqPosition)) {
+    if (unit.injured) {
+      unit.injured = false;
+      events.push({ type: "unit_healed", playerId: player.id, unitId: unit.id });
     }
   }
 
@@ -406,52 +408,23 @@ function handleEquip(
   unitId: string,
   events: GameEvent[],
 ): void {
-  const player = getPlayer(draft, playerId);
-
-  // Find item — could be in HQ or on grid
-  let item: Draft<ItemCard> | null = null;
-  let itemLocation: "hq" | { row: number; col: number } | null = null;
-
-  const hqItem = player.hq.find((c) => c.id === itemId && c.type === "item");
-  if (hqItem) {
-    item = hqItem as Draft<ItemCard>;
-    itemLocation = "hq";
-  } else {
-    for (let r = 0; r < draft.grid.length; r++) {
-      for (let c = 0; c < draft.grid[r].length; c++) {
-        const gridItem = draft.grid[r][c].items.find((i) => i.id === itemId);
-        if (gridItem) {
-          item = gridItem;
-          itemLocation = { row: r, col: c };
-          break;
-        }
-      }
-      if (item) break;
-    }
-  }
-
-  if (!item || !itemLocation) {
+  const itemResult = findItemPosition(draft.players, draft.grid, itemId);
+  if (!itemResult) {
     throw new Error(`Item "${itemId}" not found in HQ or on grid`);
   }
 
-  // Find unit — must be co-located with item
-  let unitFound = false;
-  if (itemLocation === "hq") {
-    unitFound = player.hq.some((c) => c.id === unitId && c.type === "unit");
-  } else {
-    const cell = draft.grid[itemLocation.row][itemLocation.col];
-    unitFound = cell.units.some((u) => u.id === unitId);
+  const unitResult = findUnitPosition(draft.players, draft.grid, unitId);
+  if (!unitResult) {
+    throw new Error(`Unit "${unitId}" not found in HQ or on grid`);
   }
 
-  if (!unitFound) {
-    throw new Error(
-      `Unit "${unitId}" not co-located with item "${itemId}"`,
-    );
+  if (!samePosition(itemResult.position, unitResult.position)) {
+    throw new Error(`Unit "${unitId}" not co-located with item "${itemId}"`);
   }
 
   spendAP(draft, 1);
 
-  // Unequip from previous unit if any
+  const item = itemResult.item;
   if (item.equippedTo) {
     item.equippedTo = undefined;
   }

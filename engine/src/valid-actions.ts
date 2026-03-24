@@ -1,4 +1,6 @@
 import { tryParseCost } from "./cost-helpers";
+import type { BoardPosition } from "./position-helpers";
+import { getItemsAtPosition, getUnitsAtPosition } from "./position-helpers";
 import {
   areFacingEdgesOpen,
   getAdjacentCells,
@@ -231,27 +233,25 @@ function getMainValidActions(
     }
   }
 
-  // equip — items in HQ or on grid, to co-located units (1 AP)
+  // equip — items to co-located units, across all positions (1 AP)
   if (ap >= 1) {
-    // HQ items → HQ units
-    const hqItems = player.hq.filter((c) => c.type === "item");
-    const hqUnits = player.hq.filter((c) => c.type === "unit");
-    for (const item of hqItems) {
-      for (const unit of hqUnits) {
-        actions.push({ type: "equip", playerId, itemId: item.id, unitId: unit.id });
-      }
-    }
+    const positions: BoardPosition[] = [
+      { type: "hq", playerId },
+      ...Array.from({ length: gridRows * gridCols }, (_, i) => ({
+        type: "grid" as const,
+        row: Math.floor(i / gridCols),
+        col: i % gridCols,
+      })),
+    ];
 
-    // Grid items → co-located units
-    for (let r = 0; r < gridRows; r++) {
-      for (let c = 0; c < gridCols; c++) {
-        const cell = state.grid[r][c];
-        for (const item of cell.items) {
-          if (item.ownerId !== playerId) continue;
-          for (const unit of cell.units) {
-            if (unit.ownerId !== playerId) continue;
-            actions.push({ type: "equip", playerId, itemId: item.id, unitId: unit.id });
-          }
+    for (const pos of positions) {
+      const items = getItemsAtPosition(state.players, state.grid, pos)
+        .filter((i) => i.ownerId === playerId);
+      const units = getUnitsAtPosition(state.players, state.grid, pos)
+        .filter((u) => u.ownerId === playerId);
+      for (const item of items) {
+        for (const unit of units) {
+          actions.push({ type: "equip", playerId, itemId: item.id, unitId: unit.id });
         }
       }
     }

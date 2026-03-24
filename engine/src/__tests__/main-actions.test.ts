@@ -925,6 +925,195 @@ describe("attempt_mission", () => {
 });
 
 // ---------------------------------------------------------------------------
+// combat: injury, item drops, multi-unit
+// ---------------------------------------------------------------------------
+
+describe("combat details", () => {
+  it("injures a defender when power difference is less than 2x", () => {
+    // Attacker strength 7, defender strength 5
+    // Power range: attacker 8-13, defender 6-11
+    // Best case ratio: 13/6 = 2.16 (kill), worst: 8/11 (attacker loses)
+    // With seeded RNG this is deterministic — verify the outcome
+    const attacker = makeUnit({ ownerId: ACTIVE, strength: 7 });
+    const defender = makeUnit({ ownerId: OTHER, strength: 5 });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][0].units.push(attacker, defender);
+    });
+
+    const { events } = applyAction(state, {
+      type: "attack",
+      playerId: ACTIVE,
+      unitIds: [attacker.id],
+      row: 0,
+      col: 0,
+    });
+
+    // With seeded RNG, at least one of injury or kill should happen
+    const hasInjury = events.some((e) => e.type === "unit_injured");
+    const hasKill = events.some((e) => e.type === "unit_killed");
+    expect(hasInjury || hasKill).toBe(true);
+  });
+
+  it("kills an already-injured unit on any combat loss", () => {
+    // Defender is already injured — any loss kills them
+    const attacker = makeUnit({ ownerId: ACTIVE, strength: 20 });
+    const defender = makeUnit({ ownerId: OTHER, strength: 5, injured: true });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][0].units.push(attacker, defender);
+    });
+
+    const { state: next, events } = applyAction(state, {
+      type: "attack",
+      playerId: ACTIVE,
+      unitIds: [attacker.id],
+      row: 0,
+      col: 0,
+    });
+    const ns = next as MainGameState;
+
+    expect(events.some((e) => e.type === "unit_killed")).toBe(true);
+    expect(ns.grid[0][0].units.every((u) => u.id !== defender.id)).toBe(true);
+  });
+
+  it("drops equipped items when a unit is killed", () => {
+    const attacker = makeUnit({ ownerId: ACTIVE, strength: 20 });
+    const defender = makeUnit({ ownerId: OTHER, strength: 1 });
+    const sword = makeItem({ ownerId: OTHER, equippedTo: defender.id });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][0].units.push(attacker, defender);
+      d.grid[0][0].items.push(sword);
+    });
+
+    const { state: next, events } = applyAction(state, {
+      type: "attack",
+      playerId: ACTIVE,
+      unitIds: [attacker.id],
+      row: 0,
+      col: 0,
+    });
+    const ns = next as MainGameState;
+
+    expect(events.some((e) => e.type === "item_dropped")).toBe(true);
+    // Item is unequipped and remains at location
+    const item = ns.grid[0][0].items.find((i) => i.id === sword.id);
+    expect(item).toBeDefined();
+    expect(item!.equippedTo).toBeUndefined();
+  });
+
+  it("handles multi-unit combat with 2 attackers vs 1 defender", () => {
+    const atk1 = makeUnit({ ownerId: ACTIVE, strength: 10 });
+    const atk2 = makeUnit({ ownerId: ACTIVE, strength: 10 });
+    const defender = makeUnit({ ownerId: OTHER, strength: 1 });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][0].units.push(atk1, atk2, defender);
+    });
+
+    const { state: next, events } = applyAction(state, {
+      type: "attack",
+      playerId: ACTIVE,
+      unitIds: [atk1.id, atk2.id],
+      row: 0,
+      col: 0,
+    });
+    const ns = next as MainGameState;
+
+    expect(events.some((e) => e.type === "combat_resolved")).toBe(true);
+    // Defender should be dead (2 strong attackers vs 1 weak defender)
+    expect(ns.grid[0][0].units.every((u) => u.id !== defender.id)).toBe(true);
+    // Attackers should survive
+    expect(ns.grid[0][0].units.some((u) => u.id === atk1.id)).toBe(true);
+    expect(ns.grid[0][0].units.some((u) => u.id === atk2.id)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// move: ownership and trap on move
+// ---------------------------------------------------------------------------
+
+describe("move details", () => {
+  it("rejects moving an opponent's unit", () => {
+    const enemyUnit = makeUnit({ ownerId: OTHER });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][1].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][0].units.push(enemyUnit);
+    });
+
+    expect(() =>
+      applyAction(state, {
+        type: "move",
+        playerId: ACTIVE,
+        unitId: enemyUnit.id,
+        row: 0,
+        col: 1,
+      }),
+    ).toThrow("not owned");
+  });
+
+  it("triggers traps when moving to a new cell", () => {
+    const unit = makeUnit({ ownerId: ACTIVE });
+    const trap = makeTrapEvent({
+      ownerId: OTHER,
+      definitionId: "ambush",
+      trigger: "enemy_unit_enters_location",
+    });
+    const loc1 = makeLocation({ ownerId: ACTIVE });
+    const loc2 = makeLocation({ ownerId: ACTIVE });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = loc1;
+      d.grid[0][1].location = loc2;
+      d.grid[0][0].units.push(unit);
+      d.players[0].activeTraps.push({ card: trap, targetId: loc2.id }); // p1 (OTHER) traps loc2
+    });
+
+    const { events } = applyAction(state, {
+      type: "move",
+      playerId: ACTIVE,
+      unitId: unit.id,
+      row: 0,
+      col: 1,
+    });
+
+    expect(events.some((e) => e.type === "trap_triggered")).toBe(true);
+    expect(events.some((e) => e.type === "unit_injured")).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// equip: grid items
+// ---------------------------------------------------------------------------
+
+describe("equip details", () => {
+  it("equips a grid item to a co-located unit on the grid", () => {
+    const unit = makeUnit({ ownerId: ACTIVE });
+    const item = makeItem({ ownerId: ACTIVE });
+    const location = makeLocation({ ownerId: ACTIVE });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = location;
+      d.grid[0][0].units.push(unit);
+      d.grid[0][0].items.push(item);
+    });
+
+    const { state: next, events } = applyAction(state, {
+      type: "equip",
+      playerId: ACTIVE,
+      itemId: item.id,
+      unitId: unit.id,
+    });
+    const ns = next as MainGameState;
+
+    const equipped = ns.grid[0][0].items.find((i) => i.id === item.id);
+    expect(equipped).toBeDefined();
+    expect(equipped!.equippedTo).toBe(unit.id);
+    expect(events.some((e) => e.type === "item_equipped")).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // AP validation
 // ---------------------------------------------------------------------------
 

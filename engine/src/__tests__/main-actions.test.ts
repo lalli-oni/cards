@@ -540,8 +540,8 @@ describe("raze", () => {
     expect(ns.players[ACTIVE_IDX].discardPile.length).toBeGreaterThan(0);
     expect(ns.grid[0][0].location?.id).toBe(replacement.id);
     expect(ns.grid[0][0].units).toHaveLength(0);
-    // Raze costs 3 AP (all), triggering auto-advance
-    expect(events.some((e) => e.type === "turn_ended")).toBe(true);
+    // Raze costs 3 AP (all AP), but no auto-advance — player must pass
+    expect(ns.turn.actionPointsRemaining).toBe(0);
     expect(events.some((e) => e.type === "location_razed")).toBe(true);
     expect(events.some((e) => e.type === "location_placed")).toBe(true);
   });
@@ -691,18 +691,24 @@ describe("turn lifecycle", () => {
     expect(ns.players[ACTIVE_IDX].hand.length).toBeLessThanOrEqual(7);
   });
 
-  it("auto-advances turn when AP exhausted", () => {
-    const state = createTestGame();
+  it("does not auto-advance when AP exhausted (player can still buy)", () => {
+    const marketCard = makeUnit({ ownerId: "neutral", cost: "0" });
+    const state = gameWith((d) => {
+      d.turn.actionPointsRemaining = 0;
+      d.market.push(marketCard);
+    });
 
-    // 3 draws exhaust AP → auto-advance to p1
-    let s = state as MainGameState;
-    for (let i = 0; i < 3; i++) {
-      const { state: next } = applyAction(s, { type: "draw", playerId: ACTIVE });
-      s = next as MainGameState;
-    }
+    // At 0 AP, player can still buy (0 AP cost)
+    const { state: next } = applyAction(state, {
+      type: "buy",
+      playerId: ACTIVE,
+      cardId: marketCard.id,
+    });
+    const ns = next as MainGameState;
 
-    expect(s.turn.activePlayerId).toBe(OTHER);
-    expect(s.turn.actionPointsRemaining).toBe(3);
+    // Still the same player's turn
+    expect(ns.turn.activePlayerId).toBe(ACTIVE);
+    expect(ns.turn.actionPointsRemaining).toBe(0);
   });
 
   it("decrements passive event duration and expires them", () => {

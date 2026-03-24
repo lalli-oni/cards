@@ -120,11 +120,16 @@ function endTurnAndAdvance(draft: Draft<MainGameState>, events: GameEvent[]): vo
   runStartOfTurn(draft, events);
 }
 
-/** After an AP-spending action, auto-advance if AP exhausted. */
-function checkAutoAdvance(draft: Draft<MainGameState>, events: GameEvent[]): void {
-  if (draft.turn.actionPointsRemaining <= 0) {
-    endTurnAndAdvance(draft, events);
-  }
+/**
+ * Placeholder for post-action hooks (e.g. future game-end checks).
+ * Does NOT auto-advance on AP exhaustion — players may still have
+ * 0-AP actions (buy) and must explicitly pass to end their turn.
+ */
+function afterAction(
+  _draft: Draft<MainGameState>,
+  _events: GameEvent[],
+): void {
+  // No-op for now. Future: check win conditions, etc.
 }
 
 // ---------------------------------------------------------------------------
@@ -156,7 +161,7 @@ function handleDeploy(
   player.hq.push(card);
 
   events.push({ type: "card_deployed", playerId, cardId });
-  checkAutoAdvance(draft, events);
+  afterAction(draft, events);
 }
 
 function handleBuy(
@@ -202,7 +207,7 @@ function handleDraw(
   const player = getPlayer(draft, playerId);
   spendAP(draft, 1);
   drawOneCard(draft, player, events);
-  checkAutoAdvance(draft, events);
+  afterAction(draft, events);
 }
 
 function handleEnter(
@@ -249,7 +254,7 @@ function handleEnter(
 
   events.push({ type: "unit_entered", playerId, unitId, row, col });
   checkTraps(draft, playerId, "enemy_unit_enters_location", row, col, unitId, events);
-  checkAutoAdvance(draft, events);
+  afterAction(draft, events);
 }
 
 function handleMove(
@@ -315,7 +320,7 @@ function handleMove(
       toRow: -1,
       toCol: -1,
     });
-    checkAutoAdvance(draft, events);
+    afterAction(draft, events);
     return;
   }
 
@@ -350,7 +355,7 @@ function handleMove(
 
   events.push({ type: "unit_moved", playerId, unitId, fromRow, fromCol, toRow, toCol });
   checkTraps(draft, playerId, "enemy_unit_enters_location", toRow, toCol, unitId, events);
-  checkAutoAdvance(draft, events);
+  afterAction(draft, events);
 }
 
 function handlePlayEvent(
@@ -398,7 +403,7 @@ function handlePlayEvent(
       throw new Error(`Unknown event subtype "${(card as any).subtype}" for card "${cardId}"`);
   }
 
-  checkAutoAdvance(draft, events);
+  afterAction(draft, events);
 }
 
 function handleEquip(
@@ -431,7 +436,7 @@ function handleEquip(
 
   item.equippedTo = unitId;
   events.push({ type: "item_equipped", playerId, itemId, unitId });
-  checkAutoAdvance(draft, events);
+  afterAction(draft, events);
 }
 
 function handleDestroy(
@@ -451,7 +456,7 @@ function handleDestroy(
   player.removedFromGame.push(card);
 
   events.push({ type: "card_destroyed", playerId, cardId });
-  checkAutoAdvance(draft, events);
+  afterAction(draft, events);
 }
 
 function handleRaze(
@@ -517,7 +522,7 @@ function handleRaze(
     events.push({ type: "location_placed", row, col, cardId: newLocation.id });
   }
 
-  checkAutoAdvance(draft, events);
+  afterAction(draft, events);
 }
 
 function handleAttack(
@@ -610,7 +615,7 @@ function handleAttack(
   }
 
   events.push({ type: "combat_resolved", row, col, winnerId });
-  checkAutoAdvance(draft, events);
+  afterAction(draft, events);
 }
 
 /** Check if a unit has been removed from the cell (killed/discarded). */
@@ -813,7 +818,7 @@ function handleAttemptMission(
       col,
       locationId: cell.location.id,
     });
-    checkAutoAdvance(draft, events);
+    afterAction(draft, events);
     return;
   }
 
@@ -848,7 +853,7 @@ function handleAttemptMission(
     events.push({ type: "location_placed", row, col, cardId: newLocation.id });
   }
 
-  checkAutoAdvance(draft, events);
+  afterAction(draft, events);
 }
 
 function handleActivate(

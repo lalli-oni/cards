@@ -302,6 +302,7 @@ export type MainAction =
   | {
       type: "attack";
       playerId: string;
+      /** At least one unit required — validated at runtime. */
       unitIds: string[];
       row: number;
       col: number;

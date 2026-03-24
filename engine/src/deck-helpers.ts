@@ -40,33 +40,26 @@ export function drawOneCard(
 }
 
 /**
- * Replenish a market slot from a player's market deck.
- * Implements the event draw mechanic: events go to hand, keep drawing
- * until a non-event card is found for the slot.
+ * Draw the next non-event card from a player's market deck.
+ * Implements the event draw mechanic: events drawn go to the player's hand,
+ * keep drawing until a non-event card is found.
+ * Returns the non-event card, or null if the market deck is exhausted.
  */
-export function replenishMarketSlot(
+export function drawMarketCard(
   draft: Draft<MainGameState>,
   player: Draft<PlayerState>,
-  slotIndex: number,
   events: GameEvent[],
-): void {
+): Card | null {
   while (player.marketDeck.length > 0) {
     const card = player.marketDeck.shift()!;
     if (card.type === "event") {
       player.hand.push(card);
       events.push({ type: "card_drawn", playerId: player.id, count: 1 });
     } else {
-      draft.market[slotIndex] = card;
-      events.push({
-        type: "market_replenished",
-        playerId: player.id,
-        cardId: card.id,
-        slotIndex,
-      });
-      return;
+      return card;
     }
   }
-  // Market deck exhausted — slot stays empty (set to the removed card's slot)
+  return null;
 }
 
 /**

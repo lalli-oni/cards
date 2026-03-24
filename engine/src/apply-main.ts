@@ -2,7 +2,7 @@ import type { Draft } from "immer";
 import { produce } from "immer";
 import prand from "pure-rand";
 import { parseCost, spendAP, spendGold } from "./cost-helpers";
-import { drawLocationFromProspect, drawOneCard, replenishMarketSlot } from "./deck-helpers";
+import { drawLocationFromProspect, drawMarketCard, drawOneCard } from "./deck-helpers";
 import { checkMissionRequirements, parseMission } from "./mission-helpers";
 import {
   areFacingEdgesOpen,
@@ -20,7 +20,6 @@ import {
 } from "./state-helpers";
 import type {
   ApplyResult,
-  Card,
   GameEvent,
   ItemCard,
   MainAction,
@@ -40,11 +39,16 @@ export function runStartOfTurn(draft: Draft<MainGameState>, events: GameEvent[])
     const drawCount = getConfigNumber(draft, "market_draw_count", 3);
     for (const p of draft.players) {
       for (let i = 0; i < drawCount; i++) {
-        const slotIndex = draft.market.length;
-        draft.market.push(null as unknown as Card);
-        replenishMarketSlot(draft, p, slotIndex, events);
-        if (draft.market[slotIndex] === null) {
-          draft.market.splice(slotIndex, 1);
+        const card = drawMarketCard(draft, p, events);
+        if (card) {
+          const slotIndex = draft.market.length;
+          draft.market.push(card);
+          events.push({
+            type: "market_replenished",
+            playerId: p.id,
+            cardId: card.id,
+            slotIndex,
+          });
         }
       }
     }
@@ -177,12 +181,15 @@ function handleBuy(
   events.push({ type: "card_bought", playerId, cardId, cost });
 
   // Replenish market slot from active player's market deck
-  // Insert a placeholder so slotIndex stays valid, then replenish
-  draft.market.splice(slotIndex, 0, null as unknown as Card);
-  replenishMarketSlot(draft, player, slotIndex, events);
-  // If replenishment failed (deck empty), remove the null placeholder
-  if (draft.market[slotIndex] === null) {
-    draft.market.splice(slotIndex, 1);
+  const replacement = drawMarketCard(draft, player, events);
+  if (replacement) {
+    draft.market.splice(slotIndex, 0, replacement);
+    events.push({
+      type: "market_replenished",
+      playerId: player.id,
+      cardId: replacement.id,
+      slotIndex,
+    });
   }
 }
 
@@ -224,9 +231,10 @@ function handleEnter(
   }
 
   // Check that at least one boundary edge is open
+  const location = cell.location;
   const boundaryEdges = getBoundaryEdges(row, col, gridRows, gridCols);
   const hasOpenBoundaryEdge = boundaryEdges.some(
-    (edge) => cell.location!.edges[edge],
+    (edge) => location.edges[edge],
   );
   if (!hasOpenBoundaryEdge) {
     throw new Error(
@@ -273,8 +281,11 @@ function handleMove(
     }
     const boundaryEdges = getBoundaryEdges(fromRow, fromCol, gridRows, gridCols);
     const fromLoc = draft.grid[fromRow][fromCol].location;
+    if (!fromLoc) {
+      throw new Error(`Unit at (${fromRow},${fromCol}) has no location — cannot retreat`);
+    }
     const hasOpenBoundaryEdge = boundaryEdges.some(
-      (edge) => fromLoc!.edges[edge],
+      (edge) => fromLoc.edges[edge],
     );
     if (!hasOpenBoundaryEdge) {
       throw new Error(`Unit cannot retreat — no open boundary edges`);
@@ -287,6 +298,9 @@ function handleMove(
 
     const cell = draft.grid[fromRow][fromCol];
     const idx = cell.units.findIndex((u) => u.id === unitId);
+    if (idx === -1) {
+      throw new Error(`Unit "${unitId}" not found at (${fromRow},${fromCol}) during retreat`);
+    }
     const removed = cell.units.splice(idx, 1)[0];
     const player = getPlayer(draft, playerId);
     player.hq.push(removed);
@@ -327,6 +341,9 @@ function handleMove(
 
   const fromCell = draft.grid[fromRow][fromCol];
   const idx = fromCell.units.findIndex((u) => u.id === unitId);
+  if (idx === -1) {
+    throw new Error(`Unit "${unitId}" not found at (${fromRow},${fromCol}) during move`);
+  }
   const removed = fromCell.units.splice(idx, 1)[0];
   draft.grid[toRow][toCol].units.push(removed);
 
@@ -376,6 +393,11 @@ function handlePlayEvent(
       player.activeTraps.push({ card, targetId });
       events.push({ type: "trap_set", playerId, cardId, targetId });
       break;
+
+    default: {
+      const _exhaustive: never = card.subtype;
+      throw new Error(`Unknown event subtype "${_exhaustive}" for card "${cardId}"`);
+    }
   }
 
   checkAutoAdvance(draft, events);
@@ -781,6 +803,11 @@ function resolveTrapEffect(
     case "sabotage":
       // Action already resolved — no-op for v0.1
       break;
+
+    default:
+      throw new Error(
+        `No trap resolution logic for definitionId "${trap.card.definitionId}"`,
+      );
   }
 }
 

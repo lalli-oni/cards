@@ -20,6 +20,18 @@ export function parseCost(costString: string, costIndex?: number): number {
   return value;
 }
 
+/**
+ * Try to parse a cost string. Returns the numeric cost or null if invalid.
+ * Use in valid-actions computation where invalid costs should be skipped quietly.
+ */
+export function tryParseCost(costString: string, costIndex?: number): number | null {
+  const costs = costString.split("|").map((s) => s.trim());
+  const idx = costIndex ?? 0;
+  if (idx < 0 || idx >= costs.length) return null;
+  const value = Number(costs[idx]);
+  return Number.isNaN(value) ? null : value;
+}
+
 /** Deduct AP from the active player's turn. Throws if insufficient. */
 export function spendAP(draft: Draft<MainGameState>, amount: number): void {
   if (draft.turn.actionPointsRemaining < amount) {

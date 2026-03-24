@@ -1,4 +1,4 @@
-import { parseCost } from "./cost-helpers";
+import { tryParseCost } from "./cost-helpers";
 import {
   areFacingEdgesOpen,
   getAdjacentCells,
@@ -126,13 +126,9 @@ function getMainValidActions(
   if (ap >= 1) {
     for (const card of player.hand) {
       if (card.type === "unit" || card.type === "item") {
-        try {
-          const cost = parseCost(card.cost);
-          if (player.gold >= cost) {
-            actions.push({ type: "deploy", playerId, cardId: card.id });
-          }
-        } catch {
-          // invalid cost string — skip
+        const cost = tryParseCost(card.cost);
+        if (cost !== null && player.gold >= cost) {
+          actions.push({ type: "deploy", playerId, cardId: card.id });
         }
       }
     }
@@ -143,18 +139,14 @@ function getMainValidActions(
     if (!card) continue;
     const costs = card.cost.split("|");
     for (let ci = 0; ci < costs.length; ci++) {
-      try {
-        const cost = parseCost(card.cost, ci);
-        if (player.gold >= cost) {
-          actions.push({
-            type: "buy",
-            playerId,
-            cardId: card.id,
-            costIndex: costs.length > 1 ? ci : undefined,
-          });
-        }
-      } catch {
-        // invalid cost — skip
+      const cost = tryParseCost(card.cost, ci);
+      if (cost !== null && player.gold >= cost) {
+        actions.push({
+          type: "buy",
+          playerId,
+          cardId: card.id,
+          costIndex: costs.length > 1 ? ci : undefined,
+        });
       }
     }
   }
@@ -232,13 +224,9 @@ function getMainValidActions(
   if (ap >= 1) {
     for (const card of player.hand) {
       if (card.type !== "event") continue;
-      try {
-        const cost = parseCost(card.cost);
-        if (player.gold >= cost) {
-          actions.push({ type: "play_event", playerId, cardId: card.id });
-        }
-      } catch {
-        // invalid cost — skip
+      const cost = tryParseCost(card.cost);
+      if (cost !== null && player.gold >= cost) {
+        actions.push({ type: "play_event", playerId, cardId: card.id });
       }
     }
   }

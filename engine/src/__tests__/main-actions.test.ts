@@ -838,7 +838,7 @@ describe("attempt_mission", () => {
   it("awards VP and replaces location on completion", () => {
     const unit1 = makeUnit({ ownerId: ACTIVE, attributes: ["Scientist"] });
     const unit2 = makeUnit({ ownerId: ACTIVE, attributes: ["Scientist"] });
-    const location = makeLocation({ ownerId: OTHER, mission: "scientist_2>5" });
+    const location = makeLocation({ ownerId: OTHER, requirements: "scientist_2", rewards: "5vp" });
     const replacement = makeLocation({ ownerId: ACTIVE });
     const state = gameWith((d) => {
       d.grid[0][0].location = location;
@@ -871,7 +871,7 @@ describe("attempt_mission", () => {
 
   it("fails gracefully when requirements not met", () => {
     const unit = makeUnit({ ownerId: ACTIVE, attributes: ["Warrior"] });
-    const location = makeLocation({ ownerId: OTHER, mission: "scientist_2>5" });
+    const location = makeLocation({ ownerId: OTHER, requirements: "scientist_2", rewards: "5vp" });
     const state = gameWith((d) => {
       d.grid[0][0].location = location;
       d.grid[0][0].units.push(unit);
@@ -897,7 +897,7 @@ describe("attempt_mission", () => {
   });
 
   it("rejects when no friendly units at location", () => {
-    const location = makeLocation({ ownerId: OTHER, mission: "scientist_2>5" });
+    const location = makeLocation({ ownerId: OTHER, requirements: "scientist_2", rewards: "5vp" });
     const state = gameWith((d) => {
       d.grid[0][0].location = location;
     });

@@ -3,7 +3,7 @@ import { castDraft, produce } from "immer";
 import prand from "pure-rand";
 import { parseCost, spendAP, spendGold } from "./cost-helpers";
 import { drawLocationFromProspect, drawMarketCard, drawOneCard } from "./deck-helpers";
-import { checkMissionRequirements, parseMission } from "./mission-helpers";
+import { checkMissionRequirements, parseRequirements, parseRewards } from "./mission-helpers";
 import { findItemPosition, findUnitPosition, getUnitsAtPosition, samePosition } from "./position-helpers";
 import {
   areFacingEdgesOpen,
@@ -791,7 +791,7 @@ function handleAttemptMission(
   if (!cell.location) {
     throw new Error(`Cell (${row},${col}) has no location`);
   }
-  if (!cell.location.mission) {
+  if (!cell.location.requirements || !cell.location.rewards) {
     throw new Error(`Location at (${row},${col}) has no mission`);
   }
 
@@ -802,7 +802,8 @@ function handleAttemptMission(
 
   spendAP(draft, 1);
 
-  const { requirements, vp } = parseMission(cell.location.mission);
+  const requirements = parseRequirements(cell.location.requirements);
+  const { vp } = parseRewards(cell.location.rewards);
 
   if (!checkMissionRequirements(requirements, friendlyUnits)) {
     events.push({

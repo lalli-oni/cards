@@ -30,10 +30,11 @@ Every card type includes these columns:
 
 ## Locations
 
-| Column  | Type   | Required | Description |
-|---------|--------|----------|-------------|
-| mission | string | no       | Mission requirements and VP reward. Format: `requirements>vp` |
-| passive | string | no       | Passive effect text |
+| Column       | Type   | Required | Description |
+|--------------|--------|----------|-------------|
+| requirements | string | no       | Mission requirements. Semicolon-separated atomic checks, AND'd. See Requirement Checks below. |
+| rewards      | string | no       | Mission rewards. Format: `Nvp` (e.g. `5vp`). A location with both `requirements` and `rewards` is a mission location. |
+| passive      | string | no       | Passive effect text |
 | edges   | string | no       | Blocked edges, semicolon-separated (`N`, `S`, `E`, `W`). Unlisted edges are open. Empty = all open. |
 | actions | string | no       | Semicolon-separated action definitions. Format: `name:ap_cost:effect`. Usable by any player with a unit at this location. |
 
@@ -61,9 +62,22 @@ Every card type includes these columns:
 | seeding_effect | string | no       | Effect that applies during the seeding phase |
 | actions        | string | no       | Semicolon-separated action definitions. Format: `name:ap_cost:effect` |
 
+## Requirement Checks
+
+Mission requirements use semicolon-separated atomic checks, all AND'd together.
+
+| Check type | Format | Example | Meaning |
+|------------|--------|---------|---------|
+| Attribute count | `attribute_N` | `scientist_2` | ≥ 2 units with the Scientist attribute |
+| Stat threshold | `stat_N` | `strength_15` | Sum of stat across ALL friendly units ≥ 15 |
+| Unit count | `units_N` | `units_3` | ≥ 3 friendly units |
+
+Combined example: `warrior_1;strength_15` → have at least 1 Warrior AND combined strength ≥ 15 across all friendly units.
+
+Stat checks always sum across all friendly units at the location — the attribute check and stat check are independent.
+
 ## Delimiter Conventions
 
-- **Semicolons** (`;`) separate list items within a single field (attributes, keywords, actions)
+- **Semicolons** (`;`) separate list items within a single field (attributes, keywords, actions, requirements)
 - **Pipes** (`|`) separate alternative costs
 - **Colons** (`:`) separate action components (name:ap_cost:effect)
-- **Greater-than** (`>`) separates mission requirements from VP reward

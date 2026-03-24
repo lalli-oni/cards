@@ -47,6 +47,8 @@ const VALID_LOCATION: CardDefinition = {
   flavor: null,
   keywords: [],
   mission: "control>3",
+  requirements: "units_3",
+  rewards: "3vp",
   passive: "gain_gold_1",
 };
 
@@ -322,7 +324,8 @@ describe("instantiateCard", () => {
     expect(card.type).toBe("location");
     if (card.type === "location") {
       expect(card.edges).toEqual({ n: true, e: true, s: true, w: true });
-      expect(card.mission).toBe("control>3");
+      expect(card.requirements).toBe("units_3");
+      expect(card.rewards).toBe("3vp");
       expect(card.passive).toBe("gain_gold_1");
     }
   });

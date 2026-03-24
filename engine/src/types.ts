@@ -79,7 +79,8 @@ export interface UnitCard extends CardBase {
 export interface LocationCard extends CardBase {
   type: "location";
   edges: LocationEdges;
-  mission?: string;
+  requirements?: string;
+  rewards?: string;
   passive?: string;
 }
 

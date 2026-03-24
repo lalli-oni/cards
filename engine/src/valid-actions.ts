@@ -1,5 +1,5 @@
 import { tryParseCost } from "./cost-helpers";
-import { checkMissionRequirements, parseMission } from "./mission-helpers";
+import { checkMissionRequirements, parseRequirements } from "./mission-helpers";
 import type { BoardPosition } from "./position-helpers";
 import { getItemsAtPosition, getUnitsAtPosition } from "./position-helpers";
 import {
@@ -302,16 +302,16 @@ function getMainValidActions(
     for (let r = 0; r < gridRows; r++) {
       for (let c = 0; c < gridCols; c++) {
         const cell = state.grid[r][c];
-        if (!cell.location?.mission) continue;
+        if (!cell.location?.requirements || !cell.location?.rewards) continue;
         const friendlyUnits = cell.units.filter((u) => u.ownerId === playerId);
         if (friendlyUnits.length === 0) continue;
         try {
-          const { requirements } = parseMission(cell.location.mission);
+          const requirements = parseRequirements(cell.location.requirements);
           if (checkMissionRequirements(requirements, friendlyUnits)) {
             actions.push({ type: "attempt_mission", playerId, row: r, col: c });
           }
         } catch {
-          // Unparseable mission — skip
+          // Unparseable requirements — skip
         }
       }
     }

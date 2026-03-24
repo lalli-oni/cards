@@ -38,6 +38,8 @@ export interface CardDefinition {
 
   // Location fields
   mission?: string | null;
+  requirements?: string | null;
+  rewards?: string | null;
   passive?: string | null;
 
   // Item fields
@@ -273,7 +275,8 @@ export function instantiateCard(
         ...base,
         type: "location",
         edges: { n: true, e: true, s: true, w: true },
-        mission: def.mission ?? undefined,
+        requirements: def.requirements ?? def.mission ?? undefined,
+        rewards: def.rewards ?? undefined,
         passive: def.passive ?? undefined,
       } satisfies LocationCard;
 

@@ -5,7 +5,7 @@ import { getVisibleState } from "../visible-state";
 import {
   createSeedingGame,
   createTestGame,
-  makeEvent,
+  makeTrapEvent,
   makeUnit,
   resetIds,
 } from "./helpers";
@@ -187,7 +187,7 @@ function withTrap(
     // biome-ignore lint/style/noNonNullAssertion: test helper with known player IDs
     const player = draft.players.find((p) => p.id === playerId)!;
     player.activeTraps.push({
-      card: makeEvent({ ownerId: playerId, subtype: "trap", trigger: "test" }),
+      card: makeTrapEvent({ ownerId: playerId, trigger: "test" }),
       targetId,
     });
   });

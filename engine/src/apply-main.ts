@@ -19,6 +19,7 @@ import {
   placeLocationOnGrid,
 } from "./state-helpers";
 import type {
+  ActivePassiveEvent,
   ApplyResult,
   GameEvent,
   ItemCard,
@@ -100,13 +101,11 @@ function runEndOfTurn(draft: Draft<MainGameState>, events: GameEvent[]): void {
   // Passive event duration tracking
   for (let i = player.passiveEvents.length - 1; i >= 0; i--) {
     const evt = player.passiveEvents[i];
-    if (evt.remainingDuration != null) {
-      evt.remainingDuration -= 1;
-      if (evt.remainingDuration <= 0) {
-        player.passiveEvents.splice(i, 1);
-        player.discardPile.push(evt);
-        events.push({ type: "passive_expired", playerId: player.id, cardId: evt.id });
-      }
+    evt.remainingDuration -= 1;
+    if (evt.remainingDuration <= 0) {
+      player.passiveEvents.splice(i, 1);
+      player.discardPile.push(evt);
+      events.push({ type: "passive_expired", playerId: player.id, cardId: evt.id });
     }
   }
 }
@@ -384,8 +383,7 @@ function handlePlayEvent(
       break;
 
     case "passive":
-      card.remainingDuration = card.duration ?? 1;
-      player.passiveEvents.push(card);
+      player.passiveEvents.push({ ...card, remainingDuration: card.duration } as ActivePassiveEvent);
       events.push({ type: "event_played", playerId, cardId });
       break;
 
@@ -394,10 +392,8 @@ function handlePlayEvent(
       events.push({ type: "trap_set", playerId, cardId, targetId });
       break;
 
-    default: {
-      const _exhaustive: never = card.subtype;
-      throw new Error(`Unknown event subtype "${_exhaustive}" for card "${cardId}"`);
-    }
+    default:
+      throw new Error(`Unknown event subtype "${(card as any).subtype}" for card "${cardId}"`);
   }
 
   checkAutoAdvance(draft, events);

@@ -342,7 +342,9 @@ describe("instantiateCard", () => {
     expect(card.type).toBe("event");
     if (card.type === "event") {
       expect(card.subtype).toBe("trap");
-      expect(card.trigger).toBe("unit_enters");
+      if (card.subtype === "trap") {
+        expect(card.trigger).toBe("unit_enters");
+      }
     }
   });
 

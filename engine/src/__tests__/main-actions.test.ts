@@ -4,9 +4,11 @@ import { applyAction } from "../apply-action";
 import type { MainGameState, UnitCard } from "../types";
 import {
   createTestGame,
-  makeEvent,
+  makeInstantEvent,
   makeItem,
   makeLocation,
+  makePassiveEvent,
+  makeTrapEvent,
   makeUnit,
   resetIds,
 } from "./helpers";
@@ -67,7 +69,7 @@ describe("deploy", () => {
   });
 
   it("rejects deploying a non-unit/item card", () => {
-    const event = makeEvent({ ownerId: ACTIVE, subtype: "instant" });
+    const event = makeInstantEvent({ ownerId: ACTIVE });
     const state = gameWith((d) => {
       d.players[ACTIVE_IDX].hand.push(event);
     });
@@ -143,7 +145,7 @@ describe("buy", () => {
 
   it("applies event draw mechanic — events go to hand", () => {
     const marketCard = makeUnit({ ownerId: "neutral", cost: "0" });
-    const eventCard = makeEvent({ ownerId: "neutral", subtype: "instant" });
+    const eventCard = makeInstantEvent({ ownerId: "neutral" });
     const nonEventCard = makeItem({ ownerId: "neutral", cost: "1" });
     const state = gameWith((d) => {
       d.market.push(marketCard);
@@ -414,7 +416,7 @@ describe("move", () => {
 
 describe("play_event", () => {
   it("plays an instant event and discards it", () => {
-    const event = makeEvent({ ownerId: ACTIVE, subtype: "instant", cost: "0" });
+    const event = makeInstantEvent({ ownerId: ACTIVE, cost: "0" });
     const state = gameWith((d) => {
       d.players[ACTIVE_IDX].hand.push(event);
     });
@@ -433,7 +435,7 @@ describe("play_event", () => {
   });
 
   it("plays a passive event with duration tracking", () => {
-    const event = makeEvent({ ownerId: ACTIVE, subtype: "passive", cost: "0", duration: 3 });
+    const event = makePassiveEvent({ ownerId: ACTIVE, cost: "0", duration: 3 });
     const state = gameWith((d) => {
       d.players[ACTIVE_IDX].hand.push(event);
     });
@@ -452,7 +454,7 @@ describe("play_event", () => {
   });
 
   it("plays a trap event face-down", () => {
-    const event = makeEvent({ ownerId: ACTIVE, subtype: "trap", cost: "0" });
+    const event = makeTrapEvent({ ownerId: ACTIVE, cost: "0", trigger: "manual" });
     const state = gameWith((d) => {
       d.players[ACTIVE_IDX].hand.push(event);
     });
@@ -716,13 +718,7 @@ describe("turn lifecycle", () => {
   });
 
   it("decrements passive event duration and expires them", () => {
-    const passiveEvent = makeEvent({
-      ownerId: ACTIVE,
-      subtype: "passive",
-      cost: "0",
-      duration: 1,
-      remainingDuration: 1,
-    });
+    const passiveEvent = { ...makePassiveEvent({ ownerId: ACTIVE, cost: "0", duration: 1 }), remainingDuration: 1 };
     const state = gameWith((d) => {
       d.players[ACTIVE_IDX].passiveEvents.push(passiveEvent);
     });
@@ -747,7 +743,7 @@ describe("turn lifecycle", () => {
 
 describe("traps", () => {
   it("auto-triggers ambush trap when enemy unit enters location", () => {
-    const trap = makeEvent({ ownerId: OTHER, subtype: "trap", definitionId: "ambush", trigger: "enemy_unit_enters_location" });
+    const trap = makeTrapEvent({ ownerId: OTHER, definitionId: "ambush", trigger: "enemy_unit_enters_location" });
     const unit = makeUnit({ ownerId: ACTIVE });
     const location = makeLocation({ ownerId: OTHER });
     const state = gameWith((d) => {
@@ -777,7 +773,7 @@ describe("traps", () => {
   });
 
   it("assassination-attempt kills weak unit", () => {
-    const trap = makeEvent({ ownerId: OTHER, subtype: "trap", definitionId: "assassination-attempt", trigger: "enemy_unit_enters_location" });
+    const trap = makeTrapEvent({ ownerId: OTHER, definitionId: "assassination-attempt", trigger: "enemy_unit_enters_location" });
     const weakUnit = makeUnit({ ownerId: ACTIVE, strength: 4 });
     const location = makeLocation({ ownerId: OTHER });
     const state = gameWith((d) => {
@@ -801,7 +797,7 @@ describe("traps", () => {
   });
 
   it("does not trigger trap at wrong location", () => {
-    const trap = makeEvent({ ownerId: OTHER, subtype: "trap", definitionId: "ambush", trigger: "enemy_unit_enters_location" });
+    const trap = makeTrapEvent({ ownerId: OTHER, definitionId: "ambush", trigger: "enemy_unit_enters_location" });
     const loc1 = makeLocation({ ownerId: OTHER });
     const loc2 = makeLocation({ ownerId: OTHER });
     const unit = makeUnit({ ownerId: ACTIVE });
@@ -825,7 +821,7 @@ describe("traps", () => {
   });
 
   it("does not trigger own traps", () => {
-    const trap = makeEvent({ ownerId: ACTIVE, subtype: "trap", definitionId: "ambush", trigger: "enemy_unit_enters_location" });
+    const trap = makeTrapEvent({ ownerId: ACTIVE, definitionId: "ambush", trigger: "enemy_unit_enters_location" });
     const location = makeLocation({ ownerId: ACTIVE });
     const unit = makeUnit({ ownerId: ACTIVE });
     const state = gameWith((d) => {

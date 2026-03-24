@@ -3,12 +3,14 @@ import { join } from "node:path";
 import type {
   Card,
   CardType,
-  EventCard,
   EventSubtype,
+  InstantEventCard,
   ItemCard,
   LocationCard,
+  PassiveEventCard,
   PolicyCard,
   Rarity,
+  TrapEventCard,
   UnitCard,
 } from "./types";
 
@@ -283,17 +285,31 @@ export function instantiateCard(
         stored: def.stored ?? undefined,
       } satisfies ItemCard;
 
-    case "event":
+    case "event": {
       if (!def.subtype) {
         throw new Error(`Event card "${def.id}" missing required subtype`);
       }
-      return {
-        ...base,
-        type: "event",
-        subtype: def.subtype,
-        duration: def.duration ?? undefined,
-        trigger: def.trigger ?? undefined,
-      } satisfies EventCard;
+      switch (def.subtype) {
+        case "instant":
+          return { ...base, type: "event", subtype: "instant" } satisfies InstantEventCard;
+        case "passive":
+          return {
+            ...base,
+            type: "event",
+            subtype: "passive",
+            duration: def.duration ?? 1,
+          } satisfies PassiveEventCard;
+        case "trap":
+          return {
+            ...base,
+            type: "event",
+            subtype: "trap",
+            trigger: def.trigger ?? "",
+          } satisfies TrapEventCard;
+        default:
+          throw new Error(`Event card "${def.id}" has unknown subtype "${def.subtype}"`);
+      }
+    }
 
     case "policy":
       if (!def.effect) {

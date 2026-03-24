@@ -34,7 +34,7 @@ export interface PlayerState {
   activePolicies: PolicyCard[];
   activeTraps: Trap[];
   /** Passive events currently in play, with remaining duration tracking. */
-  passiveEvents: EventCard[];
+  passiveEvents: ActivePassiveEvent[];
   /** Policy cards available for selection during seeding. Not part of decks. */
   policyPool: PolicyCard[];
 }
@@ -91,14 +91,31 @@ export interface ItemCard extends CardBase {
   equippedTo?: string;
 }
 
-export interface EventCard extends CardBase {
+interface EventCardBase extends CardBase {
   type: "event";
-  subtype: EventSubtype;
-  duration?: number;
-  trigger?: string;
-  /** Remaining turns for passive events. */
-  remainingDuration?: number;
 }
+
+export interface InstantEventCard extends EventCardBase {
+  subtype: "instant";
+}
+
+export interface PassiveEventCard extends EventCardBase {
+  subtype: "passive";
+  duration: number;
+}
+
+/** A passive event that has been played and is actively tracking duration. */
+export interface ActivePassiveEvent extends PassiveEventCard {
+  /** Remaining turns. Set when played, decremented each end-of-turn. */
+  remainingDuration: number;
+}
+
+export interface TrapEventCard extends EventCardBase {
+  subtype: "trap";
+  trigger: string;
+}
+
+export type EventCard = InstantEventCard | PassiveEventCard | TrapEventCard;
 
 export interface PolicyCard extends CardBase {
   type: "policy";
@@ -118,7 +135,7 @@ export interface GridCell {
 }
 
 export interface Trap {
-  card: EventCard;
+  card: TrapEventCard;
   /** Instance id of the targeted card (location, unit, or item), if any. */
   targetId?: string;
 }

@@ -154,7 +154,7 @@ describe("getVisibleState", () => {
   describe("ended phase", () => {
     it("does not throw for ended game", () => {
       const base = createTestGame();
-      const endedState: EndedGameState = { ...base, phase: "ended" };
+      const endedState: EndedGameState = { ...base, phase: "ended", scores: {} };
       const vis = getVisibleState(endedState, "p1");
       expect(vis.phase).toBe("ended");
       expect(vis.currentPlayerId).toBe(base.turn.activePlayerId);

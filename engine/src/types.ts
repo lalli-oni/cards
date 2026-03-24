@@ -213,7 +213,7 @@ export interface EndedGameState extends GameStateBase {
   phase: "ended";
   turn: TurnState;
   winner?: string;
-  scores?: Record<string, number>;
+  scores: Record<string, number>;
 }
 
 export type GameState = SeedingGameState | MainGameState | EndedGameState;

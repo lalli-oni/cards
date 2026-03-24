@@ -302,8 +302,8 @@ export type MainAction =
   | {
       type: "attack";
       playerId: string;
-      /** At least one unit required — validated at runtime. */
-      unitIds: string[];
+      /** At least one attacker required. */
+      unitIds: [string, ...string[]];
       row: number;
       col: number;
     }

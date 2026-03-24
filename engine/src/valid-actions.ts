@@ -287,7 +287,7 @@ function getMainValidActions(
           actions.push({
             type: "attack",
             playerId,
-            unitIds: myUnits.map((u) => u.id),
+            unitIds: myUnits.map((u) => u.id) as [string, ...string[]],
             row: r,
             col: c,
           });

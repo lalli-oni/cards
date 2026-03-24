@@ -1,14 +1,22 @@
 import type { Draft } from "immer";
 import type {
   GameEvent,
-  GameState,
   LocationCard,
   MainGameState,
   SeedingGameState,
 } from "./types";
 
-export function getPlayer(draft: GameState, playerId: string) {
-  const player = draft.players.find((p) => p.id === playerId);
+/**
+ * These helpers use structural typing for their parameters so they accept
+ * both GameState and Draft<GameState>. This avoids Immer draft incompatibility
+ * caused by variadic tuple types (e.g. attack.unitIds) elsewhere in the state.
+ */
+
+export function getPlayer<P extends { id: string }>(
+  state: { players: readonly P[] },
+  playerId: string,
+): P {
+  const player = state.players.find((p) => p.id === playerId);
   if (!player) {
     throw new Error(`Player "${playerId}" not found`);
   }
@@ -16,11 +24,11 @@ export function getPlayer(draft: GameState, playerId: string) {
 }
 
 export function getConfigNumber(
-  draft: GameState,
+  state: { config: Record<string, unknown> },
   key: string,
   defaultValue: number,
 ): number {
-  const val = draft.config[key];
+  const val = state.config[key];
   if (val === undefined) return defaultValue;
   if (typeof val !== "number") {
     throw new Error(
@@ -31,7 +39,7 @@ export function getConfigNumber(
 }
 
 export function placeLocationOnGrid(
-  draft: GameState,
+  draft: { grid: { location: LocationCard | null }[][] },
   card: LocationCard,
   row: number,
   col: number,

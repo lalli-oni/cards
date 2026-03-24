@@ -603,15 +603,7 @@ describe("attack", () => {
     ).toThrow("No enemy units");
   });
 
-  it("rejects attack with empty unitIds", () => {
-    const state = gameWith((d) => {
-      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
-    });
-
-    expect(() =>
-      applyAction(state, { type: "attack", playerId: ACTIVE, unitIds: [], row: 0, col: 0 }),
-    ).toThrow("at least one unit");
-  });
+  // Empty unitIds is now a compile-time error via [string, ...string[]] tuple type
 
   it("kills a vastly weaker defender", () => {
     const attacker = makeUnit({ ownerId: ACTIVE, strength: 20 });

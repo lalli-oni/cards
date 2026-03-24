@@ -1,5 +1,5 @@
 import type { Draft } from "immer";
-import { produce } from "immer";
+import { castDraft, produce } from "immer";
 import prand from "pure-rand";
 import { parseCost, spendAP, spendGold } from "./cost-helpers";
 import { drawLocationFromProspect, drawMarketCard, drawOneCard } from "./deck-helpers";
@@ -560,10 +560,6 @@ function handleAttack(
     throw new Error(`Cell (${row},${col}) has no location`);
   }
 
-  if (unitIds.length === 0) {
-    throw new Error("Must commit at least one unit to attack");
-  }
-
   // Validate all committed units are at this cell and owned by player
   const attackers: Draft<UnitCard>[] = [];
   for (const uid of unitIds) {
@@ -900,7 +896,9 @@ export function applyMainAction(
   const events: GameEvent[] = [];
 
   const nextState = produce(state, (draft) => {
-    draft.actionLog.push(action);
+    // castDraft: Immer widens variadic tuples (e.g. attack.unitIds: [string, ...string[]])
+    // to plain arrays in Draft<T>, breaking Action[] assignability. castDraft bridges this.
+    draft.actionLog.push(castDraft(action));
 
     switch (action.type) {
       case "pass":

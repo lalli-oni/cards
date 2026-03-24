@@ -1,4 +1,5 @@
 import { tryParseCost } from "./cost-helpers";
+import { checkMissionRequirements, parseMission } from "./mission-helpers";
 import type { BoardPosition } from "./position-helpers";
 import { getItemsAtPosition, getUnitsAtPosition } from "./position-helpers";
 import {
@@ -153,8 +154,8 @@ function getMainValidActions(
     }
   }
 
-  // draw — if AP available (valid even with empty deck)
-  if (ap >= 1) {
+  // draw — if AP available and there are cards to draw
+  if (ap >= 1 && (player.mainDeck.length > 0 || player.discardPile.length > 0)) {
     actions.push({ type: "draw", playerId });
   }
 
@@ -296,14 +297,21 @@ function getMainValidActions(
     }
   }
 
-  // attempt_mission — locations with missions where player has units (1 AP)
+  // attempt_mission — locations with missions where player meets requirements (1 AP)
   if (ap >= 1) {
     for (let r = 0; r < gridRows; r++) {
       for (let c = 0; c < gridCols; c++) {
         const cell = state.grid[r][c];
         if (!cell.location?.mission) continue;
-        if (cell.units.some((u) => u.ownerId === playerId)) {
-          actions.push({ type: "attempt_mission", playerId, row: r, col: c });
+        const friendlyUnits = cell.units.filter((u) => u.ownerId === playerId);
+        if (friendlyUnits.length === 0) continue;
+        try {
+          const { requirements } = parseMission(cell.location.mission);
+          if (checkMissionRequirements(requirements, friendlyUnits)) {
+            actions.push({ type: "attempt_mission", playerId, row: r, col: c });
+          }
+        } catch {
+          // Unparseable mission — skip
         }
       }
     }

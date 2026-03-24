@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "bun:test";
 import { produce } from "immer";
 import { applyAction } from "../apply-action";
 import type { MainGameState, UnitCard } from "../types";
+import { getValidActions } from "../valid-actions";
 import {
   createTestGame,
   makeInstantEvent,
@@ -229,15 +230,10 @@ describe("draw", () => {
     expect(events.some((e) => e.type === "deck_shuffled")).toBe(true);
   });
 
-  it("draws nothing when both deck and discard are empty", () => {
-    const state = createTestGame();
-    const { state: next } = applyAction(state, {
-      type: "draw",
-      playerId: ACTIVE,
-    });
-    const ns = next as MainGameState;
-    expect(ns.players[ACTIVE_IDX].hand).toHaveLength(0);
-    expect(ns.turn.actionPointsRemaining).toBe(2);
+  it("is not a valid action when both deck and discard are empty", () => {
+    const state = createTestGame(); // empty decks by default
+    const actions = getValidActions(state, ACTIVE);
+    expect(actions.some((a) => a.type === "draw")).toBe(false);
   });
 });
 
@@ -889,9 +885,10 @@ describe("attempt_mission", () => {
     });
     const ns = next as MainGameState;
 
-    // No VP, no mission_completed event
+    // No VP, emits mission_attempt_failed
     expect(ns.players[ACTIVE_IDX].vp).toBe(0);
     expect(events.some((e) => e.type === "mission_completed")).toBe(false);
+    expect(events.some((e) => e.type === "mission_attempt_failed")).toBe(true);
     // Units and location stay
     expect(ns.grid[0][0].units).toHaveLength(1);
     expect(ns.grid[0][0].location?.id).toBe(location.id);

@@ -396,6 +396,13 @@ export type GameEvent =
       locationId: string;
       vp: number;
     }
+  | {
+      type: "mission_attempt_failed";
+      playerId: string;
+      row: number;
+      col: number;
+      locationId: string;
+    }
   | { type: "gold_changed"; playerId: string; amount: number; reason: string }
   | { type: "turn_started"; playerId: string; round: number }
   | { type: "turn_ended"; playerId: string }

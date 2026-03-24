@@ -805,7 +805,13 @@ function handleAttemptMission(
   const { requirements, vp } = parseMission(cell.location.mission);
 
   if (!checkMissionRequirements(requirements, friendlyUnits)) {
-    // Mission not met — no penalty, attempt ends
+    events.push({
+      type: "mission_attempt_failed",
+      playerId,
+      row,
+      col,
+      locationId: cell.location.id,
+    });
     checkAutoAdvance(draft, events);
     return;
   }

@@ -247,6 +247,7 @@ function handleSeedSteal(
   const card = seeding.middleArea.splice(cardIdx, 1)[0];
   const player = getPlayer(draft, playerId);
 
+  let destination: "grid" | "prospect" | "market";
   if (card.type === "location" && !isFull(draft.grid)) {
     if (row == null || col == null) {
       throw new Error(
@@ -255,13 +256,16 @@ function handleSeedSteal(
     }
     placeLocationOnGrid(draft, card as LocationCard, row, col, rotation);
     events.push({ type: "location_placed", row, col, cardId: card.id });
+    destination = "grid";
   } else if (card.type === "location") {
     player.prospectDeck.push(card);
+    destination = "prospect";
   } else {
     player.marketDeck.push(card);
+    destination = "market";
   }
 
-  events.push({ type: "seed_stolen", playerId, cardId: card.id });
+  events.push({ type: "seed_stolen", playerId, cardId: card.id, destination });
 
   // Advance steal turn
   seeding.stealTurnIndex =

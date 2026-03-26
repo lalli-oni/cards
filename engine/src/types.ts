@@ -431,7 +431,12 @@ export type GameEvent =
       keptCount: number;
       exposedCount: number;
     }
-  | { type: "seed_stolen"; playerId: string; cardId: string }
+  | {
+      type: "seed_stolen";
+      playerId: string;
+      cardId: string;
+      destination: "grid" | "prospect" | "market";
+    }
   | { type: "seeding_step_changed"; step: SeedingStep }
   | {
       type: "seeding_player_changed";

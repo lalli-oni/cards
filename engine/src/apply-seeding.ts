@@ -188,13 +188,17 @@ function handleSeedKeep(
   }
 
   // Move kept cards: locations → prospect deck, others → market deck
+  let toProspect = 0;
+  let toMarket = 0;
   for (const id of keepIds) {
     const idx = player.hand.findIndex((c) => c.id === id);
     const card = player.hand.splice(idx, 1)[0];
     if (card.type === "location") {
       player.prospectDeck.push(card);
+      toProspect++;
     } else {
       player.marketDeck.push(card);
+      toMarket++;
     }
   }
 
@@ -209,6 +213,8 @@ function handleSeedKeep(
     playerId,
     keptCount: keepIds.length,
     exposedCount: exposeIds.length,
+    toProspect,
+    toMarket,
   });
 
   seeding.keepSubmitted.push(playerId);

@@ -430,6 +430,8 @@ export type GameEvent =
       playerId: string;
       keptCount: number;
       exposedCount: number;
+      toProspect: number;
+      toMarket: number;
     }
   | {
       type: "seed_stolen";

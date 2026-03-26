@@ -866,7 +866,7 @@ describe("attempt_mission", () => {
     // Units and location discarded to completing player
     expect(p.discardPile.some((c) => c.id === unit1.id)).toBe(true);
     expect(p.discardPile.some((c) => c.id === unit2.id)).toBe(true);
-    expect(p.discardPile.some((c) => c.id === location.id)).toBe(true);
+    expect(p.removedFromGame.some((c) => c.id === location.id)).toBe(true);
     // Replacement location placed
     expect(ns.grid[0][0].location?.id).toBe(replacement.id);
     expect(ns.grid[0][0].units).toHaveLength(0);

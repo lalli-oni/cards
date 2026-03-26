@@ -840,8 +840,9 @@ function handleAttemptMission(
   }
   cell.items = [];
 
-  // Location → completing player's discard
-  player.discardPile.push(cell.location);
+  // Completed mission location → removed from game (not discard, to avoid reshuffle)
+  // TODO(#59): move to scoring area when HQ is on grid
+  player.removedFromGame.push(cell.location);
   cell.location = null;
 
   events.push({ type: "mission_completed", playerId, locationId, vp });

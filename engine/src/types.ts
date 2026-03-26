@@ -33,6 +33,8 @@ export interface PlayerState {
   hq: Card[];
   activePolicies: PolicyCard[];
   activeTraps: Trap[];
+  /** Passive events currently in play, with remaining duration tracking. */
+  passiveEvents: ActivePassiveEvent[];
   /** Policy cards available for selection during seeding. Not part of decks. */
   policyPool: PolicyCard[];
 }
@@ -77,7 +79,8 @@ export interface UnitCard extends CardBase {
 export interface LocationCard extends CardBase {
   type: "location";
   edges: LocationEdges;
-  mission?: string;
+  requirements?: string;
+  rewards?: string;
   passive?: string;
 }
 
@@ -89,14 +92,31 @@ export interface ItemCard extends CardBase {
   equippedTo?: string;
 }
 
-export interface EventCard extends CardBase {
+interface EventCardBase extends CardBase {
   type: "event";
-  subtype: EventSubtype;
-  duration?: number;
-  trigger?: string;
-  /** Remaining turns for passive events. */
-  remainingDuration?: number;
 }
+
+export interface InstantEventCard extends EventCardBase {
+  subtype: "instant";
+}
+
+export interface PassiveEventCard extends EventCardBase {
+  subtype: "passive";
+  duration: number;
+}
+
+/** A passive event that has been played and is actively tracking duration. */
+export interface ActivePassiveEvent extends PassiveEventCard {
+  /** Remaining turns. Set when played, decremented each end-of-turn. */
+  remainingDuration: number;
+}
+
+export interface TrapEventCard extends EventCardBase {
+  subtype: "trap";
+  trigger: string;
+}
+
+export type EventCard = InstantEventCard | PassiveEventCard | TrapEventCard;
 
 export interface PolicyCard extends CardBase {
   type: "policy";
@@ -116,7 +136,7 @@ export interface GridCell {
 }
 
 export interface Trap {
-  card: EventCard;
+  card: TrapEventCard;
   /** Instance id of the targeted card (location, unit, or item), if any. */
   targetId?: string;
 }
@@ -194,7 +214,7 @@ export interface EndedGameState extends GameStateBase {
   phase: "ended";
   turn: TurnState;
   winner?: string;
-  scores?: Record<string, number>;
+  scores: Record<string, number>;
 }
 
 export type GameState = SeedingGameState | MainGameState | EndedGameState;
@@ -272,24 +292,34 @@ export type MainAction =
   | { type: "play_event"; playerId: string; cardId: string; targetId?: string }
   | { type: "equip"; playerId: string; itemId: string; unitId: string }
   | { type: "destroy"; playerId: string; cardId: string }
-  | { type: "raze"; playerId: string; unitId: string; row: number; col: number }
+  | {
+      type: "raze";
+      playerId: string;
+      unitId: string;
+      row: number;
+      col: number;
+      rotation?: number;
+    }
+  | {
+      type: "attack";
+      playerId: string;
+      /** At least one attacker required. */
+      unitIds: [string, ...string[]];
+      row: number;
+      col: number;
+    }
+  | { type: "attempt_mission"; playerId: string; row: number; col: number }
   | { type: "pass"; playerId: string };
 
 export type Action = SeedingAction | MainAction;
 
-/** Discriminator sets for phase-action validation. */
-export const SEEDING_ACTION_TYPES = new Set<SeedingAction["type"]>([
-  "seed_draw",
-  "seed_keep",
-  "seed_steal",
-  "seed_split_prospect",
-  "seed_place_location",
-  "policy_select",
-] as const);
-
-export function isSeedingAction(action: Action): action is SeedingAction {
-  return (SEEDING_ACTION_TYPES as ReadonlySet<string>).has(action.type);
-}
+/** Maps a GameState subtype to its valid action type. */
+export type ActionForState<S extends GameState> =
+  S extends SeedingGameState
+    ? SeedingAction
+    : S extends MainGameState
+      ? MainAction
+      : never;
 
 // ---------------------------------------------------------------------------
 // Apply Result
@@ -367,6 +397,13 @@ export type GameEvent =
       locationId: string;
       vp: number;
     }
+  | {
+      type: "mission_attempt_failed";
+      playerId: string;
+      row: number;
+      col: number;
+      locationId: string;
+    }
   | { type: "gold_changed"; playerId: string; amount: number; reason: string }
   | { type: "turn_started"; playerId: string; round: number }
   | { type: "turn_ended"; playerId: string }
@@ -374,6 +411,27 @@ export type GameEvent =
   | { type: "game_ended"; winner?: string; scores: Record<string, number> }
   | { type: "deck_shuffled"; playerId: string; deck: DeckName }
   | { type: "card_destroyed"; playerId: string; cardId: string }
+  | {
+      type: "combat_started";
+      row: number;
+      col: number;
+      attackerId: string;
+      defenderId: string;
+    }
+  | {
+      type: "combat_resolved";
+      row: number;
+      col: number;
+      winnerId: string | null;
+    }
+  | {
+      type: "market_replenished";
+      playerId: string;
+      cardId: string;
+      slotIndex: number;
+    }
+  | { type: "passive_expired"; playerId: string; cardId: string }
+  | { type: "unit_healed"; playerId: string; unitId: string }
   // Seeding phase events
   | { type: "seed_cards_drawn"; playerId: string; count: number }
   | {

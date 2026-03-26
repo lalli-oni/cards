@@ -5,7 +5,7 @@ import { getVisibleState } from "../visible-state";
 import {
   createSeedingGame,
   createTestGame,
-  makeEvent,
+  makeTrapEvent,
   makeUnit,
   resetIds,
 } from "./helpers";
@@ -154,7 +154,7 @@ describe("getVisibleState", () => {
   describe("ended phase", () => {
     it("does not throw for ended game", () => {
       const base = createTestGame();
-      const endedState: EndedGameState = { ...base, phase: "ended" };
+      const endedState: EndedGameState = { ...base, phase: "ended", scores: {} };
       const vis = getVisibleState(endedState, "p1");
       expect(vis.phase).toBe("ended");
       expect(vis.currentPlayerId).toBe(base.turn.activePlayerId);
@@ -187,7 +187,7 @@ function withTrap(
     // biome-ignore lint/style/noNonNullAssertion: test helper with known player IDs
     const player = draft.players.find((p) => p.id === playerId)!;
     player.activeTraps.push({
-      card: makeEvent({ ownerId: playerId, subtype: "trap", trigger: "test" }),
+      card: makeTrapEvent({ ownerId: playerId, trigger: "test" }),
       targetId,
     });
   });

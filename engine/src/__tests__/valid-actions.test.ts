@@ -7,11 +7,13 @@ import { createSeedingGame, createTestGame } from "./helpers";
 
 describe("getValidActions", () => {
   describe("main phase", () => {
-    it("returns pass for the active player", () => {
+    it("always includes pass for the active player", () => {
       const state = createTestGame();
       const actions = getValidActions(state, state.turn.activePlayerId);
-      expect(actions).toHaveLength(1);
-      expect(actions[0].type).toBe("pass");
+      const types = actions.map((a) => a.type);
+      expect(types).toContain("pass");
+      // draw requires cards in deck or discard — empty by default
+      expect(types).not.toContain("draw");
       expect(actions[0].playerId).toBe(state.turn.activePlayerId);
     });
 
@@ -30,6 +32,7 @@ describe("getValidActions", () => {
       const endedState: EndedGameState = {
         ...base,
         phase: "ended",
+        scores: {},
       };
       const actions = getValidActions(
         endedState,
@@ -58,7 +61,7 @@ describe("getValidActions", () => {
 
     it("throws for ended phase", () => {
       const base = createTestGame();
-      const endedState: EndedGameState = { ...base, phase: "ended" };
+      const endedState: EndedGameState = { ...base, phase: "ended", scores: {} };
       expect(() => getActivePlayerId(endedState)).toThrow(
         "No active player in ended phase",
       );

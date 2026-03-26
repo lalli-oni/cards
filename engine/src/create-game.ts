@@ -28,6 +28,7 @@ function createPlayerState(descriptor: PlayerDescriptor): PlayerState {
     hq: [],
     activePolicies: [],
     activeTraps: [],
+    passiveEvents: [],
     policyPool: [],
   };
 }

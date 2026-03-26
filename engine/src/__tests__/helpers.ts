@@ -3,16 +3,18 @@ import { createGame } from "../create-game";
 import type {
   Card,
   DeckInput,
-  EventCard,
   GameConfig,
   GameState,
+  InstantEventCard,
   ItemCard,
   LocationCard,
   LocationEdges,
   MainGameState,
+  PassiveEventCard,
   PlayerDescriptor,
   PolicyCard,
   SeedingGameState,
+  TrapEventCard,
   UnitCard,
 } from "../types";
 
@@ -79,16 +81,45 @@ export function makeItem(
   };
 }
 
-export function makeEvent(
-  overrides: Partial<EventCard> & {
-    ownerId: string;
-    subtype: EventCard["subtype"];
-  },
-): EventCard {
+export function makeInstantEvent(
+  overrides: Partial<InstantEventCard> & { ownerId: string },
+): InstantEventCard {
   return {
     id: nextId(),
     definitionId: "test-event",
     type: "event",
+    subtype: "instant",
+    name: "Test Event",
+    cost: "1",
+    rarity: "common",
+    ...overrides,
+  };
+}
+
+export function makePassiveEvent(
+  overrides: Partial<PassiveEventCard> & { ownerId: string },
+): PassiveEventCard {
+  return {
+    id: nextId(),
+    definitionId: "test-event",
+    type: "event",
+    subtype: "passive",
+    name: "Test Event",
+    cost: "1",
+    rarity: "common",
+    duration: 1,
+    ...overrides,
+  };
+}
+
+export function makeTrapEvent(
+  overrides: Partial<TrapEventCard> & { ownerId: string; trigger: string },
+): TrapEventCard {
+  return {
+    id: nextId(),
+    definitionId: "test-event",
+    type: "event",
+    subtype: "trap",
     name: "Test Event",
     cost: "1",
     rarity: "common",
@@ -177,7 +208,7 @@ export function makeSeedingDeck(ownerId: string, count: number): Card[] {
     } else if (mod === 2) {
       cards.push(makeLocation({ ownerId }));
     } else {
-      cards.push(makeEvent({ ownerId, subtype: "instant" }));
+      cards.push(makeInstantEvent({ ownerId }));
     }
   }
   return cards;

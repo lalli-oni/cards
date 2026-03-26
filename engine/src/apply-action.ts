@@ -1,15 +1,27 @@
 import { applyMainAction } from "./apply-main";
 import { applySeedingAction } from "./apply-seeding";
-import type { Action, ApplyResult, GameState, MainAction } from "./types";
-import { getActivePlayerId, isSeedingAction } from "./types";
+import type {
+  ActionForState,
+  ApplyResult,
+  GameState,
+  MainAction,
+  SeedingAction,
+} from "./types";
+import { getActivePlayerId } from "./types";
 
 export type { ApplyResult };
 
 /**
  * Apply a player action to the game state.
  * Routes to the appropriate phase handler.
+ *
+ * The generic signature ensures callers with a narrowed state type
+ * (e.g. MainGameState) can only pass the matching action type.
  */
-export function applyAction(state: GameState, action: Action): ApplyResult {
+export function applyAction<S extends GameState>(
+  state: S,
+  action: ActionForState<S>,
+): ApplyResult {
   const activePlayerId = getActivePlayerId(state);
 
   if (action.playerId !== activePlayerId) {
@@ -18,23 +30,12 @@ export function applyAction(state: GameState, action: Action): ApplyResult {
     );
   }
 
-  if (state.phase === "seeding") {
-    if (!isSeedingAction(action)) {
-      throw new Error(
-        `Action type "${action.type}" is not valid during seeding phase`,
-      );
-    }
-    return applySeedingAction(state, action);
+  switch (state.phase) {
+    case "seeding":
+      return applySeedingAction(state, action as SeedingAction);
+    case "main":
+      return applyMainAction(state, action as MainAction);
+    case "ended":
+      throw new Error('Cannot apply actions during "ended" phase');
   }
-
-  if (state.phase === "main") {
-    if (isSeedingAction(action)) {
-      throw new Error(
-        `Action type "${action.type}" is not valid during main phase`,
-      );
-    }
-    return applyMainAction(state, action as MainAction);
-  }
-
-  throw new Error(`Cannot apply actions during "${state.phase}" phase`);
 }

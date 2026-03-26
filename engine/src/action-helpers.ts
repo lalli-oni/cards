@@ -2,7 +2,7 @@ import type { Action, GameState, PlayerState, VisibleState } from "./types";
 
 /**
  * Complete a template action with real card IDs.
- * Actions like seed_keep and seed_split_prospect come from validActions
+ * Actions like seed_keep come from validActions
  * as templates with empty arrays — this fills them with a simple default choice.
  *
  * Returns the action unchanged if it doesn't need filling.

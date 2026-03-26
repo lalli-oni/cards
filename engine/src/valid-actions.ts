@@ -84,6 +84,8 @@ function getSeedingValidActions(
     }
 
     case "seed_place_location": {
+      const plPlayer = state.players.find((p) => p.id === playerId);
+      if (!plPlayer?.prospectDeck.some((c) => c.type === "location")) return [];
       const actions: SeedingAction[] = [];
       for (let r = 0; r < state.grid.length; r++) {
         for (let c = 0; c < state.grid[r].length; c++) {

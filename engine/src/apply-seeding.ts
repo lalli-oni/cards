@@ -247,18 +247,16 @@ function handleSeedSteal(
   const card = seeding.middleArea.splice(cardIdx, 1)[0];
   const player = getPlayer(draft, playerId);
 
-  if (card.type === "location") {
-    if (!isFull(draft.grid)) {
-      if (row == null || col == null) {
-        throw new Error(
-          "Stolen location requires row and col for grid placement",
-        );
-      }
-      placeLocationOnGrid(draft, card as LocationCard, row, col, rotation);
-      events.push({ type: "location_placed", row, col, cardId: card.id });
-    } else {
-      player.prospectDeck.push(card);
+  if (card.type === "location" && !isFull(draft.grid)) {
+    if (row == null || col == null) {
+      throw new Error(
+        "Stolen location requires row and col for grid placement",
+      );
     }
+    placeLocationOnGrid(draft, card as LocationCard, row, col, rotation);
+    events.push({ type: "location_placed", row, col, cardId: card.id });
+  } else if (card.type === "location") {
+    player.prospectDeck.push(card);
   } else {
     player.marketDeck.push(card);
   }
@@ -295,26 +293,17 @@ function handleSeedSteal(
       rng = buildMainDecksAndHands(draft, rng, events);
       draft.rngState = extractRngState(rng) as number[];
 
-      if (!isFull(draft.grid)) {
-        seeding.step = "seed_place_location";
-        seeding.currentPlayerId = draft.turnOrder[0];
-        events.push({
-          type: "seeding_step_changed",
-          step: "seed_place_location",
-        });
-      } else {
-        seeding.step = "policy_selection";
-        seeding.currentPlayerId = draft.turnOrder[0];
-        events.push({
-          type: "seeding_step_changed",
-          step: "policy_selection",
-        });
-      }
+      const nextStep = isFull(draft.grid)
+        ? "policy_selection"
+        : "seed_place_location";
+      seeding.step = nextStep;
+      seeding.currentPlayerId = draft.turnOrder[0];
+      events.push({ type: "seeding_step_changed", step: nextStep });
     }
   }
 }
 
-/** After all prospect splits: shuffle market deck, draw main deck, draw starting hand. */
+/** After seeding is complete: shuffle market deck, draw main deck, draw starting hand. */
 function buildMainDecksAndHands(
   draft: Draft<SeedingGameState>,
   rng: prand.RandomGenerator,
@@ -372,9 +361,14 @@ function handleSeedPlaceLocation(
   }
 
   if (!card) {
-    throw new Error(
-      `Player "${playerId}" has no locations left in prospect deck`,
-    );
+    // No locations left — skip this player
+    advanceSeedingCursor(draft, events);
+    if (isFull(draft.grid)) {
+      seeding.step = "policy_selection";
+      seeding.currentPlayerId = draft.turnOrder[0];
+      events.push({ type: "seeding_step_changed", step: "policy_selection" });
+    }
+    return;
   }
 
   placeLocationOnGrid(draft, card as LocationCard, row, col, rotation);

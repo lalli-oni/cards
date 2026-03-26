@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "bun:test";
+import { produce } from "immer";
 import { fillAction } from "../action-helpers";
 import { applyAction } from "../apply-action";
 import type { GameState, SeedingAction, SeedingGameState } from "../types";
@@ -417,6 +418,155 @@ describe("seeding phase", () => {
         r2.players.map((p) => p.activePolicies.map((pol) => pol.definitionId)),
       );
       expect(r1.actionLog.length).toEqual(r2.actionLog.length);
+    });
+  });
+
+  describe("seed_place_location with empty prospect deck", () => {
+    it("returns no valid actions if player has no locations in prospect deck", () => {
+      // Get to seed_place_location via e2e, then empty the active player's prospect deck
+      const game = createSeedingGame({ deckSize: 40, policyCount: 3, seed: "place-empty", config: { ...DEFAULT_CONFIG, grid_padding: 2 } });
+      let s: GameState = game;
+      while (
+        s.phase === "seeding" &&
+        s.seedingState.step !== "seed_place_location"
+      ) {
+        const activeId = getActivePlayerId(s);
+        const actions = getValidActions(s, activeId);
+        if (actions.length === 0) break;
+        s = apply(s as SeedingGameState, fillAction(s, actions[0]) as SeedingAction);
+      }
+      if (s.phase !== "seeding" || s.seedingState.step !== "seed_place_location") {
+        // Grid filled before reaching seed_place_location — skip test
+        return;
+      }
+
+      const activeId = getActivePlayerId(s);
+      const modified = produce(s as SeedingGameState, (draft) => {
+        const player = draft.players.find((p) => p.id === activeId)!;
+        player.prospectDeck = [];
+      });
+
+      const actions = getValidActions(modified, activeId);
+      expect(actions).toHaveLength(0);
+    });
+
+    it("handler skips player with no locations instead of throwing", () => {
+      const game = createSeedingGame({ deckSize: 40, policyCount: 3, seed: "place-skip", config: { ...DEFAULT_CONFIG, grid_padding: 2 } });
+      let s: GameState = game;
+      while (
+        s.phase === "seeding" &&
+        s.seedingState.step !== "seed_place_location"
+      ) {
+        const activeId = getActivePlayerId(s);
+        const actions = getValidActions(s, activeId);
+        if (actions.length === 0) break;
+        s = apply(s as SeedingGameState, fillAction(s, actions[0]) as SeedingAction);
+      }
+      if (s.phase !== "seeding" || s.seedingState.step !== "seed_place_location") {
+        return;
+      }
+
+      const activeId = getActivePlayerId(s);
+      const modified = produce(s as SeedingGameState, (draft) => {
+        const player = draft.players.find((p) => p.id === activeId)!;
+        player.prospectDeck = [];
+      });
+
+      // Should not throw — handler skips the player
+      expect(() =>
+        applyAction(modified, {
+          type: "seed_place_location",
+          playerId: activeId,
+          row: 0,
+          col: 0,
+        }),
+      ).not.toThrow();
+    });
+  });
+
+  describe("grid-full steal fallback", () => {
+    it("routes stolen location to prospect deck when grid is full", () => {
+      const game = createSeedingGame({ deckSize: 40, policyCount: 3, seed: "steal-full-grid", config: { ...DEFAULT_CONFIG, grid_padding: 2 } });
+      let s: GameState = game;
+      // Play until we reach steal phase
+      while (
+        s.phase === "seeding" &&
+        s.seedingState.step !== "seed_steal"
+      ) {
+        const activeId = getActivePlayerId(s);
+        const actions = getValidActions(s, activeId);
+        if (actions.length === 0) break;
+        s = apply(s as SeedingGameState, fillAction(s, actions[0]) as SeedingAction);
+      }
+      if (s.phase !== "seeding" || s.seedingState.step !== "seed_steal") return;
+
+      // Fill the entire grid and ensure a location is in middle area
+      const modified = produce(s as SeedingGameState, (draft) => {
+        // Fill all empty grid cells with a dummy location
+        for (const row of draft.grid) {
+          for (const cell of row) {
+            if (cell.location === null) {
+              cell.location = {
+                id: "dummy-loc",
+                definitionId: "dummy-loc",
+                type: "location",
+                name: "Dummy",
+                cost: "0",
+                rarity: "common",
+                edges: { n: true, e: true, s: true, w: true },
+                requirements: "",
+                rewards: "",
+                ownerId: draft.players[0].id,
+                mission: null,
+                dilemmas: [],
+              } as any;
+            }
+          }
+        }
+        // Ensure there's a location card in the middle area
+        const locInMiddle = draft.seedingState.middleArea.find(
+          (c) => c.type === "location",
+        );
+        if (!locInMiddle) {
+          draft.seedingState.middleArea.push({
+            id: "test-loc-middle",
+            definitionId: "test-loc-middle",
+            type: "location",
+            name: "Test Location",
+            cost: "0",
+            rarity: "common",
+            edges: { n: true, e: true, s: true, w: true },
+            requirements: "",
+            rewards: "",
+            ownerId: null,
+            mission: null,
+            dilemmas: [],
+          } as any);
+        }
+      });
+
+      const activeId = getActivePlayerId(modified);
+      const actions = getValidActions(modified, activeId) as SeedingAction[];
+      // Location steal actions should have no row/col when grid is full
+      const locAction = actions.find((a) => {
+        if (a.type !== "seed_steal") return false;
+        const card = modified.seedingState.middleArea.find(
+          (c) => c.id === (a as any).cardId,
+        );
+        return card?.type === "location";
+      }) as any;
+
+      expect(locAction).toBeDefined();
+      expect(locAction.row).toBeUndefined();
+      expect(locAction.col).toBeUndefined();
+
+      // Apply the steal — location should go to prospect deck
+      const playerBefore = getPlayer(modified, activeId);
+      const prospectBefore = playerBefore.prospectDeck.length;
+
+      const next = apply(modified, locAction);
+      const playerAfter = getPlayer(next, activeId);
+      expect(playerAfter.prospectDeck.length).toBe(prospectBefore + 1);
     });
   });
 });

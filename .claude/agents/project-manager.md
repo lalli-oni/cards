@@ -47,6 +47,9 @@ When asked "what should I work on next" or to prioritize:
 - Consider recency — recently updated issues may have momentum
 - Flag issues that are **good entry points** (small scope, well-defined)
 
+### Issue Grouping
+When pairing issues for a branch/PR, prefer issues within the same project area (engine, rules, library, clients). Cross-project pairings (e.g. engine + library) need an especially strong justification since they have different review concerns and workflows.
+
 ### Issue Management
 You can create, label, close, and organize GitHub issues:
 

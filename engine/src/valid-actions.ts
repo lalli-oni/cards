@@ -304,13 +304,15 @@ function getMainValidActions(
         if (!cell.location?.requirements || !cell.location?.rewards) continue;
         const friendlyUnits = cell.units.filter((u) => u.ownerId === playerId);
         if (friendlyUnits.length === 0) continue;
+        let requirements: ReturnType<typeof parseRequirements>;
         try {
-          const requirements = parseRequirements(cell.location.requirements);
-          if (checkMissionRequirements(requirements, friendlyUnits)) {
-            actions.push({ type: "attempt_mission", playerId, row: r, col: c });
-          }
+          requirements = parseRequirements(cell.location.requirements);
         } catch {
-          // Unparseable requirements — skip
+          // Unparseable requirement string (see #60) — skip this mission
+          continue;
+        }
+        if (checkMissionRequirements(requirements, friendlyUnits)) {
+          actions.push({ type: "attempt_mission", playerId, row: r, col: c });
         }
       }
     }

@@ -161,7 +161,6 @@ export type SeedingStep =
   | "seed_draw"
   | "seed_keep"
   | "seed_steal"
-  | "seed_split_prospect"
   | "seed_place_location"
   | "policy_selection";
 
@@ -174,8 +173,6 @@ export interface SeedingState {
   stealTurnIndex: number;
   /** Players who have submitted seed_keep this round. Reset at step entry. */
   keepSubmitted: string[];
-  /** Players who have submitted seed_split_prospect. Reset at step entry. */
-  splitSubmitted: string[];
 }
 
 export interface TurnState {
@@ -254,12 +251,6 @@ export type SeedingAction =
       row?: number;
       col?: number;
       rotation?: number;
-    }
-  | {
-      type: "seed_split_prospect";
-      playerId: string;
-      topHalf: string[];
-      bottomHalf: string[];
     }
   | {
       type: "seed_place_location";

@@ -32,17 +32,6 @@ export function fillAction(
       };
     }
 
-    case "seed_split_prospect": {
-      if (action.topHalf.length > 0) return action;
-      const locations = player.marketDeck.filter((c) => c.type === "location");
-      const half = Math.ceil(locations.length / 2);
-      return {
-        ...action,
-        topHalf: locations.slice(0, half).map((c) => c.id),
-        bottomHalf: locations.slice(half).map((c) => c.id),
-      };
-    }
-
     default:
       return action;
   }

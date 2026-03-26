@@ -179,7 +179,16 @@ describe("seeding phase", () => {
       });
 
       const updatedPlayer = getPlayer(next, activeId);
-      expect(updatedPlayer.marketDeck).toHaveLength(8);
+      // Locations route to prospect deck, others to market deck
+      const keptTotal =
+        updatedPlayer.marketDeck.length + updatedPlayer.prospectDeck.length;
+      expect(keptTotal).toBe(8);
+      expect(
+        updatedPlayer.prospectDeck.every((c) => c.type === "location"),
+      ).toBe(true);
+      expect(
+        updatedPlayer.marketDeck.every((c) => c.type !== "location"),
+      ).toBe(true);
       if (next.phase === "seeding") {
         expect(next.seedingState.middleArea.length).toBeGreaterThanOrEqual(2);
       }

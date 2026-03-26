@@ -136,7 +136,6 @@ export function createGame(
         middleArea: [],
         stealTurnIndex: 0,
         keepSubmitted: [],
-        splitSubmitted: [],
       },
     } satisfies SeedingGameState;
   }

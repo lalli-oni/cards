@@ -6,6 +6,7 @@ import {
   areFacingEdgesOpen,
   getAdjacentCells,
   getBoundaryEdges,
+  isFull,
   isPerimeterCell,
 } from "./grid-helpers";
 import { getConfigNumber } from "./state-helpers";
@@ -59,8 +60,9 @@ function getSeedingValidActions(
 
     case "seed_steal": {
       const actions: SeedingAction[] = [];
+      const gridIsFull = isFull(state.grid);
       for (const card of seeding.middleArea) {
-        if (card.type === "location") {
+        if (card.type === "location" && !gridIsFull) {
           for (let r = 0; r < state.grid.length; r++) {
             for (let c = 0; c < state.grid[r].length; c++) {
               if (state.grid[r][c].location === null) {
@@ -80,11 +82,6 @@ function getSeedingValidActions(
       }
       return actions;
     }
-
-    case "seed_split_prospect":
-      return [
-        { type: "seed_split_prospect", playerId, topHalf: [], bottomHalf: [] },
-      ];
 
     case "seed_place_location": {
       const actions: SeedingAction[] = [];

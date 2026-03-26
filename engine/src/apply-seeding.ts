@@ -3,6 +3,7 @@ import { produce } from "immer";
 import prand from "pure-rand";
 import { runStartOfTurn } from "./apply-main";
 import { extractRngState, shuffle } from "./rng";
+import { isFull } from "./grid-helpers";
 import {
   advanceSeedingCursor,
   getConfigNumber,
@@ -81,16 +82,6 @@ export function applySeedingAction(
           action.row,
           action.col,
           action.rotation,
-          events,
-        );
-        break;
-      case "seed_split_prospect":
-        handleSeedSplitProspect(
-          draft,
-          ds,
-          action.playerId,
-          action.topHalf,
-          action.bottomHalf,
           events,
         );
         break;
@@ -196,10 +187,15 @@ function handleSeedKeep(
     }
   }
 
-  // Move kept cards to market deck
+  // Move kept cards: locations → prospect deck, others → market deck
   for (const id of keepIds) {
     const idx = player.hand.findIndex((c) => c.id === id);
-    player.marketDeck.push(player.hand.splice(idx, 1)[0]);
+    const card = player.hand.splice(idx, 1)[0];
+    if (card.type === "location") {
+      player.prospectDeck.push(card);
+    } else {
+      player.marketDeck.push(card);
+    }
   }
 
   // Move exposed cards to middle area
@@ -252,13 +248,17 @@ function handleSeedSteal(
   const player = getPlayer(draft, playerId);
 
   if (card.type === "location") {
-    if (row == null || col == null) {
-      throw new Error(
-        "Stolen location requires row and col for grid placement",
-      );
+    if (!isFull(draft.grid)) {
+      if (row == null || col == null) {
+        throw new Error(
+          "Stolen location requires row and col for grid placement",
+        );
+      }
+      placeLocationOnGrid(draft, card as LocationCard, row, col, rotation);
+      events.push({ type: "location_placed", row, col, cardId: card.id });
+    } else {
+      player.prospectDeck.push(card);
     }
-    placeLocationOnGrid(draft, card as LocationCard, row, col, rotation);
-    events.push({ type: "location_placed", row, col, cardId: card.id });
   } else {
     player.marketDeck.push(card);
   }
@@ -278,116 +278,38 @@ function handleSeedSteal(
       seeding.currentPlayerId = draft.turnOrder[0];
       events.push({ type: "seeding_step_changed", step: "seed_draw" });
     } else {
-      seeding.step = "seed_split_prospect";
-      seeding.splitSubmitted = [];
-      seeding.currentPlayerId = draft.turnOrder[0];
-      events.push({
-        type: "seeding_step_changed",
-        step: "seed_split_prospect",
-      });
-    }
-  }
-}
-
-// -- seed_split_prospect -----------------------------------------------------
-
-function handleSeedSplitProspect(
-  draft: Draft<SeedingGameState>,
-  seeding: Draft<SeedingState>,
-  playerId: string,
-  topHalf: string[],
-  bottomHalf: string[],
-  events: GameEvent[],
-): void {
-  if (seeding.step !== "seed_split_prospect") {
-    throw new Error(
-      `seed_split_prospect not valid during step "${seeding.step}"`,
-    );
-  }
-
-  validateUniqueIds("prospect split", topHalf, bottomHalf);
-
-  const player = getPlayer(draft, playerId);
-
-  // Extract locations from market deck
-  const locationIds = new Set([...topHalf, ...bottomHalf]);
-  const locations: LocationCard[] = [];
-  const remaining: Card[] = [];
-
-  for (const card of player.marketDeck) {
-    if (locationIds.has(card.id)) {
-      if (card.type !== "location") {
-        throw new Error(`Card "${card.id}" is not a location`);
+      // Auto-shuffle prospect decks and build main decks
+      let rng = prand.mersenne.fromState(draft.rngState);
+      for (const player of draft.players) {
+        const [shuffled, nextRng] = shuffle(player.prospectDeck, rng);
+        player.prospectDeck = shuffled;
+        rng = nextRng;
+        events.push({ type: "prospect_deck_built", playerId: player.id });
+        events.push({
+          type: "deck_shuffled",
+          playerId: player.id,
+          deck: "prospect",
+        });
       }
-      locations.push(card as LocationCard);
-    } else {
-      remaining.push(card);
-    }
-  }
 
-  if (locations.length !== locationIds.size) {
-    const found = new Set(locations.map((l) => l.id));
-    const missing = [...locationIds].filter((id) => !found.has(id));
-    throw new Error(
-      `Location IDs not found in market deck: ${missing.join(", ")}`,
-    );
-  }
+      rng = buildMainDecksAndHands(draft, rng, events);
+      draft.rngState = extractRngState(rng) as number[];
 
-  const marketLocations = player.marketDeck.filter(
-    (c) => c.type === "location",
-  );
-  if (marketLocations.length !== locations.length) {
-    throw new Error(
-      `All ${marketLocations.length} locations in market deck must be split, but only ${locations.length} were provided`,
-    );
-  }
-
-  // Build prospect deck: shuffle each half, stack top on bottom
-  let rng = prand.mersenne.fromState(draft.rngState);
-
-  const getLocation = (id: string) => {
-    const loc = locations.find((l) => l.id === id);
-    if (!loc) throw new Error(`Location "${id}" not found`);
-    return loc;
-  };
-  const topCards = topHalf.map(getLocation);
-  const bottomCards = bottomHalf.map(getLocation);
-
-  const [shuffledTop, rng2] = shuffle(topCards, rng);
-  const [shuffledBottom, rng3] = shuffle(bottomCards, rng2);
-  rng = rng3;
-
-  player.prospectDeck = [...shuffledTop, ...shuffledBottom];
-  player.marketDeck = remaining;
-
-  draft.rngState = extractRngState(rng) as number[];
-
-  events.push({ type: "prospect_deck_built", playerId });
-  events.push({ type: "deck_shuffled", playerId, deck: "prospect" });
-
-  seeding.splitSubmitted.push(playerId);
-  advanceSeedingCursor(draft, events);
-
-  // After all players submit, do automatic deck construction
-  if (seeding.splitSubmitted.length === draft.players.length) {
-    rng = prand.mersenne.fromState(draft.rngState);
-    rng = buildMainDecksAndHands(draft, rng, events);
-    draft.rngState = extractRngState(rng) as number[];
-
-    const hasEmptyCells = draft.grid.some((row) =>
-      row.some((cell) => cell.location === null),
-    );
-    if (hasEmptyCells) {
-      seeding.step = "seed_place_location";
-      seeding.currentPlayerId = draft.turnOrder[0];
-      events.push({
-        type: "seeding_step_changed",
-        step: "seed_place_location",
-      });
-    } else {
-      seeding.step = "policy_selection";
-      seeding.currentPlayerId = draft.turnOrder[0];
-      events.push({ type: "seeding_step_changed", step: "policy_selection" });
+      if (!isFull(draft.grid)) {
+        seeding.step = "seed_place_location";
+        seeding.currentPlayerId = draft.turnOrder[0];
+        events.push({
+          type: "seeding_step_changed",
+          step: "seed_place_location",
+        });
+      } else {
+        seeding.step = "policy_selection";
+        seeding.currentPlayerId = draft.turnOrder[0];
+        events.push({
+          type: "seeding_step_changed",
+          step: "policy_selection",
+        });
+      }
     }
   }
 }
@@ -460,10 +382,7 @@ function handleSeedPlaceLocation(
 
   advanceSeedingCursor(draft, events);
 
-  const hasEmptyCells = draft.grid.some((r) =>
-    r.some((cell) => cell.location === null),
-  );
-  if (!hasEmptyCells) {
+  if (isFull(draft.grid)) {
     seeding.step = "policy_selection";
     seeding.currentPlayerId = draft.turnOrder[0];
     events.push({ type: "seeding_step_changed", step: "policy_selection" });

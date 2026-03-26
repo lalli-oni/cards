@@ -1,5 +1,10 @@
 import type { Grid, UnitCard } from "./types";
 
+/** True if every cell on the grid has a location. */
+export function isFull(grid: Grid): boolean {
+  return grid.every((row) => row.every((cell) => cell.location !== null));
+}
+
 type Edge = "n" | "s" | "e" | "w";
 
 /** Find a unit on the grid by instance ID. Returns its position or null. */

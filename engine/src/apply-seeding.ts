@@ -188,6 +188,7 @@ function handleSeedKeep(
   }
 
   // Move kept cards: locations → prospect deck, others → market deck
+  // TODO: when dilemma card type is added, route dilemmas to prospect deck too
   let toProspect = 0;
   let toMarket = 0;
   for (const id of keepIds) {

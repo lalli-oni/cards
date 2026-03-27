@@ -8,7 +8,7 @@ describe("applyAction", () => {
     it("rejects actions from non-active player", () => {
       const state = createTestGame();
       // biome-ignore lint/style/noNonNullAssertion: test setup — 2-player game always has a non-active player
-      const nonActivePlayer = state.turnOrder.find(
+      const nonActivePlayer = state.players.map((p) => p.id).find(
         (id) => id !== state.turn.activePlayerId,
       )!;
 
@@ -83,7 +83,7 @@ describe("applyAction", () => {
 
     it("wraps turn order back to first player", () => {
       const state = createTestGame();
-      const firstPlayer = state.turnOrder[0];
+      const firstPlayer = state.players[0].id;
 
       // Both players pass
       const { state: s1 } = applyAction(state, {

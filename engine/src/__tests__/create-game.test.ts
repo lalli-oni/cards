@@ -41,7 +41,7 @@ describe("createGame", () => {
     expect(state.phase).toBe("seeding");
     expect(state.seedingState).toBeDefined();
     expect(state.seedingState.step).toBe("seed_draw");
-    expect(state.seedingState.currentPlayerId).toBe(state.turnOrder[0]);
+    expect(state.seedingState.currentPlayerId).toBe(state.players[0].id);
   });
 
   it("seeding mode returns no turn property", () => {
@@ -86,16 +86,17 @@ describe("createGame", () => {
     }
   });
 
-  it("sets turn order containing all player ids", () => {
+  it("sets players in turn order with all player ids", () => {
     const state = createTestGame();
-    expect(state.turnOrder).toHaveLength(2);
-    expect(state.turnOrder).toContain("p1");
-    expect(state.turnOrder).toContain("p2");
+    const playerIds = state.players.map((p) => p.id);
+    expect(playerIds).toHaveLength(2);
+    expect(playerIds).toContain("p1");
+    expect(playerIds).toContain("p2");
   });
 
   it("sets active player to first in turn order", () => {
     const state = createTestGame();
-    expect(state.turn.activePlayerId).toBe(state.turnOrder[0]);
+    expect(state.turn.activePlayerId).toBe(state.players[0].id);
   });
 
   it("starts with empty action log", () => {
@@ -127,7 +128,7 @@ describe("createGame", () => {
     it("produces identical state for the same seed", () => {
       const s1 = createTestGame();
       const s2 = createTestGame();
-      expect(s1.turnOrder).toEqual(s2.turnOrder);
+      expect(s1.players.map((p) => p.id)).toEqual(s2.players.map((p) => p.id));
       expect(s1.rngState).toEqual(s2.rngState);
     });
 

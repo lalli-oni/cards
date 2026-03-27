@@ -136,7 +136,7 @@ describe("seeding phase", () => {
       );
       expect(playerChanged).toBeDefined();
       if (playerChanged && playerChanged.type === "seeding_player_changed") {
-        expect(state.turnOrder).toContain(playerChanged.playerId);
+        expect(state.players.map((p) => p.id)).toContain(playerChanged.playerId);
         expect(playerChanged.step).toBe("seed_draw");
       }
       expect(events.some((e) => e.type === "turn_started")).toBe(false);
@@ -308,7 +308,6 @@ describe("seeding phase", () => {
         rngState: state.rngState,
         seed: state.seed,
         actionLog: state.actionLog,
-        turnOrder: state.turnOrder,
         phase: "main" as const,
         turn: {
           activePlayerId: state.seedingState.currentPlayerId,

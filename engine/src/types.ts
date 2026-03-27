@@ -169,7 +169,7 @@ export interface SeedingState {
   /** Whose input is needed next during seeding. */
   currentPlayerId: string;
   middleArea: Card[];
-  /** Index into turnOrder for whose turn it is to steal. */
+  /** Index into players array for whose turn it is to steal. */
   stealTurnIndex: number;
   /** Players who have submitted seed_keep this round. Reset at step entry. */
   keepSubmitted: string[];
@@ -187,6 +187,7 @@ export interface TurnState {
 
 interface GameStateBase {
   config: GameConfig;
+  /** Player states, ordered by turn. */
   players: PlayerState[];
   grid: Grid;
   market: Card[];
@@ -194,7 +195,6 @@ interface GameStateBase {
   rngState: readonly number[];
   seed: string;
   actionLog: Action[];
-  turnOrder: string[];
 }
 
 export interface SeedingGameState extends GameStateBase {

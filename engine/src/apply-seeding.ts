@@ -7,7 +7,7 @@ import { isFull } from "./grid-helpers";
 import {
   advanceSeedingCursor,
   getConfigNumber,
-  getPlayer,
+  getPlayerById,
   placeLocationOnGrid,
 } from "./state-helpers";
 import type {
@@ -114,7 +114,7 @@ function handleSeedDraw(
     throw new Error(`seed_draw not valid during step "${seeding.step}"`);
   }
 
-  const player = getPlayer(draft, playerId);
+  const player = getPlayerById(draft, playerId);
   if (player.seedingDeck.length === 0) {
     throw new Error(
       `Player "${playerId}" has no cards left in seeding deck during seed_draw`,
@@ -130,7 +130,7 @@ function handleSeedDraw(
   advanceSeedingCursor(draft, events);
 
   // If we've looped back to the first player, all have drawn
-  if (seeding.currentPlayerId === draft.turnOrder[0]) {
+  if (seeding.currentPlayerId === draft.players[0].id) {
     seeding.step = "seed_keep";
     seeding.keepSubmitted = [];
     events.push({ type: "seeding_step_changed", step: "seed_keep" });
@@ -153,7 +153,7 @@ function handleSeedKeep(
 
   validateUniqueIds("keep/expose", keepIds, exposeIds);
 
-  const player = getPlayer(draft, playerId);
+  const player = getPlayerById(draft, playerId);
   const keepCount = getConfigNumber(draft, "seed_keep", 8);
   const exposeCount = getConfigNumber(draft, "seed_expose", 2);
 
@@ -225,7 +225,7 @@ function handleSeedKeep(
   if (seeding.keepSubmitted.length === draft.players.length) {
     seeding.step = "seed_steal";
     seeding.stealTurnIndex = 0;
-    seeding.currentPlayerId = draft.turnOrder[0];
+    seeding.currentPlayerId = draft.players[0].id;
     events.push({ type: "seeding_step_changed", step: "seed_steal" });
   }
 }
@@ -252,7 +252,7 @@ function handleSeedSteal(
   }
 
   const card = seeding.middleArea.splice(cardIdx, 1)[0];
-  const player = getPlayer(draft, playerId);
+  const player = getPlayerById(draft, playerId);
 
   let destination: "grid" | "prospect" | "market";
   if (card.type === "location" && !isFull(draft.grid)) {
@@ -276,15 +276,15 @@ function handleSeedSteal(
 
   // Advance steal turn
   seeding.stealTurnIndex =
-    (seeding.stealTurnIndex + 1) % draft.turnOrder.length;
-  seeding.currentPlayerId = draft.turnOrder[seeding.stealTurnIndex];
+    (seeding.stealTurnIndex + 1) % draft.players.length;
+  seeding.currentPlayerId = draft.players[seeding.stealTurnIndex].id;
 
   // If middle area is empty, determine next step
   if (seeding.middleArea.length === 0) {
     const anyDeckHasCards = draft.players.some((p) => p.seedingDeck.length > 0);
     if (anyDeckHasCards) {
       seeding.step = "seed_draw";
-      seeding.currentPlayerId = draft.turnOrder[0];
+      seeding.currentPlayerId = draft.players[0].id;
       events.push({ type: "seeding_step_changed", step: "seed_draw" });
     } else {
       // Auto-shuffle prospect decks and build main decks
@@ -308,7 +308,7 @@ function handleSeedSteal(
         ? "policy_selection"
         : "seed_place_location";
       seeding.step = nextStep;
-      seeding.currentPlayerId = draft.turnOrder[0];
+      seeding.currentPlayerId = draft.players[0].id;
       events.push({ type: "seeding_step_changed", step: nextStep });
     }
   }
@@ -362,7 +362,7 @@ function handleSeedPlaceLocation(
     );
   }
 
-  const player = getPlayer(draft, playerId);
+  const player = getPlayerById(draft, playerId);
 
   // Draw from top of prospect deck until we get a location
   let card = player.prospectDeck.shift();
@@ -376,7 +376,7 @@ function handleSeedPlaceLocation(
     advanceSeedingCursor(draft, events);
     if (isFull(draft.grid)) {
       seeding.step = "policy_selection";
-      seeding.currentPlayerId = draft.turnOrder[0];
+      seeding.currentPlayerId = draft.players[0].id;
       events.push({ type: "seeding_step_changed", step: "policy_selection" });
     }
     return;
@@ -389,7 +389,7 @@ function handleSeedPlaceLocation(
 
   if (isFull(draft.grid)) {
     seeding.step = "policy_selection";
-    seeding.currentPlayerId = draft.turnOrder[0];
+    seeding.currentPlayerId = draft.players[0].id;
     events.push({ type: "seeding_step_changed", step: "policy_selection" });
   }
 }
@@ -442,7 +442,7 @@ function handlePolicySelection(
     config: final.config,
     phase: "main",
     turn: {
-      activePlayerId: final.turnOrder[0],
+      activePlayerId: final.players[0].id,
       round: 1,
       actionPointsRemaining: getConfigNumber(
         final,
@@ -456,13 +456,12 @@ function handlePolicySelection(
     rngState: final.rngState,
     seed: final.seed,
     actionLog: final.actionLog,
-    turnOrder: final.turnOrder,
   };
 
   events.push({ type: "phase_changed", from: "seeding", to: "main" });
   events.push({
     type: "turn_started",
-    playerId: final.turnOrder[0],
+    playerId: final.players[0].id,
     round: 1,
   });
 

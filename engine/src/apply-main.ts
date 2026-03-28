@@ -21,7 +21,8 @@ import {
 } from "./state-helpers";
 import { emit as emitEvent } from "./listeners/emit";
 import { rebuildListeners } from "./listeners/rebuild";
-import type { EmitFn } from "./listeners/types";
+import { getModifiedStat, getModifiedCost, getModifiedAPCost } from "./listeners/query";
+import type { EmitFn, QueryListener } from "./listeners/types";
 import { killUnit, dropEquippedItems } from "./unit-helpers";
 import type {
   ActivePassiveEvent,
@@ -162,6 +163,7 @@ function handleDeploy(
   cardId: string,
   emit: EmitFn,
   events: GameEvent[],
+  queries: QueryListener[],
 ): void {
   const player = getPlayerById(draft, playerId);
   const cardIdx = player.hand.findIndex((c) => c.id === cardId);
@@ -174,7 +176,7 @@ function handleDeploy(
     throw new Error(`Cannot deploy card of type "${card.type}" — only units and items`);
   }
 
-  const cost = parseCost(card.cost);
+  const cost = getModifiedCost(draft as MainGameState, queries, card, playerId, "deploy");
   spendGold(draft, player, cost, "deploy", events);
   spendAP(draft, 1);
 
@@ -192,6 +194,7 @@ function handleBuy(
   costIndex: number | undefined,
   emit: EmitFn,
   events: GameEvent[],
+  queries: QueryListener[],
 ): void {
   const player = getPlayerById(draft, playerId);
   const slotIndex = draft.market.findIndex((c) => c.id === cardId);
@@ -200,7 +203,7 @@ function handleBuy(
   }
 
   const card = draft.market[slotIndex];
-  const cost = parseCost(card.cost, costIndex);
+  const cost = getModifiedCost(draft as MainGameState, queries, card, playerId, "buy", costIndex);
   spendGold(draft, player, cost, "buy", events);
 
   // Remove from market and add to hand
@@ -286,6 +289,7 @@ function handleMove(
   toRow: number,
   toCol: number,
   emit: EmitFn,
+  queries: QueryListener[],
 ): void {
   const pos = findUnitOnGrid(draft.grid, unitId);
   if (!pos) {
@@ -319,9 +323,13 @@ function handleMove(
       throw new Error(`Unit cannot retreat — no open boundary edges`);
     }
 
-    const apCost = unit.injured
+    const baseApCost = unit.injured
       ? 1 + getConfigNumber(draft, "injury_move_penalty", 1)
       : 1;
+    const apCost = getModifiedAPCost(
+      draft as MainGameState, queries,
+      { type: "move", playerId, unitId, row: toRow, col: toCol }, baseApCost,
+    );
     spendAP(draft, apCost);
 
     const cell = draft.grid[fromRow][fromCol];
@@ -559,6 +567,7 @@ function handleAttack(
   row: number,
   col: number,
   emit: EmitFn,
+  queries: QueryListener[],
 ): void {
   const cell = draft.grid[row][col];
   if (!cell.location) {
@@ -604,7 +613,11 @@ function handleAttack(
     for (const u of livingAttackers) {
       const [roll, nextRng] = prand.uniformIntDistribution(1, 6, rng);
       rng = nextRng;
-      const strength = u.injured ? Math.max(0, u.strength - getConfigNumber(draft, "injury_stat_penalty", 1)) : u.strength;
+      const modifiedStr = getModifiedStat(
+        draft as MainGameState, queries, u as UnitCard, "strength",
+        { row, col }, { role: "attacker", row, col },
+      );
+      const strength = u.injured ? Math.max(0, modifiedStr - getConfigNumber(draft, "injury_stat_penalty", 1)) : modifiedStr;
       atkRolls.push({ unit: u, power: strength + roll });
     }
 
@@ -612,7 +625,11 @@ function handleAttack(
     for (const u of livingDefenders) {
       const [roll, nextRng] = prand.uniformIntDistribution(1, 6, rng);
       rng = nextRng;
-      const strength = u.injured ? Math.max(0, u.strength - getConfigNumber(draft, "injury_stat_penalty", 1)) : u.strength;
+      const modifiedStr = getModifiedStat(
+        draft as MainGameState, queries, u as UnitCard, "strength",
+        { row, col }, { role: "defender", row, col },
+      );
+      const strength = u.injured ? Math.max(0, modifiedStr - getConfigNumber(draft, "injury_stat_penalty", 1)) : modifiedStr;
       defRolls.push({ unit: u, power: strength + roll });
     }
 
@@ -693,6 +710,7 @@ function handleAttemptMission(
   col: number,
   emit: EmitFn,
   events: GameEvent[],
+  queries: QueryListener[],
 ): void {
   const cell = draft.grid[row][col];
   if (!cell.location) {
@@ -712,7 +730,7 @@ function handleAttemptMission(
   const requirements = parseRequirements(cell.location.requirements);
   const { vp } = parseRewards(cell.location.rewards);
 
-  if (!checkMissionRequirements(requirements, friendlyUnits)) {
+  if (!checkMissionRequirements(requirements, friendlyUnits, draft as MainGameState, queries, { row, col })) {
     emit({
       type: "mission_attempt_failed",
       playerId,
@@ -788,7 +806,7 @@ export function applyMainAction(
     // to plain arrays in Draft<T>, breaking Action[] assignability. castDraft bridges this.
     draft.actionLog.push(castDraft(action));
 
-    const listeners = rebuildListeners(draft as MainGameState);
+    const { listeners, queries } = rebuildListeners(draft as MainGameState);
     const emit: EmitFn = (event) => emitEvent(draft, event, listeners, events);
 
     switch (action.type) {
@@ -797,11 +815,11 @@ export function applyMainAction(
         break;
 
       case "deploy":
-        handleDeploy(draft, action.playerId, action.cardId, emit, events);
+        handleDeploy(draft, action.playerId, action.cardId, emit, events, queries);
         break;
 
       case "buy":
-        handleBuy(draft, action.playerId, action.cardId, action.costIndex, emit, events);
+        handleBuy(draft, action.playerId, action.cardId, action.costIndex, emit, events, queries);
         break;
 
       case "draw":
@@ -813,7 +831,7 @@ export function applyMainAction(
         break;
 
       case "move":
-        handleMove(draft, action.playerId, action.unitId, action.row, action.col, emit);
+        handleMove(draft, action.playerId, action.unitId, action.row, action.col, emit, queries);
         break;
 
       case "play_event":
@@ -836,7 +854,7 @@ export function applyMainAction(
         break;
 
       case "attack":
-        handleAttack(draft, action.playerId, action.unitIds, action.row, action.col, emit);
+        handleAttack(draft, action.playerId, action.unitIds, action.row, action.col, emit, queries);
         break;
 
       case "activate":
@@ -847,7 +865,7 @@ export function applyMainAction(
         break;
 
       case "attempt_mission":
-        handleAttemptMission(draft, action.playerId, action.row, action.col, emit, events);
+        handleAttemptMission(draft, action.playerId, action.row, action.col, emit, events, queries);
         break;
 
       default: {

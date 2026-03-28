@@ -5,7 +5,8 @@ import { applyAction } from "../apply-action";
 import type { GameEvent, MainGameState } from "../types";
 import { emit } from "../listeners/emit";
 import { rebuildListeners } from "../listeners/rebuild";
-import type { EffectListener } from "../listeners/types";
+import { getModifiedStat, getModifiedCost, isUnitProtected, getModifiedAPCost } from "../listeners/query";
+import type { EffectListener, QueryListener } from "../listeners/types";
 import {
   createTestGame,
   makeUnit,
@@ -132,9 +133,11 @@ describe("emit", () => {
 // ---------------------------------------------------------------------------
 
 describe("rebuildListeners", () => {
-  it("returns empty array for a state with no registered effect cards", () => {
+  it("returns empty result for a state with no registered effect cards", () => {
     const state = createTestGame();
-    expect(rebuildListeners(state)).toEqual([]);
+    const result = rebuildListeners(state);
+    expect(result.listeners).toEqual([]);
+    expect(result.queries).toEqual([]);
   });
 
   it("returns listeners for a location with registered effects", () => {
@@ -144,7 +147,7 @@ describe("rebuildListeners", () => {
         definitionId: "the-silk-road",
       });
     });
-    const listeners = rebuildListeners(state);
+    const { listeners } = rebuildListeners(state);
     expect(listeners.length).toBeGreaterThan(0);
     expect(listeners[0].source.definitionId).toBe("the-silk-road");
   });
@@ -162,7 +165,7 @@ describe("rebuildListeners", () => {
         }),
       });
     });
-    const listeners = rebuildListeners(state);
+    const { listeners } = rebuildListeners(state);
     const defIds = listeners.map((l) => l.source.definitionId);
     expect(defIds).toContain("scholar");
     expect(defIds).toContain("ambush");
@@ -175,7 +178,9 @@ describe("rebuildListeners", () => {
         definitionId: "unknown-location",
       });
     });
-    expect(rebuildListeners(state)).toEqual([]);
+    const result = rebuildListeners(state);
+    expect(result.listeners).toEqual([]);
+    expect(result.queries).toEqual([]);
   });
 });
 
@@ -614,5 +619,283 @@ describe("heal reward listeners", () => {
     )).toBe(true);
     // base income (1) + healer bonus (1) = 2 more gold
     expect(ns.players[activeIdx].gold).toBe(goldBefore + 2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Stat modifier queries
+// ---------------------------------------------------------------------------
+
+describe("stat modifier queries", () => {
+  it("The Forge: +1 str at location, +0 elsewhere", () => {
+    const state = gameWith((d, p) => {
+      d.grid[0][0].location = makeLocation({ ownerId: p.active, definitionId: "the-forge" });
+      d.grid[0][1].location = makeLocation({ ownerId: p.active });
+    });
+    const { queries } = rebuildListeners(state);
+    const unit = makeUnit({ ownerId: state.turn.activePlayerId, strength: 5 });
+
+    expect(getModifiedStat(state, queries, unit, "strength", { row: 0, col: 0 })).toBe(6);
+    expect(getModifiedStat(state, queries, unit, "strength", { row: 0, col: 1 })).toBe(5);
+    expect(getModifiedStat(state, queries, unit, "cunning", { row: 0, col: 0 })).toBe(5);
+  });
+
+  it("Great Library: +1 cunning for Scientist only", () => {
+    const state = gameWith((d, p) => {
+      d.grid[0][0].location = makeLocation({ ownerId: p.active, definitionId: "the-great-library" });
+    });
+    const { queries } = rebuildListeners(state);
+    const scientist = makeUnit({ ownerId: state.turn.activePlayerId, cunning: 4, attributes: ["Scientist"] });
+    const warrior = makeUnit({ ownerId: state.turn.activePlayerId, cunning: 4, attributes: ["Warrior"] });
+
+    expect(getModifiedStat(state, queries, scientist, "cunning", { row: 0, col: 0 })).toBe(5);
+    expect(getModifiedStat(state, queries, warrior, "cunning", { row: 0, col: 0 })).toBe(4);
+  });
+
+  it("The Arena: +1 str attacker only, not defender", () => {
+    const state = gameWith((d, p) => {
+      d.grid[0][0].location = makeLocation({ ownerId: p.active, definitionId: "the-arena" });
+    });
+    const { queries } = rebuildListeners(state);
+    const unit = makeUnit({ ownerId: state.turn.activePlayerId, strength: 5 });
+
+    expect(getModifiedStat(state, queries, unit, "strength", { row: 0, col: 0 },
+      { role: "attacker", row: 0, col: 0 })).toBe(6);
+    expect(getModifiedStat(state, queries, unit, "strength", { row: 0, col: 0 },
+      { role: "defender", row: 0, col: 0 })).toBe(5);
+  });
+
+  it("Great Wall: +1 str defender only", () => {
+    const state = gameWith((d, p) => {
+      d.grid[0][0].location = makeLocation({ ownerId: p.active, definitionId: "the-great-wall" });
+    });
+    const { queries } = rebuildListeners(state);
+    const unit = makeUnit({ ownerId: state.turn.activePlayerId, strength: 5 });
+
+    expect(getModifiedStat(state, queries, unit, "strength", { row: 0, col: 0 },
+      { role: "defender", row: 0, col: 0 })).toBe(6);
+    expect(getModifiedStat(state, queries, unit, "strength", { row: 0, col: 0 },
+      { role: "attacker", row: 0, col: 0 })).toBe(5);
+  });
+
+  it("Ancient Scroll: +2 cunning to equipped unit", () => {
+    const state = gameWith((d, p) => {
+      const item = makeItem({ ownerId: p.active, definitionId: "ancient-scroll", equippedTo: "unit-1" });
+      d.grid[0][0].location = makeLocation({ ownerId: p.active });
+      d.grid[0][0].items.push(item);
+    });
+    const { queries } = rebuildListeners(state);
+    const equipped = makeUnit({ id: "unit-1", ownerId: state.turn.activePlayerId, cunning: 3 });
+    const other = makeUnit({ id: "unit-2", ownerId: state.turn.activePlayerId, cunning: 3 });
+
+    expect(getModifiedStat(state, queries, equipped, "cunning", { row: 0, col: 0 })).toBe(5);
+    expect(getModifiedStat(state, queries, other, "cunning", { row: 0, col: 0 })).toBe(3);
+  });
+
+  it("Philosopher's Stone: +2 to all stats for equipped unit", () => {
+    const state = gameWith((d, p) => {
+      const item = makeItem({ ownerId: p.active, definitionId: "philosophers-stone", equippedTo: "unit-1" });
+      d.grid[0][0].location = makeLocation({ ownerId: p.active });
+      d.grid[0][0].items.push(item);
+    });
+    const { queries } = rebuildListeners(state);
+    const unit = makeUnit({ id: "unit-1", ownerId: state.turn.activePlayerId, strength: 3, cunning: 3, charisma: 3 });
+
+    expect(getModifiedStat(state, queries, unit, "strength", { row: 0, col: 0 })).toBe(5);
+    expect(getModifiedStat(state, queries, unit, "cunning", { row: 0, col: 0 })).toBe(5);
+    expect(getModifiedStat(state, queries, unit, "charisma", { row: 0, col: 0 })).toBe(5);
+  });
+
+  it("Arms Race: +2 str to owner's Warriors only", () => {
+    const state = gameWith((d, p) => {
+      d.players[p.activeIdx].passiveEvents.push({
+        ...makePassiveEvent({ ownerId: p.active, definitionId: "arms-race" }),
+        remainingDuration: 2,
+      });
+    });
+    const { active, other } = getPlayers(state);
+    const { queries } = rebuildListeners(state);
+    const myWarrior = makeUnit({ ownerId: active, strength: 4, attributes: ["Warrior"] });
+    const myScientist = makeUnit({ ownerId: active, strength: 4, attributes: ["Scientist"] });
+    const enemyWarrior = makeUnit({ ownerId: other, strength: 4, attributes: ["Warrior"] });
+
+    expect(getModifiedStat(state, queries, myWarrior, "strength")).toBe(6);
+    expect(getModifiedStat(state, queries, myScientist, "strength")).toBe(4);
+    expect(getModifiedStat(state, queries, enemyWarrior, "strength")).toBe(4);
+  });
+
+  it("Plague: -2 str at target + adjacent, not further", () => {
+    const targetLoc = makeLocation({ ownerId: "p1", definitionId: "test-location" });
+    const state = gameWith((d, p) => {
+      d.grid[1][1].location = targetLoc;
+      d.grid[0][1].location = makeLocation({ ownerId: p.active }); // adjacent
+      d.grid[0][0].location = makeLocation({ ownerId: p.active }); // diagonal (not adjacent)
+      d.players[p.otherIdx].passiveEvents.push({
+        ...makePassiveEvent({ ownerId: p.other, definitionId: "plague" }),
+        remainingDuration: 99,
+        targetId: targetLoc.id,
+      });
+    });
+    const { queries } = rebuildListeners(state);
+    const unit = makeUnit({ ownerId: state.turn.activePlayerId, strength: 5 });
+
+    expect(getModifiedStat(state, queries, unit, "strength", { row: 1, col: 1 })).toBe(3); // at target
+    expect(getModifiedStat(state, queries, unit, "strength", { row: 0, col: 1 })).toBe(3); // adjacent
+    expect(getModifiedStat(state, queries, unit, "strength", { row: 0, col: 0 })).toBe(5); // diagonal = not adjacent
+  });
+
+  it("multiple modifiers stack: Forge + Arms Race on Warrior", () => {
+    const state = gameWith((d, p) => {
+      d.grid[0][0].location = makeLocation({ ownerId: p.active, definitionId: "the-forge" });
+      d.players[p.activeIdx].passiveEvents.push({
+        ...makePassiveEvent({ ownerId: p.active, definitionId: "arms-race" }),
+        remainingDuration: 2,
+      });
+    });
+    const { active } = getPlayers(state);
+    const { queries } = rebuildListeners(state);
+    const warrior = makeUnit({ ownerId: active, strength: 4, attributes: ["Warrior"] });
+
+    // Forge +1 + Arms Race +2 = 4 + 3 = 7
+    expect(getModifiedStat(state, queries, warrior, "strength", { row: 0, col: 0 })).toBe(7);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Cost modifier queries
+// ---------------------------------------------------------------------------
+
+describe("cost modifier queries", () => {
+  it("The Bazaar: buy -1 with unit present, no discount without", () => {
+    const state = gameWith((d, p) => {
+      d.grid[0][0].location = makeLocation({ ownerId: p.active, definitionId: "the-bazaar" });
+      d.grid[0][0].units.push(makeUnit({ ownerId: p.active }));
+    });
+    const { active } = getPlayers(state);
+    const { queries } = rebuildListeners(state);
+    const card = makeUnit({ ownerId: active, cost: "3" });
+
+    expect(getModifiedCost(state, queries, card, active, "buy")).toBe(2);
+    // Without unit at bazaar — use other player
+    const { other } = getPlayers(state);
+    expect(getModifiedCost(state, queries, card, other, "buy")).toBe(3);
+  });
+
+  it("Industrialist: first buy -1, second buy normal", () => {
+    const state = gameWith((d, p) => {
+      d.players[p.activeIdx].activePolicies.push(
+        makePolicy({ ownerId: p.active, definitionId: "industrialist" }),
+      );
+    });
+    const { active } = getPlayers(state);
+    const { queries } = rebuildListeners(state);
+    const card = makeUnit({ ownerId: active, cost: "3" });
+
+    // No buys yet this turn — should get discount
+    expect(getModifiedCost(state, queries, card, active, "buy")).toBe(2);
+
+    // After a buy action in the log
+    const stateWithBuy = produce(state, (d) => {
+      d.actionLog.push({ type: "buy", playerId: active, cardId: "whatever" } as any);
+    });
+    const { queries: q2 } = rebuildListeners(stateWithBuy);
+    expect(getModifiedCost(stateWithBuy, q2, card, active, "buy")).toBe(3);
+  });
+
+  it("Trade Embargo: opponent buys +2, own unaffected", () => {
+    const state = gameWith((d, p) => {
+      d.players[p.activeIdx].passiveEvents.push({
+        ...makePassiveEvent({ ownerId: p.active, definitionId: "trade-embargo" }),
+        remainingDuration: 2,
+      });
+    });
+    const { active, other } = getPlayers(state);
+    const { queries } = rebuildListeners(state);
+    const card = makeUnit({ ownerId: other, cost: "3" });
+
+    expect(getModifiedCost(state, queries, card, other, "buy")).toBe(5);
+    expect(getModifiedCost(state, queries, card, active, "buy")).toBe(3);
+  });
+
+  it("cost floor per-modifier: min 1 prevents going below 1", () => {
+    const state = gameWith((d, p) => {
+      d.grid[0][0].location = makeLocation({ ownerId: p.active, definitionId: "the-bazaar" });
+      d.grid[0][0].units.push(makeUnit({ ownerId: p.active }));
+    });
+    const { active } = getPlayers(state);
+    const { queries } = rebuildListeners(state);
+    const cheapCard = makeUnit({ ownerId: active, cost: "1" });
+
+    // Bazaar -1 on cost 1, but min is 1
+    expect(getModifiedCost(state, queries, cheapCard, active, "buy")).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Protection queries
+// ---------------------------------------------------------------------------
+
+describe("protection queries", () => {
+  it("Machu Picchu: protected from event_target", () => {
+    const state = gameWith((d, p) => {
+      d.grid[0][0].location = makeLocation({ ownerId: p.active, definitionId: "machu-picchu" });
+    });
+    const { queries } = rebuildListeners(state);
+    const unit = makeUnit({ ownerId: state.turn.activePlayerId });
+
+    expect(isUnitProtected(state, queries, unit, { row: 0, col: 0 }, "event_target")).toBe(true);
+    expect(isUnitProtected(state, queries, unit, { row: 0, col: 1 }, "event_target")).toBe(false);
+    expect(isUnitProtected(state, queries, unit, { row: 0, col: 0 }, "event_injury")).toBe(false);
+  });
+
+  it("The Catacombs: protected from event_injury", () => {
+    const state = gameWith((d, p) => {
+      d.grid[0][0].location = makeLocation({ ownerId: p.active, definitionId: "the-catacombs" });
+    });
+    const { queries } = rebuildListeners(state);
+    const unit = makeUnit({ ownerId: state.turn.activePlayerId });
+
+    expect(isUnitProtected(state, queries, unit, { row: 0, col: 0 }, "event_injury")).toBe(true);
+    expect(isUnitProtected(state, queries, unit, { row: 0, col: 0 }, "event_target")).toBe(false);
+  });
+
+  it("Sherwood Forest: 7+ cunning protected from str contests, 6 cunning not", () => {
+    const state = gameWith((d, p) => {
+      d.grid[0][0].location = makeLocation({ ownerId: p.active, definitionId: "sherwood-forest" });
+    });
+    const { queries } = rebuildListeners(state);
+    const highCunning = makeUnit({ ownerId: state.turn.activePlayerId, cunning: 7 });
+    const lowCunning = makeUnit({ ownerId: state.turn.activePlayerId, cunning: 6 });
+
+    expect(isUnitProtected(state, queries, highCunning, { row: 0, col: 0 }, "contest_target", "strength")).toBe(true);
+    expect(isUnitProtected(state, queries, lowCunning, { row: 0, col: 0 }, "contest_target", "strength")).toBe(false);
+    expect(isUnitProtected(state, queries, highCunning, { row: 0, col: 0 }, "contest_target", "cunning")).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// AP modifier queries
+// ---------------------------------------------------------------------------
+
+describe("AP modifier queries", () => {
+  it("Pioneer: first move 0 AP, second move normal", () => {
+    const state = gameWith((d, p) => {
+      d.players[p.activeIdx].activePolicies.push(
+        makePolicy({ ownerId: p.active, definitionId: "pioneer" }),
+      );
+    });
+    const { active } = getPlayers(state);
+    const { queries } = rebuildListeners(state);
+    const moveAction = { type: "move" as const, playerId: active, unitId: "u1", row: 0, col: 1 };
+
+    // First move — 0 AP
+    expect(getModifiedAPCost(state, queries, moveAction, 1)).toBe(0);
+
+    // After a move in the log — normal AP
+    const stateWithMove = produce(state, (d) => {
+      d.actionLog.push({ type: "move", playerId: active, unitId: "u1", row: 0, col: 1 } as any);
+    });
+    const { queries: q2 } = rebuildListeners(stateWithMove);
+    expect(getModifiedAPCost(stateWithMove, q2, moveAction, 1)).toBe(1);
   });
 });

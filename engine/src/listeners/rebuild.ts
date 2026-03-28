@@ -1,5 +1,5 @@
 import type { MainGameState } from "../types";
-import type { EffectListener } from "./types";
+import type { EffectListener, QueryListener } from "./types";
 import {
   LOCATION_EFFECTS,
   POLICY_EFFECTS,
@@ -8,18 +8,24 @@ import {
   ITEM_EFFECTS,
 } from "./effects";
 
+export interface RebuildResult {
+  listeners: EffectListener[];
+  queries: QueryListener[];
+}
+
 /**
- * Derive the active listener list from current game state.
+ * Derive the active listener and query lists from current game state.
  *
  * Scans locations, policies, passive events, traps, and items for cards
  * whose definitionId has a matching effect factory. Cards without effects
  * are silently skipped.
  *
- * Called once per action — the returned array is used for the duration
+ * Called once per action — the returned arrays are used for the duration
  * of that action's processing.
  */
-export function rebuildListeners(state: MainGameState): EffectListener[] {
+export function rebuildListeners(state: MainGameState): RebuildResult {
   const listeners: EffectListener[] = [];
+  const queries: QueryListener[] = [];
 
   // Grid: locations and items
   for (let r = 0; r < state.grid.length; r++) {
@@ -30,7 +36,9 @@ export function rebuildListeners(state: MainGameState): EffectListener[] {
       if (cell.location) {
         const factory = LOCATION_EFFECTS[cell.location.definitionId];
         if (factory) {
-          listeners.push(...factory(cell.location, cell.location.ownerId, r, c));
+          const result = factory(cell.location, cell.location.ownerId, r, c);
+          listeners.push(...result.listeners);
+          queries.push(...result.queries);
         }
       }
 
@@ -38,7 +46,9 @@ export function rebuildListeners(state: MainGameState): EffectListener[] {
       for (const item of cell.items) {
         const factory = ITEM_EFFECTS[item.definitionId];
         if (factory) {
-          listeners.push(...factory(item, item.ownerId, { row: r, col: c }));
+          const result = factory(item, item.ownerId, { row: r, col: c });
+          listeners.push(...result.listeners);
+          queries.push(...result.queries);
         }
       }
     }
@@ -49,21 +59,27 @@ export function rebuildListeners(state: MainGameState): EffectListener[] {
     for (const policy of player.activePolicies) {
       const factory = POLICY_EFFECTS[policy.definitionId];
       if (factory) {
-        listeners.push(...factory(policy, player.id));
+        const result = factory(policy, player.id);
+        listeners.push(...result.listeners);
+        queries.push(...result.queries);
       }
     }
 
     for (const pe of player.passiveEvents) {
       const factory = PASSIVE_EVENT_EFFECTS[pe.definitionId];
       if (factory) {
-        listeners.push(...factory(pe, player.id));
+        const result = factory(pe, player.id);
+        listeners.push(...result.listeners);
+        queries.push(...result.queries);
       }
     }
 
     for (const trap of player.activeTraps) {
       const factory = TRAP_EFFECTS[trap.card.definitionId];
       if (factory) {
-        listeners.push(...factory(trap, player.id));
+        const result = factory(trap, player.id);
+        listeners.push(...result.listeners);
+        queries.push(...result.queries);
       }
     }
 
@@ -72,11 +88,13 @@ export function rebuildListeners(state: MainGameState): EffectListener[] {
       if (card.type === "item") {
         const factory = ITEM_EFFECTS[card.definitionId];
         if (factory) {
-          listeners.push(...factory(card, player.id));
+          const result = factory(card, player.id);
+          listeners.push(...result.listeners);
+          queries.push(...result.queries);
         }
       }
     }
   }
 
-  return listeners;
+  return { listeners, queries };
 }

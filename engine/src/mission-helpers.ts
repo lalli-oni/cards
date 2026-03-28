@@ -1,4 +1,6 @@
-import type { UnitCard } from "./types";
+import type { MainGameState, UnitCard } from "./types";
+import type { QueryListener } from "./listeners/types";
+import { getModifiedStat } from "./listeners/query";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -146,17 +148,24 @@ export function parseRewards(rewardsString: string): ParsedRewards {
 
 /**
  * Check if a set of units at a location meets all mission requirements.
+ * When state/queries/position are provided, stat checks use modified values.
  */
 export function checkMissionRequirements(
   requirements: MissionRequirement[],
   units: UnitCard[],
+  state?: MainGameState,
+  queries?: QueryListener[],
+  position?: { row: number; col: number },
 ): boolean {
-  return requirements.every((req) => checkSingleRequirement(req, units));
+  return requirements.every((req) => checkSingleRequirement(req, units, state, queries, position));
 }
 
 function checkSingleRequirement(
   req: MissionRequirement,
   units: UnitCard[],
+  state?: MainGameState,
+  queries?: QueryListener[],
+  position?: { row: number; col: number },
 ): boolean {
   switch (req.kind) {
     case "attribute": {
@@ -167,7 +176,12 @@ function checkSingleRequirement(
     }
 
     case "stat": {
-      const total = units.reduce((sum, u) => sum + u[req.stat], 0);
+      const total = units.reduce((sum, u) => {
+        if (state && queries) {
+          return sum + getModifiedStat(state, queries, u, req.stat, position);
+        }
+        return sum + u[req.stat];
+      }, 0);
       return total >= req.threshold;
     }
 

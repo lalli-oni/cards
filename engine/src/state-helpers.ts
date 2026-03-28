@@ -92,15 +92,16 @@ export function placeLocationOnGrid(
   draft.grid[row][col].location = card;
 }
 
-/** Advance to the next player's turn. Main-phase only. Increments round when wrapping back to the first player. */
+/** Advance to the next player's turn. Main-phase only. Increments round when wrapping back to the first player. Returns true when a new round begins. */
 export function advanceTurn(
   draft: Draft<MainGameState>,
   events: GameEvent[],
-): void {
+): boolean {
   const nextId = getNextPlayerId(draft, draft.turn.activePlayerId);
   const nextIndex = getTurnIndex(draft, nextId);
 
-  if (nextIndex === 0) {
+  const roundIncremented = nextIndex === 0;
+  if (roundIncremented) {
     draft.turn.round += 1;
   }
 
@@ -110,6 +111,8 @@ export function advanceTurn(
     playerId: nextId,
     round: draft.turn.round,
   });
+
+  return roundIncremented;
 }
 
 /** Advance to the next player in seeding. Emits seeding_player_changed. Does not handle step transitions. */

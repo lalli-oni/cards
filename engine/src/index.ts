@@ -67,3 +67,5 @@ export type {
 export { getActivePlayerId } from "./types";
 export { getValidActions } from "./valid-actions";
 export { getVisibleState } from "./visible-state";
+// Win condition
+export { findSoleLeader, getScores, shouldEndGame, toEndedState } from "./win-condition";

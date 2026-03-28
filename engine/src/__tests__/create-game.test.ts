@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { createGame } from "../create-game";
-import type { DeckInput, Grid } from "../types";
+import type { SetupInput, Grid } from "../types";
 import {
   createSeedingGame,
   createTestGame,
@@ -11,7 +11,7 @@ import {
   TWO_PLAYERS,
 } from "./helpers";
 
-const MAIN_DECK_INPUT: DeckInput = {
+const MAIN_SETUP_INPUT: SetupInput = {
   mode: "main",
   decks: {
     p1: {
@@ -144,7 +144,7 @@ describe("createGame", () => {
   describe("validation", () => {
     it("rejects empty players array", () => {
       expect(() =>
-        createGame(DEFAULT_CONFIG, [], SEED, MAIN_DECK_INPUT),
+        createGame(DEFAULT_CONFIG, [], SEED, MAIN_SETUP_INPUT),
       ).toThrow("at least one player");
     });
 
@@ -157,14 +157,14 @@ describe("createGame", () => {
             { id: "p1", name: "B" },
           ],
           SEED,
-          MAIN_DECK_INPUT,
+          MAIN_SETUP_INPUT,
         ),
       ).toThrow("Duplicate player IDs");
     });
 
     it("rejects empty seed", () => {
       expect(() =>
-        createGame(DEFAULT_CONFIG, TWO_PLAYERS, "", MAIN_DECK_INPUT),
+        createGame(DEFAULT_CONFIG, TWO_PLAYERS, "", MAIN_SETUP_INPUT),
       ).toThrow("non-empty seed");
     });
   });
@@ -183,7 +183,7 @@ describe("createGame", () => {
         ],
       ];
       const state = createTestGame({
-        deckInput: {
+        setupInput: {
           mode: "main",
           decks: {
             p1: { mainDeck: [], hand: [], prospectDeck: [], marketDeck: [], activePolicies: [] },
@@ -199,7 +199,7 @@ describe("createGame", () => {
     it("uses provided market instead of empty array", () => {
       const card = makeUnit({ ownerId: "p1" });
       const state = createTestGame({
-        deckInput: {
+        setupInput: {
           mode: "main",
           decks: {
             p1: { mainDeck: [], hand: [], prospectDeck: [], marketDeck: [], activePolicies: [] },
@@ -214,7 +214,7 @@ describe("createGame", () => {
 
     it("overrides starting gold per player", () => {
       const state = createTestGame({
-        deckInput: {
+        setupInput: {
           mode: "main",
           decks: {
             p1: { mainDeck: [], hand: [], prospectDeck: [], marketDeck: [], activePolicies: [], gold: 25 },
@@ -231,7 +231,7 @@ describe("createGame", () => {
     it("falls back to config starting_gold when gold not specified", () => {
       const state = createTestGame({
         config: { ...DEFAULT_CONFIG, starting_gold: 15 },
-        deckInput: {
+        setupInput: {
           mode: "main",
           decks: {
             p1: { mainDeck: [], hand: [], prospectDeck: [], marketDeck: [], activePolicies: [] },

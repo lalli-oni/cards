@@ -46,5 +46,5 @@ This enables:
 - Single player support (see #31)
 
 Engine support landed in #44: callers set `seeding-phase: "pre-built"`
-in variant overrides, then use `buildPrebuiltDeckInput()` to construct
-the deck input with pre-populated grid, market, and per-player gold.
+in variant overrides, then use `buildPrebuiltSetup()` to construct
+the setup input with pre-populated grid, market, and per-player gold.

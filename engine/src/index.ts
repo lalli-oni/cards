@@ -21,7 +21,7 @@ export { GameController } from "./controller";
 export { createGame } from "./create-game";
 // Pre-built game setup
 export type { PrebuiltGameInput, PrebuiltPlayerInput } from "./prebuilt";
-export { buildPrebuiltDeckInput } from "./prebuilt";
+export { buildPrebuiltSetup } from "./prebuilt";
 // Rules config
 export {
   buildBaselineConfig,
@@ -35,7 +35,7 @@ export type {
   ActionForState,
   Card,
   CardType,
-  DeckInput,
+  SetupInput,
   DeckName,
   EndedGameState,
   ActivePassiveEvent,

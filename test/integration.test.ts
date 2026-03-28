@@ -9,7 +9,7 @@ import { join } from "path";
 import {
   BotAdapter,
   GameController,
-  buildPrebuiltDeckInput,
+  buildPrebuiltSetup,
   createGame,
   createInstanceCounter,
   getActivePlayerId,
@@ -49,7 +49,7 @@ const DEFAULT_CONFIG: GameConfig = {
   combat_kill_ratio: 2,
 };
 
-type DeckInput = Parameters<typeof createGame>[3];
+type SetupInput = Parameters<typeof createGame>[3];
 
 function makePlayers(count: number): PlayerDescriptor[] {
   return Array.from({ length: count }, (_, i) => ({
@@ -70,7 +70,7 @@ function makeAdapters(
 function buildSeedingInput(
   players: PlayerDescriptor[],
   defs: CardDefinition[],
-): DeckInput {
+): SetupInput {
   const counter = createInstanceCounter();
   const nonPolicy = defs.filter((d) => d.type !== "policy");
   const policies = defs.filter((d) => d.type === "policy");
@@ -94,13 +94,13 @@ async function runFullGame(opts: {
 }): Promise<GameController> {
   const players = opts.players ?? makePlayers(2);
   const defs = loadCardDefinitionsFromBuild(BUILD_DIR);
-  const deckInput = buildSeedingInput(players, defs);
+  const setupInput = buildSeedingInput(players, defs);
 
   const controller = new GameController({
     config: opts.config ?? DEFAULT_CONFIG,
     players,
     seed: opts.seed ?? "integration-seed",
-    deckInput,
+    setupInput,
     adapters: makeAdapters(players),
   });
 
@@ -208,7 +208,7 @@ describe("determinism", () => {
   it("action log replay produces identical state", async () => {
     const players = makePlayers(2);
     const defs = loadCardDefinitionsFromBuild(BUILD_DIR);
-    const deckInput = buildSeedingInput(players, defs);
+    const setupInput = buildSeedingInput(players, defs);
 
     const controller = await runFullGame({ seed: DET_SEED, players });
     const session = controller.toSession();
@@ -216,7 +216,7 @@ describe("determinism", () => {
     // Replay from action log (no snapshot)
     const replayed = GameController.fromSession(
       { ...session, snapshot: undefined },
-      deckInput,
+      setupInput,
       makeAdapters(players),
     );
 
@@ -232,13 +232,13 @@ describe("determinism", () => {
   it("cross-client portability: session transfer mid-game", async () => {
     const players = makePlayers(2);
     const defs = loadCardDefinitionsFromBuild(BUILD_DIR);
-    const deckInput = buildSeedingInput(players, defs);
+    const setupInput = buildSeedingInput(players, defs);
 
     const controller = new GameController({
       config: DEFAULT_CONFIG,
       players,
       seed: "portability-test",
-      deckInput,
+      setupInput,
       adapters: makeAdapters(players),
     });
 
@@ -252,7 +252,7 @@ describe("determinism", () => {
     const session = controller.toSession(true);
     const c2 = GameController.fromSession(
       session,
-      deckInput,
+      setupInput,
       makeAdapters(players),
     );
 
@@ -296,9 +296,9 @@ describe("real card data", () => {
   it("creates a seeding game with real cards", () => {
     const players = makePlayers(2);
     const defs = loadCardDefinitionsFromBuild(BUILD_DIR);
-    const deckInput = buildSeedingInput(players, defs);
+    const setupInput = buildSeedingInput(players, defs);
 
-    const state = createGame(DEFAULT_CONFIG, players, "real-cards", deckInput);
+    const state = createGame(DEFAULT_CONFIG, players, "real-cards", setupInput);
     expect(state.phase).toBe("seeding");
     expect(state.players[0].seedingDeck.length).toBeGreaterThan(0);
   });
@@ -405,25 +405,25 @@ describe("pre-built game flow", () => {
       };
     }
 
-    const deckInput = buildPrebuiltDeckInput({
+    const setupInput = buildPrebuiltSetup({
       players: playerDecks,
       grid,
     });
 
-    return { players, deckInput, config, seed: opts?.seed ?? "prebuilt-seed" };
+    return { players, setupInput, config, seed: opts?.seed ?? "prebuilt-seed" };
   }
 
   it("starts directly in main phase (no seeding)", () => {
-    const { players, deckInput, config, seed } = buildPrebuiltGame();
-    const state = createGame(config, players, seed, deckInput);
+    const { players, setupInput, config, seed } = buildPrebuiltGame();
+    const state = createGame(config, players, seed, setupInput);
 
     expect(state.phase).toBe("main");
     expect("seedingState" in state).toBe(false);
   });
 
   it("preserves the pre-populated grid", () => {
-    const { players, deckInput, config, seed } = buildPrebuiltGame();
-    const state = createGame(config, players, seed, deckInput);
+    const { players, setupInput, config, seed } = buildPrebuiltGame();
+    const state = createGame(config, players, seed, setupInput);
 
     let locationCount = 0;
     for (const row of state.grid) {
@@ -435,12 +435,12 @@ describe("pre-built game flow", () => {
   });
 
   it("runs a pre-built game to completion with bots", async () => {
-    const { players, deckInput, config, seed } = buildPrebuiltGame();
+    const { players, setupInput, config, seed } = buildPrebuiltGame();
     const controller = new GameController({
       config,
       players,
       seed,
-      deckInput,
+      setupInput,
       adapters: makeAdapters(players),
     });
 
@@ -453,12 +453,12 @@ describe("pre-built game flow", () => {
   });
 
   it("produces a valid session from a pre-built game", async () => {
-    const { players, deckInput, config, seed } = buildPrebuiltGame();
+    const { players, setupInput, config, seed } = buildPrebuiltGame();
     const controller = new GameController({
       config,
       players,
       seed,
-      deckInput,
+      setupInput,
       adapters: makeAdapters(players),
     });
 

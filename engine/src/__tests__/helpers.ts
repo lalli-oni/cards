@@ -2,7 +2,7 @@ import prand from "pure-rand";
 import { createGame } from "../create-game";
 import type {
   Card,
-  DeckInput,
+  SetupInput,
   GameConfig,
   GameState,
   InstantEventCard,
@@ -169,10 +169,10 @@ export function createTestGame(overrides?: {
   config?: GameConfig;
   players?: PlayerDescriptor[];
   seed?: string;
-  deckInput?: DeckInput;
+  setupInput?: SetupInput;
 }): MainGameState {
   const players = overrides?.players ?? TWO_PLAYERS;
-  const deckInput: DeckInput = overrides?.deckInput ?? {
+  const setupInput: SetupInput = overrides?.setupInput ?? {
     mode: "main",
     decks: Object.fromEntries(
       players.map((p) => [
@@ -191,7 +191,7 @@ export function createTestGame(overrides?: {
     overrides?.config ?? DEFAULT_CONFIG,
     players,
     overrides?.seed ?? SEED,
-    deckInput,
+    setupInput,
   ) as MainGameState;
 }
 

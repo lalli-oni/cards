@@ -3,7 +3,7 @@ import { BotAdapter } from "../bot-adapter";
 import { GameController } from "../controller";
 import type {
   Action,
-  DeckInput,
+  SetupInput,
   GameEvent,
   GameState,
   MainGameState,
@@ -13,7 +13,7 @@ import type {
 } from "../types";
 import { DEFAULT_CONFIG, SEED, TWO_PLAYERS } from "./helpers";
 
-const MAIN_DECK_INPUT: DeckInput = {
+const MAIN_SETUP_INPUT: SetupInput = {
   mode: "main",
   decks: {
     p1: {
@@ -47,7 +47,7 @@ function createController(
     config: DEFAULT_CONFIG,
     players: TWO_PLAYERS,
     seed: SEED,
-    deckInput: MAIN_DECK_INPUT,
+    setupInput: MAIN_SETUP_INPUT,
     adapters: createAdapters(),
     onEvent,
   });
@@ -98,7 +98,7 @@ describe("GameController", () => {
         config: DEFAULT_CONFIG,
         players: TWO_PLAYERS,
         seed: SEED,
-        deckInput: MAIN_DECK_INPUT,
+        setupInput: MAIN_SETUP_INPUT,
         adapters: new Map([
           ["p1", badAdapter],
           ["p2", badAdapter],
@@ -153,7 +153,7 @@ describe("GameController", () => {
 
       const replayed = GameController.fromSession(
         session,
-        MAIN_DECK_INPUT,
+        MAIN_SETUP_INPUT,
         createAdapters(),
       );
       expect((replayed.getState() as MainGameState).turn.round).toBe(
@@ -171,7 +171,7 @@ describe("GameController", () => {
 
       const resumed = GameController.fromSession(
         session,
-        MAIN_DECK_INPUT,
+        MAIN_SETUP_INPUT,
         createAdapters(),
       );
       expect((resumed.getState() as MainGameState).turn.activePlayerId).toBe(
@@ -188,7 +188,7 @@ describe("GameController", () => {
       const session = controller.toSession();
       const replayed = GameController.fromSession(
         session,
-        MAIN_DECK_INPUT,
+        MAIN_SETUP_INPUT,
         createAdapters(),
       );
 
@@ -214,7 +214,7 @@ describe("GameController", () => {
       };
 
       expect(() =>
-        GameController.fromSession(session, MAIN_DECK_INPUT, createAdapters()),
+        GameController.fromSession(session, MAIN_SETUP_INPUT, createAdapters()),
       ).toThrow(/action 1\/1/);
     });
   });

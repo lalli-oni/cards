@@ -325,7 +325,7 @@ export interface ApplyResult {
 // Deck Input (for createGame)
 // ---------------------------------------------------------------------------
 
-export type DeckInput =
+export type SetupInput =
   | {
       mode: "seeding";
       decks: Record<string, { seedingDeck: Card[]; policyPool: PolicyCard[] }>;

@@ -340,8 +340,14 @@ export type DeckInput =
           prospectDeck: Card[];
           marketDeck: Card[];
           activePolicies: PolicyCard[];
+          /** Override starting_gold from config for this player. */
+          gold?: number;
         }
       >;
+      /** Pre-populated grid. When omitted, an empty grid is created. */
+      grid?: Grid;
+      /** Pre-populated shared market. When omitted, starts empty. */
+      market?: Card[];
     };
 
 // ---------------------------------------------------------------------------

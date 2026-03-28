@@ -54,6 +54,11 @@ function createEmptyGrid(config: GameConfig, playerCount: number): Grid {
  * DeckInput determines the starting mode:
  * - "seeding": populate seeding decks + policy pools, start in seeding phase
  * - "main": populate pre-built decks, skip directly to main phase
+ *   Accepts optional grid, market, and per-player gold overrides.
+ *
+ * Callers decide which mode to use based on variant config (e.g.
+ * config["seeding-phase"] === "pre-built"). See buildPrebuiltDeckInput()
+ * for a convenience helper.
  */
 export function createGame(
   config: GameConfig,
@@ -112,6 +117,9 @@ export function createGame(
       ps.prospectDeck = [...input.prospectDeck];
       ps.marketDeck = [...input.marketDeck];
       ps.activePolicies = [...input.activePolicies];
+      if (input.gold !== undefined) {
+        ps.gold = input.gold;
+      }
     }
   }
 
@@ -125,8 +133,14 @@ export function createGame(
   const base = {
     config,
     players: orderedPlayers,
-    grid: createEmptyGrid(config, players.length),
-    market: [],
+    grid:
+      deckInput.mode === "main" && deckInput.grid
+        ? deckInput.grid
+        : createEmptyGrid(config, players.length),
+    market:
+      deckInput.mode === "main" && deckInput.market
+        ? [...deckInput.market]
+        : [],
     rngState: extractRngState(nextRng),
     seed,
     actionLog: [],

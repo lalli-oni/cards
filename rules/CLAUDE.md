@@ -26,6 +26,7 @@ This folder contains markdown files defining the card game rules.
 
 ## File Structure
 - `README.md` — Master design document (phases, card types, economy, variants)
+- `stat-contests.md` — Stat contest mechanics (1v1 resolution, modifiers, distinction from stat checks)
 - `market.md` — Market and economy rules
 - `policies.md` — Policy rules, structure, and examples
 - `ideas.md` — Feature ideas for post-v1.0 consideration

@@ -196,6 +196,10 @@ Each deck has its own draw behavior:
 
 #### Combat
 
+> Combat is a series of **strength contests** resolved through a
+> multi-unit commitment and matchup system. See
+> [Stat Contests](stat-contests.md) for the general contest mechanic.
+
 Combat is initiated by the **Attack** action (1 AP). The attacker must
 have at least one unit at the location and at least one enemy unit must
 be present.
@@ -213,7 +217,7 @@ be present.
    count. The side with more units chooses which of their excess units
    sit out (decided after seeing all rolls).
 5. **Resolve**: Each pair resolves independently:
-   - Higher attack power wins. **Tie = nothing happens.**
+   - Higher attack power wins. **Tie = defender wins.**
    - Loser is **injured** (see Unit status). Items are dropped at the
      location.
    - If the winner's attack power is [var:combat_kill_ratio:2]x or more the loser's
@@ -242,8 +246,11 @@ be present.
 ## Card Types
 ### Units
 Based on historical figures.
-Stats (for example; strength, cunning, charisma).
+Stats (for example; strength, cunning, charisma). Stats are open-ended
+— any stat printed on a card can be referenced by game mechanics.
 Any stats not listed on the card are treated as [var:default_stat:5].
+See [Stat Contests](stat-contests.md) for how stats are used in 1v1
+contest resolution.
 Attributes (for example: Scientist, Politician, Engineer, Warrior, Spiritual)
 Actions: Units can have various actions that players can activate.
 
@@ -443,7 +450,7 @@ differs per card.
 | Untouchable | Static | This unit cannot be targeted by the Attack action and is not committed to combat as a defender |
 | Duelist | Static | When this unit is in combat, the matchup it is assigned to is resolved in isolation — no other units' keywords or effects apply to it |
 | Lethal | Static | When this unit wins combat, the loser is killed instead of injured (regardless of attack power ratio) |
-| Resolute | Static | This unit wins combat ties. If both units have Resolute, tie = nothing happens (cancels out) |
+| Resolute | Static | This unit wins ties when attacking |
 | Taunt | Static | Enemy units at this location must target this unit when attacking. If multiple friendly units have Taunt, the attacker chooses among them |
 | Heal | Activated (1 AP) | Remove the injured status from a friendly unit at the same location |
 

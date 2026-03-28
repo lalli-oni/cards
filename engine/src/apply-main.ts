@@ -13,6 +13,7 @@ import {
   isPerimeterCell,
 } from "./grid-helpers";
 import { extractRngState } from "./rng";
+import { findSoleLeader, shouldEndGame, toEndedState } from "./win-condition";
 import {
   advanceTurn,
   getConfigNumber,
@@ -28,6 +29,7 @@ import type {
   MainGameState,
   UnitCard,
 } from "./types";
+import { getActivePlayerId } from "./types";
 
 // ---------------------------------------------------------------------------
 // Turn lifecycle
@@ -112,24 +114,21 @@ function runEndOfTurn(draft: Draft<MainGameState>, events: GameEvent[]): void {
   }
 }
 
-/** End the current turn and advance to the next player. */
-function endTurnAndAdvance(draft: Draft<MainGameState>, events: GameEvent[]): void {
+/**
+ * End the current turn and advance to the next player.
+ * When a new round begins, the caller is responsible for emitting
+ * turn_started and running start-of-turn after checking win conditions.
+ *
+ * @returns true when a new round begins
+ */
+function endTurnAndAdvance(draft: Draft<MainGameState>, events: GameEvent[]): boolean {
   events.push({ type: "turn_ended", playerId: draft.turn.activePlayerId });
   runEndOfTurn(draft, events);
-  advanceTurn(draft, events);
-  runStartOfTurn(draft, events);
-}
-
-/**
- * Placeholder for post-action hooks (e.g. future game-end checks).
- * Does NOT auto-advance on AP exhaustion — players may still have
- * 0-AP actions (buy) and must explicitly pass to end their turn.
- */
-function afterAction(
-  _draft: Draft<MainGameState>,
-  _events: GameEvent[],
-): void {
-  // No-op for now. Future: check win conditions, etc.
+  const roundIncremented = advanceTurn(draft, events);
+  if (!roundIncremented) {
+    runStartOfTurn(draft, events);
+  }
+  return roundIncremented;
 }
 
 // ---------------------------------------------------------------------------
@@ -161,7 +160,7 @@ function handleDeploy(
   player.hq.push(card);
 
   events.push({ type: "card_deployed", playerId, cardId });
-  afterAction(draft, events);
+
 }
 
 function handleBuy(
@@ -207,7 +206,7 @@ function handleDraw(
   const player = getPlayerById(draft, playerId);
   spendAP(draft, 1);
   drawOneCard(draft, player, events);
-  afterAction(draft, events);
+
 }
 
 function handleEnter(
@@ -254,7 +253,7 @@ function handleEnter(
 
   events.push({ type: "unit_entered", playerId, unitId, row, col });
   checkTraps(draft, playerId, "enemy_unit_enters_location", row, col, unitId, events);
-  afterAction(draft, events);
+
 }
 
 function handleMove(
@@ -320,7 +319,7 @@ function handleMove(
       toRow: -1,
       toCol: -1,
     });
-    afterAction(draft, events);
+  
     return;
   }
 
@@ -355,7 +354,7 @@ function handleMove(
 
   events.push({ type: "unit_moved", playerId, unitId, fromRow, fromCol, toRow, toCol });
   checkTraps(draft, playerId, "enemy_unit_enters_location", toRow, toCol, unitId, events);
-  afterAction(draft, events);
+
 }
 
 function handlePlayEvent(
@@ -403,7 +402,7 @@ function handlePlayEvent(
       throw new Error(`Unknown event subtype "${(card as any).subtype}" for card "${cardId}"`);
   }
 
-  afterAction(draft, events);
+
 }
 
 function handleEquip(
@@ -436,7 +435,7 @@ function handleEquip(
 
   item.equippedTo = unitId;
   events.push({ type: "item_equipped", playerId, itemId, unitId });
-  afterAction(draft, events);
+
 }
 
 function handleDestroy(
@@ -456,7 +455,7 @@ function handleDestroy(
   player.removedFromGame.push(card);
 
   events.push({ type: "card_destroyed", playerId, cardId });
-  afterAction(draft, events);
+
 }
 
 function handleRaze(
@@ -522,7 +521,7 @@ function handleRaze(
     events.push({ type: "location_placed", row, col, cardId: newLocation.id });
   }
 
-  afterAction(draft, events);
+
 }
 
 function handleAttack(
@@ -615,7 +614,7 @@ function handleAttack(
   }
 
   events.push({ type: "combat_resolved", row, col, winnerId });
-  afterAction(draft, events);
+
 }
 
 /** Check if a unit has been removed from the cell (killed/discarded). */
@@ -818,7 +817,7 @@ function handleAttemptMission(
       col,
       locationId: cell.location.id,
     });
-    afterAction(draft, events);
+  
     return;
   }
 
@@ -854,7 +853,7 @@ function handleAttemptMission(
     events.push({ type: "location_placed", row, col, cardId: newLocation.id });
   }
 
-  afterAction(draft, events);
+
 }
 
 function handleActivate(
@@ -880,6 +879,7 @@ export function applyMainAction(
   action: MainAction,
 ): ApplyResult {
   const events: GameEvent[] = [];
+  let roundIncremented = false;
 
   const nextState = produce(state, (draft) => {
     // castDraft: Immer widens variadic tuples (e.g. attack.unitIds: [string, ...string[]])
@@ -888,7 +888,7 @@ export function applyMainAction(
 
     switch (action.type) {
       case "pass":
-        endTurnAndAdvance(draft, events);
+        roundIncremented = endTurnAndAdvance(draft, events);
         break;
 
       case "deploy":
@@ -953,6 +953,26 @@ export function applyMainAction(
       }
     }
   });
+
+  // Check win conditions at round boundaries
+  if (roundIncremented) {
+    if (shouldEndGame(nextState)) {
+      const leader = findSoleLeader(nextState);
+      if (leader) {
+        return { state: toEndedState(nextState, leader, events), events };
+      }
+      // Tied — per rules, play additional rounds until sole leader.
+      // GameController.run() has a maxActions guard (10k) to prevent infinite loops.
+    }
+    // Game continues — emit turn_started (deferred from advanceTurn at round boundary)
+    // and run start-of-turn effects
+    const activeId = getActivePlayerId(nextState);
+    events.push({ type: "turn_started", playerId: activeId, round: nextState.turn.round });
+    const withTurnStart = produce(nextState, (draft) => {
+      runStartOfTurn(draft, events);
+    });
+    return { state: withTurnStart, events };
+  }
 
   return { state: nextState, events };
 }

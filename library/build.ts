@@ -119,7 +119,11 @@ function transformCard(type: CardType, raw: Record<string, string>): Record<stri
       break;
 
     case "locations":
-      base.mission = raw.mission || null;
+      if (raw.mission) {
+        const [req, reward] = raw.mission.split(">");
+        base.requirements = req;
+        base.rewards = reward ? `${reward}vp` : null;
+      }
       base.passive = raw.passive || null;
       break;
 

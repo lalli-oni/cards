@@ -16,7 +16,7 @@ import {
 
 beforeEach(() => resetIds());
 
-// With SEED="test-seed", players are in turn order ["p2","p1"] — p2 goes first (players[0]).
+// With SEED="test-seed", shuffle produces ["p2","p1"]. If shuffle or hash changes, update these constants.
 const ACTIVE = "p2";
 const OTHER = "p1";
 const ACTIVE_IDX = 0;

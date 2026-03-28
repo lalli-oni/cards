@@ -79,7 +79,7 @@ export function createGame(
 
   const rng = prand.mersenne(hashSeed(seed));
 
-  // Determine turn order — shuffle player ids using seeded RNG
+  // Shuffle player IDs to determine players array ordering (which defines turn order)
   const [turnOrder, nextRng] = shuffle(ids, rng);
 
   const startingGold =

@@ -9,7 +9,7 @@ import {
   isFull,
   isPerimeterCell,
 } from "./grid-helpers";
-import { getConfigNumber } from "./state-helpers";
+import { getConfigNumber, getPlayerById } from "./state-helpers";
 import type {
   Action,
   GameState,
@@ -116,7 +116,7 @@ function getMainValidActions(
   playerId: string,
 ): MainAction[] {
   const actions: MainAction[] = [];
-  const player = state.players.find((p) => p.id === playerId)!;
+  const player = getPlayerById(state, playerId);
   const ap = state.turn.actionPointsRemaining;
   const gridRows = state.grid.length;
   const gridCols = state.grid[0].length;
@@ -307,8 +307,12 @@ function getMainValidActions(
         let requirements: ReturnType<typeof parseRequirements>;
         try {
           requirements = parseRequirements(cell.location.requirements);
-        } catch {
+        } catch (err) {
           // Unparseable requirement string (see #60) — skip this mission
+          console.warn(
+            `Skipping mission at (${r},${c}): failed to parse requirements ` +
+              `"${cell.location.requirements}" — ${err instanceof Error ? err.message : err}`,
+          );
           continue;
         }
         if (checkMissionRequirements(requirements, friendlyUnits)) {

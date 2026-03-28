@@ -187,7 +187,7 @@ export interface TurnState {
 
 interface GameStateBase {
   config: GameConfig;
-  /** Player states, ordered by turn. */
+  /** Player states, ordered by turn. Array index determines turn order; there is no separate turnOrder field. */
   players: PlayerState[];
   grid: Grid;
   market: Card[];

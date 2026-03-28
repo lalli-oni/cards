@@ -23,7 +23,7 @@ export function getPlayerById<P extends { id: string }>(
   return player;
 }
 
-/** Get the index of a player in the turn order (players array). */
+/** Get a player's index within the players array, which determines turn order. */
 export function getTurnIndex(
   state: { players: readonly { id: string }[] },
   playerId: string,
@@ -92,7 +92,7 @@ export function placeLocationOnGrid(
   draft.grid[row][col].location = card;
 }
 
-/** Advance to the next player's turn. Main-phase only. Advances round when all players have gone. */
+/** Advance to the next player's turn. Main-phase only. Increments round when wrapping back to the first player. */
 export function advanceTurn(
   draft: Draft<MainGameState>,
   events: GameEvent[],
@@ -112,7 +112,7 @@ export function advanceTurn(
   });
 }
 
-/** Advance to the next player in seeding. Emits seeding_player_changed. */
+/** Advance to the next player in seeding. Emits seeding_player_changed. Does not handle step transitions. */
 export function advanceSeedingCursor(
   draft: Draft<SeedingGameState>,
   events: GameEvent[],

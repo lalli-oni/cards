@@ -199,6 +199,30 @@ describe("seeding phase", () => {
       const state = keepAllPlayers(stateAtKeep());
       expect(state.seedingState.step).toBe("seed_steal");
     });
+
+    it("seed_kept event includes toProspect and toMarket counts", () => {
+      const state = stateAtKeep();
+      const activeId = getActivePlayerId(state);
+      const player = getPlayer(state, activeId);
+
+      const keepIds = player.hand.slice(0, 8).map((c) => c.id);
+      const exposeIds = player.hand.slice(8, 10).map((c) => c.id);
+      const keptCards = player.hand.filter((c) => keepIds.includes(c.id));
+      const expectedProspect = keptCards.filter((c) => c.type === "location").length;
+      const expectedMarket = keptCards.filter((c) => c.type !== "location").length;
+
+      const { events } = applyAction(state, {
+        type: "seed_keep",
+        playerId: activeId,
+        keepIds,
+        exposeIds,
+      });
+
+      const keptEvent = events.find((e) => e.type === "seed_kept");
+      expect(keptEvent).toBeDefined();
+      expect((keptEvent as any).toProspect).toBe(expectedProspect);
+      expect((keptEvent as any).toMarket).toBe(expectedMarket);
+    });
   });
 
   describe("seed_steal", () => {
@@ -231,6 +255,20 @@ describe("seeding phase", () => {
           );
         }
       }
+    });
+
+    it("seed_stolen event includes destination field", () => {
+      const state = stateAtSteal();
+      const activeId = getActivePlayerId(state);
+      const actions = getValidActions(state, activeId) as SeedingAction[];
+      const stealAction = findNonLocationSteal(state, actions) ?? actions[0];
+
+      const { events } = applyAction(state, stealAction);
+      const stolenEvent = events.find((e) => e.type === "seed_stolen");
+      expect(stolenEvent).toBeDefined();
+      expect(["grid", "prospect", "market"]).toContain(
+        (stolenEvent as any).destination,
+      );
     });
 
     it("transitions to seed_draw when middle area empty and decks remain", () => {
@@ -434,10 +472,8 @@ describe("seeding phase", () => {
         if (actions.length === 0) break;
         s = apply(s as SeedingGameState, fillAction(s, actions[0]) as SeedingAction);
       }
-      if (s.phase !== "seeding" || s.seedingState.step !== "seed_place_location") {
-        // Grid filled before reaching seed_place_location — skip test
-        return;
-      }
+      expect(s.phase).toBe("seeding");
+      expect((s as SeedingGameState).seedingState.step).toBe("seed_place_location");
 
       const activeId = getActivePlayerId(s);
       const modified = produce(s as SeedingGameState, (draft) => {
@@ -461,9 +497,8 @@ describe("seeding phase", () => {
         if (actions.length === 0) break;
         s = apply(s as SeedingGameState, fillAction(s, actions[0]) as SeedingAction);
       }
-      if (s.phase !== "seeding" || s.seedingState.step !== "seed_place_location") {
-        return;
-      }
+      expect(s.phase).toBe("seeding");
+      expect((s as SeedingGameState).seedingState.step).toBe("seed_place_location");
 
       const activeId = getActivePlayerId(s);
       const modified = produce(s as SeedingGameState, (draft) => {
@@ -497,7 +532,8 @@ describe("seeding phase", () => {
         if (actions.length === 0) break;
         s = apply(s as SeedingGameState, fillAction(s, actions[0]) as SeedingAction);
       }
-      if (s.phase !== "seeding" || s.seedingState.step !== "seed_steal") return;
+      expect(s.phase).toBe("seeding");
+      expect((s as SeedingGameState).seedingState.step).toBe("seed_steal");
 
       // Fill the entire grid and ensure a location is in middle area
       const modified = produce(s as SeedingGameState, (draft) => {

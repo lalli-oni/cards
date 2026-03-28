@@ -314,7 +314,7 @@ function handleSeedSteal(
   }
 }
 
-/** After seeding is complete: shuffle market deck, draw main deck, draw starting hand. */
+/** After steal rounds are exhausted: shuffle prospect/market decks, draw main decks, draw starting hands. */
 function buildMainDecksAndHands(
   draft: Draft<SeedingGameState>,
   rng: prand.RandomGenerator,

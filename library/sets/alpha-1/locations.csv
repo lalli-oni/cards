@@ -11,7 +11,7 @@ the-great-wall,The Great Wall,alpha-1,epic,0,warrior_3>6,,N;S,rotate:0:rotate_lo
 versailles,Versailles,alpha-1,epic,0,politician_charisma_20>7,Your Politician units here get +1 charisma.,,,Palace,Have Politicians with combined charisma 20+ here.,Excess as a form of government.
 the-pyramids,The Pyramids,alpha-1,legendary,0,units_5>8,,,,Monument,Have 5 units here to complete.,Built to outlast memory itself.
 sherwood-forest,Sherwood Forest,alpha-1,uncommon,0,cunning_unit_7>3,Units here with 7+ cunning cannot be targeted by strength contests.,,,Hideout,Have a unit with 7+ cunning here.,The trees keep secrets.
-the-arena,The Arena,alpha-1,common,0,,Strength contests here get +1 bonus for the initiator.,,,Arena,No mission. Favors attackers.,The crowd demands blood.
+the-arena,The Arena,alpha-1,common,0,,Strength contests here get +1 bonus for the attacker.,,,Arena,No mission. Favors attackers.,The crowd demands blood.
 the-observatory,The Observatory,alpha-1,uncommon,0,scientist_cunning_14>4,,,,Research,Have Scientists with combined cunning 14+ here.,The stars do not lie — if you know how to read them.
 trade-port,Trade Port,alpha-1,common,0,,Generates 1 gold at start of your turn if a Diplomat is here.,,,Commerce,No mission. Gold income with Diplomat.,Ships come and go. Gold stays.
 the-catacombs,The Catacombs,alpha-1,uncommon,0,spiritual_2>4,Units here cannot be injured by events.,,,Sanctuary,Have 2 Spiritual units here.,The dead protect the living.

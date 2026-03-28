@@ -51,17 +51,5 @@ export function toEndedState(
   events.push({ type: "phase_changed", from: "main", to: "ended" });
   events.push({ type: "game_ended", winner, scores });
 
-  return {
-    config: state.config,
-    players: state.players,
-    grid: state.grid,
-    market: state.market,
-    rngState: state.rngState,
-    seed: state.seed,
-    actionLog: state.actionLog,
-    phase: "ended",
-    turn: state.turn,
-    winner,
-    scores,
-  };
+  return { ...state, phase: "ended" as const, winner, scores };
 }

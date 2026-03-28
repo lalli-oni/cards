@@ -29,6 +29,7 @@ import type {
   MainGameState,
   UnitCard,
 } from "./types";
+import { getActivePlayerId } from "./types";
 
 // ---------------------------------------------------------------------------
 // Turn lifecycle
@@ -113,7 +114,7 @@ function runEndOfTurn(draft: Draft<MainGameState>, events: GameEvent[]): void {
   }
 }
 
-/** End the current turn and advance to the next player. Returns true when a new round begins. */
+/** End the current turn and advance to the next player. Returns true when a new round begins. When true, the caller is responsible for emitting turn_started and running start-of-turn after checking win conditions. */
 function endTurnAndAdvance(draft: Draft<MainGameState>, events: GameEvent[]): boolean {
   events.push({ type: "turn_ended", playerId: draft.turn.activePlayerId });
   runEndOfTurn(draft, events);
@@ -954,9 +955,13 @@ export function applyMainAction(
       if (leader) {
         return { state: toEndedState(nextState, leader, events), events };
       }
-      // Tied — continue playing additional rounds
+      // Tied — per rules, play additional rounds until sole leader.
+      // GameController.run() has a maxActions guard (10k) to prevent infinite loops.
     }
-    // Start next turn (deferred from endTurnAndAdvance when round incremented)
+    // Game continues — emit turn_started (deferred from advanceTurn at round boundary)
+    // and run start-of-turn effects
+    const activeId = getActivePlayerId(nextState);
+    events.push({ type: "turn_started", playerId: activeId, round: nextState.turn.round });
     const withTurnStart = produce(nextState, (draft) => {
       runStartOfTurn(draft, events);
     });

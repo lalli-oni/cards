@@ -67,6 +67,13 @@ describe("shouldEndGame", () => {
     expect(shouldEndGame(state)).toBe(true);
   });
 
+  it("returns false at exactly the turn limit round", () => {
+    const state = produce(createTestGame(), (d) => {
+      d.turn.round = 20;
+    });
+    expect(shouldEndGame(state)).toBe(false);
+  });
+
   it("returns true when turn limit is exceeded", () => {
     const state = produce(createTestGame(), (d) => {
       d.turn.round = 21;
@@ -135,6 +142,17 @@ describe("win condition integration", () => {
     expect(ended.scores[last]).toBe(10);
     expect(events.some((e) => e.type === "game_ended")).toBe(true);
     expect(events.some((e) => e.type === "phase_changed")).toBe(true);
+  });
+
+  it("does not emit turn_started when game ends at round boundary", () => {
+    const base = createTestGame();
+    const { last } = turnOrder(base);
+    const state = gameAtRoundEnd({ leaderVp: 50, otherVp: 10 });
+    const { events } = applyAction(state, passAction(last));
+
+    const turnEndedIdx = events.findIndex((e) => e.type === "turn_ended");
+    const turnStartedAfterEnd = events.slice(turnEndedIdx + 1).some((e) => e.type === "turn_started");
+    expect(turnStartedAfterEnd).toBe(false);
   });
 
   it("transitions to ended phase when turn limit exceeded with sole leader", () => {

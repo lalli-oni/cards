@@ -12,7 +12,7 @@ import type {
  * caused by variadic tuple types (e.g. attack.unitIds) elsewhere in the state.
  */
 
-export function getPlayer<P extends { id: string }>(
+export function getPlayerById<P extends { id: string }>(
   state: { players: readonly P[] },
   playerId: string,
 ): P {
@@ -21,6 +21,30 @@ export function getPlayer<P extends { id: string }>(
     throw new Error(`Player "${playerId}" not found`);
   }
   return player;
+}
+
+/** Get a player's index within the players array, which determines turn order. */
+export function getTurnIndex(
+  state: { players: readonly { id: string }[] },
+  playerId: string,
+): number {
+  const idx = state.players.findIndex((p) => p.id === playerId);
+  if (idx === -1) {
+    throw new Error(
+      `Player "${playerId}" not found in players ` +
+        `[${state.players.map((p) => p.id).join(", ")}]`,
+    );
+  }
+  return idx;
+}
+
+/** Get the next player ID in turn order (wrapping). */
+export function getNextPlayerId(
+  state: { players: readonly { id: string }[] },
+  currentId: string,
+): string {
+  const idx = getTurnIndex(state, currentId);
+  return state.players[(idx + 1) % state.players.length].id;
 }
 
 export function getConfigNumber(
@@ -68,50 +92,37 @@ export function placeLocationOnGrid(
   draft.grid[row][col].location = card;
 }
 
-/** Advance to the next player's turn. Main-phase only. Advances round when all players have gone. */
+/** Advance to the next player's turn. Main-phase only. Increments round when wrapping back to the first player. */
 export function advanceTurn(
   draft: Draft<MainGameState>,
   events: GameEvent[],
 ): void {
-  const currentIndex = draft.turnOrder.indexOf(draft.turn.activePlayerId);
-  if (currentIndex === -1) {
-    throw new Error(
-      `Active player "${draft.turn.activePlayerId}" not found in turnOrder ` +
-        `[${draft.turnOrder.join(", ")}]`,
-    );
-  }
-  const nextIndex = (currentIndex + 1) % draft.turnOrder.length;
+  const nextId = getNextPlayerId(draft, draft.turn.activePlayerId);
+  const nextIndex = getTurnIndex(draft, nextId);
 
   if (nextIndex === 0) {
     draft.turn.round += 1;
   }
 
-  draft.turn.activePlayerId = draft.turnOrder[nextIndex];
+  draft.turn.activePlayerId = nextId;
   events.push({
     type: "turn_started",
-    playerId: draft.turn.activePlayerId,
+    playerId: nextId,
     round: draft.turn.round,
   });
 }
 
-/** Advance to the next player in seeding. Emits seeding_player_changed. */
+/** Advance to the next player in seeding. Emits seeding_player_changed. Does not handle step transitions. */
 export function advanceSeedingCursor(
   draft: Draft<SeedingGameState>,
   events: GameEvent[],
 ): void {
   const seeding = draft.seedingState;
-  const idx = draft.turnOrder.indexOf(seeding.currentPlayerId);
-  if (idx === -1) {
-    throw new Error(
-      `Seeding active player "${seeding.currentPlayerId}" not found in turnOrder ` +
-        `[${draft.turnOrder.join(", ")}]`,
-    );
-  }
-  const next = (idx + 1) % draft.turnOrder.length;
-  seeding.currentPlayerId = draft.turnOrder[next];
+  const nextId = getNextPlayerId(draft, seeding.currentPlayerId);
+  seeding.currentPlayerId = nextId;
   events.push({
     type: "seeding_player_changed",
-    playerId: seeding.currentPlayerId,
+    playerId: nextId,
     step: seeding.step,
   });
 }

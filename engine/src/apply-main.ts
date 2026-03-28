@@ -16,7 +16,7 @@ import { extractRngState } from "./rng";
 import {
   advanceTurn,
   getConfigNumber,
-  getPlayer,
+  getPlayerById,
   placeLocationOnGrid,
 } from "./state-helpers";
 import type {
@@ -34,7 +34,7 @@ import type {
 // ---------------------------------------------------------------------------
 
 export function runStartOfTurn(draft: Draft<MainGameState>, events: GameEvent[]): void {
-  const player = getPlayer(draft, draft.turn.activePlayerId);
+  const player = getPlayerById(draft, draft.turn.activePlayerId);
 
   // Market population — once, when market is empty (first turn of main phase)
   if (draft.market.length === 0) {
@@ -91,7 +91,7 @@ export function runStartOfTurn(draft: Draft<MainGameState>, events: GameEvent[])
 }
 
 function runEndOfTurn(draft: Draft<MainGameState>, events: GameEvent[]): void {
-  const player = getPlayer(draft, draft.turn.activePlayerId);
+  const player = getPlayerById(draft, draft.turn.activePlayerId);
 
   // Hand size enforcement
   const maxHandSize = getConfigNumber(draft, "max_hand_size", 7);
@@ -142,7 +142,7 @@ function handleDeploy(
   cardId: string,
   events: GameEvent[],
 ): void {
-  const player = getPlayer(draft, playerId);
+  const player = getPlayerById(draft, playerId);
   const cardIdx = player.hand.findIndex((c) => c.id === cardId);
   if (cardIdx === -1) {
     throw new Error(`Card "${cardId}" not found in player "${playerId}" hand`);
@@ -171,7 +171,7 @@ function handleBuy(
   costIndex: number | undefined,
   events: GameEvent[],
 ): void {
-  const player = getPlayer(draft, playerId);
+  const player = getPlayerById(draft, playerId);
   const slotIndex = draft.market.findIndex((c) => c.id === cardId);
   if (slotIndex === -1) {
     throw new Error(`Card "${cardId}" not found in market`);
@@ -204,7 +204,7 @@ function handleDraw(
   playerId: string,
   events: GameEvent[],
 ): void {
-  const player = getPlayer(draft, playerId);
+  const player = getPlayerById(draft, playerId);
   spendAP(draft, 1);
   drawOneCard(draft, player, events);
   afterAction(draft, events);
@@ -218,7 +218,7 @@ function handleEnter(
   col: number,
   events: GameEvent[],
 ): void {
-  const player = getPlayer(draft, playerId);
+  const player = getPlayerById(draft, playerId);
   const unitIdx = player.hq.findIndex((c) => c.id === unitId && c.type === "unit");
   if (unitIdx === -1) {
     throw new Error(`Unit "${unitId}" not found in player "${playerId}" HQ`);
@@ -308,7 +308,7 @@ function handleMove(
       throw new Error(`Unit "${unitId}" not found at (${fromRow},${fromCol}) during retreat`);
     }
     const removed = cell.units.splice(idx, 1)[0];
-    const player = getPlayer(draft, playerId);
+    const player = getPlayerById(draft, playerId);
     player.hq.push(removed);
 
     events.push({
@@ -365,7 +365,7 @@ function handlePlayEvent(
   targetId: string | undefined,
   events: GameEvent[],
 ): void {
-  const player = getPlayer(draft, playerId);
+  const player = getPlayerById(draft, playerId);
   const cardIdx = player.hand.findIndex((c) => c.id === cardId);
   if (cardIdx === -1) {
     throw new Error(`Card "${cardId}" not found in player "${playerId}" hand`);
@@ -445,7 +445,7 @@ function handleDestroy(
   cardId: string,
   events: GameEvent[],
 ): void {
-  const player = getPlayer(draft, playerId);
+  const player = getPlayerById(draft, playerId);
   const cardIdx = player.hand.findIndex((c) => c.id === cardId);
   if (cardIdx === -1) {
     throw new Error(`Card "${cardId}" not found in player "${playerId}" hand`);
@@ -496,20 +496,20 @@ function handleRaze(
 
   // Discard all units at location to their owners' discard piles
   for (const u of cell.units) {
-    const owner = getPlayer(draft, u.ownerId);
+    const owner = getPlayerById(draft, u.ownerId);
     owner.discardPile.push(u);
   }
   cell.units = [];
 
   // Discard all items at location
   for (const item of cell.items) {
-    const owner = getPlayer(draft, item.ownerId);
+    const owner = getPlayerById(draft, item.ownerId);
     owner.discardPile.push(item);
   }
   cell.items = [];
 
   // Discard the location
-  const player = getPlayer(draft, playerId);
+  const player = getPlayerById(draft, playerId);
   player.discardPile.push(cell.location);
   cell.location = null;
 
@@ -674,7 +674,7 @@ function killUnit(
   }
 
   // Send to owner's discard pile
-  const owner = getPlayer(draft, unit.ownerId);
+  const owner = getPlayerById(draft, unit.ownerId);
   owner.discardPile.push(unit);
 
   events.push({ type: "unit_killed", unitId: unit.id, ownerId: unit.ownerId });
@@ -822,7 +822,7 @@ function handleAttemptMission(
     return;
   }
 
-  const player = getPlayer(draft, playerId);
+  const player = getPlayerById(draft, playerId);
   const locationId = cell.location.id;
 
   // Award VP

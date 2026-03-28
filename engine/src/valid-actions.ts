@@ -6,9 +6,10 @@ import {
   areFacingEdgesOpen,
   getAdjacentCells,
   getBoundaryEdges,
+  isFull,
   isPerimeterCell,
 } from "./grid-helpers";
-import { getConfigNumber } from "./state-helpers";
+import { getConfigNumber, getPlayerById } from "./state-helpers";
 import type {
   Action,
   GameState,
@@ -59,8 +60,9 @@ function getSeedingValidActions(
 
     case "seed_steal": {
       const actions: SeedingAction[] = [];
+      const gridIsFull = isFull(state.grid);
       for (const card of seeding.middleArea) {
-        if (card.type === "location") {
+        if (card.type === "location" && !gridIsFull) {
           for (let r = 0; r < state.grid.length; r++) {
             for (let c = 0; c < state.grid[r].length; c++) {
               if (state.grid[r][c].location === null) {
@@ -81,12 +83,9 @@ function getSeedingValidActions(
       return actions;
     }
 
-    case "seed_split_prospect":
-      return [
-        { type: "seed_split_prospect", playerId, topHalf: [], bottomHalf: [] },
-      ];
-
     case "seed_place_location": {
+      const plPlayer = state.players.find((p) => p.id === playerId);
+      if (!plPlayer?.prospectDeck.some((c) => c.type === "location")) return [];
       const actions: SeedingAction[] = [];
       for (let r = 0; r < state.grid.length; r++) {
         for (let c = 0; c < state.grid[r].length; c++) {
@@ -117,7 +116,7 @@ function getMainValidActions(
   playerId: string,
 ): MainAction[] {
   const actions: MainAction[] = [];
-  const player = state.players.find((p) => p.id === playerId)!;
+  const player = getPlayerById(state, playerId);
   const ap = state.turn.actionPointsRemaining;
   const gridRows = state.grid.length;
   const gridCols = state.grid[0].length;
@@ -305,13 +304,19 @@ function getMainValidActions(
         if (!cell.location?.requirements || !cell.location?.rewards) continue;
         const friendlyUnits = cell.units.filter((u) => u.ownerId === playerId);
         if (friendlyUnits.length === 0) continue;
+        let requirements: ReturnType<typeof parseRequirements>;
         try {
-          const requirements = parseRequirements(cell.location.requirements);
-          if (checkMissionRequirements(requirements, friendlyUnits)) {
-            actions.push({ type: "attempt_mission", playerId, row: r, col: c });
-          }
-        } catch {
-          // Unparseable requirements — skip
+          requirements = parseRequirements(cell.location.requirements);
+        } catch (err) {
+          // Unparseable requirement string (see #60) — skip this mission
+          console.warn(
+            `Skipping mission at (${r},${c}): failed to parse requirements ` +
+              `"${cell.location.requirements}" — ${err instanceof Error ? err.message : err}`,
+          );
+          continue;
+        }
+        if (checkMissionRequirements(requirements, friendlyUnits)) {
+          actions.push({ type: "attempt_mission", playerId, row: r, col: c });
         }
       }
     }

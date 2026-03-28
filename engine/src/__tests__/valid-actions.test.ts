@@ -20,7 +20,7 @@ describe("getValidActions", () => {
     it("returns empty array for non-active player", () => {
       const state = createTestGame();
       // biome-ignore lint/style/noNonNullAssertion: 2-player game always has a non-active player
-      const nonActive = state.turnOrder.find(
+      const nonActive = state.players.map((p) => p.id).find(
         (id) => id !== state.turn.activePlayerId,
       )!;
       const actions = getValidActions(state, nonActive);

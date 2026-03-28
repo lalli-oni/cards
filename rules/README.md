@@ -41,11 +41,10 @@ draft round:
    shared **Arena**. Of the remaining 8 kept cards:
    - **Locations** are placed on the grid immediately (player chooses
      slot and orientation). If the grid is full, the location goes to
-     the player's prospect deck (player chooses early reserves or late reserves).
+     the player's prospect deck (face-down).
    - **Dilemmas** are placed face-down under a mission location on
      the grid (max [var:dilemmas_per_mission:2] per mission). If no mission has room, the
-     dilemma goes to the player's prospect deck (player chooses early
-     reserves or late reserves).
+     dilemma goes to the player's prospect deck (face-down).
    - All other cards go to the player's **market deck** (face-down).
    [design: If a player has fewer cards remaining than [var:seed_draw:10], they
    draw what they can and split proportionally (round up for kept,
@@ -57,11 +56,11 @@ draft round:
    - Claimed **locations** must be placed on the grid immediately
      (the claiming player chooses slot and orientation). If the grid
      is already full, the claimed location goes to the player's
-     prospect deck instead (player chooses early reserves or late reserves).
+     prospect deck instead (face-down).
    - Claimed **dilemmas** must be placed face-down under a mission
      location on the grid (max [var:dilemmas_per_mission:2] per mission). If no mission
      has room, the dilemma goes to the player's prospect deck
-     instead (player chooses early reserves or late reserves).
+     instead (face-down).
    - Other claimed cards go to the player's market deck.
    All cards in the Arena must be claimed; players continue picking
    until the Arena is empty.
@@ -69,11 +68,8 @@ draft round:
 #### 3. Deck construction
 After all draft rounds are complete:
 
-1. **Prospect deck**: Each player shuffles their **early reserves**
-   and **late reserves** separately, then stacks early on top of late
-   to form the final **prospect deck**. (Locations and dilemmas were
-   assigned to early or late reserves throughout seeding as they were
-   drawn/claimed.)
+1. **Prospect deck**: Each player's prospect deck (locations and
+   dilemmas accumulated during draft rounds) is automatically shuffled.
 2. **Main deck**: Each player shuffles their market deck, then draws
    [var:main_deck_seed:10] cards from it into their **main deck**. Shuffle the main
    deck.
@@ -485,7 +481,7 @@ differs per card.
 - Dilemmas per location: 2
 - Main deck seeded from market deck: 10 cards
 - Starting hand drawn from main deck: 5 cards
-- Prospect deck: locations/dilemmas placed into early/late reserves during seeding, shuffled and stacked at deck construction
+- Prospect deck: locations/dilemmas accumulated during seeding draft rounds, auto-shuffled at deck construction
 
 #### Main Phase
 - Grid size: (players + 2) x (players + 2)

@@ -802,10 +802,6 @@ export function applyMainAction(
   let roundIncremented = false;
 
   const nextState = produce(state, (draft) => {
-    // castDraft: Immer widens variadic tuples (e.g. attack.unitIds: [string, ...string[]])
-    // to plain arrays in Draft<T>, breaking Action[] assignability. castDraft bridges this.
-    draft.actionLog.push(castDraft(action));
-
     const { listeners, queries } = rebuildListeners(draft as MainGameState);
     const emit: EmitFn = (event) => emitEvent(draft, event, listeners, events);
 
@@ -875,6 +871,10 @@ export function applyMainAction(
         );
       }
     }
+
+    // Log action after handler — so "first X per turn" queries (countActionsThisTurn)
+    // don't count the current action as a prior action during the same handler.
+    draft.actionLog.push(castDraft(action));
   });
 
   // Check win conditions at round boundaries

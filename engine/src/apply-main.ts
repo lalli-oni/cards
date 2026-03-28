@@ -114,7 +114,13 @@ function runEndOfTurn(draft: Draft<MainGameState>, events: GameEvent[]): void {
   }
 }
 
-/** End the current turn and advance to the next player. Returns true when a new round begins. When true, the caller is responsible for emitting turn_started and running start-of-turn after checking win conditions. */
+/**
+ * End the current turn and advance to the next player.
+ * When a new round begins, the caller is responsible for emitting
+ * turn_started and running start-of-turn after checking win conditions.
+ *
+ * @returns true when a new round begins
+ */
 function endTurnAndAdvance(draft: Draft<MainGameState>, events: GameEvent[]): boolean {
   events.push({ type: "turn_ended", playerId: draft.turn.activePlayerId });
   runEndOfTurn(draft, events);

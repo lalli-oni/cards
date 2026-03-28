@@ -182,7 +182,10 @@ function buildSet(setName: string): { cards: Record<string, unknown>[]; errors: 
 
   for (const type of CARD_TYPES) {
     const csvPath = join(setDir, `${type}.csv`);
-    if (!existsSync(csvPath)) continue;
+    if (!existsSync(csvPath)) {
+      console.warn(`  Warning: ${type}.csv not found in ${setName}, skipping`);
+      continue;
+    }
 
     const raw = readFileSync(csvPath, "utf-8");
     const rows = parseCSV(raw);

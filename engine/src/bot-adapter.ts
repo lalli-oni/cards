@@ -46,18 +46,15 @@ export class BotAdapter implements PlayerAdapter {
 
   /** Return the highest-priority subset of actions, with move scoring. */
   private prioritise(actions: Action[], state: VisibleState): Action[] {
-    // attempt_mission is always top priority
     const missions = actions.filter((a) => a.type === "attempt_mission");
     if (missions.length > 0) return missions;
 
-    // For moves, score and return only the best-scoring moves
     const moves = actions.filter((a) => a.type === "move");
     if (moves.length > 0) {
       const scored = scoreMoves(moves, state);
       if (scored.length > 0) return scored;
     }
 
-    // Other actions by priority
     for (const type of GREEDY_PRIORITY) {
       const matches = actions.filter((a) => a.type === type);
       if (matches.length > 0) return matches;
@@ -84,7 +81,8 @@ const GREEDY_PRIORITY: readonly string[] = [
 /**
  * Score move actions and return only those with the highest score.
  * Prefers moves toward mission locations and cells with friendly units.
- * Retreats to HQ (row -1) are scored 0.
+ * Retreats to HQ (negative coordinates) are excluded from scoring;
+ * returns empty array if all moves are retreats.
  */
 function scoreMoves(
   moves: Action[],
@@ -100,7 +98,6 @@ function scoreMoves(
     if (action.type !== "move") continue;
     const { row, col } = action;
 
-    // Retreat to HQ — low priority
     if (row < 0 || col < 0) continue;
 
     const score = scoreCellForMovement(grid, row, col, playerId);

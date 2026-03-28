@@ -29,7 +29,7 @@ export function findSoleLeader(state: MainGameState): string | null {
   return tied ? null : leaderId;
 }
 
-/** Check whether VP threshold or turn limit has been reached. */
+/** Check whether any player has reached the VP threshold or the turn limit has been exceeded. */
 export function shouldEndGame(state: MainGameState): boolean {
   const vpThreshold = getConfigNumber(state, "vp_threshold", 50);
   const turnLimit = getConfigNumber(state, "turn_limit", 20);
@@ -40,7 +40,11 @@ export function shouldEndGame(state: MainGameState): boolean {
   return vpReached || turnLimitReached;
 }
 
-/** Transition a MainGameState to EndedGameState, emitting phase_changed and game_ended events. */
+/**
+ * Transition a MainGameState to EndedGameState.
+ * Pushes phase_changed and game_ended events into the provided events array.
+ * Safe to call on Immer-frozen state (uses shallow spread, no mutation).
+ */
 export function toEndedState(
   state: MainGameState,
   winner: string,

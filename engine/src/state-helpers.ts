@@ -92,7 +92,14 @@ export function placeLocationOnGrid(
   draft.grid[row][col].location = card;
 }
 
-/** Advance to the next player's turn. Main-phase only. Increments round when wrapping back to the first player. Returns true when a new round begins. When a new round begins, turn_started is NOT emitted — the caller must emit it after checking win conditions. */
+/**
+ * Advance to the next player's turn. Main-phase only.
+ * Increments round when wrapping past the last player back to players[0].
+ * Emits turn_started for mid-round advances only; at round boundaries the
+ * caller must emit it after checking win conditions.
+ *
+ * @returns true when a new round begins
+ */
 export function advanceTurn(
   draft: Draft<MainGameState>,
   events: GameEvent[],

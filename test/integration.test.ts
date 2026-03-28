@@ -109,7 +109,9 @@ async function runFullGame(opts: {
 // ---------------------------------------------------------------------------
 
 describe("full game flow", () => {
-  // seed-2 is known to produce a decisive winner with greedy bots
+  // seed-2 is known to produce a decisive winner with the current alpha-1
+  // card library and greedy bots. If the card set changes, this seed may
+  // need updating — pick one where scores differ at the turn limit.
   const DECISIVE_SEED = "seed-2";
 
   it("runs a 1v1 game to completion (seeding → main → ended)", async () => {
@@ -236,7 +238,7 @@ describe("determinism", () => {
       adapters: makeAdapters(players),
     });
 
-    // Play 50 turns
+    // Play up to 50 actions to get into mid-game
     for (let i = 0; i < 50; i++) {
       if (controller.getState().phase === "ended") break;
       await controller.playTurn();

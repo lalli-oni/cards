@@ -16,10 +16,11 @@ import {
 
 beforeEach(() => resetIds());
 
-// With SEED="test-seed", turnOrder is ["p2","p1"] — p2 goes first (players[1]).
+// With SEED="test-seed", shuffle produces ["p2","p1"]. If shuffle or hash changes, update these constants.
 const ACTIVE = "p2";
 const OTHER = "p1";
-const ACTIVE_IDX = 1;
+const ACTIVE_IDX = 0;
+const OTHER_IDX = 1;
 
 function gameWith(fn: (draft: MainGameState) => void): MainGameState {
   return produce(createTestGame(), fn);
@@ -617,7 +618,7 @@ describe("attack", () => {
       col: 0,
     });
     const ns = next as MainGameState;
-    const p1 = ns.players[0]; // OTHER = p1 = players[0]
+    const p1 = ns.players[OTHER_IDX];
 
     expect(events.some((e) => e.type === "unit_killed")).toBe(true);
     expect(p1.discardPile.some((c) => c.id === defender.id)).toBe(true);
@@ -632,13 +633,13 @@ describe("attack", () => {
 describe("turn lifecycle", () => {
   it("grants gold income at start of next player's turn", () => {
     const state = createTestGame();
-    const initialGold = state.players[0].gold; // p1's gold
+    const initialGold = state.players[OTHER_IDX].gold;
 
     // p2 passes → p1's turn starts (gets income)
     const { state: s1 } = applyAction(state, { type: "pass", playerId: ACTIVE });
     const ns = s1 as MainGameState;
     expect(ns.turn.activePlayerId).toBe(OTHER);
-    expect(ns.players[0].gold).toBe(initialGold + 1);
+    expect(ns.players[OTHER_IDX].gold).toBe(initialGold + 1);
   });
 
   it("resets AP at start of turn", () => {
@@ -742,7 +743,7 @@ describe("traps", () => {
     const location = makeLocation({ ownerId: OTHER });
     const state = gameWith((d) => {
       // OTHER (p1) has a trap targeting the location
-      d.players[0].activeTraps.push({ card: trap, targetId: location.id });
+      d.players[OTHER_IDX].activeTraps.push({ card: trap, targetId: location.id });
       d.players[ACTIVE_IDX].hq.push(unit);
       d.grid[0][0].location = location;
     });
@@ -759,8 +760,8 @@ describe("traps", () => {
     expect(events.some((e) => e.type === "trap_triggered")).toBe(true);
     expect(events.some((e) => e.type === "unit_injured")).toBe(true);
     // Trap is discarded
-    expect(ns.players[0].activeTraps).toHaveLength(0);
-    expect(ns.players[0].discardPile.some((c) => c.id === trap.id)).toBe(true);
+    expect(ns.players[OTHER_IDX].activeTraps).toHaveLength(0);
+    expect(ns.players[OTHER_IDX].discardPile.some((c) => c.id === trap.id)).toBe(true);
     // Unit is injured
     const injuredUnit = ns.grid[0][0].units.find((u) => u.id === unit.id);
     expect(injuredUnit?.injured).toBe(true);
@@ -771,7 +772,7 @@ describe("traps", () => {
     const weakUnit = makeUnit({ ownerId: ACTIVE, strength: 4 });
     const location = makeLocation({ ownerId: OTHER });
     const state = gameWith((d) => {
-      d.players[0].activeTraps.push({ card: trap, targetId: location.id });
+      d.players[OTHER_IDX].activeTraps.push({ card: trap, targetId: location.id });
       d.players[ACTIVE_IDX].hq.push(weakUnit);
       d.grid[0][0].location = location;
     });
@@ -797,7 +798,7 @@ describe("traps", () => {
     const unit = makeUnit({ ownerId: ACTIVE });
     const state = gameWith((d) => {
       // Trap targets loc1 but unit enters loc2
-      d.players[0].activeTraps.push({ card: trap, targetId: loc1.id });
+      d.players[OTHER_IDX].activeTraps.push({ card: trap, targetId: loc1.id });
       d.players[ACTIVE_IDX].hq.push(unit);
       d.grid[0][0].location = loc1;
       d.grid[0][1].location = loc2;
@@ -1070,7 +1071,7 @@ describe("move details", () => {
       d.grid[0][0].location = loc1;
       d.grid[0][1].location = loc2;
       d.grid[0][0].units.push(unit);
-      d.players[0].activeTraps.push({ card: trap, targetId: loc2.id }); // p1 (OTHER) traps loc2
+      d.players[OTHER_IDX].activeTraps.push({ card: trap, targetId: loc2.id });
     });
 
     const { events } = applyAction(state, {

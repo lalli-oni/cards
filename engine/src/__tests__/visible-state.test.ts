@@ -120,7 +120,7 @@ describe("getVisibleState", () => {
     it("includes turn order", () => {
       const state = createTestGame();
       const vis = getVisibleState(state, "p1");
-      expect(vis.turnOrder).toEqual(state.turnOrder);
+      expect(vis.turnOrder).toEqual(state.players.map((p) => p.id));
     });
 
     it("includes turn for main phase", () => {

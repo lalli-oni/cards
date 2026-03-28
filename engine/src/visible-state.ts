@@ -51,7 +51,7 @@ export function getVisibleState(
     opponents,
     grid: state.grid,
     market: state.market,
-    turnOrder: state.turnOrder,
+    turnOrder: state.players.map((p) => p.id),
     middleArea: state.phase === "seeding" ? state.seedingState.middleArea : [],
     seedingStep:
       state.phase === "seeding" ? state.seedingState.step : undefined,

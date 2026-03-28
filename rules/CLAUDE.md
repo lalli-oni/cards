@@ -20,7 +20,6 @@ This folder contains markdown files defining the card game rules.
 - **Main deck** — personal draw deck, seeded from market deck during deck construction
 - **Arena** — shared face-up area where exposed cards are placed during draft rounds
 - **Claim** — picking a card from the Arena
-- **Early reserves / Late reserves** — the two halves of the prospect deck during seeding; early cards appear sooner in the main phase
 - **Draft rounds** — the draw/claim rounds within the seeding phase
 - **HQ** — player's staging area where units/items enter play
 

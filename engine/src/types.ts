@@ -161,7 +161,6 @@ export type SeedingStep =
   | "seed_draw"
   | "seed_keep"
   | "seed_steal"
-  | "seed_split_prospect"
   | "seed_place_location"
   | "policy_selection";
 
@@ -170,12 +169,10 @@ export interface SeedingState {
   /** Whose input is needed next during seeding. */
   currentPlayerId: string;
   middleArea: Card[];
-  /** Index into turnOrder for whose turn it is to steal. */
+  /** Index into players array for whose turn it is to steal. */
   stealTurnIndex: number;
   /** Players who have submitted seed_keep this round. Reset at step entry. */
   keepSubmitted: string[];
-  /** Players who have submitted seed_split_prospect. Reset at step entry. */
-  splitSubmitted: string[];
 }
 
 export interface TurnState {
@@ -190,6 +187,7 @@ export interface TurnState {
 
 interface GameStateBase {
   config: GameConfig;
+  /** Player states, ordered by turn. Array index determines turn order; there is no separate turnOrder field. */
   players: PlayerState[];
   grid: Grid;
   market: Card[];
@@ -197,7 +195,6 @@ interface GameStateBase {
   rngState: readonly number[];
   seed: string;
   actionLog: Action[];
-  turnOrder: string[];
 }
 
 export interface SeedingGameState extends GameStateBase {
@@ -254,12 +251,6 @@ export type SeedingAction =
       row?: number;
       col?: number;
       rotation?: number;
-    }
-  | {
-      type: "seed_split_prospect";
-      playerId: string;
-      topHalf: string[];
-      bottomHalf: string[];
     }
   | {
       type: "seed_place_location";
@@ -439,8 +430,15 @@ export type GameEvent =
       playerId: string;
       keptCount: number;
       exposedCount: number;
+      toProspect: number;
+      toMarket: number;
     }
-  | { type: "seed_stolen"; playerId: string; cardId: string }
+  | {
+      type: "seed_stolen";
+      playerId: string;
+      cardId: string;
+      destination: "grid" | "prospect" | "market";
+    }
   | { type: "seeding_step_changed"; step: SeedingStep }
   | {
       type: "seeding_player_changed";

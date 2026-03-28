@@ -79,7 +79,7 @@ export function createGame(
 
   const rng = prand.mersenne(hashSeed(seed));
 
-  // Determine turn order — shuffle player ids using seeded RNG
+  // Shuffle player IDs to determine players array ordering (which defines turn order)
   const [turnOrder, nextRng] = shuffle(ids, rng);
 
   const startingGold =
@@ -115,15 +115,21 @@ export function createGame(
     }
   }
 
+  // Reorder players to match shuffled turn order
+  const orderedPlayers = turnOrder.map((id) => {
+    const ps = playerStates.find((p) => p.id === id);
+    if (!ps) throw new Error(`Player "${id}" not found`);
+    return ps;
+  });
+
   const base = {
     config,
-    players: playerStates,
+    players: orderedPlayers,
     grid: createEmptyGrid(config, players.length),
     market: [],
     rngState: extractRngState(nextRng),
     seed,
     actionLog: [],
-    turnOrder,
   };
 
   if (deckInput.mode === "seeding") {
@@ -132,11 +138,10 @@ export function createGame(
       phase: "seeding",
       seedingState: {
         step: "seed_draw",
-        currentPlayerId: turnOrder[0],
+        currentPlayerId: orderedPlayers[0].id,
         middleArea: [],
         stealTurnIndex: 0,
         keepSubmitted: [],
-        splitSubmitted: [],
       },
     } satisfies SeedingGameState;
   }
@@ -145,7 +150,7 @@ export function createGame(
     ...base,
     phase: "main",
     turn: {
-      activePlayerId: turnOrder[0],
+      activePlayerId: orderedPlayers[0].id,
       actionPointsRemaining:
         typeof config.action_points_per_turn === "number"
           ? config.action_points_per_turn

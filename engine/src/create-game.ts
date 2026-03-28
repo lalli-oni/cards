@@ -135,7 +135,7 @@ export function createGame(
     players: orderedPlayers,
     grid:
       deckInput.mode === "main" && deckInput.grid
-        ? deckInput.grid
+        ? deckInput.grid.map((row) => row.map((cell) => ({ ...cell })))
         : createEmptyGrid(config, players.length),
     market:
       deckInput.mode === "main" && deckInput.market

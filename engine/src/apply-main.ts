@@ -19,6 +19,10 @@ import {
   getPlayerById,
   placeLocationOnGrid,
 } from "./state-helpers";
+import { emit as emitEvent } from "./listeners/emit";
+import { rebuildListeners } from "./listeners/rebuild";
+import type { EmitFn } from "./listeners/types";
+import { killUnit, dropEquippedItems } from "./unit-helpers";
 import type {
   ActivePassiveEvent,
   ApplyResult,
@@ -33,7 +37,11 @@ import type {
 // Turn lifecycle
 // ---------------------------------------------------------------------------
 
-export function runStartOfTurn(draft: Draft<MainGameState>, events: GameEvent[]): void {
+export function runStartOfTurn(
+  draft: Draft<MainGameState>,
+  emit: EmitFn,
+  events: GameEvent[],
+): void {
   const player = getPlayerById(draft, draft.turn.activePlayerId);
 
   // Market population — once, when market is empty (first turn of main phase)
@@ -45,7 +53,7 @@ export function runStartOfTurn(draft: Draft<MainGameState>, events: GameEvent[])
         if (card) {
           const slotIndex = draft.market.length;
           draft.market.push(card);
-          events.push({
+          emit({
             type: "market_replenished",
             playerId: p.id,
             cardId: card.id,
@@ -66,7 +74,7 @@ export function runStartOfTurn(draft: Draft<MainGameState>, events: GameEvent[])
   // Gold income
   const income = getConfigNumber(draft, "turn_gold_income", 1);
   player.gold += income;
-  events.push({
+  emit({
     type: "gold_changed",
     playerId: player.id,
     amount: income,
@@ -84,13 +92,16 @@ export function runStartOfTurn(draft: Draft<MainGameState>, events: GameEvent[])
   for (const unit of getUnitsAtPosition(draft.players, draft.grid, hqPosition)) {
     if (unit.injured) {
       unit.injured = false;
-      events.push({ type: "unit_healed", playerId: player.id, unitId: unit.id });
+      emit({ type: "unit_healed", playerId: player.id, unitId: unit.id });
     }
   }
 
 }
 
-function runEndOfTurn(draft: Draft<MainGameState>, events: GameEvent[]): void {
+function runEndOfTurn(
+  draft: Draft<MainGameState>,
+  emit: EmitFn,
+): void {
   const player = getPlayerById(draft, draft.turn.activePlayerId);
 
   // Hand size enforcement
@@ -107,17 +118,26 @@ function runEndOfTurn(draft: Draft<MainGameState>, events: GameEvent[]): void {
     if (evt.remainingDuration <= 0) {
       player.passiveEvents.splice(i, 1);
       player.discardPile.push(evt);
-      events.push({ type: "passive_expired", playerId: player.id, cardId: evt.id });
+      emit({ type: "passive_expired", playerId: player.id, cardId: evt.id });
     }
   }
 }
 
 /** End the current turn and advance to the next player. */
-function endTurnAndAdvance(draft: Draft<MainGameState>, events: GameEvent[]): void {
-  events.push({ type: "turn_ended", playerId: draft.turn.activePlayerId });
-  runEndOfTurn(draft, events);
-  advanceTurn(draft, events);
-  runStartOfTurn(draft, events);
+function endTurnAndAdvance(
+  draft: Draft<MainGameState>,
+  emit: EmitFn,
+  events: GameEvent[],
+): void {
+  emit({ type: "turn_ended", playerId: draft.turn.activePlayerId });
+  runEndOfTurn(draft, emit);
+  advanceTurn(draft);
+  emit({
+    type: "turn_started",
+    playerId: draft.turn.activePlayerId,
+    round: draft.turn.round,
+  });
+  runStartOfTurn(draft, emit, events);
 }
 
 /**
@@ -127,7 +147,7 @@ function endTurnAndAdvance(draft: Draft<MainGameState>, events: GameEvent[]): vo
  */
 function afterAction(
   _draft: Draft<MainGameState>,
-  _events: GameEvent[],
+  _emit: EmitFn,
 ): void {
   // No-op for now. Future: check win conditions, etc.
 }
@@ -140,6 +160,7 @@ function handleDeploy(
   draft: Draft<MainGameState>,
   playerId: string,
   cardId: string,
+  emit: EmitFn,
   events: GameEvent[],
 ): void {
   const player = getPlayerById(draft, playerId);
@@ -160,8 +181,8 @@ function handleDeploy(
   player.hand.splice(cardIdx, 1);
   player.hq.push(card);
 
-  events.push({ type: "card_deployed", playerId, cardId });
-  afterAction(draft, events);
+  emit({ type: "card_deployed", playerId, cardId });
+  afterAction(draft, emit);
 }
 
 function handleBuy(
@@ -169,6 +190,7 @@ function handleBuy(
   playerId: string,
   cardId: string,
   costIndex: number | undefined,
+  emit: EmitFn,
   events: GameEvent[],
 ): void {
   const player = getPlayerById(draft, playerId);
@@ -184,13 +206,13 @@ function handleBuy(
   // Remove from market and add to hand
   draft.market.splice(slotIndex, 1);
   player.hand.push(card);
-  events.push({ type: "card_bought", playerId, cardId, cost });
+  emit({ type: "card_bought", playerId, cardId, cost });
 
   // Replenish market slot from active player's market deck
   const replacement = drawMarketCard(draft, player, events);
   if (replacement) {
     draft.market.splice(slotIndex, 0, replacement);
-    events.push({
+    emit({
       type: "market_replenished",
       playerId: player.id,
       cardId: replacement.id,
@@ -202,12 +224,13 @@ function handleBuy(
 function handleDraw(
   draft: Draft<MainGameState>,
   playerId: string,
+  emit: EmitFn,
   events: GameEvent[],
 ): void {
   const player = getPlayerById(draft, playerId);
   spendAP(draft, 1);
   drawOneCard(draft, player, events);
-  afterAction(draft, events);
+  afterAction(draft, emit);
 }
 
 function handleEnter(
@@ -216,7 +239,7 @@ function handleEnter(
   unitId: string,
   row: number,
   col: number,
-  events: GameEvent[],
+  emit: EmitFn,
 ): void {
   const player = getPlayerById(draft, playerId);
   const unitIdx = player.hq.findIndex((c) => c.id === unitId && c.type === "unit");
@@ -252,9 +275,8 @@ function handleEnter(
   const unit = player.hq.splice(unitIdx, 1)[0] as UnitCard;
   cell.units.push(unit);
 
-  events.push({ type: "unit_entered", playerId, unitId, row, col });
-  checkTraps(draft, playerId, "enemy_unit_enters_location", row, col, unitId, events);
-  afterAction(draft, events);
+  emit({ type: "unit_entered", playerId, unitId, row, col });
+  afterAction(draft, emit);
 }
 
 function handleMove(
@@ -263,7 +285,7 @@ function handleMove(
   unitId: string,
   toRow: number,
   toCol: number,
-  events: GameEvent[],
+  emit: EmitFn,
 ): void {
   const pos = findUnitOnGrid(draft.grid, unitId);
   if (!pos) {
@@ -311,7 +333,7 @@ function handleMove(
     const player = getPlayerById(draft, playerId);
     player.hq.push(removed);
 
-    events.push({
+    emit({
       type: "unit_moved",
       playerId,
       unitId,
@@ -320,7 +342,7 @@ function handleMove(
       toRow: -1,
       toCol: -1,
     });
-    afterAction(draft, events);
+    afterAction(draft, emit);
     return;
   }
 
@@ -353,9 +375,8 @@ function handleMove(
   const removed = fromCell.units.splice(idx, 1)[0];
   draft.grid[toRow][toCol].units.push(removed);
 
-  events.push({ type: "unit_moved", playerId, unitId, fromRow, fromCol, toRow, toCol });
-  checkTraps(draft, playerId, "enemy_unit_enters_location", toRow, toCol, unitId, events);
-  afterAction(draft, events);
+  emit({ type: "unit_moved", playerId, unitId, fromRow, fromCol, toRow, toCol });
+  afterAction(draft, emit);
 }
 
 function handlePlayEvent(
@@ -363,6 +384,7 @@ function handlePlayEvent(
   playerId: string,
   cardId: string,
   targetId: string | undefined,
+  emit: EmitFn,
   events: GameEvent[],
 ): void {
   const player = getPlayerById(draft, playerId);
@@ -386,24 +408,28 @@ function handlePlayEvent(
     case "instant":
       // Effect resolution deferred — for now just discard
       player.discardPile.push(card);
-      events.push({ type: "event_played", playerId, cardId });
+      emit({ type: "event_played", playerId, cardId });
       break;
 
     case "passive":
-      player.passiveEvents.push({ ...card, remainingDuration: card.duration } as ActivePassiveEvent);
-      events.push({ type: "event_played", playerId, cardId });
+      player.passiveEvents.push({
+        ...card,
+        remainingDuration: card.duration,
+        ...(targetId != null ? { targetId } : {}),
+      } as ActivePassiveEvent);
+      emit({ type: "event_played", playerId, cardId });
       break;
 
     case "trap":
       player.activeTraps.push({ card, targetId });
-      events.push({ type: "trap_set", playerId, cardId, targetId });
+      emit({ type: "trap_set", playerId, cardId, targetId });
       break;
 
     default:
       throw new Error(`Unknown event subtype "${(card as any).subtype}" for card "${cardId}"`);
   }
 
-  afterAction(draft, events);
+  afterAction(draft, emit);
 }
 
 function handleEquip(
@@ -411,7 +437,7 @@ function handleEquip(
   playerId: string,
   itemId: string,
   unitId: string,
-  events: GameEvent[],
+  emit: EmitFn,
 ): void {
   const itemResult = findItemPosition(draft.players, draft.grid, itemId);
   if (!itemResult) {
@@ -435,15 +461,15 @@ function handleEquip(
   }
 
   item.equippedTo = unitId;
-  events.push({ type: "item_equipped", playerId, itemId, unitId });
-  afterAction(draft, events);
+  emit({ type: "item_equipped", playerId, itemId, unitId });
+  afterAction(draft, emit);
 }
 
 function handleDestroy(
   draft: Draft<MainGameState>,
   playerId: string,
   cardId: string,
-  events: GameEvent[],
+  emit: EmitFn,
 ): void {
   const player = getPlayerById(draft, playerId);
   const cardIdx = player.hand.findIndex((c) => c.id === cardId);
@@ -455,8 +481,8 @@ function handleDestroy(
   const card = player.hand.splice(cardIdx, 1)[0];
   player.removedFromGame.push(card);
 
-  events.push({ type: "card_destroyed", playerId, cardId });
-  afterAction(draft, events);
+  emit({ type: "card_destroyed", playerId, cardId });
+  afterAction(draft, emit);
 }
 
 function handleRaze(
@@ -466,6 +492,7 @@ function handleRaze(
   row: number,
   col: number,
   rotation: number | undefined,
+  emit: EmitFn,
   events: GameEvent[],
 ): void {
   const cell = draft.grid[row][col];
@@ -513,16 +540,16 @@ function handleRaze(
   player.discardPile.push(cell.location);
   cell.location = null;
 
-  events.push({ type: "location_razed", row, col, cardId: razedLocationId });
+  emit({ type: "location_razed", row, col, cardId: razedLocationId });
 
   // Draw replacement location from prospect deck
   const newLocation = drawLocationFromProspect(draft, player, events);
   if (newLocation) {
     placeLocationOnGrid(draft, newLocation, row, col, rotation);
-    events.push({ type: "location_placed", row, col, cardId: newLocation.id });
+    emit({ type: "location_placed", row, col, cardId: newLocation.id });
   }
 
-  afterAction(draft, events);
+  afterAction(draft, emit);
 }
 
 function handleAttack(
@@ -531,7 +558,7 @@ function handleAttack(
   unitIds: string[],
   row: number,
   col: number,
-  events: GameEvent[],
+  emit: EmitFn,
 ): void {
   const cell = draft.grid[row][col];
   if (!cell.location) {
@@ -560,7 +587,7 @@ function handleAttack(
   const defenderId = defenders[0].ownerId;
   spendAP(draft, 1);
 
-  events.push({ type: "combat_started", row, col, attackerId: playerId, defenderId });
+  emit({ type: "combat_started", row, col, attackerId: playerId, defenderId });
 
   let rng = prand.mersenne.fromState(draft.rngState);
 
@@ -597,7 +624,7 @@ function handleAttack(
     for (let i = 0; i < pairs; i++) {
       const atk = atkRolls[i];
       const def = defRolls[i];
-      resolveCombatPair(draft, cell, atk, def, row, col, events);
+      resolveCombatPair(draft, cell, atk, def, row, col, emit);
     }
   }
 
@@ -614,8 +641,8 @@ function handleAttack(
     winnerId = defenderId;
   }
 
-  events.push({ type: "combat_resolved", row, col, winnerId });
-  afterAction(draft, events);
+  emit({ type: "combat_resolved", row, col, winnerId });
+  afterAction(draft, emit);
 }
 
 /** Check if a unit has been removed from the cell (killed/discarded). */
@@ -634,7 +661,7 @@ function resolveCombatPair(
   def: { unit: Draft<UnitCard>; power: number },
   row: number,
   col: number,
-  events: GameEvent[],
+  emit: EmitFn,
 ): void {
   if (atk.power === def.power) return; // tie — nothing happens
 
@@ -645,139 +672,13 @@ function resolveCombatPair(
 
   if (isKill || loser.unit.injured) {
     // Kill: remove unit from grid, drop items, send to owner's discard
-    killUnit(draft, cell, loser.unit, row, col, events);
+    killUnit(draft, cell, loser.unit, row, col, emit);
   } else {
     // Injure
     loser.unit.injured = true;
     // Drop equipped items at location
-    dropEquippedItems(cell, loser.unit, row, col, events);
-    events.push({ type: "unit_injured", unitId: loser.unit.id, ownerId: loser.unit.ownerId });
-  }
-}
-
-/** Kill a unit: remove from grid, drop items, send to owner's discard. */
-function killUnit(
-  draft: Draft<MainGameState>,
-  cell: Draft<{ units: UnitCard[]; items: ItemCard[] }>,
-  unit: Draft<UnitCard>,
-  row: number,
-  col: number,
-  events: GameEvent[],
-): void {
-  // Drop equipped items first
-  dropEquippedItems(cell, unit, row, col, events);
-
-  // Remove from cell
-  const idx = cell.units.findIndex((u) => u.id === unit.id);
-  if (idx !== -1) {
-    cell.units.splice(idx, 1);
-  }
-
-  // Send to owner's discard pile
-  const owner = getPlayerById(draft, unit.ownerId);
-  owner.discardPile.push(unit);
-
-  events.push({ type: "unit_killed", unitId: unit.id, ownerId: unit.ownerId });
-}
-
-/** Drop all items equipped to a unit at the unit's location. */
-function dropEquippedItems(
-  cell: Draft<{ units: UnitCard[]; items: ItemCard[] }>,
-  unit: Draft<UnitCard>,
-  row: number,
-  col: number,
-  events: GameEvent[],
-): void {
-  // Find items equipped to this unit (could be in cell.items or HQ items)
-  for (const item of cell.items) {
-    if (item.equippedTo === unit.id) {
-      item.equippedTo = undefined;
-      events.push({ type: "item_dropped", itemId: item.id, row, col });
-    }
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Trap auto-trigger
-// ---------------------------------------------------------------------------
-
-function checkTraps(
-  draft: Draft<MainGameState>,
-  playerId: string,
-  triggerType: string,
-  row: number,
-  col: number,
-  unitId: string,
-  events: GameEvent[],
-): void {
-  const location = draft.grid[row]?.[col]?.location;
-
-  for (const player of draft.players) {
-    if (player.id === playerId) continue; // only enemy traps fire
-    for (let i = player.activeTraps.length - 1; i >= 0; i--) {
-      const trap = player.activeTraps[i];
-      if (trap.card.trigger !== triggerType) continue;
-      // If trap has a targetId, it must match the location at (row, col)
-      if (trap.targetId && location && trap.targetId !== location.id) continue;
-
-      resolveTrapEffect(draft, trap, unitId, row, col, events);
-
-      // Discard the trap
-      player.activeTraps.splice(i, 1);
-      player.discardPile.push(trap.card);
-      events.push({
-        type: "trap_triggered",
-        playerId: player.id,
-        cardId: trap.card.id,
-        targetId: trap.targetId,
-      });
-    }
-  }
-}
-
-function resolveTrapEffect(
-  draft: Draft<MainGameState>,
-  trap: Draft<{ card: { definitionId: string } }>,
-  unitId: string,
-  row: number,
-  col: number,
-  events: GameEvent[],
-): void {
-  const cell = draft.grid[row][col];
-  const unit = cell.units.find((u) => u.id === unitId);
-  if (!unit) return;
-
-  switch (trap.card.definitionId) {
-    case "ambush":
-      if (unit.injured) {
-        killUnit(draft, cell, unit, row, col, events);
-      } else {
-        unit.injured = true;
-        dropEquippedItems(cell, unit, row, col, events);
-        events.push({ type: "unit_injured", unitId: unit.id, ownerId: unit.ownerId });
-      }
-      break;
-
-    case "assassination-attempt":
-      if (unit.strength <= 6) {
-        killUnit(draft, cell, unit, row, col, events);
-      } else if (unit.injured) {
-        killUnit(draft, cell, unit, row, col, events);
-      } else {
-        unit.injured = true;
-        dropEquippedItems(cell, unit, row, col, events);
-        events.push({ type: "unit_injured", unitId: unit.id, ownerId: unit.ownerId });
-      }
-      break;
-
-    case "sabotage":
-      // Action already resolved — no-op for v0.1
-      break;
-
-    default:
-      throw new Error(
-        `No trap resolution logic for definitionId "${trap.card.definitionId}"`,
-      );
+    dropEquippedItems(cell, loser.unit, row, col, emit);
+    emit({ type: "unit_injured", unitId: loser.unit.id, ownerId: loser.unit.ownerId });
   }
 }
 
@@ -790,6 +691,7 @@ function handleAttemptMission(
   playerId: string,
   row: number,
   col: number,
+  emit: EmitFn,
   events: GameEvent[],
 ): void {
   const cell = draft.grid[row][col];
@@ -811,14 +713,14 @@ function handleAttemptMission(
   const { vp } = parseRewards(cell.location.rewards);
 
   if (!checkMissionRequirements(requirements, friendlyUnits)) {
-    events.push({
+    emit({
       type: "mission_attempt_failed",
       playerId,
       row,
       col,
       locationId: cell.location.id,
     });
-    afterAction(draft, events);
+    afterAction(draft, emit);
     return;
   }
 
@@ -845,16 +747,16 @@ function handleAttemptMission(
   player.removedFromGame.push(cell.location);
   cell.location = null;
 
-  events.push({ type: "mission_completed", playerId, locationId, vp });
+  emit({ type: "mission_completed", playerId, locationId, vp });
 
   // Draw replacement location from prospect deck
   const newLocation = drawLocationFromProspect(draft, player, events);
   if (newLocation) {
     placeLocationOnGrid(draft, newLocation, row, col);
-    events.push({ type: "location_placed", row, col, cardId: newLocation.id });
+    emit({ type: "location_placed", row, col, cardId: newLocation.id });
   }
 
-  afterAction(draft, events);
+  afterAction(draft, emit);
 }
 
 function handleActivate(
@@ -863,7 +765,7 @@ function handleActivate(
   _cardId: string,
   _actionName: string,
   _targetId: string | undefined,
-  _events: GameEvent[],
+  _emit: EmitFn,
 ): void {
   // Stub — effect resolution deferred to issue #20
   throw new Error(
@@ -886,63 +788,66 @@ export function applyMainAction(
     // to plain arrays in Draft<T>, breaking Action[] assignability. castDraft bridges this.
     draft.actionLog.push(castDraft(action));
 
+    const listeners = rebuildListeners(draft as MainGameState);
+    const emit: EmitFn = (event) => emitEvent(draft, event, listeners, events);
+
     switch (action.type) {
       case "pass":
-        endTurnAndAdvance(draft, events);
+        endTurnAndAdvance(draft, emit, events);
         break;
 
       case "deploy":
-        handleDeploy(draft, action.playerId, action.cardId, events);
+        handleDeploy(draft, action.playerId, action.cardId, emit, events);
         break;
 
       case "buy":
-        handleBuy(draft, action.playerId, action.cardId, action.costIndex, events);
+        handleBuy(draft, action.playerId, action.cardId, action.costIndex, emit, events);
         break;
 
       case "draw":
-        handleDraw(draft, action.playerId, events);
+        handleDraw(draft, action.playerId, emit, events);
         break;
 
       case "enter":
-        handleEnter(draft, action.playerId, action.unitId, action.row, action.col, events);
+        handleEnter(draft, action.playerId, action.unitId, action.row, action.col, emit);
         break;
 
       case "move":
-        handleMove(draft, action.playerId, action.unitId, action.row, action.col, events);
+        handleMove(draft, action.playerId, action.unitId, action.row, action.col, emit);
         break;
 
       case "play_event":
-        handlePlayEvent(draft, action.playerId, action.cardId, action.targetId, events);
+        handlePlayEvent(draft, action.playerId, action.cardId, action.targetId, emit, events);
         break;
 
       case "equip":
-        handleEquip(draft, action.playerId, action.itemId, action.unitId, events);
+        handleEquip(draft, action.playerId, action.itemId, action.unitId, emit);
         break;
 
       case "destroy":
-        handleDestroy(draft, action.playerId, action.cardId, events);
+        handleDestroy(draft, action.playerId, action.cardId, emit);
         break;
 
       case "raze":
         handleRaze(
           draft, action.playerId, action.unitId,
-          action.row, action.col, action.rotation, events,
+          action.row, action.col, action.rotation, emit, events,
         );
         break;
 
       case "attack":
-        handleAttack(draft, action.playerId, action.unitIds, action.row, action.col, events);
+        handleAttack(draft, action.playerId, action.unitIds, action.row, action.col, emit);
         break;
 
       case "activate":
         handleActivate(
           draft, action.playerId, action.cardId,
-          action.actionName, action.targetId, events,
+          action.actionName, action.targetId, emit,
         );
         break;
 
       case "attempt_mission":
-        handleAttemptMission(draft, action.playerId, action.row, action.col, events);
+        handleAttemptMission(draft, action.playerId, action.row, action.col, emit, events);
         break;
 
       default: {

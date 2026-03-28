@@ -109,6 +109,8 @@ export interface PassiveEventCard extends EventCardBase {
 export interface ActivePassiveEvent extends PassiveEventCard {
   /** Remaining turns. Set when played, decremented each end-of-turn. */
   remainingDuration: number;
+  /** Target card instance id (e.g. a location for Plague). */
+  targetId?: string;
 }
 
 export interface TrapEventCard extends EventCardBase {

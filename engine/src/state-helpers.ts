@@ -93,10 +93,7 @@ export function placeLocationOnGrid(
 }
 
 /** Advance to the next player's turn. Main-phase only. Increments round when wrapping back to the first player. */
-export function advanceTurn(
-  draft: Draft<MainGameState>,
-  events: GameEvent[],
-): void {
+export function advanceTurn(draft: Draft<MainGameState>): void {
   const nextId = getNextPlayerId(draft, draft.turn.activePlayerId);
   const nextIndex = getTurnIndex(draft, nextId);
 
@@ -105,11 +102,6 @@ export function advanceTurn(
   }
 
   draft.turn.activePlayerId = nextId;
-  events.push({
-    type: "turn_started",
-    playerId: nextId,
-    round: draft.turn.round,
-  });
 }
 
 /** Advance to the next player in seeding. Emits seeding_player_changed. Does not handle step transitions. */

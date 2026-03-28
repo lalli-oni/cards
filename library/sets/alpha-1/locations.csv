@@ -1,17 +1,17 @@
 id,name,set,rarity,cost,mission,passive,edges,actions,keywords,text,flavor
 the-great-library,The Great Library,alpha-1,epic,0,scientist_2>5,Your units here get +1 cunning.,,,Archive,Have 2 units with the Scientist attribute here to complete.,Knowledge is the only treasure that multiplies when shared.
-the-colosseum,The Colosseum,alpha-1,epic,0,warrior_strength_15>4,,,,Arena,Have warriors with combined strength of 15+ here to complete.,The sand remembers every name.
-the-silk-road,The Silk Road,alpha-1,uncommon,0,units_3_different_attributes>3,Units here generate 1 gold at start of your turn.,,,Trade,Have 3 units with different attributes here to complete.,A thread that stitched the world together.
-the-agora,The Agora,alpha-1,uncommon,0,diplomat_charisma_12>3,,,,Market,Have diplomats with combined charisma 12+ here.,Where words were worth more than swords.
+the-colosseum,The Colosseum,alpha-1,epic,0,warrior_1;strength_15>4,,,,Arena,Have warriors with combined strength of 15+ here to complete.,The sand remembers every name.
+the-silk-road,The Silk Road,alpha-1,uncommon,0,warrior_1;diplomat_1;scientist_1>3,Units here generate 1 gold at start of your turn.,,,Trade,Have 3 units with different attributes here to complete.,A thread that stitched the world together.
+the-agora,The Agora,alpha-1,uncommon,0,diplomat_1;charisma_12>3,,,,Market,Have diplomats with combined charisma 12+ here.,Where words were worth more than swords.
 machu-picchu,Machu Picchu,alpha-1,epic,0,units_3>5,Units entering here cannot be targeted by events until your next turn.,,,Sanctuary,Have 3 units here to complete.,Hidden above the clouds.
 the-forge,The Forge,alpha-1,common,0,,Units here get +1 strength.,,,Workshop,No mission. +1 strength to all units here.,The anvil sings when struck.
-alexandria-harbor,Alexandria Harbor,alpha-1,uncommon,0,scientist_1_diplomat_1>3,You may look at the top card of your main deck at any time.,,,Port,Have 1 Scientist and 1 Diplomat here.,Where knowledge met commerce.
+alexandria-harbor,Alexandria Harbor,alpha-1,uncommon,0,scientist_1;diplomat_1>3,You may look at the top card of your main deck at any time.,,,Port,Have 1 Scientist and 1 Diplomat here.,Where knowledge met commerce.
 the-bazaar,The Bazaar,alpha-1,common,0,,Players with a unit here pay 1 less gold on Buy actions (minimum 1).,,,Commerce,No mission. Reduced Buy costs.,Everything has a price — just not always gold.
 the-great-wall,The Great Wall,alpha-1,epic,0,warrior_3>6,,N;S,rotate:0:rotate_location,Fortification,Have 3 Warriors here to complete. A unit here may rotate this location for 0 AP.,They could not go over it.
-versailles,Versailles,alpha-1,epic,0,politician_charisma_20>7,Your Politician units here get +1 charisma.,,,Palace,Have Politicians with combined charisma 20+ here.,Excess as a form of government.
+versailles,Versailles,alpha-1,epic,0,politician_1;charisma_20>7,Your Politician units here get +1 charisma.,,,Palace,Have Politicians with combined charisma 20+ here.,Excess as a form of government.
 the-pyramids,The Pyramids,alpha-1,legendary,0,units_5>8,,,,Monument,Have 5 units here to complete.,Built to outlast memory itself.
-sherwood-forest,Sherwood Forest,alpha-1,uncommon,0,cunning_unit_7>3,Units here with 7+ cunning cannot be targeted by strength contests.,,,Hideout,Have a unit with 7+ cunning here.,The trees keep secrets.
-the-arena,The Arena,alpha-1,common,0,,Strength contests here get +1 bonus for the initiator.,,,Arena,No mission. Favors attackers.,The crowd demands blood.
-the-observatory,The Observatory,alpha-1,uncommon,0,scientist_cunning_14>4,,,,Research,Have Scientists with combined cunning 14+ here.,The stars do not lie — if you know how to read them.
+sherwood-forest,Sherwood Forest,alpha-1,uncommon,0,cunning_7>3,Units here with 7+ cunning cannot be targeted by strength contests.,,,Hideout,Have a unit with 7+ cunning here.,The trees keep secrets.
+the-arena,The Arena,alpha-1,common,0,,Strength contests here get +1 bonus for the attacker.,,,Arena,No mission. Favors attackers.,The crowd demands blood.
+the-observatory,The Observatory,alpha-1,uncommon,0,scientist_1;cunning_14>4,,,,Research,Have Scientists with combined cunning 14+ here.,The stars do not lie — if you know how to read them.
 trade-port,Trade Port,alpha-1,common,0,,Generates 1 gold at start of your turn if a Diplomat is here.,,,Commerce,No mission. Gold income with Diplomat.,Ships come and go. Gold stays.
 the-catacombs,The Catacombs,alpha-1,uncommon,0,spiritual_2>4,Units here cannot be injured by events.,,,Sanctuary,Have 2 Spiritual units here.,The dead protect the living.

@@ -1,7 +1,7 @@
 import prand from "pure-rand";
 import { extractRngState, shuffle } from "./rng";
 import type {
-  DeckInput,
+  SetupInput,
   GameConfig,
   GameState,
   Grid,
@@ -51,15 +51,20 @@ function createEmptyGrid(config: GameConfig, playerCount: number): Grid {
 /**
  * Initialize a new game. Returns the starting GameState.
  *
- * DeckInput determines the starting mode:
+ * SetupInput determines the starting mode:
  * - "seeding": populate seeding decks + policy pools, start in seeding phase
  * - "main": populate pre-built decks, skip directly to main phase
+ *   Accepts optional grid, market, and per-player gold overrides.
+ *
+ * Callers decide which mode to use based on variant config (e.g.
+ * config["seeding-phase"] === "pre-built"). See buildPrebuiltSetup()
+ * for a convenience helper.
  */
 export function createGame(
   config: GameConfig,
   players: PlayerDescriptor[],
   seed: string,
-  deckInput: DeckInput,
+  setupInput: SetupInput,
 ): GameState {
   if (players.length === 0) {
     throw new Error("createGame requires at least one player");
@@ -92,9 +97,9 @@ export function createGame(
   });
 
   // Populate decks based on input mode
-  if (deckInput.mode === "seeding") {
+  if (setupInput.mode === "seeding") {
     for (const ps of playerStates) {
-      const input = deckInput.decks[ps.id];
+      const input = setupInput.decks[ps.id];
       if (!input) {
         throw new Error(`No seeding deck provided for player "${ps.id}"`);
       }
@@ -103,7 +108,7 @@ export function createGame(
     }
   } else {
     for (const ps of playerStates) {
-      const input = deckInput.decks[ps.id];
+      const input = setupInput.decks[ps.id];
       if (!input) {
         throw new Error(`No deck input provided for player "${ps.id}"`);
       }
@@ -112,6 +117,9 @@ export function createGame(
       ps.prospectDeck = [...input.prospectDeck];
       ps.marketDeck = [...input.marketDeck];
       ps.activePolicies = [...input.activePolicies];
+      if (input.gold !== undefined) {
+        ps.gold = input.gold;
+      }
     }
   }
 
@@ -125,14 +133,20 @@ export function createGame(
   const base = {
     config,
     players: orderedPlayers,
-    grid: createEmptyGrid(config, players.length),
-    market: [],
+    grid:
+      setupInput.mode === "main" && setupInput.grid
+        ? setupInput.grid.map((row) => row.map((cell) => ({ ...cell })))
+        : createEmptyGrid(config, players.length),
+    market:
+      setupInput.mode === "main" && setupInput.market
+        ? [...setupInput.market]
+        : [],
     rngState: extractRngState(nextRng),
     seed,
     actionLog: [],
   };
 
-  if (deckInput.mode === "seeding") {
+  if (setupInput.mode === "seeding") {
     return {
       ...base,
       phase: "seeding",

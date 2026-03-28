@@ -1,15 +1,17 @@
 import { describe, expect, it } from "bun:test";
 import { createGame } from "../create-game";
-import type { DeckInput } from "../types";
+import type { SetupInput, Grid } from "../types";
 import {
   createSeedingGame,
   createTestGame,
   DEFAULT_CONFIG,
+  makeLocation,
+  makeUnit,
   SEED,
   TWO_PLAYERS,
 } from "./helpers";
 
-const MAIN_DECK_INPUT: DeckInput = {
+const MAIN_SETUP_INPUT: SetupInput = {
   mode: "main",
   decks: {
     p1: {
@@ -142,7 +144,7 @@ describe("createGame", () => {
   describe("validation", () => {
     it("rejects empty players array", () => {
       expect(() =>
-        createGame(DEFAULT_CONFIG, [], SEED, MAIN_DECK_INPUT),
+        createGame(DEFAULT_CONFIG, [], SEED, MAIN_SETUP_INPUT),
       ).toThrow("at least one player");
     });
 
@@ -155,15 +157,102 @@ describe("createGame", () => {
             { id: "p1", name: "B" },
           ],
           SEED,
-          MAIN_DECK_INPUT,
+          MAIN_SETUP_INPUT,
         ),
       ).toThrow("Duplicate player IDs");
     });
 
     it("rejects empty seed", () => {
       expect(() =>
-        createGame(DEFAULT_CONFIG, TWO_PLAYERS, "", MAIN_DECK_INPUT),
+        createGame(DEFAULT_CONFIG, TWO_PLAYERS, "", MAIN_SETUP_INPUT),
       ).toThrow("non-empty seed");
+    });
+  });
+
+  describe("pre-built mode with grid/market/gold", () => {
+    it("uses provided grid instead of creating an empty one", () => {
+      const loc = makeLocation({ ownerId: "p1" });
+      const grid: Grid = [
+        [
+          { location: loc, units: [], items: [] },
+          { location: null, units: [], items: [] },
+        ],
+        [
+          { location: null, units: [], items: [] },
+          { location: null, units: [], items: [] },
+        ],
+      ];
+      const state = createTestGame({
+        setupInput: {
+          mode: "main",
+          decks: {
+            p1: { mainDeck: [], hand: [], prospectDeck: [], marketDeck: [], activePolicies: [] },
+            p2: { mainDeck: [], hand: [], prospectDeck: [], marketDeck: [], activePolicies: [] },
+          },
+          grid,
+        },
+      });
+      expect(state.grid).toHaveLength(2);
+      expect(state.grid[0][0].location).toBe(loc);
+    });
+
+    it("uses provided market instead of empty array", () => {
+      const card = makeUnit({ ownerId: "p1" });
+      const state = createTestGame({
+        setupInput: {
+          mode: "main",
+          decks: {
+            p1: { mainDeck: [], hand: [], prospectDeck: [], marketDeck: [], activePolicies: [] },
+            p2: { mainDeck: [], hand: [], prospectDeck: [], marketDeck: [], activePolicies: [] },
+          },
+          market: [card],
+        },
+      });
+      expect(state.market).toHaveLength(1);
+      expect(state.market[0]).toEqual(card);
+    });
+
+    it("overrides starting gold per player", () => {
+      const state = createTestGame({
+        setupInput: {
+          mode: "main",
+          decks: {
+            p1: { mainDeck: [], hand: [], prospectDeck: [], marketDeck: [], activePolicies: [], gold: 25 },
+            p2: { mainDeck: [], hand: [], prospectDeck: [], marketDeck: [], activePolicies: [], gold: 30 },
+          },
+        },
+      });
+      const p1 = state.players.find((p) => p.id === "p1")!;
+      const p2 = state.players.find((p) => p.id === "p2")!;
+      expect(p1.gold).toBe(25);
+      expect(p2.gold).toBe(30);
+    });
+
+    it("falls back to config starting_gold when gold not specified", () => {
+      const state = createTestGame({
+        config: { ...DEFAULT_CONFIG, starting_gold: 15 },
+        setupInput: {
+          mode: "main",
+          decks: {
+            p1: { mainDeck: [], hand: [], prospectDeck: [], marketDeck: [], activePolicies: [] },
+            p2: { mainDeck: [], hand: [], prospectDeck: [], marketDeck: [], activePolicies: [] },
+          },
+        },
+      });
+      for (const player of state.players) {
+        expect(player.gold).toBe(15);
+      }
+    });
+
+    it("creates empty grid when grid not provided in main mode", () => {
+      const state = createTestGame();
+      // Default: 2 players + 2 padding = 4x4, all null locations
+      expect(state.grid).toHaveLength(4);
+      for (const row of state.grid) {
+        for (const cell of row) {
+          expect(cell.location).toBeNull();
+        }
+      }
     });
   });
 

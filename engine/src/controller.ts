@@ -2,7 +2,7 @@ import { applyAction } from "./apply-action";
 import { createGame } from "./create-game";
 import type {
   Action,
-  DeckInput,
+  SetupInput,
   GameConfig,
   GameEvent,
   GameState,
@@ -18,7 +18,7 @@ export interface ControllerOptions {
   config: GameConfig;
   players: PlayerDescriptor[];
   seed: string;
-  deckInput: DeckInput;
+  setupInput: SetupInput;
   adapters: Map<string, PlayerAdapter>;
   /** Called after each action is applied. */
   onEvent?: (events: GameEvent[], state: GameState) => void;
@@ -42,7 +42,7 @@ export class GameController {
       options.config,
       options.players,
       options.seed,
-      options.deckInput,
+      options.setupInput,
     );
     this.adapters = options.adapters;
     this.onEvent = options.onEvent;
@@ -53,7 +53,7 @@ export class GameController {
   /** Resume a game from a session (replays action log or loads snapshot). */
   static fromSession(
     session: Session,
-    deckInput: DeckInput,
+    setupInput: SetupInput,
     adapters: Map<string, PlayerAdapter>,
     onEvent?: (events: GameEvent[], state: GameState) => void,
   ): GameController {
@@ -61,7 +61,7 @@ export class GameController {
       config: session.config,
       players: session.players,
       seed: session.seed,
-      deckInput,
+      setupInput,
       adapters,
       onEvent,
     });

@@ -37,7 +37,7 @@ but adds complexity to type checks.
 
 ### Pre-seeded variant
 The seeding phase is marked `[var:seeding-phase]` and can be replaced
-entirely. A pre-seeded variant would skip seeding and provide players
+entirely. A pre-seeded variant skips seeding and provides players
 with pre-constructed decks (main deck, prospect deck, market deck)
 and a pre-populated grid, jumping straight into the main phase.
 This enables:
@@ -45,4 +45,6 @@ This enables:
 - Tutorial mode (learn main phase mechanics first)
 - Single player support (see #31)
 
-See #44 for engine support for variant-replaceable phases.
+Engine support landed in #44: callers set `seeding-phase: "pre-built"`
+in variant overrides, then use `buildPrebuiltSetup()` to construct
+the setup input with pre-populated grid, market, and per-player gold.

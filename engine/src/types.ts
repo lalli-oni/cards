@@ -327,7 +327,7 @@ export interface ApplyResult {
 // Deck Input (for createGame)
 // ---------------------------------------------------------------------------
 
-export type DeckInput =
+export type SetupInput =
   | {
       mode: "seeding";
       decks: Record<string, { seedingDeck: Card[]; policyPool: PolicyCard[] }>;
@@ -342,8 +342,14 @@ export type DeckInput =
           prospectDeck: Card[];
           marketDeck: Card[];
           activePolicies: PolicyCard[];
+          /** Override starting_gold from config for this player. */
+          gold?: number;
         }
       >;
+      /** Pre-populated grid. When omitted, an empty grid is created. */
+      grid?: Grid;
+      /** Pre-populated shared market. When omitted, starts empty. */
+      market?: Card[];
     };
 
 // ---------------------------------------------------------------------------

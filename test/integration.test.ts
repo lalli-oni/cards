@@ -9,6 +9,7 @@ import { join } from "path";
 import {
   BotAdapter,
   GameController,
+  buildPrebuiltSetup,
   createGame,
   createInstanceCounter,
   getActivePlayerId,
@@ -18,6 +19,9 @@ import {
   type CardDefinition,
   type EndedGameState,
   type GameConfig,
+  type Grid,
+  type GridCell,
+  type LocationCard,
   type PlayerAdapter,
   type PlayerDescriptor,
   type PolicyCard,
@@ -45,7 +49,7 @@ const DEFAULT_CONFIG: GameConfig = {
   combat_kill_ratio: 2,
 };
 
-type DeckInput = Parameters<typeof createGame>[3];
+type SetupInput = Parameters<typeof createGame>[3];
 
 function makePlayers(count: number): PlayerDescriptor[] {
   return Array.from({ length: count }, (_, i) => ({
@@ -66,7 +70,7 @@ function makeAdapters(
 function buildSeedingInput(
   players: PlayerDescriptor[],
   defs: CardDefinition[],
-): DeckInput {
+): SetupInput {
   const counter = createInstanceCounter();
   const nonPolicy = defs.filter((d) => d.type !== "policy");
   const policies = defs.filter((d) => d.type === "policy");
@@ -90,13 +94,13 @@ async function runFullGame(opts: {
 }): Promise<GameController> {
   const players = opts.players ?? makePlayers(2);
   const defs = loadCardDefinitionsFromBuild(BUILD_DIR);
-  const deckInput = buildSeedingInput(players, defs);
+  const setupInput = buildSeedingInput(players, defs);
 
   const controller = new GameController({
     config: opts.config ?? DEFAULT_CONFIG,
     players,
     seed: opts.seed ?? "integration-seed",
-    deckInput,
+    setupInput,
     adapters: makeAdapters(players),
   });
 
@@ -204,7 +208,7 @@ describe("determinism", () => {
   it("action log replay produces identical state", async () => {
     const players = makePlayers(2);
     const defs = loadCardDefinitionsFromBuild(BUILD_DIR);
-    const deckInput = buildSeedingInput(players, defs);
+    const setupInput = buildSeedingInput(players, defs);
 
     const controller = await runFullGame({ seed: DET_SEED, players });
     const session = controller.toSession();
@@ -212,7 +216,7 @@ describe("determinism", () => {
     // Replay from action log (no snapshot)
     const replayed = GameController.fromSession(
       { ...session, snapshot: undefined },
-      deckInput,
+      setupInput,
       makeAdapters(players),
     );
 
@@ -228,13 +232,13 @@ describe("determinism", () => {
   it("cross-client portability: session transfer mid-game", async () => {
     const players = makePlayers(2);
     const defs = loadCardDefinitionsFromBuild(BUILD_DIR);
-    const deckInput = buildSeedingInput(players, defs);
+    const setupInput = buildSeedingInput(players, defs);
 
     const controller = new GameController({
       config: DEFAULT_CONFIG,
       players,
       seed: "portability-test",
-      deckInput,
+      setupInput,
       adapters: makeAdapters(players),
     });
 
@@ -248,7 +252,7 @@ describe("determinism", () => {
     const session = controller.toSession(true);
     const c2 = GameController.fromSession(
       session,
-      deckInput,
+      setupInput,
       makeAdapters(players),
     );
 
@@ -292,9 +296,9 @@ describe("real card data", () => {
   it("creates a seeding game with real cards", () => {
     const players = makePlayers(2);
     const defs = loadCardDefinitionsFromBuild(BUILD_DIR);
-    const deckInput = buildSeedingInput(players, defs);
+    const setupInput = buildSeedingInput(players, defs);
 
-    const state = createGame(DEFAULT_CONFIG, players, "real-cards", deckInput);
+    const state = createGame(DEFAULT_CONFIG, players, "real-cards", setupInput);
     expect(state.phase).toBe("seeding");
     expect(state.players[0].seedingDeck.length).toBeGreaterThan(0);
   });
@@ -320,5 +324,149 @@ describe("real card data", () => {
       }
     }
     expect(locationCount).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Pre-built game flow (#44)
+// ---------------------------------------------------------------------------
+
+describe("pre-built game flow", () => {
+  function buildPrebuiltGame(opts?: {
+    players?: PlayerDescriptor[];
+    seed?: string;
+    config?: GameConfig;
+  }) {
+    const players = opts?.players ?? makePlayers(2);
+    const config = opts?.config ?? DEFAULT_CONFIG;
+    const defs = loadCardDefinitionsFromBuild(BUILD_DIR);
+    const counter = createInstanceCounter();
+
+    const locations = defs.filter((d) => d.type === "location");
+    const policies = defs.filter((d) => d.type === "policy");
+    const nonLocationNonPolicy = defs.filter(
+      (d) => d.type !== "location" && d.type !== "policy",
+    );
+
+    // Build a grid with locations assigned to players in round-robin
+    const gridSize = players.length + (typeof config.grid_padding === "number" ? config.grid_padding : 2);
+    const grid: Grid = Array.from({ length: gridSize }, () =>
+      Array.from({ length: gridSize }, (): GridCell => ({
+        location: null,
+        units: [],
+        items: [],
+      })),
+    );
+
+    // Place one location per player in the first row
+    const placedLocations: LocationCard[] = [];
+    for (let i = 0; i < players.length; i++) {
+      const locDef = locations[i % locations.length];
+      const loc = instantiateCards([locDef], players[i].id, counter)[0] as LocationCard;
+      grid[0][i].location = loc;
+      placedLocations.push(loc);
+    }
+
+    // Distribute non-location cards across players
+    const perPlayer = Math.floor(nonLocationNonPolicy.length / players.length);
+    const playerDecks: Record<string, {
+      mainDeck: Card[];
+      hand: Card[];
+      prospectDeck: Card[];
+      marketDeck: Card[];
+      activePolicies: PolicyCard[];
+      gold?: number;
+    }> = {};
+
+    for (let i = 0; i < players.length; i++) {
+      const p = players[i];
+      const slice = nonLocationNonPolicy.slice(i * perPlayer, (i + 1) * perPlayer);
+      const cards = instantiateCards(slice, p.id, counter) as Card[];
+      const policyCards = instantiateCards(
+        policies.slice(0, 2),
+        p.id,
+        counter,
+      ) as PolicyCard[];
+
+      // Remaining locations go to prospect deck
+      const remainingLocs = locations.slice(players.length);
+      const prospectCards = instantiateCards(
+        remainingLocs.slice(i * 3, (i + 1) * 3),
+        p.id,
+        counter,
+      ) as Card[];
+
+      playerDecks[p.id] = {
+        hand: cards.slice(0, 5),
+        mainDeck: cards.slice(5, 20),
+        marketDeck: cards.slice(20),
+        prospectDeck: prospectCards,
+        activePolicies: policyCards,
+      };
+    }
+
+    const setupInput = buildPrebuiltSetup({
+      players: playerDecks,
+      grid,
+    });
+
+    return { players, setupInput, config, seed: opts?.seed ?? "prebuilt-seed" };
+  }
+
+  it("starts directly in main phase (no seeding)", () => {
+    const { players, setupInput, config, seed } = buildPrebuiltGame();
+    const state = createGame(config, players, seed, setupInput);
+
+    expect(state.phase).toBe("main");
+    expect("seedingState" in state).toBe(false);
+  });
+
+  it("preserves the pre-populated grid", () => {
+    const { players, setupInput, config, seed } = buildPrebuiltGame();
+    const state = createGame(config, players, seed, setupInput);
+
+    let locationCount = 0;
+    for (const row of state.grid) {
+      for (const cell of row) {
+        if (cell.location) locationCount++;
+      }
+    }
+    expect(locationCount).toBe(players.length);
+  });
+
+  it("runs a pre-built game to completion with bots", async () => {
+    const { players, setupInput, config, seed } = buildPrebuiltGame();
+    const controller = new GameController({
+      config,
+      players,
+      seed,
+      setupInput,
+      adapters: makeAdapters(players),
+    });
+
+    await controller.run(10_000);
+    const state = controller.getState() as EndedGameState;
+
+    expect(state.phase).toBe("ended");
+    expect(Object.keys(state.scores)).toHaveLength(2);
+    expect(state.turn.round).toBeGreaterThan(0);
+  });
+
+  it("produces a valid session from a pre-built game", async () => {
+    const { players, setupInput, config, seed } = buildPrebuiltGame();
+    const controller = new GameController({
+      config,
+      players,
+      seed,
+      setupInput,
+      adapters: makeAdapters(players),
+    });
+
+    await controller.run(10_000);
+    const session = controller.toSession();
+
+    expect(session.version).toBe("0.1.0");
+    expect(session.actions.length).toBeGreaterThan(0);
+    expect(session.result).toBeDefined();
   });
 });

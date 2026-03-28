@@ -94,16 +94,11 @@ export function placeLocationOnGrid(
 
 /**
  * Advance to the next player's turn. Main-phase only.
- * Increments round when wrapping past the last player back to players[0].
- * Emits turn_started for mid-round advances only; at round boundaries the
- * caller must emit it after checking win conditions.
+ * Pure state mutation — event emission handled by the caller via emit().
  *
- * @returns true when a new round begins
+ * @returns true when a new round begins (caller must check win conditions)
  */
-export function advanceTurn(
-  draft: Draft<MainGameState>,
-  events: GameEvent[],
-): boolean {
+export function advanceTurn(draft: Draft<MainGameState>): boolean {
   const nextId = getNextPlayerId(draft, draft.turn.activePlayerId);
   const nextIndex = getTurnIndex(draft, nextId);
 
@@ -113,15 +108,6 @@ export function advanceTurn(
   }
 
   draft.turn.activePlayerId = nextId;
-
-  if (!roundIncremented) {
-    events.push({
-      type: "turn_started",
-      playerId: nextId,
-      round: draft.turn.round,
-    });
-  }
-
   return roundIncremented;
 }
 

@@ -10,6 +10,8 @@ import {
   isPerimeterCell,
 } from "./grid-helpers";
 import { getConfigNumber, getPlayerById } from "./state-helpers";
+import { rebuildListeners } from "./listeners/rebuild";
+import { getModifiedCost, getModifiedAPCost } from "./listeners/query";
 import type {
   Action,
   GameState,
@@ -120,6 +122,7 @@ function getMainValidActions(
   const ap = state.turn.actionPointsRemaining;
   const gridRows = state.grid.length;
   const gridCols = state.grid[0].length;
+  const { queries } = rebuildListeners(state);
 
   // pass — always available
   actions.push({ type: "pass", playerId });
@@ -128,8 +131,8 @@ function getMainValidActions(
   if (ap >= 1) {
     for (const card of player.hand) {
       if (card.type === "unit" || card.type === "item") {
-        const cost = tryParseCost(card.cost);
-        if (cost !== null && player.gold >= cost) {
+        const cost = getModifiedCost(state, queries, card, playerId, "deploy");
+        if (player.gold >= cost) {
           actions.push({ type: "deploy", playerId, cardId: card.id });
         }
       }
@@ -141,8 +144,10 @@ function getMainValidActions(
     if (!card) continue;
     const costs = card.cost.split("|");
     for (let ci = 0; ci < costs.length; ci++) {
-      const cost = tryParseCost(card.cost, ci);
-      if (cost !== null && player.gold >= cost) {
+      const baseCost = tryParseCost(card.cost, ci);
+      if (baseCost === null) continue;
+      const cost = getModifiedCost(state, queries, card, playerId, "buy", ci);
+      if (player.gold >= cost) {
         actions.push({
           type: "buy",
           playerId,
@@ -189,10 +194,9 @@ function getMainValidActions(
     for (let c = 0; c < gridCols; c++) {
       for (const unit of state.grid[r][c].units) {
         if (unit.ownerId !== playerId) continue;
-        const moveCost = unit.injured
+        const baseMoveCost = unit.injured
           ? 1 + getConfigNumber(state, "injury_move_penalty", 1)
           : 1;
-        if (ap < moveCost) continue;
 
         // Move to adjacent cells
         for (const adj of getAdjacentCells(gridRows, gridCols, r, c)) {
@@ -200,13 +204,11 @@ function getMainValidActions(
             state.grid[adj.row][adj.col].location &&
             areFacingEdgesOpen(state.grid, r, c, adj.row, adj.col)
           ) {
-            actions.push({
-              type: "move",
-              playerId,
-              unitId: unit.id,
-              row: adj.row,
-              col: adj.col,
-            });
+            const moveAction: MainAction = { type: "move", playerId, unitId: unit.id, row: adj.row, col: adj.col };
+            const moveCost = getModifiedAPCost(state, queries, moveAction, baseMoveCost);
+            if (ap >= moveCost) {
+              actions.push(moveAction);
+            }
           }
         }
 
@@ -215,7 +217,11 @@ function getMainValidActions(
           const boundaryEdges = getBoundaryEdges(r, c, gridRows, gridCols);
           const loc = state.grid[r][c].location;
           if (loc && boundaryEdges.some((edge) => loc.edges[edge])) {
-            actions.push({ type: "move", playerId, unitId: unit.id, row: -1, col: -1 });
+            const retreatAction: MainAction = { type: "move", playerId, unitId: unit.id, row: -1, col: -1 };
+            const retreatCost = getModifiedAPCost(state, queries, retreatAction, baseMoveCost);
+            if (ap >= retreatCost) {
+              actions.push(retreatAction);
+            }
           }
         }
       }
@@ -315,7 +321,7 @@ function getMainValidActions(
           );
           continue;
         }
-        if (checkMissionRequirements(requirements, friendlyUnits)) {
+        if (checkMissionRequirements(requirements, friendlyUnits, state, queries, { row: r, col: c })) {
           actions.push({ type: "attempt_mission", playerId, row: r, col: c });
         }
       }

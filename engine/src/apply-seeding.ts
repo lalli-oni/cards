@@ -466,8 +466,9 @@ function handlePolicySelection(
   });
 
   // Run first player's start-of-turn (gold income, card draw, market population)
+  // No listeners fire at game start — no active cards yet. Pass a no-op emit.
   const readyState = produce(mainState, (draft) => {
-    runStartOfTurn(draft, events);
+    runStartOfTurn(draft, (e) => events.push(e), events);
   });
 
   return { state: readyState, events };

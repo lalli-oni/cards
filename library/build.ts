@@ -119,7 +119,15 @@ function transformCard(type: CardType, raw: Record<string, string>): Record<stri
       break;
 
     case "locations":
-      base.mission = raw.mission || null;
+      base.requirements = null;
+      base.rewards = null;
+      if (raw.mission) {
+        const parts = raw.mission.split(">");
+        if (parts.length !== 2) throw new Error(`${raw.id}: mission "${raw.mission}" must have exactly one ">"`);
+        if (!/^\d+$/.test(parts[1].trim())) throw new Error(`${raw.id}: mission reward must be a number, got "${parts[1]}"`);
+        base.requirements = splitList(parts[0]).join(";");
+        base.rewards = `${parts[1].trim()}vp`;
+      }
       base.passive = raw.passive || null;
       break;
 
@@ -174,7 +182,10 @@ function buildSet(setName: string): { cards: Record<string, unknown>[]; errors: 
 
   for (const type of CARD_TYPES) {
     const csvPath = join(setDir, `${type}.csv`);
-    if (!existsSync(csvPath)) continue;
+    if (!existsSync(csvPath)) {
+      console.warn(`  Warning: ${type}.csv not found in ${setName}, skipping`);
+      continue;
+    }
 
     const raw = readFileSync(csvPath, "utf-8");
     const rows = parseCSV(raw);

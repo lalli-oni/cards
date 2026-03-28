@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
-    "cards-engine": "workspace:*"
+    "cards-engine": "workspace:*",
+    "immer": "^10.1.1"
   }
 }

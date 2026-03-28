@@ -4,6 +4,7 @@ export type { ApplyResult } from "./apply-action";
 export { applyAction } from "./apply-action";
 // Adapters
 export { BotAdapter } from "./bot-adapter";
+export type { BotStrategy } from "./bot-adapter";
 export type { CardDefinition, InstanceCounter } from "./card-loader";
 // Card loader
 export {

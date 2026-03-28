@@ -266,23 +266,28 @@ Actions: Units can have various actions that players can activate.
   equipped items are dropped at the unit's last location (any player's
   unit there may pick them up via Equip).
 - **Controlled**: A unit under another player's control. Card effects
-  (unit actions, events, dilemmas, etc.) can grant a player temporary
-  control of an enemy unit for a stated duration.
+  can grant a player temporary control of an enemy unit for a stated
+  duration. Duration tracking follows the same token pattern as
+  passive events where applicable.
   - The controlled unit counts as a **friendly unit** of the
     controller for all purposes (actions, mission attempts, stat
     checks, etc.).
   - The controller may use the controlled unit's actions, move it,
     and manage its equipment (equip, unequip, swap).
   - **Leaving the board**: Any effect that would move a controlled
-    unit off the board (killed, discarded, sent to hand, mission
-    completion, removed from game) instead returns the unit to its
-    **owner's HQ**. Control ends immediately. Equipped items are
-    dropped at the unit's last location before it returns.
+    unit off the board instead returns the unit to its **owner's HQ**.
+    Control ends immediately. Equipped items are dropped at the unit's
+    last location before it returns. This applies to:
+    - killed, discarded, sent to hand, mission completion, or
+      removed from game
   - **When control ends naturally** (duration expires): the unit
-    stays where it is. Ownership reverts to the original owner.
+    stays where it is. Control is returned to the original owner.
   - Injuries sustained while controlled persist after control ends.
   - A unit that is already controlled **cannot be controlled** by
     another player. The existing control must end first.
+  - [design: A controlled unit that would be killed returns to its
+    owner's HQ alive. This is intentional — the owner should not
+    permanently lose a unit to an opponent's control effect.]
 
 ### Locations
 Locations are placed on the grid during seeding (both drawn and claimed
@@ -467,7 +472,6 @@ differs per card.
 | Resolute | Static | This unit wins ties when attacking |
 | Taunt | Static | Enemy units at this location must target this unit when attacking. If multiple friendly units have Taunt, the attacker chooses among them |
 | Heal | Activated (1 AP) | Remove the injured status from a friendly unit at the same location |
-| Control | Static | This unit is controlled by another player. See Unit status for full rules |
 
 #### Equipment keywords
 | Keyword | Timing | Definition |

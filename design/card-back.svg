@@ -5,6 +5,17 @@
     Dark blue gradient + hex pattern + Frutiger Aero logo badge.
   -->
 
+  <style>
+    /* Badge hue — change this single value to recolor the orb */
+    svg { --badge-hue: 0; }
+
+    .badge-highlight { stop-color: hsl(var(--badge-hue) 64% 60%) }
+    .badge-mid       { stop-color: hsl(var(--badge-hue) 59% 44%) }
+    .badge-shadow    { stop-color: hsl(var(--badge-hue) 64% 29%) }
+    .badge-deep      { stop-color: hsl(var(--badge-hue) 63% 19%) }
+    .badge-rim       { stop-color: hsl(var(--badge-hue) 60% 25%) }
+  </style>
+
   <defs>
     <!-- === CARD BACKGROUND === -->
     <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
@@ -19,7 +30,7 @@
 
     <!-- === HEX PATTERN === -->
     <!-- Flat-top hex grid, r=25. Tile: 75 x 43.3.
-         5 polygons (4 corners + 1 center) tile seamlessly. -->
+         5 polygons tile seamlessly (4 at tile boundaries, 1 centered). -->
     <pattern id="hexPat" width="75" height="43.3" patternUnits="userSpaceOnUse">
       <polygon points="25,0 12.5,21.65 -12.5,21.65 -25,0 -12.5,-21.65 12.5,-21.65"
                fill="none" stroke="#2a2a55" stroke-width="0.8"/>
@@ -42,7 +53,7 @@
       <stop offset="100%" stop-color="white"/>
     </radialGradient>
 
-    <!-- Bottom fade: hexes blend into bottom gradient color -->
+    <!-- Bottom fade: hex pattern fades to transparent, revealing background gradient -->
     <linearGradient id="hexBottomFade" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%"   stop-color="black" stop-opacity="0"/>
       <stop offset="100%" stop-color="black" stop-opacity="1"/>
@@ -54,14 +65,14 @@
     </mask>
 
     <!-- === BADGE === -->
-    <!-- Blue Frutiger Aero orb -->
+    <!-- Frutiger Aero orb (colors driven by --badge-hue) -->
     <radialGradient id="badgeOrb" cx="375" cy="410" r="170" fx="350" fy="390"
                     gradientUnits="userSpaceOnUse">
-      <stop offset="0%"   stop-color="#5598dd"/>
-      <stop offset="35%"  stop-color="#2e65b0"/>
-      <stop offset="70%"  stop-color="#1a3878"/>
-      <stop offset="92%"  stop-color="#122050"/>
-      <stop offset="100%" stop-color="#1a3068"/>
+      <stop offset="0%"   class="badge-highlight"/>
+      <stop offset="35%"  class="badge-mid"/>
+      <stop offset="70%"  class="badge-shadow"/>
+      <stop offset="92%"  class="badge-deep"/>
+      <stop offset="100%" class="badge-rim"/>
     </radialGradient>
 
     <!-- Gloss overlay (top-lit shine) -->
@@ -151,7 +162,7 @@
                stroke-linecap="round" stroke-linejoin="round"/>
         </mask>
 
-        <!-- Per-letter radial gradients (orange orb palette) -->
+        <!-- Per-letter radial gradients (fixed orange/gold palette, independent of --badge-hue) -->
         <radialGradient id="l-orbBase">
           <stop offset="0%"   stop-color="#FFD060"/>
           <stop offset="55%"  stop-color="#FF9200"/>

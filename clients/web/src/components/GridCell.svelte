@@ -105,11 +105,14 @@
       <span class="truncate font-semibold">⚔️{unit.name.slice(0, 5)}</span>
       <span class="text-2xs"><span class="text-stat-strength">{unit.strength}</span>/<span class="text-stat-cunning">{unit.cunning}</span>/<span class="text-stat-charisma">{unit.charisma}</span></span>
       {#if unit.injured}<span class="text-danger">!</span>{/if}
+      {#if unit.attributes.length > 0}
+        <span class="text-2xs text-text-muted">{unit.attributes.join(", ")}</span>
+      {/if}
     </div>
     {#if equippedByUnit[unit.id]}
       {#each equippedByUnit[unit.id] as eqItem}
         <span class="w-full truncate pl-2 text-2xs text-item-equipped" title="🛡️ {eqItem.name}{eqItem.equip ? ' — ' + eqItem.equip : ''}">
-          🛡️ {eqItem.name}{#if eqItem.equip}: {eqItem.equip}{/if}
+          ↳ {eqItem.name}{#if eqItem.equip}: {eqItem.equip}{/if}
         </span>
       {/each}
     {/if}

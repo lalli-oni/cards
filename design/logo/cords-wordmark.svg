@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 540 160">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 510 160">
   <!--
     "cords" wordmark — flat iteration
     The 'o' is a hidden single-story 'a': its tail is outlined (ghost stroke)
@@ -6,27 +6,29 @@
 
     Style: fat rounded strokes, friendly/comic feel.
     Stroke: 34px with round caps on a 38px radius for round letters.
+
+    Grid: x-height stroke-center top=52, bottom=128, center=90. Ascender=22.
   -->
 
   <!-- main letterforms -->
   <g fill="none" stroke="#1a1a2e" stroke-width="34" stroke-linecap="round" stroke-linejoin="round">
-    <!-- c: open circle, gap on right -->
-    <path d="M 85,64 A 38,38 0 1,0 85,116"/>
+    <!-- c: open circle, gap at ~45 deg on right -->
+    <path d="M 84,63 A 38,38 0 1,0 84,117"/>
 
     <!-- o: full circle (bowl of the hidden 'a') -->
     <circle cx="168" cy="90" r="38"/>
 
-    <!-- r: stem + shoulder hook -->
-    <path d="M 254,128 V 76 C 254,52 284,52 288,64"/>
+    <!-- r: stem to x-height, smooth quadratic shoulder curving right -->
+    <path d="M 254,128 V 68 Q 254,52 276,52"/>
 
-    <!-- d: ascender stem + bowl -->
-    <path d="M 384,22 V 128 A 38,38 0 1,0 384,52"/>
+    <!-- d: ascender stem + LEFT bowl (sweep=1 for 'd', not 'b') -->
+    <path d="M 360,22 V 128 A 38,38 0 0,1 360,52"/>
 
-    <!-- s: double curve -->
-    <path d="M 494,62 C 498,42 440,38 440,62 C 440,82 494,86 494,110 C 494,136 436,136 436,114"/>
+    <!-- s: two circular arcs (r=25) joined at inflection, no self-overlap -->
+    <path d="M 479,52 A 25,25 0 1,0 446,90 A 25,25 0 1,1 413,128"/>
   </g>
 
   <!-- ghost tail: thin outlined stroke revealing the hidden 'a' in the 'o' -->
-  <path d="M 200,116 C 208,134 205,150 196,154"
+  <path d="M 201,109 C 209,126 206,140 198,144"
         fill="none" stroke="#1a1a2e" stroke-width="4.5" stroke-linecap="round" opacity="0.5"/>
 </svg>

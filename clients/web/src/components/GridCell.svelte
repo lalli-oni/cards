@@ -87,7 +87,7 @@
     {#if cell.location.requirements || cell.location.rewards}
       <span class="w-full truncate text-2xs text-text-muted">
         {#if cell.location.requirements}{formatRequirements(cell.location.requirements)}{/if}
-        {#if cell.location.rewards}{cell.location.requirements ? " " : ""}→{cell.location.rewards}{/if}
+        {#if cell.location.rewards}{cell.location.requirements ? " " : ""}→{cell.location.rewards.replace("vp", "⭐")}{/if}
       </span>
     {/if}
     {#if cell.location.passive}

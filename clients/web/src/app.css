@@ -9,9 +9,9 @@
 
   /* Text */
   --color-text-primary: var(--color-stone-100);
-  --color-text-secondary: var(--color-stone-300);
-  --color-text-muted: var(--color-stone-400);
-  --color-text-faint: var(--color-stone-500);
+  --color-text-secondary: var(--color-stone-200);
+  --color-text-muted: var(--color-stone-300);
+  --color-text-faint: var(--color-stone-400);
 
   /* Highlight (actionable / interactive) */
   --color-highlight: var(--color-amber-400);

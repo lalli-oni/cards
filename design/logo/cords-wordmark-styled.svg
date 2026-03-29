@@ -1,0 +1,101 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-40 -20 640 220">
+  <!--
+    "cords" wordmark — styled iteration
+    Bright orange with glossy depth, glow, and drop shadow.
+    Same letter shapes as the flat version.
+  -->
+
+  <defs>
+    <!-- Reusable letter shapes (no stroke/fill — set per use) -->
+    <g id="letters">
+      <g transform="rotate(-22, 57, 90)">
+        <path d="M 84,63 A 38,38 0 1,0 84,117"/>
+      </g>
+      <circle cx="168" cy="90" r="38"/>
+      <path d="M 254,128 V 62 C 254,42 276,38 296,48"/>
+      <circle cx="366" cy="90" r="38"/>
+      <path d="M 404,22 V 128"/>
+      <g transform="translate(8, 10)">
+        <path d="M 515,52 A 25,25 0 1,0 482,90 A 25,25 0 1,1 449,128"/>
+      </g>
+    </g>
+
+    <!-- Base orange gradient (top-lit) -->
+    <linearGradient id="base" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFB840"/>
+      <stop offset="50%" stop-color="#FF8800"/>
+      <stop offset="100%" stop-color="#B84400"/>
+    </linearGradient>
+
+    <!-- Top gloss: white fade from top -->
+    <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.6"/>
+      <stop offset="30%" stop-color="#ffffff" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+
+    <!-- Bottom depth shadow -->
+    <linearGradient id="depth" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="65%" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.25"/>
+    </linearGradient>
+
+    <!-- Top edge specular highlight -->
+    <linearGradient id="edgeLight" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.85"/>
+      <stop offset="15%" stop-color="#ffffff" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+
+    <!-- Orange glow + drop shadow filter -->
+    <filter id="fx" x="-20%" y="-15%" width="140%" height="150%">
+      <!-- Outer glow (warm orange aura) -->
+      <feGaussianBlur in="SourceAlpha" stdDeviation="8" result="glowBlur"/>
+      <feFlood flood-color="#FF8800" flood-opacity="0.25"/>
+      <feComposite in2="glowBlur" operator="in" result="orangeGlow"/>
+
+      <!-- Drop shadow (dark, offset down) -->
+      <feGaussianBlur in="SourceAlpha" stdDeviation="4" result="shadowBlur"/>
+      <feOffset in="shadowBlur" dy="5" result="shadowOff"/>
+      <feFlood flood-color="#3d1800" flood-opacity="0.4"/>
+      <feComposite in2="shadowOff" operator="in" result="dropShadow"/>
+
+      <feMerge>
+        <feMergeNode in="orangeGlow"/>
+        <feMergeNode in="dropShadow"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- ====== RENDERED LETTERS ====== -->
+  <g filter="url(#fx)">
+
+    <!-- Layer 1: Base orange gradient fill -->
+    <use href="#letters" fill="none" stroke="url(#base)" stroke-width="34"
+         stroke-linecap="round" stroke-linejoin="round"/>
+
+    <!-- Layer 2: Bottom inner shadow (depth) -->
+    <use href="#letters" fill="none" stroke="url(#depth)" stroke-width="34"
+         stroke-linecap="round" stroke-linejoin="round"/>
+
+    <!-- Layer 3: Gloss highlight (thinner, shifted up slightly) -->
+    <g transform="translate(0, -2)">
+      <use href="#letters" fill="none" stroke="url(#gloss)" stroke-width="28"
+           stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+
+    <!-- Layer 4: Thin specular edge at top -->
+    <g transform="translate(0, -4)">
+      <use href="#letters" fill="none" stroke="url(#edgeLight)" stroke-width="4"
+           stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+
+  </g>
+
+  <!-- Ghost tail: dashed outline in matching orange -->
+  <path d="M 193,102 V 128 A 13,13 0 0,0 219,128 V 102"
+        fill="none" stroke="#FF8800" stroke-width="2.5" stroke-linecap="round"
+        stroke-dasharray="5 4" opacity="0.5"/>
+</svg>

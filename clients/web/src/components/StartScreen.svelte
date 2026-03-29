@@ -4,6 +4,8 @@
     loadGame,
     refreshSessions,
     getSavedSessions,
+    getError,
+    clearError,
   } from "../lib/gameStore.svelte";
   import { deleteSession } from "../lib/persistence";
 
@@ -24,16 +26,38 @@
   }
 
   async function handleDelete(key: string) {
-    await deleteSession(key);
+    try {
+      await deleteSession(key);
+    } catch (err) {
+      console.error("Failed to delete session:", err);
+    }
     await refreshSessions();
   }
 
+  function displayName(key: string): string {
+    if (key === "autosave") return "Autosave";
+    return key.replace(/^session-/, "");
+  }
+
   const sessions = $derived(getSavedSessions());
+  const error = $derived(getError());
 </script>
 
 <div class="flex min-h-screen items-center justify-center bg-stone-900 p-4">
   <div class="w-full max-w-md space-y-8">
     <h1 class="text-center text-3xl font-bold text-stone-100">Cards</h1>
+
+    {#if error}
+      <div class="flex items-center justify-between rounded-lg bg-red-900/80 px-4 py-3">
+        <span class="text-sm text-red-200">{error}</span>
+        <button
+          onclick={clearError}
+          class="rounded bg-red-800 px-3 py-1 text-xs text-red-200 hover:bg-red-700"
+        >
+          Dismiss
+        </button>
+      </div>
+    {/if}
 
     <div class="space-y-4 rounded-lg bg-stone-800 p-6">
       <h2 class="text-lg font-semibold text-stone-200">New Game</h2>
@@ -70,7 +94,12 @@
         <h2 class="text-lg font-semibold text-stone-200">Saved Games</h2>
         {#each sessions as key}
           <div class="flex items-center justify-between rounded bg-stone-700 px-3 py-2">
-            <span class="text-stone-200">{key}</span>
+            <span class="text-stone-200">
+              {displayName(key)}
+              {#if key === "autosave"}
+                <span class="ml-1 text-xs text-stone-400">(auto)</span>
+              {/if}
+            </span>
             <div class="flex gap-2">
               <button
                 onclick={() => handleLoad(key)}

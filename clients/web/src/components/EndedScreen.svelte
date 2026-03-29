@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { getVisibleState, returnToMenu, startNewGame } from "../lib/gameStore.svelte";
+  import { getVisibleState, returnToMenu } from "../lib/gameStore.svelte";
 
   const vs = $derived(getVisibleState());
 </script>

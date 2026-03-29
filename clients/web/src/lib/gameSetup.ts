@@ -8,7 +8,7 @@ import {
   type PolicyCard,
   type SetupInput,
 } from "cards-engine";
-import cardDefsJson from "../../../../library/build/all.json";
+import cardDefsJson from "@library/all.json";
 
 export const DEFAULT_CONFIG: GameConfig = {
   starting_gold: 10,

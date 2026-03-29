@@ -143,6 +143,7 @@
       <p class="mb-3 text-sm text-stone-400">Click a cell to place the location.</p>
       <GridBoard
         grid={vs.grid}
+        selfPlayerId={vs.self.id}
         highlightedCells={placementCells}
         onCellClick={handlePlaceLocation}
       />

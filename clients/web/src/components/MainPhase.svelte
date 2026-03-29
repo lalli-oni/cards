@@ -60,6 +60,7 @@
       <div class="flex-1 overflow-auto">
         <GridBoard
           grid={vs.grid}
+          selfPlayerId={vs.self.id}
           {highlightedCells}
           onCellClick={handleCellClick}
         />

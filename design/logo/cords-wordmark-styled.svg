@@ -36,28 +36,57 @@
          - r: covers to the outer stroke edge
          Colors: v3 palette (bright center → orange mid → deep orange edge)
     -->
-    <!-- Base orb gradient (stops only — position inherited by per-letter refs) -->
-    <radialGradient id="orbBase">
+    <!-- All gradients normalized to r≈58, focal offset ~(-10,-12) to match 'r' look -->
+    <radialGradient id="gc" gradientUnits="userSpaceOnUse"
+                    cx="57" cy="78" r="58" fx="47" fy="66">
       <stop offset="0%" stop-color="#FFD060"/>
-      <stop offset="35%" stop-color="#FFAB28"/>
-      <stop offset="60%" stop-color="#FF9200"/>
-      <stop offset="80%" stop-color="#E88000"/>
-      <stop offset="100%" stop-color="#D87200"/>
+      <stop offset="55%" stop-color="#FF9200"/>
+      <stop offset="88%" stop-color="#D87200"/>
+      <stop offset="100%" stop-color="#E88A20"/>
     </radialGradient>
 
-    <!-- Per-letter: inherit stops from orbBase, override only position -->
-    <radialGradient id="gc" href="#orbBase" gradientUnits="userSpaceOnUse"
-                    cx="57" cy="78" r="58" fx="47" fy="66"/>
-    <radialGradient id="go" href="#orbBase" gradientUnits="userSpaceOnUse"
-                    cx="168" cy="78" r="58" fx="158" fy="66"/>
-    <radialGradient id="gr" href="#orbBase" gradientUnits="userSpaceOnUse"
-                    cx="268" cy="78" r="58" fx="258" fy="66"/>
-    <radialGradient id="gd" href="#orbBase" gradientUnits="userSpaceOnUse"
-                    cx="370" cy="78" r="62" fx="360" fy="66"/>
-    <radialGradient id="gds" href="#orbBase" gradientUnits="userSpaceOnUse"
-                    cx="404" cy="60" r="62" fx="398" fy="48"/>
-    <radialGradient id="gs" href="#orbBase" gradientUnits="userSpaceOnUse"
-                    cx="490" cy="90" r="56" fx="480" fy="78"/>
+    <radialGradient id="go" gradientUnits="userSpaceOnUse"
+                    cx="168" cy="78" r="58" fx="158" fy="66">
+      <stop offset="0%" stop-color="#FFD060"/>
+      <stop offset="55%" stop-color="#FF9200"/>
+      <stop offset="88%" stop-color="#D87200"/>
+      <stop offset="100%" stop-color="#E88A20"/>
+    </radialGradient>
+
+    <radialGradient id="gr" gradientUnits="userSpaceOnUse"
+                    cx="268" cy="78" r="58" fx="258" fy="66">
+      <stop offset="0%" stop-color="#FFD060"/>
+      <stop offset="55%" stop-color="#FF9200"/>
+      <stop offset="88%" stop-color="#D87200"/>
+      <stop offset="100%" stop-color="#E88A20"/>
+    </radialGradient>
+
+    <!-- d bowl: centered on bowl, stem falls in natural darker zone -->
+    <radialGradient id="gd" gradientUnits="userSpaceOnUse"
+                    cx="370" cy="78" r="62" fx="360" fy="66">
+      <stop offset="0%" stop-color="#FFD060"/>
+      <stop offset="55%" stop-color="#FF9200"/>
+      <stop offset="88%" stop-color="#D87200"/>
+      <stop offset="100%" stop-color="#E88A20"/>
+    </radialGradient>
+
+    <!-- d stem: separate gradient centered on the stem itself -->
+    <radialGradient id="gds" gradientUnits="userSpaceOnUse"
+                    cx="404" cy="60" r="62" fx="398" fy="48">
+      <stop offset="0%" stop-color="#FFD060"/>
+      <stop offset="55%" stop-color="#FF9200"/>
+      <stop offset="88%" stop-color="#D87200"/>
+      <stop offset="100%" stop-color="#E88A20"/>
+    </radialGradient>
+
+    <!-- s: normalized radius -->
+    <radialGradient id="gs" gradientUnits="userSpaceOnUse"
+                    cx="490" cy="90" r="56" fx="480" fy="78">
+      <stop offset="0%" stop-color="#FFD060"/>
+      <stop offset="55%" stop-color="#FF9200"/>
+      <stop offset="88%" stop-color="#D87200"/>
+      <stop offset="100%" stop-color="#E88A20"/>
+    </radialGradient>
 
     <!-- Per-letter gloss: positioned on upper portion of each letter (userSpaceOnUse) -->
     <radialGradient id="glc" gradientUnits="userSpaceOnUse" cx="52" cy="68" r="42">

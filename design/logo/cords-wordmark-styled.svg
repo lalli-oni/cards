@@ -1,8 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="-30 -10 620 200">
   <!--
-    "cords" wordmark — styled iteration v3
-    Gemstone/jewel aesthetic: sharp highlights, crisp edges, no blur glow.
-    Same letter shapes as the flat version.
+    "cords" wordmark — styled iteration v4
+    Frutiger Aero / gemstone aesthetic using SVG lighting filters.
+
+    Technique (per the orb tutorial):
+    1. Base orange shape
+    2. feDiffuseLighting on blurred alpha → 3D rounded shading per letter
+    3. feSpecularLighting → sharp gloss highlights per letter
+    4. Masked oval overlay → glass-like shine across top
+    5. Crisp drop shadow
   -->
 
   <defs>
@@ -20,87 +26,89 @@
       </g>
     </g>
 
-    <!-- Base: rich orange, fully opaque -->
-    <linearGradient id="base" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#FFC550"/>
-      <stop offset="45%" stop-color="#FF9200"/>
-      <stop offset="100%" stop-color="#D06A00"/>
+    <!-- Mask: white letter silhouettes for clipping overlays -->
+    <mask id="letterMask">
+      <use href="#letters" fill="none" stroke="white" stroke-width="34"
+           stroke-linecap="round" stroke-linejoin="round"/>
+    </mask>
+
+    <!-- Base orange gradient (subtler range for lighting to modulate) -->
+    <linearGradient id="baseOrange" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFCA55"/>
+      <stop offset="100%" stop-color="#EE8500"/>
     </linearGradient>
 
-    <!-- Sharp highlight band: concentrated bright streak near top (gemstone facet) -->
-    <linearGradient id="highlight" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.35"/>
-      <stop offset="10%" stop-color="#ffffff" stop-opacity="0.7"/>
-      <stop offset="20%" stop-color="#ffffff" stop-opacity="0.2"/>
-      <stop offset="32%" stop-color="#ffffff" stop-opacity="0"/>
+    <!-- Oval gloss gradient (the glass shine ellipse) -->
+    <radialGradient id="ovalGloss" cx="50%" cy="25%" r="65%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.72"/>
+      <stop offset="45%" stop-color="#ffffff" stop-opacity="0.18"/>
       <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
-    </linearGradient>
+    </radialGradient>
 
-    <!-- Bottom depth: subtle darkening -->
-    <linearGradient id="depth" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#000000" stop-opacity="0"/>
-      <stop offset="75%" stop-color="#000000" stop-opacity="0"/>
-      <stop offset="100%" stop-color="#000000" stop-opacity="0.12"/>
-    </linearGradient>
+    <!-- 3D gemstone filter: diffuse + specular lighting + drop shadow -->
+    <filter id="gem3d" x="-15%" y="-15%" width="130%" height="145%"
+            color-interpolation-filters="sRGB">
 
-    <!-- Bottom facet reflection (gemstones catch light underneath) -->
-    <linearGradient id="bottomFacet" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#ffffff" stop-opacity="0"/>
-      <stop offset="88%" stop-color="#ffffff" stop-opacity="0"/>
-      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.15"/>
-    </linearGradient>
+      <!-- Step 1: Blur alpha to create smooth bump/height map.
+           stdDeviation controls how "round" the 3D surface looks.
+           ~8px gives nice convex depth for 34px-wide strokes. -->
+      <feGaussianBlur in="SourceAlpha" stdDeviation="8" result="bump"/>
 
-    <!-- Top edge specular line -->
-    <linearGradient id="edgeLight" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.95"/>
-      <stop offset="10%" stop-color="#ffffff" stop-opacity="0.4"/>
-      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
-    </linearGradient>
+      <!-- Step 2: Diffuse lighting — soft 3D form shading.
+           Light from upper-left. Each letter gets independent
+           depth because the bump map follows each shape's alpha. -->
+      <feDiffuseLighting in="bump" surfaceScale="6" diffuseConstant="1"
+                         lighting-color="white" result="diffuse">
+        <fePointLight x="220" y="-100" z="300"/>
+      </feDiffuseLighting>
+      <feComposite in="diffuse" in2="SourceAlpha" operator="in" result="diffClip"/>
 
-    <!-- Crisp drop shadow only (no glow, low blur) -->
-    <filter id="shadow" x="-10%" y="-5%" width="120%" height="125%">
-      <feGaussianBlur in="SourceAlpha" stdDeviation="2.5" result="blur"/>
-      <feOffset in="blur" dy="4" result="off"/>
-      <feFlood flood-color="#805000" flood-opacity="0.2"/>
-      <feComposite in2="off" operator="in" result="dropShadow"/>
+      <!-- Step 3: Multiply diffuse light map with base orange.
+           Lit areas stay orange, shadow areas darken naturally. -->
+      <feBlend in="SourceGraphic" in2="diffClip" mode="multiply" result="shaded"/>
+
+      <!-- Step 4: Specular lighting — sharp gloss highlights.
+           Same light position, higher exponent for tight bright spots. -->
+      <feSpecularLighting in="bump" surfaceScale="4" specularConstant="1.5"
+                          specularExponent="30" lighting-color="white" result="spec">
+        <fePointLight x="220" y="-100" z="300"/>
+      </feSpecularLighting>
+      <feComposite in="spec" in2="SourceAlpha" operator="in" result="specClip"/>
+
+      <!-- Step 5: Add specular highlights onto shaded base.
+           k2=1 keeps shaded, k3=0.6 controls highlight intensity. -->
+      <feComposite in="specClip" in2="shaded" operator="arithmetic"
+                   k1="0" k2="1" k3="0.6" k4="0" result="glossy"/>
+
+      <!-- Step 6: Crisp drop shadow (low blur, subtle) -->
+      <feGaussianBlur in="SourceAlpha" stdDeviation="2.5" result="shadowBlur"/>
+      <feOffset in="shadowBlur" dy="4" result="shadowOff"/>
+      <feFlood flood-color="#806000" flood-opacity="0.18"/>
+      <feComposite in2="shadowOff" operator="in" result="shadow"/>
+
+      <!-- Final merge: shadow behind glossy letters -->
       <feMerge>
-        <feMergeNode in="dropShadow"/>
-        <feMergeNode in="SourceGraphic"/>
+        <feMergeNode in="shadow"/>
+        <feMergeNode in="glossy"/>
       </feMerge>
     </filter>
   </defs>
 
-  <!-- Ghost tail: rendered BEHIND letters so overlap is hidden -->
+  <!-- Ghost tail (behind everything, hidden where letters overlap) -->
   <path d="M 193,102 V 128 A 13,13 0 0,0 219,128 V 102"
         fill="none" stroke="#FF9200" stroke-width="2.5" stroke-linecap="round"
         stroke-dasharray="5 4" opacity="0.5"/>
 
-  <!-- ====== RENDERED LETTERS ====== -->
-  <g filter="url(#shadow)">
-
-    <!-- Layer 1: Base orange (fully opaque, covers ghost tail overlap) -->
-    <use href="#letters" fill="none" stroke="url(#base)" stroke-width="34"
+  <!-- 3D lit letters with integrated drop shadow -->
+  <g filter="url(#gem3d)">
+    <use href="#letters" fill="none" stroke="url(#baseOrange)" stroke-width="34"
          stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
 
-    <!-- Layer 2: Bottom depth darkening -->
-    <use href="#letters" fill="none" stroke="url(#depth)" stroke-width="34"
-         stroke-linecap="round" stroke-linejoin="round"/>
-
-    <!-- Layer 3: Bottom facet reflection -->
-    <use href="#letters" fill="none" stroke="url(#bottomFacet)" stroke-width="34"
-         stroke-linecap="round" stroke-linejoin="round"/>
-
-    <!-- Layer 4: Sharp gemstone highlight band (slightly thinner, offset up) -->
-    <g transform="translate(0, -1)">
-      <use href="#letters" fill="none" stroke="url(#highlight)" stroke-width="30"
-           stroke-linecap="round" stroke-linejoin="round"/>
-    </g>
-
-    <!-- Layer 5: Top edge specular line (thin, crisp) -->
-    <g transform="translate(0, -5)">
-      <use href="#letters" fill="none" stroke="url(#edgeLight)" stroke-width="3"
-           stroke-linecap="round" stroke-linejoin="round"/>
-    </g>
-
+  <!-- Glass oval gloss: white-to-transparent ellipse, masked to letters.
+       This is the "shine" overlay from the orb tutorial (steps 5-7).
+       Spans the upper third of the word for a uniform glass highlight. -->
+  <g mask="url(#letterMask)">
+    <ellipse cx="265" cy="50" rx="270" ry="48" fill="url(#ovalGloss)"/>
   </g>
 </svg>

@@ -37,6 +37,11 @@
       <span title="Prospect deck">🗺️ Prospect:{self.prospectDeck.length}</span>
       <span title="Market deck">🏪 Market:{self.marketDeck.length}</span>
       <span title="Discard pile">♻️ Discard:{self.discardPile.length}</span>
+      {#if self.removedFromGame.length > 0}
+        <span title="Cards removed from game: {self.removedFromGame.map(c => c.name).join(', ')}">
+          ❌ Removed:{self.removedFromGame.length}
+        </span>
+      {/if}
     </div>
     {#if selfHasEffects}
       <StatusEffectsBar
@@ -44,6 +49,7 @@
         traps={self.activeTraps}
         passiveEvents={self.passiveEvents}
         isSelf={true}
+        {vs}
       />
     {/if}
   </div>
@@ -81,6 +87,7 @@
           policies={opponent.activePolicies}
           traps={opponent.activeTraps}
           isSelf={false}
+          {vs}
         />
       {/if}
     </div>

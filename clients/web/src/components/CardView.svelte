@@ -19,19 +19,33 @@
 
   const tooltip = $derived.by(() => {
     const lines = [`${card.name} (${card.type}) — Cost: ${card.cost}`];
+    if (card.keywords && card.keywords.length > 0) {
+      lines.push(`Keywords: ${card.keywords.join(", ")}`);
+    }
     if (card.type === "unit") {
+      if (card.attributes.length > 0) lines.push(`Attributes: ${card.attributes.join(", ")}`);
       lines.push(`Str:${card.strength} Cun:${card.cunning} Cha:${card.charisma}${card.injured ? " (injured)" : ""}`);
     } else if (card.type === "location") {
       if (card.requirements) lines.push(`Req: ${card.requirements}`);
       if (card.rewards) lines.push(`Rew: ${card.rewards}`);
       if (card.passive) lines.push(`Passive: ${card.passive}`);
     } else if (card.type === "item") {
-      if (card.equip) lines.push(card.equip);
-      if (card.stored) lines.push(card.stored);
+      if (card.equip) lines.push(`Equip: ${card.equip}`);
+      if (card.stored) lines.push(`Stored: ${card.stored}`);
+    } else if (card.type === "event" && card.subtype === "trap") {
+      lines.push(`Trigger: ${card.trigger}`);
+    } else if (card.type === "policy") {
+      lines.push(`Effect: ${card.effect}`);
     }
     if (card.text) lines.push(card.text);
     return lines.join("\n");
   });
+
+  const attributeStr = $derived(
+    card.type === "unit" && card.attributes.length > 0
+      ? card.attributes.join(", ")
+      : "",
+  );
 </script>
 
 <button
@@ -58,6 +72,12 @@
       <span class="text-2xs">{card.requirements ?? ""}</span>
     {/if}
   </div>
+  {#if attributeStr}
+    <div class="truncate text-2xs text-text-muted">{attributeStr}</div>
+  {/if}
+  {#if card.keywords && card.keywords.length > 0}
+    <div class="truncate text-2xs text-text-faint italic">{card.keywords.join(", ")}</div>
+  {/if}
   {#if card.text}
     <div class="mt-1 truncate text-text-faint">{card.text}</div>
   {/if}

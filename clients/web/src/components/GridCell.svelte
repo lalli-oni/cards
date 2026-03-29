@@ -48,7 +48,8 @@
     }
     for (const u of cell.units) {
       const owner = u.ownerId === selfPlayerId ? "yours" : "opponent";
-      lines.push(`⚔️ ${u.name} — S:${u.strength} C:${u.cunning} Ch:${u.charisma}${u.injured ? " INJURED" : ""} (${owner})`);
+      const attrs = u.attributes.length > 0 ? ` [${u.attributes.join(", ")}]` : "";
+      lines.push(`⚔️ ${u.name}${attrs} — S:${u.strength} C:${u.cunning} Ch:${u.charisma}${u.injured ? " INJURED" : ""} (${owner})`);
     }
     for (const i of cell.items) {
       lines.push(`🛡️ ${i.name}${i.equippedTo ? " (equipped)" : " (loose)"}`);

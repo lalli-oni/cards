@@ -596,32 +596,28 @@ COMPOSE_FNS = {
 }
 
 
-def export_card_back(output_dir, fmt):
-    """Export the card back SVG (and optionally PNG) to the output directory.
+def export_card_back(output_dir, fmt, file_id=None, page_id=None):
+    """Export the card back as SVG (standalone) and/or PNG (via Penpot).
 
-    The card back is a standalone SVG with features (CSS variables, hex patterns,
-    masks) that bypass the Penpot template pipeline. SVG exports are postprocessed
-    for web delivery.
+    SVG: copies the standalone card-back.svg and postprocesses it.
+    PNG: connects to Penpot, finds the Card Back frame, and exports via the render pipeline.
     """
-    src = os.path.join(SCRIPT_DIR, "card-back.svg")
-    if not os.path.exists(src):
-        print(f"ERROR: card-back.svg not found at {src}", file=sys.stderr)
-        sys.exit(1)
-
     os.makedirs(output_dir, exist_ok=True)
     formats = ["png", "svg"] if fmt == "both" else [fmt]
 
     for f in formats:
         if f == "svg":
+            src = os.path.join(SCRIPT_DIR, "card-back.svg")
+            if not os.path.exists(src):
+                print(f"ERROR: card-back.svg not found at {src}", file=sys.stderr)
+                sys.exit(1)
             out_path = os.path.join(output_dir, "card-back.svg")
-            # Copy source SVG
             with open(src, "rb") as fin:
                 data = fin.read()
             with open(out_path, "wb") as fout:
                 fout.write(data)
             print(f"  Saved {out_path} ({len(data)} bytes)")
 
-            # Post-process
             postprocess = os.path.join(SCRIPT_DIR, "postprocess-svg.py")
             if os.path.exists(postprocess):
                 try:
@@ -629,10 +625,39 @@ def export_card_back(output_dir, fmt):
                 except subprocess.CalledProcessError as e:
                     print(f"ERROR: SVG postprocessing failed for card-back: {e}", file=sys.stderr)
                     sys.exit(1)
-        else:
-            print("  PNG export for card back requires a browser renderer (not yet implemented).",
-                  file=sys.stderr)
-            print("  Use --format svg for now.", file=sys.stderr)
+
+        elif f == "png":
+            if not file_id:
+                print("ERROR: PNG export requires --file-id or PENPOT_FILE_ID", file=sys.stderr)
+                print("  Run setup-template.py --type card-back first, then export.", file=sys.stderr)
+                sys.exit(1)
+
+            client = PenpotClient()
+            print("  Logging in to Penpot...")
+            client.login()
+
+            file_data = client.get_file(file_id)
+            if not page_id:
+                page_id = file_data["data"]["pages"][0]
+            objects = client.get_page_objects(file_data, page_id)
+
+            # Find the Card Back frame
+            frame_id = None
+            for oid, obj in objects.items():
+                if obj.get("name") == "Card Back" and obj.get("type") == "frame":
+                    frame_id = oid
+                    break
+            if not frame_id:
+                print("ERROR: 'Card Back' frame not found in Penpot file.", file=sys.stderr)
+                print("  Run: python setup-template.py --type card-back", file=sys.stderr)
+                sys.exit(1)
+
+            print("  Exporting PNG from Penpot...")
+            data = client.export_png(file_id, page_id, frame_id)
+            out_path = os.path.join(output_dir, "card-back.png")
+            with open(out_path, "wb") as fout:
+                fout.write(data)
+            print(f"  Saved {out_path} ({len(data)} bytes)")
 
     print("Card back exported.")
 
@@ -644,17 +669,17 @@ def main():
     parser.add_argument("--type", choices=list(FRAME_NAMES.keys()),
                         help="Card type (auto-detected from filename if omitted)")
     parser.add_argument("--card-back", action="store_true",
-                        help="Export the card back SVG (no Penpot needed)")
+                        help="Export the card back (SVG standalone, PNG via Penpot)")
     parser.add_argument("--format", choices=["png", "svg", "both"], default="png")
     parser.add_argument("-o", "--output", default=os.path.join(SCRIPT_DIR, "exports"))
     parser.add_argument("--file-id", default=os.environ.get("PENPOT_FILE_ID"))
     parser.add_argument("--page-id", default=os.environ.get("PENPOT_PAGE_ID"))
     args = parser.parse_args()
 
-    # Card back: standalone export, no Penpot connection needed
+    # Card back: SVG standalone, PNG via Penpot
     if args.card_back:
         print("Exporting card back...")
-        export_card_back(args.output, args.format)
+        export_card_back(args.output, args.format, args.file_id, args.page_id)
         return
 
     # Detect card type

@@ -1,4 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="-20 0 600 180">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-20 0 600 180" role="img" aria-labelledby="title">
+  <title id="title">cords</title>
   <!--
     "cords" wordmark — flat iteration v5
     The 'o' is a hidden single-story 'a': its tail is a dashed outline (ghost).

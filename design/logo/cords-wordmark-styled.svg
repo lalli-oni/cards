@@ -1,4 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="-30 -10 620 200">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-30 -10 620 200" role="img" aria-labelledby="title">
+  <title id="title">cords</title>
   <!--
     "cords" wordmark — styled iteration v6
     Per-letter radial gradients for individual orb/3D depth.
@@ -61,37 +62,25 @@
     <radialGradient id="gs" href="#orbBase" gradientUnits="userSpaceOnUse"
                     cx="490" cy="90" r="56" fx="480" fy="78"/>
 
-    <!-- Per-letter gloss: positioned on upper portion of each letter (userSpaceOnUse) -->
-    <radialGradient id="glc" gradientUnits="userSpaceOnUse" cx="52" cy="68" r="42">
+    <!-- Base gloss gradient (stops only — per-letter refs inherit these) -->
+    <radialGradient id="glossBase">
       <stop offset="0%" stop-color="#fff" stop-opacity="0.7"/>
       <stop offset="45%" stop-color="#fff" stop-opacity="0.1"/>
       <stop offset="100%" stop-color="#fff" stop-opacity="0"/>
     </radialGradient>
-    <radialGradient id="glo" gradientUnits="userSpaceOnUse" cx="163" cy="68" r="42">
-      <stop offset="0%" stop-color="#fff" stop-opacity="0.7"/>
-      <stop offset="45%" stop-color="#fff" stop-opacity="0.1"/>
-      <stop offset="100%" stop-color="#fff" stop-opacity="0"/>
-    </radialGradient>
-    <radialGradient id="glr" gradientUnits="userSpaceOnUse" cx="260" cy="62" r="38">
-      <stop offset="0%" stop-color="#fff" stop-opacity="0.7"/>
-      <stop offset="45%" stop-color="#fff" stop-opacity="0.1"/>
-      <stop offset="100%" stop-color="#fff" stop-opacity="0"/>
-    </radialGradient>
-    <radialGradient id="gld" gradientUnits="userSpaceOnUse" cx="358" cy="68" r="42">
-      <stop offset="0%" stop-color="#fff" stop-opacity="0.7"/>
-      <stop offset="45%" stop-color="#fff" stop-opacity="0.1"/>
-      <stop offset="100%" stop-color="#fff" stop-opacity="0"/>
-    </radialGradient>
+
+    <!-- Per-letter gloss: inherit stops from glossBase, override position -->
+    <radialGradient id="glc" href="#glossBase" gradientUnits="userSpaceOnUse" cx="52" cy="68" r="42"/>
+    <radialGradient id="glo" href="#glossBase" gradientUnits="userSpaceOnUse" cx="163" cy="68" r="42"/>
+    <radialGradient id="glr" href="#glossBase" gradientUnits="userSpaceOnUse" cx="260" cy="62" r="38"/>
+    <radialGradient id="gld" href="#glossBase" gradientUnits="userSpaceOnUse" cx="358" cy="68" r="42"/>
+    <!-- d stem: slightly dimmer gloss -->
     <radialGradient id="gldst" gradientUnits="userSpaceOnUse" cx="404" cy="38" r="30">
       <stop offset="0%" stop-color="#fff" stop-opacity="0.55"/>
       <stop offset="45%" stop-color="#fff" stop-opacity="0.08"/>
       <stop offset="100%" stop-color="#fff" stop-opacity="0"/>
     </radialGradient>
-    <radialGradient id="gls" gradientUnits="userSpaceOnUse" cx="482" cy="72" r="40">
-      <stop offset="0%" stop-color="#fff" stop-opacity="0.7"/>
-      <stop offset="45%" stop-color="#fff" stop-opacity="0.1"/>
-      <stop offset="100%" stop-color="#fff" stop-opacity="0"/>
-    </radialGradient>
+    <radialGradient id="gls" href="#glossBase" gradientUnits="userSpaceOnUse" cx="482" cy="72" r="40"/>
 
     <!-- Edge specular (5% dimmer, slightly visible in darkest areas) -->
     <linearGradient id="edgeLight" x1="0" y1="0" x2="0" y2="1">
@@ -135,8 +124,10 @@
     <!-- d: bowl + stem (same gradient covers both) -->
     <circle cx="366" cy="90" r="38" stroke="url(#gd)"/>
     <path d="M 404,22 V 128" stroke="url(#gds)"/>
-    <!-- s (pre-translated coordinates, no transform needed) -->
-    <path d="M 523,62 A 25,25 0 1,0 490,100 A 25,25 0 1,1 457,138" stroke="url(#gs)"/>
+    <!-- s (same transform as #letters def, same base coordinates) -->
+    <g transform="translate(8, 10)">
+      <path d="M 515,52 A 25,25 0 1,0 482,90 A 25,25 0 1,1 449,128" stroke="url(#gs)"/>
+    </g>
   </g>
 
   <!-- Per-letter gloss: individual shine on each letter (uniform distant light) -->
@@ -165,6 +156,8 @@
     <path d="M 254,128 V 62 C 254,42 276,38 296,48"/>
     <circle cx="366" cy="90" r="38"/>
     <path d="M 404,22 V 128"/>
-    <path d="M 523,62 A 25,25 0 1,0 490,100 A 25,25 0 1,1 457,138"/>
+    <g transform="translate(8, 10)">
+      <path d="M 515,52 A 25,25 0 1,0 482,90 A 25,25 0 1,1 449,128"/>
+    </g>
   </g>
 </svg>

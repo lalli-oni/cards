@@ -41,21 +41,24 @@
                     cx="57" cy="78" r="58" fx="47" fy="66">
       <stop offset="0%" stop-color="#FFD060"/>
       <stop offset="55%" stop-color="#FF9200"/>
-      <stop offset="100%" stop-color="#D87200"/>
+      <stop offset="88%" stop-color="#D87200"/>
+      <stop offset="100%" stop-color="#E88A20"/>
     </radialGradient>
 
     <radialGradient id="go" gradientUnits="userSpaceOnUse"
                     cx="168" cy="78" r="58" fx="158" fy="66">
       <stop offset="0%" stop-color="#FFD060"/>
       <stop offset="55%" stop-color="#FF9200"/>
-      <stop offset="100%" stop-color="#D87200"/>
+      <stop offset="88%" stop-color="#D87200"/>
+      <stop offset="100%" stop-color="#E88A20"/>
     </radialGradient>
 
     <radialGradient id="gr" gradientUnits="userSpaceOnUse"
                     cx="268" cy="78" r="58" fx="258" fy="66">
       <stop offset="0%" stop-color="#FFD060"/>
       <stop offset="55%" stop-color="#FF9200"/>
-      <stop offset="100%" stop-color="#D87200"/>
+      <stop offset="88%" stop-color="#D87200"/>
+      <stop offset="100%" stop-color="#E88A20"/>
     </radialGradient>
 
     <!-- d bowl: centered on bowl, stem falls in natural darker zone -->
@@ -63,7 +66,8 @@
                     cx="370" cy="78" r="62" fx="360" fy="66">
       <stop offset="0%" stop-color="#FFD060"/>
       <stop offset="55%" stop-color="#FF9200"/>
-      <stop offset="100%" stop-color="#D87200"/>
+      <stop offset="88%" stop-color="#D87200"/>
+      <stop offset="100%" stop-color="#E88A20"/>
     </radialGradient>
 
     <!-- d stem: separate gradient centered on the stem itself -->
@@ -71,7 +75,8 @@
                     cx="404" cy="60" r="62" fx="398" fy="48">
       <stop offset="0%" stop-color="#FFD060"/>
       <stop offset="55%" stop-color="#FF9200"/>
-      <stop offset="100%" stop-color="#D87200"/>
+      <stop offset="88%" stop-color="#D87200"/>
+      <stop offset="100%" stop-color="#E88A20"/>
     </radialGradient>
 
     <!-- s: normalized radius -->
@@ -79,7 +84,8 @@
                     cx="490" cy="90" r="56" fx="480" fy="78">
       <stop offset="0%" stop-color="#FFD060"/>
       <stop offset="55%" stop-color="#FF9200"/>
-      <stop offset="100%" stop-color="#D87200"/>
+      <stop offset="88%" stop-color="#D87200"/>
+      <stop offset="100%" stop-color="#E88A20"/>
     </radialGradient>
 
     <!-- Per-letter gloss: positioned on upper portion of each letter (userSpaceOnUse) -->
@@ -130,13 +136,6 @@
     <filter id="specBlur" x="-5%" y="-5%" width="110%" height="110%">
       <feGaussianBlur stdDeviation="0.8"/>
     </filter>
-
-    <!-- Very gentle blur for base letters — softens gradient seams at
-         stroke bends (e.g. r corner) without visible pixelation.
-         Only applied to base layer; gloss + specular stay crisp on top. -->
-    <filter id="baseSmooth" x="-2%" y="-2%" width="104%" height="104%">
-      <feGaussianBlur stdDeviation="0.4"/>
-    </filter>
   </defs>
 
   <!-- Ghost tail (behind everything) -->
@@ -150,9 +149,8 @@
          stroke-linecap="round" stroke-linejoin="round"/>
   </g>
 
-  <!-- ====== MAIN LETTERS: per-letter radial gradients ====== -->
-  <g fill="none" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"
-     filter="url(#baseSmooth)">
+  <!-- ====== MAIN LETTERS: per-letter radial gradients (crisp vectors) ====== -->
+  <g fill="none" stroke-width="34" stroke-linecap="round" stroke-linejoin="round">
     <!-- c (rotated, uses gc gradient) -->
     <g transform="rotate(-22, 57, 90)">
       <path d="M 84,63 A 38,38 0 1,0 84,117" stroke="url(#gc)"/>

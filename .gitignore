@@ -17,3 +17,6 @@ design/exports/
 .claude/settings.local.json
 .claude/bin/
 .mcp.json
+
+# VS Code task context
+.vscode/task-context.md

@@ -1,0 +1,163 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-30 -10 620 200" role="img" aria-labelledby="title">
+  <title id="title">cords</title>
+  <!--
+    "cords" wordmark — styled iteration v6
+    Per-letter radial gradients for individual orb/3D depth.
+    Each letter has its own radial gradient with focal point
+    shifted upper-left to simulate top-lit lighting.
+    Oval gloss overlay masked to letter interiors.
+    No raster filters on main letters (crisp vectors).
+  -->
+
+  <defs>
+    <!-- Letter shapes (for mask + shadow reuse) -->
+    <g id="letters">
+      <g transform="rotate(-22, 57, 90)">
+        <path d="M 84,63 A 38,38 0 1,0 84,117"/>
+      </g>
+      <circle cx="168" cy="90" r="38"/>
+      <path d="M 254,128 V 62 C 254,42 276,38 296,48"/>
+      <circle cx="366" cy="90" r="38"/>
+      <path d="M 404,22 V 128"/>
+      <g transform="translate(8, 10)">
+        <path d="M 515,52 A 25,25 0 1,0 482,90 A 25,25 0 1,1 449,128"/>
+      </g>
+    </g>
+
+    <!-- Inner mask for gloss (narrower so shine stays inside) -->
+    <mask id="glossMask">
+      <use href="#letters" fill="none" stroke="white" stroke-width="22"
+           stroke-linecap="round" stroke-linejoin="round"/>
+    </mask>
+
+    <!-- === PER-LETTER RADIAL GRADIENTS (userSpaceOnUse) ===
+         Each gradient has:
+         - cx,cy: geometric center of the letter
+         - fx,fy: focal point shifted upper-left (light source direction)
+         - r: covers to the outer stroke edge
+         Colors: v3 palette (bright center → orange mid → deep orange edge)
+    -->
+    <!-- Base orb gradient (stops only — per-letter refs inherit these) -->
+    <radialGradient id="orbBase">
+      <stop offset="0%" stop-color="#FFD060"/>
+      <stop offset="55%" stop-color="#FF9200"/>
+      <stop offset="88%" stop-color="#D87200"/>
+      <stop offset="100%" stop-color="#E88A20"/>
+    </radialGradient>
+
+    <!-- Per-letter: inherit stops from orbBase, override only position -->
+    <radialGradient id="gc" href="#orbBase" gradientUnits="userSpaceOnUse"
+                    cx="57" cy="78" r="58" fx="47" fy="66"/>
+    <radialGradient id="go" href="#orbBase" gradientUnits="userSpaceOnUse"
+                    cx="168" cy="78" r="58" fx="158" fy="66"/>
+    <radialGradient id="gr" href="#orbBase" gradientUnits="userSpaceOnUse"
+                    cx="268" cy="78" r="58" fx="258" fy="66"/>
+    <!-- d bowl -->
+    <radialGradient id="gd" href="#orbBase" gradientUnits="userSpaceOnUse"
+                    cx="370" cy="78" r="62" fx="360" fy="66"/>
+    <!-- d stem -->
+    <radialGradient id="gds" href="#orbBase" gradientUnits="userSpaceOnUse"
+                    cx="404" cy="60" r="62" fx="398" fy="48"/>
+    <!-- s -->
+    <radialGradient id="gs" href="#orbBase" gradientUnits="userSpaceOnUse"
+                    cx="490" cy="90" r="56" fx="480" fy="78"/>
+
+    <!-- Base gloss gradient (stops only — per-letter refs inherit these) -->
+    <radialGradient id="glossBase">
+      <stop offset="0%" stop-color="#fff" stop-opacity="0.7"/>
+      <stop offset="45%" stop-color="#fff" stop-opacity="0.1"/>
+      <stop offset="100%" stop-color="#fff" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Per-letter gloss: inherit stops from glossBase, override position -->
+    <radialGradient id="glc" href="#glossBase" gradientUnits="userSpaceOnUse" cx="52" cy="68" r="42"/>
+    <radialGradient id="glo" href="#glossBase" gradientUnits="userSpaceOnUse" cx="163" cy="68" r="42"/>
+    <radialGradient id="glr" href="#glossBase" gradientUnits="userSpaceOnUse" cx="260" cy="62" r="38"/>
+    <radialGradient id="gld" href="#glossBase" gradientUnits="userSpaceOnUse" cx="358" cy="68" r="42"/>
+    <!-- d stem: slightly dimmer gloss -->
+    <radialGradient id="gldst" gradientUnits="userSpaceOnUse" cx="404" cy="38" r="30">
+      <stop offset="0%" stop-color="#fff" stop-opacity="0.55"/>
+      <stop offset="45%" stop-color="#fff" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#fff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="gls" href="#glossBase" gradientUnits="userSpaceOnUse" cx="482" cy="72" r="40"/>
+
+    <!-- Edge specular (5% dimmer, slightly visible in darkest areas) -->
+    <linearGradient id="edgeLight" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.85"/>
+      <stop offset="12%" stop-color="#ffffff" stop-opacity="0.28"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.05"/>
+    </linearGradient>
+
+    <!-- Shadow blur (applied to shadow layer only) -->
+    <filter id="shadowBlur" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="2.5"/>
+    </filter>
+
+    <!-- Soft blur for specular lines (applied only to specular group) -->
+    <filter id="specBlur" x="-5%" y="-5%" width="110%" height="110%">
+      <feGaussianBlur stdDeviation="0.8"/>
+    </filter>
+  </defs>
+
+  <!-- Ghost tail (behind everything) -->
+  <path d="M 193,102 V 128 A 13,13 0 0,0 219,128 V 102"
+        fill="none" stroke="#FF9200" stroke-width="2.5" stroke-linecap="round"
+        stroke-dasharray="5 4" opacity="0.5"/>
+
+  <!-- Drop shadow (only element with a filter) -->
+  <g filter="url(#shadowBlur)" opacity="0.18" transform="translate(0, 4)">
+    <use href="#letters" fill="none" stroke="#805000" stroke-width="34"
+         stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <!-- ====== MAIN LETTERS: per-letter radial gradients (crisp vectors) ====== -->
+  <g fill="none" stroke-width="34" stroke-linecap="round" stroke-linejoin="round">
+    <!-- c (rotated, uses gc gradient) -->
+    <g transform="rotate(-22, 57, 90)">
+      <path d="M 84,63 A 38,38 0 1,0 84,117" stroke="url(#gc)"/>
+    </g>
+    <!-- o -->
+    <circle cx="168" cy="90" r="38" stroke="url(#go)"/>
+    <!-- r -->
+    <path d="M 254,128 V 62 C 254,42 276,38 296,48" stroke="url(#gr)"/>
+    <!-- d: bowl + stem (same gradient covers both) -->
+    <circle cx="366" cy="90" r="38" stroke="url(#gd)"/>
+    <path d="M 404,22 V 128" stroke="url(#gds)"/>
+    <!-- s (same transform as #letters def, same base coordinates) -->
+    <g transform="translate(8, 10)">
+      <path d="M 515,52 A 25,25 0 1,0 482,90 A 25,25 0 1,1 449,128" stroke="url(#gs)"/>
+    </g>
+  </g>
+
+  <!-- Per-letter gloss: individual shine on each letter (uniform distant light) -->
+  <g mask="url(#glossMask)">
+    <!-- c -->
+    <circle cx="52" cy="68" r="42" fill="url(#glc)"/>
+    <!-- o -->
+    <circle cx="163" cy="68" r="42" fill="url(#glo)"/>
+    <!-- r -->
+    <circle cx="260" cy="62" r="38" fill="url(#glr)"/>
+    <!-- d bowl (shifted left) -->
+    <circle cx="358" cy="68" r="42" fill="url(#gld)"/>
+    <!-- d stem -->
+    <ellipse cx="404" cy="38" rx="18" ry="30" fill="url(#gldst)"/>
+    <!-- s (shifted up-left) -->
+    <circle cx="482" cy="72" r="40" fill="url(#gls)"/>
+  </g>
+
+  <!-- Top edge specular (softly blurred, slightly dimmed) -->
+  <g transform="translate(0, -5)" fill="none" stroke="url(#edgeLight)" stroke-width="3"
+     stroke-linecap="round" stroke-linejoin="round" filter="url(#specBlur)">
+    <g transform="rotate(-22, 57, 90)">
+      <path d="M 84,63 A 38,38 0 1,0 84,117"/>
+    </g>
+    <circle cx="168" cy="90" r="38"/>
+    <path d="M 254,128 V 62 C 254,42 276,38 296,48"/>
+    <circle cx="366" cy="90" r="38"/>
+    <path d="M 404,22 V 128"/>
+    <g transform="translate(8, 10)">
+      <path d="M 515,52 A 25,25 0 1,0 482,90 A 25,25 0 1,1 449,128"/>
+    </g>
+  </g>
+</svg>

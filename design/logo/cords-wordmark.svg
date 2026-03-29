@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-20 0 600 180" role="img" aria-labelledby="title">
+  <title id="title">cords</title>
+  <!--
+    "cords" wordmark — flat iteration v5
+    The 'o' is a hidden single-story 'a': its tail is a dashed outline (ghost).
+    Intentionally "derpy": tilted c, misplaced s.
+
+    Stroke: 34px round caps, 38px radius for round letters.
+    Grid: x-height top=52, bottom=128, center=90. Ascender=22.
+  -->
+
+  <!-- main letterforms -->
+  <g fill="none" stroke="#1a1a2e" stroke-width="34" stroke-linecap="round" stroke-linejoin="round">
+    <!-- c: tilted -22 deg counter-clockwise for derpy feel -->
+    <g transform="rotate(-22, 57, 90)">
+      <path d="M 84,63 A 38,38 0 1,0 84,117"/>
+    </g>
+
+    <!-- o: full circle (bowl of the hidden 'a') -->
+    <circle cx="168" cy="90" r="38"/>
+
+    <!-- r: stem with Fredoka-style ear — shoulder curves up past x-height
+         then droops into a round ball terminal, creating a distinct hook -->
+    <path d="M 254,128 V 62 C 254,42 276,38 296,48"/>
+
+    <!-- d: full bubble bowl (circle) + separate ascender stem -->
+    <circle cx="366" cy="90" r="38"/>
+    <path d="M 404,22 V 128"/>
+
+    <!-- s: offset down-right for intentionally misplaced derpy feel -->
+    <g transform="translate(8, 10)">
+      <path d="M 515,52 A 25,25 0 1,0 482,90 A 25,25 0 1,1 449,128"/>
+    </g>
+  </g>
+
+  <!-- ghost tail: dashed U-shaped OUTLINE tracing the border of where
+       the 'a' tail would be. Visible below the 'o' stroke.
+       The tail stroke would be at x=206 (right edge of bowl) with 34px width,
+       so its border runs from x=189 to x=223. This draws the bottom contour
+       as small elongated dashes, not a filled shape. -->
+  <path d="M 193,102 V 128 A 13,13 0 0,0 219,128 V 102"
+        fill="none" stroke="#1a1a2e" stroke-width="2.5" stroke-linecap="round"
+        stroke-dasharray="5 4" opacity="0.45"/>
+</svg>

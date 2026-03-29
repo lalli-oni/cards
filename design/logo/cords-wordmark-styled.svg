@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="-40 -20 640 220">
   <!--
-    "cords" wordmark — styled iteration
-    Bright orange with glossy depth, glow, and drop shadow.
+    "cords" wordmark — styled iteration v2
+    Glossy orange with glass-like depth, glow, and shadow.
     Same letter shapes as the flat version.
   -->
 
@@ -20,45 +20,60 @@
       </g>
     </g>
 
-    <!-- Base orange gradient (top-lit) -->
+    <!-- Base orange gradient (shifted more yellow-orange, less brown) -->
     <linearGradient id="base" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#FFB840"/>
-      <stop offset="50%" stop-color="#FF8800"/>
-      <stop offset="100%" stop-color="#B84400"/>
+      <stop offset="0%" stop-color="#FFC550"/>
+      <stop offset="50%" stop-color="#FF9200"/>
+      <stop offset="100%" stop-color="#D06A00"/>
     </linearGradient>
 
-    <!-- Top gloss: white fade from top -->
+    <!-- Top gloss: sharper white band for glass refraction -->
     <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.6"/>
-      <stop offset="30%" stop-color="#ffffff" stop-opacity="0.12"/>
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.75"/>
+      <stop offset="20%" stop-color="#ffffff" stop-opacity="0.25"/>
+      <stop offset="35%" stop-color="#ffffff" stop-opacity="0"/>
       <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
     </linearGradient>
 
-    <!-- Bottom depth shadow -->
+    <!-- Bottom depth shadow (lighter than v1) -->
     <linearGradient id="depth" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#000000" stop-opacity="0"/>
-      <stop offset="65%" stop-color="#000000" stop-opacity="0"/>
-      <stop offset="100%" stop-color="#000000" stop-opacity="0.25"/>
+      <stop offset="70%" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.15"/>
+    </linearGradient>
+
+    <!-- Bottom reflection: glass catches light underneath -->
+    <linearGradient id="bottomReflect" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="80%" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.18"/>
     </linearGradient>
 
     <!-- Top edge specular highlight -->
     <linearGradient id="edgeLight" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.85"/>
-      <stop offset="15%" stop-color="#ffffff" stop-opacity="0.25"/>
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.9"/>
+      <stop offset="12%" stop-color="#ffffff" stop-opacity="0.3"/>
       <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
     </linearGradient>
 
-    <!-- Orange glow + drop shadow filter -->
+    <!-- Glass edge outline gradient -->
+    <linearGradient id="glassEdge" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFD870" stop-opacity="0.7"/>
+      <stop offset="50%" stop-color="#FFA020" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="#CC7500" stop-opacity="0.5"/>
+    </linearGradient>
+
+    <!-- Orange glow + lighter drop shadow -->
     <filter id="fx" x="-20%" y="-15%" width="140%" height="150%">
       <!-- Outer glow (warm orange aura) -->
       <feGaussianBlur in="SourceAlpha" stdDeviation="8" result="glowBlur"/>
-      <feFlood flood-color="#FF8800" flood-opacity="0.25"/>
+      <feFlood flood-color="#FF9500" flood-opacity="0.2"/>
       <feComposite in2="glowBlur" operator="in" result="orangeGlow"/>
 
-      <!-- Drop shadow (dark, offset down) -->
+      <!-- Drop shadow (softer, less dark) -->
       <feGaussianBlur in="SourceAlpha" stdDeviation="4" result="shadowBlur"/>
       <feOffset in="shadowBlur" dy="5" result="shadowOff"/>
-      <feFlood flood-color="#3d1800" flood-opacity="0.4"/>
+      <feFlood flood-color="#804000" flood-opacity="0.22"/>
       <feComposite in2="shadowOff" operator="in" result="dropShadow"/>
 
       <feMerge>
@@ -72,30 +87,43 @@
   <!-- ====== RENDERED LETTERS ====== -->
   <g filter="url(#fx)">
 
-    <!-- Layer 1: Base orange gradient fill -->
+    <!-- Layer 1: Base orange gradient -->
     <use href="#letters" fill="none" stroke="url(#base)" stroke-width="34"
          stroke-linecap="round" stroke-linejoin="round"/>
 
-    <!-- Layer 2: Bottom inner shadow (depth) -->
+    <!-- Layer 2: Bottom inner shadow (depth, subtle) -->
     <use href="#letters" fill="none" stroke="url(#depth)" stroke-width="34"
          stroke-linecap="round" stroke-linejoin="round"/>
 
-    <!-- Layer 3: Gloss highlight (thinner, shifted up slightly) -->
+    <!-- Layer 3: Bottom reflection (glass light from below) -->
+    <use href="#letters" fill="none" stroke="url(#bottomReflect)" stroke-width="34"
+         stroke-linecap="round" stroke-linejoin="round"/>
+
+    <!-- Layer 4: Gloss highlight (sharper, glass-like) -->
     <g transform="translate(0, -2)">
       <use href="#letters" fill="none" stroke="url(#gloss)" stroke-width="28"
            stroke-linecap="round" stroke-linejoin="round"/>
     </g>
 
-    <!-- Layer 4: Thin specular edge at top -->
+    <!-- Layer 5: Thin specular edge at top -->
     <g transform="translate(0, -4)">
       <use href="#letters" fill="none" stroke="url(#edgeLight)" stroke-width="4"
            stroke-linecap="round" stroke-linejoin="round"/>
     </g>
 
+    <!-- Layer 6: Glass edge outline (thin border around letters) -->
+    <use href="#letters" fill="none" stroke="url(#glassEdge)" stroke-width="36"
+         stroke-linecap="round" stroke-linejoin="round"
+         style="paint-order: stroke; stroke-opacity: 1; fill: none;"/>
+
+    <!-- Redraw base on top so edge only shows as a thin rim -->
+    <use href="#letters" fill="none" stroke="url(#base)" stroke-width="33"
+         stroke-linecap="round" stroke-linejoin="round"/>
+
   </g>
 
   <!-- Ghost tail: dashed outline in matching orange -->
   <path d="M 193,102 V 128 A 13,13 0 0,0 219,128 V 102"
-        fill="none" stroke="#FF8800" stroke-width="2.5" stroke-linecap="round"
+        fill="none" stroke="#FF9200" stroke-width="2.5" stroke-linecap="round"
         stroke-dasharray="5 4" opacity="0.5"/>
 </svg>

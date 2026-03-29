@@ -5,7 +5,7 @@
     Dark blue gradient + hex pattern + Frutiger Aero logo badge.
   -->
 
-  <style>
+  <style><![CDATA[
     /* Badge hue — change this single value to recolor the orb */
     svg { --badge-hue: 0; }
 
@@ -14,7 +14,7 @@
     .badge-shadow    { stop-color: hsl(var(--badge-hue) 64% 29%) }
     .badge-deep      { stop-color: hsl(var(--badge-hue) 63% 19%) }
     .badge-rim       { stop-color: hsl(var(--badge-hue) 60% 25%) }
-  </style>
+  ]]></style>
 
   <defs>
     <!-- === CARD BACKGROUND === -->
@@ -65,7 +65,7 @@
     </mask>
 
     <!-- === BADGE === -->
-    <!-- Frutiger Aero orb (colors driven by --badge-hue) -->
+    <!-- Frutiger Aero orb (colors driven by badge-hue) -->
     <radialGradient id="badgeOrb" cx="375" cy="410" r="170" fx="350" fy="390"
                     gradientUnits="userSpaceOnUse">
       <stop offset="0%"   class="badge-highlight"/>
@@ -162,7 +162,7 @@
                stroke-linecap="round" stroke-linejoin="round"/>
         </mask>
 
-        <!-- Per-letter radial gradients (fixed orange/gold palette, independent of --badge-hue) -->
+        <!-- Per-letter radial gradients (fixed orange/gold palette, independent of badge-hue) -->
         <radialGradient id="l-orbBase">
           <stop offset="0%"   stop-color="#FFD060"/>
           <stop offset="55%"  stop-color="#FF9200"/>

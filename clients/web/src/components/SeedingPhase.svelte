@@ -41,8 +41,8 @@
     const keepIds = hand.filter((c) => keepSet.has(c.id)).map((c) => c.id);
     const exposeIds = hand.filter((c) => !keepSet.has(c.id)).map((c) => c.id);
 
-    // Manually constructed: the engine's validActions returns a seed_keep
-    // template with empty keepIds/exposeIds that the UI must fill in.
+    // Manually constructed — engine returns a template with empty arrays.
+    // Validation tracked in #76.
     selectAction({
       type: "seed_keep",
       playerId: vs.currentPlayerId,

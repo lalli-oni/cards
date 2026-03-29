@@ -16,10 +16,10 @@
   }
 </script>
 
-<div class="overflow-auto rounded-lg bg-surface-sunken p-2">
+<div class="h-full overflow-auto rounded-lg bg-surface-sunken p-2">
   <div
-    class="inline-grid gap-1"
-    style="grid-template-columns: repeat({grid[0]?.length ?? 0}, auto)"
+    class="grid h-full gap-1"
+    style="grid-template-columns: repeat({grid[0]?.length ?? 0}, 1fr); grid-template-rows: repeat({grid.length}, 1fr)"
   >
     {#each grid as row, r}
       {#each row as cell, c}

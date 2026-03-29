@@ -35,6 +35,27 @@
     ].join("; ");
   });
 
+  const cellTooltip = $derived.by(() => {
+    const lines: string[] = [];
+    if (cell.location) {
+      const e = cell.location.edges;
+      const dir = (open: boolean) => (open ? "open" : "blocked");
+      lines.push(`${cell.location.name}`);
+      lines.push(`Edges: N:${dir(e.n)} E:${dir(e.e)} S:${dir(e.s)} W:${dir(e.w)}`);
+      if (cell.location.requirements) lines.push(`Req: ${cell.location.requirements}`);
+      if (cell.location.rewards) lines.push(`Rew: ${cell.location.rewards}`);
+      if (cell.location.passive) lines.push(`Passive: ${cell.location.passive}`);
+    }
+    for (const u of cell.units) {
+      const owner = u.ownerId === selfPlayerId ? "yours" : "opponent";
+      lines.push(`⚔️ ${u.name} — S:${u.strength} C:${u.cunning} Ch:${u.charisma}${u.injured ? " INJURED" : ""} (${owner})`);
+    }
+    for (const i of cell.items) {
+      lines.push(`🛡️ ${i.name}${i.equippedTo ? " (equipped)" : " (loose)"}`);
+    }
+    return lines.join("\n");
+  });
+
   // Group equipped items by unit, separate loose items
   const equippedByUnit = $derived(
     cell.items.reduce(
@@ -51,22 +72,25 @@
 </script>
 
 <button
-  class="flex h-28 w-28 flex-col items-start justify-start overflow-hidden rounded p-1 text-2xs leading-tight transition-colors {bgClass}"
+  class="flex min-h-24 min-w-24 flex-col items-start justify-start overflow-hidden rounded p-1 text-2xs leading-tight transition-colors {bgClass}"
   style={highlighted ? `${edgeStyle}; outline: 2px solid var(--color-highlight-border)` : edgeStyle}
+  title={cellTooltip}
   onclick={() => onclick?.(row, col)}
   disabled={!onclick}
 >
   {#if cell.location}
-    <span class="w-full truncate font-semibold text-location" title={cell.location.name}>
-      {cell.location.name}
+    <span class="w-full truncate font-semibold text-location">
+      📍 {cell.location.name}
     </span>
     {#if cell.location.requirements || cell.location.rewards}
-      <span
-        class="w-full truncate text-2xs text-text-muted"
-        title="Req: {cell.location.requirements ?? 'none'} | Rew: {cell.location.rewards ?? 'none'}"
-      >
+      <span class="w-full truncate text-2xs text-text-muted">
         {#if cell.location.requirements}R:{cell.location.requirements.slice(0, 10)}{/if}
         {#if cell.location.rewards}{cell.location.requirements ? " " : ""}→{cell.location.rewards}{/if}
+      </span>
+    {/if}
+    {#if cell.location.passive}
+      <span class="w-full truncate text-2xs text-passive">
+        ✦ {cell.location.passive}
       </span>
     {/if}
   {/if}
@@ -76,26 +100,23 @@
       class="flex w-full items-center gap-0.5 truncate {unit.ownerId === selfPlayerId
         ? 'text-self'
         : 'text-opponent'}"
-      title="{unit.name} S:{unit.strength} C:{unit.cunning} Ch:{unit.charisma}{unit.injured
-        ? ' INJURED'
-        : ''}"
     >
-      <span class="truncate font-semibold">{unit.name.slice(0, 7)}</span>
-      <span class="text-2xs opacity-75">{unit.strength}/{unit.cunning}/{unit.charisma}</span>
+      <span class="truncate font-semibold">⚔️{unit.name.slice(0, 5)}</span>
+      <span class="text-2xs"><span class="text-stat-strength">{unit.strength}</span>/<span class="text-stat-cunning">{unit.cunning}</span>/<span class="text-stat-charisma">{unit.charisma}</span></span>
       {#if unit.injured}<span class="text-danger">!</span>{/if}
     </div>
     {#if equippedByUnit[unit.id]}
-      {#each equippedByUnit[unit.id] as item}
-        <span class="w-full truncate pl-2 text-2xs text-item-equipped" title={item.name}>
-          +{item.name.slice(0, 8)}
+      {#each equippedByUnit[unit.id] as eqItem}
+        <span class="w-full truncate pl-2 text-2xs text-item-equipped">
+          +{eqItem.name.slice(0, 6)}
         </span>
       {/each}
     {/if}
   {/each}
 
-  {#each looseItems as item}
-    <span class="w-full truncate text-item" title={item.name}>
-      ~{item.name.slice(0, 8)}
+  {#each looseItems as looseItem}
+    <span class="w-full truncate text-item">
+      ~{looseItem.name.slice(0, 6)}
     </span>
   {/each}
 

@@ -9,23 +9,29 @@
 
   let { card, highlighted = false, onclick }: Props = $props();
 
-  function statLine(c: Card): string {
-    if (c.type === "unit") {
-      return `${c.strength}/${c.cunning}/${c.charisma}${c.injured ? " 🩹" : ""}`;
-    }
-    if (c.type === "location") {
-      return c.requirements ?? "";
-    }
-    return "";
-  }
-
-  const typeLabel: Record<string, string> = {
-    unit: "U",
-    location: "L",
-    item: "I",
-    event: "E",
-    policy: "P",
+  const typeEmoji: Record<string, string> = {
+    unit: "⚔️",
+    location: "📍",
+    item: "🛡️",
+    event: "⚡",
+    policy: "📜",
   };
+
+  const tooltip = $derived.by(() => {
+    const lines = [`${card.name} (${card.type}) — Cost: ${card.cost}`];
+    if (card.type === "unit") {
+      lines.push(`Str:${card.strength} Cun:${card.cunning} Cha:${card.charisma}${card.injured ? " (injured)" : ""}`);
+    } else if (card.type === "location") {
+      if (card.requirements) lines.push(`Req: ${card.requirements}`);
+      if (card.rewards) lines.push(`Rew: ${card.rewards}`);
+      if (card.passive) lines.push(`Passive: ${card.passive}`);
+    } else if (card.type === "item") {
+      if (card.equip) lines.push(card.equip);
+      if (card.stored) lines.push(card.stored);
+    }
+    if (card.text) lines.push(card.text);
+    return lines.join("\n");
+  });
 </script>
 
 <button
@@ -33,6 +39,7 @@
     {highlighted
     ? 'border-highlight-border bg-highlight-bg'
     : 'border-surface-hover bg-surface-raised hover:border-text-faint'}"
+  title={tooltip}
   onclick={() => onclick?.(card)}
   disabled={!onclick}
 >
@@ -41,8 +48,15 @@
     <span class="ml-1 text-text-muted">{card.cost}</span>
   </div>
   <div class="flex items-center justify-between text-text-muted">
-    <span class="rounded bg-surface-hover px-1">{typeLabel[card.type]}</span>
-    <span>{statLine(card)}</span>
+    <span>{typeEmoji[card.type] ?? card.type}</span>
+    {#if card.type === "unit"}
+      <span class="text-2xs">
+        <span class="text-stat-strength">{card.strength}</span>/<span class="text-stat-cunning">{card.cunning}</span>/<span class="text-stat-charisma">{card.charisma}</span>
+        {#if card.injured}🩹{/if}
+      </span>
+    {:else if card.type === "location"}
+      <span class="text-2xs">{card.requirements ?? ""}</span>
+    {/if}
   </div>
   {#if card.text}
     <div class="mt-1 truncate text-text-faint">{card.text}</div>

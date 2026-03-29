@@ -14,7 +14,7 @@
 
 <div class="rounded-lg bg-surface p-3">
   <h3 class="mb-2 text-sm font-semibold text-text-muted">{title} ({cards.length})</h3>
-  <div class="flex gap-2 overflow-x-auto pb-1">
+  <div class="flex flex-wrap gap-2">
     {#each cards as card}
       <CardView
         {card}

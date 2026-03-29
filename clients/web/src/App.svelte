@@ -15,7 +15,9 @@
   import MainPhase from "./components/MainPhase.svelte";
   import EndedScreen from "./components/EndedScreen.svelte";
   import EventLog from "./components/EventLog.svelte";
+  import DevPreview from "./DevPreview.svelte";
 
+  const isDevPreview = window.location.hash === "#dev";
   const screen = $derived(getScreen());
   const vs = $derived(getVisibleState());
   const actions = $derived(getValidActions());
@@ -34,7 +36,9 @@
   }
 </script>
 
-{#if screen === "start"}
+{#if isDevPreview}
+  <DevPreview />
+{:else if screen === "start"}
   <StartScreen />
 {:else}
   <div class="flex h-screen flex-col bg-stone-900 p-3 text-stone-100">

@@ -15,8 +15,8 @@
 
   /* Highlight (actionable / interactive) */
   --color-highlight: var(--color-amber-400);
-  --color-highlight-bg: oklch(0.555 0.163 84.429 / 0.3); /* amber-900/30 */
-  --color-highlight-border: var(--color-amber-400);
+  --color-highlight-bg: oklch(0.555 0.163 84.429 / 0.15); /* amber-900/15 — subtler bg */
+  --color-highlight-border: var(--color-sky-400);
 
   /* Player identity */
   --color-identity: var(--color-amber-400);
@@ -43,6 +43,11 @@
   --color-cell-border: var(--color-stone-700);
   --color-cell-edge-open: var(--color-stone-600);
   --color-cell-edge-blocked: var(--color-red-900);
+
+  /* Stat colors */
+  --color-stat-strength: var(--color-red-400);
+  --color-stat-cunning: var(--color-sky-400);
+  --color-stat-charisma: var(--color-amber-300);
 
   /* Injury / danger */
   --color-danger: var(--color-red-400);

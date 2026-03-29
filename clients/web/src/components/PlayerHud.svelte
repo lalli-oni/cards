@@ -23,56 +23,60 @@
   );
 </script>
 
-<div class="flex flex-col gap-1 rounded-lg bg-surface px-4 py-2">
-  <!-- Row 1: Resources and turn info -->
-  <div class="flex items-center justify-between">
-    <!-- Self -->
+<div class="flex gap-4 rounded-lg bg-surface px-4 py-2">
+  <!-- Self -->
+  <div class="flex flex-1 flex-col gap-1">
     <div class="flex items-center gap-3 text-sm">
       <span class="font-bold text-identity">{self.name}</span>
       <span class="text-text-secondary" title="Gold">💰{self.gold}</span>
       <span class="text-text-secondary" title="Victory Points">⭐{self.vp}</span>
-      <span class="text-text-secondary" title="Hand">🃏{self.hand.length}</span>
-      <span class="text-text-muted" title="Main deck">📚{self.mainDeck.length}</span>
-      <span class="text-xs text-text-faint" title="Prospect / Market / Discard">
-        Prsp:{self.prospectDeck.length} Mkt:{self.marketDeck.length} Disc:{self.discardPile.length}
-      </span>
+      <span class="text-text-secondary" title="Hand size">✋{self.hand.length}</span>
     </div>
-
-    <!-- Turn info -->
-    {#if vs.turn}
-      <div class="flex items-center gap-3 text-text-muted">
-        <span>R{vs.turn.round}</span>
-        <span class="font-semibold text-identity-resource" title="Action Points">
-          AP:{vs.turn.actionPointsRemaining}
-        </span>
-      </div>
-    {/if}
-
-    <!-- Opponent -->
-    {#if opponent}
-      <div class="flex items-center gap-3 text-sm">
-        <span class="text-xs text-text-faint" title="Prospect / Market / Discard">
-          Disc:{opponent.discardPileSize} Mkt:{opponent.marketDeckSize} Prsp:{opponent.prospectDeckSize}
-        </span>
-        <span class="text-text-muted" title="Main deck">📚{opponent.mainDeckSize}</span>
-        <span class="text-text-secondary" title="Hand">🃏{opponent.handSize}</span>
-        <span class="text-text-secondary" title="Victory Points">⭐{opponent.vp}</span>
-        <span class="text-text-secondary" title="Gold">💰{opponent.gold}</span>
-        <span class="font-bold text-text-muted">{opponent.name}</span>
-      </div>
-    {/if}
-  </div>
-
-  <!-- Row 2: Active effects (only if any exist) -->
-  {#if selfHasEffects || opponentHasEffects}
-    <div class="flex items-start justify-between gap-4">
+    <div class="flex gap-3 text-xs text-text-faint">
+      <span title="Main deck">📚 Main:{self.mainDeck.length}</span>
+      <span title="Prospect deck">🗺️ Prospect:{self.prospectDeck.length}</span>
+      <span title="Market deck">🏪 Market:{self.marketDeck.length}</span>
+      <span title="Discard pile">♻️ Discard:{self.discardPile.length}</span>
+    </div>
+    {#if selfHasEffects}
       <StatusEffectsBar
         policies={self.activePolicies}
         traps={self.activeTraps}
         passiveEvents={self.passiveEvents}
         isSelf={true}
       />
-      {#if opponent && opponentHasEffects}
+    {/if}
+  </div>
+
+  <!-- Turn info (center) -->
+  {#if vs.turn}
+    <div class="flex flex-col items-center justify-center gap-0.5 text-sm text-text-muted">
+      <span>Round {vs.turn.round}</span>
+      <span class="font-semibold text-identity-resource">
+        Action Points: {vs.turn.actionPointsRemaining}
+      </span>
+      <span class="text-xs">
+        Active: {vs.turn.activePlayerId === self.id ? self.name : opponent?.name ?? vs.turn.activePlayerId}
+      </span>
+    </div>
+  {/if}
+
+  <!-- Opponent -->
+  {#if opponent}
+    <div class="flex flex-1 flex-col items-end gap-1">
+      <div class="flex items-center gap-3 text-sm">
+        <span class="font-bold text-text-muted">{opponent.name}</span>
+        <span class="text-text-secondary" title="Gold">💰{opponent.gold}</span>
+        <span class="text-text-secondary" title="Victory Points">⭐{opponent.vp}</span>
+        <span class="text-text-secondary" title="Hand size">✋{opponent.handSize}</span>
+      </div>
+      <div class="flex gap-3 text-xs text-text-faint">
+        <span title="Main deck">📚 Main:{opponent.mainDeckSize}</span>
+        <span title="Prospect deck">🗺️ Prospect:{opponent.prospectDeckSize}</span>
+        <span title="Market deck">🏪 Market:{opponent.marketDeckSize}</span>
+        <span title="Discard pile">♻️ Discard:{opponent.discardPileSize}</span>
+      </div>
+      {#if opponentHasEffects}
         <StatusEffectsBar
           policies={opponent.activePolicies}
           traps={opponent.activeTraps}

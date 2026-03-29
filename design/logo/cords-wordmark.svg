@@ -1,7 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="-20 0 580 180">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-20 0 600 180">
   <!--
-    "cords" wordmark — flat iteration v3
-    The 'o' is a hidden single-story 'a': its tail is a dotted outline (ghost).
+    "cords" wordmark — flat iteration v5
+    The 'o' is a hidden single-story 'a': its tail is a dashed outline (ghost).
     Intentionally "derpy": tilted c, misplaced s.
 
     Stroke: 34px round caps, 38px radius for round letters.
@@ -10,7 +10,7 @@
 
   <!-- main letterforms -->
   <g fill="none" stroke="#1a1a2e" stroke-width="34" stroke-linecap="round" stroke-linejoin="round">
-    <!-- c: tilted -15 deg counter-clockwise for derpy feel -->
+    <!-- c: tilted -22 deg counter-clockwise for derpy feel -->
     <g transform="rotate(-22, 57, 90)">
       <path d="M 84,63 A 38,38 0 1,0 84,117"/>
     </g>
@@ -18,24 +18,26 @@
     <!-- o: full circle (bowl of the hidden 'a') -->
     <circle cx="168" cy="90" r="38"/>
 
-    <!-- r: vertical stem + horizontal shoulder with 90 deg curve and round terminal -->
-    <path d="M 254,128 V 64 Q 254,48 282,48"/>
+    <!-- r: stem with Fredoka-style ear — shoulder curves up past x-height
+         then droops into a round ball terminal, creating a distinct hook -->
+    <path d="M 254,128 V 62 C 254,42 276,38 296,48"/>
 
     <!-- d: full bubble bowl (circle) + separate ascender stem -->
-    <circle cx="362" cy="90" r="38"/>
-    <path d="M 400,22 V 128"/>
+    <circle cx="376" cy="90" r="38"/>
+    <path d="M 414,22 V 128"/>
 
     <!-- s: offset down-right for intentionally misplaced derpy feel -->
     <g transform="translate(8, 10)">
-      <path d="M 511,52 A 25,25 0 1,0 478,90 A 25,25 0 1,1 445,128"/>
+      <path d="M 525,52 A 25,25 0 1,0 492,90 A 25,25 0 1,1 459,128"/>
     </g>
   </g>
 
-  <!-- ghost tail: dashed vertical stroke at bottom-right of 'o',
-       where the 'a' tail would continue straight down instead of curving back.
-       Positioned at x=206 (right side of bowl), starting just below where
-       the 'o' stroke ends, extending past baseline. -->
-  <path d="M 206,108 V 142"
-        fill="none" stroke="#1a1a2e" stroke-width="20" stroke-linecap="round"
-        stroke-dasharray="4 10" opacity="0.35"/>
+  <!-- ghost tail: dashed U-shaped OUTLINE tracing the border of where
+       the 'a' tail would be. Visible below the 'o' stroke.
+       The tail stroke would be at x=206 (right edge of bowl) with 34px width,
+       so its border runs from x=189 to x=223. This draws the bottom contour
+       as small elongated dashes, not a filled shape. -->
+  <path d="M 189,100 V 128 A 17,17 0 0,0 223,128 V 100"
+        fill="none" stroke="#1a1a2e" stroke-width="2.5" stroke-linecap="round"
+        stroke-dasharray="5 4" opacity="0.45"/>
 </svg>

@@ -11,7 +11,7 @@
   <!-- main letterforms -->
   <g fill="none" stroke="#1a1a2e" stroke-width="34" stroke-linecap="round" stroke-linejoin="round">
     <!-- c: tilted -15 deg counter-clockwise for derpy feel -->
-    <g transform="rotate(-15, 57, 90)">
+    <g transform="rotate(-22, 57, 90)">
       <path d="M 84,63 A 38,38 0 1,0 84,117"/>
     </g>
 
@@ -31,8 +31,11 @@
     </g>
   </g>
 
-  <!-- ghost tail: dotted outline hinting at the hidden 'a' in the 'o' -->
-  <path d="M 198,114 C 206,130 204,144 198,148"
-        fill="none" stroke="#1a1a2e" stroke-width="6" stroke-linecap="round"
-        stroke-dasharray="0.1 10" opacity="0.5"/>
+  <!-- ghost tail: dashed vertical stroke at bottom-right of 'o',
+       where the 'a' tail would continue straight down instead of curving back.
+       Positioned at x=206 (right side of bowl), starting just below where
+       the 'o' stroke ends, extending past baseline. -->
+  <path d="M 206,108 V 142"
+        fill="none" stroke="#1a1a2e" stroke-width="20" stroke-linecap="round"
+        stroke-dasharray="4 10" opacity="0.35"/>
 </svg>

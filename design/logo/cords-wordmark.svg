@@ -23,12 +23,12 @@
     <path d="M 254,128 V 62 C 254,42 276,38 296,48"/>
 
     <!-- d: full bubble bowl (circle) + separate ascender stem -->
-    <circle cx="376" cy="90" r="38"/>
-    <path d="M 414,22 V 128"/>
+    <circle cx="366" cy="90" r="38"/>
+    <path d="M 404,22 V 128"/>
 
     <!-- s: offset down-right for intentionally misplaced derpy feel -->
     <g transform="translate(8, 10)">
-      <path d="M 525,52 A 25,25 0 1,0 492,90 A 25,25 0 1,1 459,128"/>
+      <path d="M 515,52 A 25,25 0 1,0 482,90 A 25,25 0 1,1 449,128"/>
     </g>
   </g>
 
@@ -37,7 +37,7 @@
        The tail stroke would be at x=206 (right edge of bowl) with 34px width,
        so its border runs from x=189 to x=223. This draws the bottom contour
        as small elongated dashes, not a filled shape. -->
-  <path d="M 189,100 V 128 A 17,17 0 0,0 223,128 V 100"
+  <path d="M 193,102 V 128 A 13,13 0 0,0 219,128 V 102"
         fill="none" stroke="#1a1a2e" stroke-width="2.5" stroke-linecap="round"
         stroke-dasharray="5 4" opacity="0.45"/>
 </svg>

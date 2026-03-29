@@ -28,7 +28,7 @@
 {#if hasEffects}
   <div class="flex flex-wrap items-center gap-2 text-xs">
     {#each policies as policy}
-      <span class="rounded bg-purple-900/40 px-1.5 py-0.5 text-purple-300" title={policy.effect}>
+      <span class="rounded bg-policy-bg px-1.5 py-0.5 text-policy" title={policy.effect}>
         {policy.name}
       </span>
     {/each}
@@ -37,7 +37,7 @@
       {#each traps as trap}
         {@const selfTrap = trap as Trap}
         <span
-          class="rounded bg-orange-900/40 px-1.5 py-0.5 text-orange-300"
+          class="rounded bg-trap-bg px-1.5 py-0.5 text-trap"
           title={selfTrap.card.name}
         >
           {selfTrap.card.name.slice(0, 10)}{trap.targetId
@@ -46,11 +46,11 @@
         </span>
       {/each}
     {:else if traps.length > 0}
-      <span class="rounded bg-orange-900/40 px-1.5 py-0.5 text-orange-400">
+      <span class="rounded bg-trap-bg px-1.5 py-0.5 text-trap">
         Traps: {traps.length}
         {#each traps as trap}
           {#if trap.targetId}
-            <span class="text-[10px] opacity-75">({trap.targetId.slice(0, 8)})</span>
+            <span class="text-2xs opacity-75">({trap.targetId.slice(0, 8)})</span>
           {/if}
         {/each}
       </span>
@@ -58,7 +58,7 @@
 
     {#each passiveEvents as event}
       <span
-        class="rounded bg-cyan-900/40 px-1.5 py-0.5 text-cyan-300"
+        class="rounded bg-passive-bg px-1.5 py-0.5 text-passive"
         title={event.text ?? event.name}
       >
         {event.name.slice(0, 10)} ({event.remainingDuration}t)

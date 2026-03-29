@@ -31,20 +31,20 @@
 <button
   class="w-32 flex-shrink-0 rounded border p-2 text-left text-xs transition-colors
     {highlighted
-    ? 'border-amber-400 bg-amber-900/30'
-    : 'border-stone-600 bg-stone-700 hover:border-stone-500'}"
+    ? 'border-highlight-border bg-highlight-bg'
+    : 'border-surface-hover bg-surface-raised hover:border-text-faint'}"
   onclick={() => onclick?.(card)}
   disabled={!onclick}
 >
   <div class="mb-1 flex items-center justify-between">
-    <span class="truncate font-semibold text-stone-100">{card.name}</span>
-    <span class="ml-1 text-stone-400">{card.cost}</span>
+    <span class="truncate font-semibold text-text-primary">{card.name}</span>
+    <span class="ml-1 text-text-muted">{card.cost}</span>
   </div>
-  <div class="flex items-center justify-between text-stone-400">
-    <span class="rounded bg-stone-600 px-1">{typeLabel[card.type]}</span>
+  <div class="flex items-center justify-between text-text-muted">
+    <span class="rounded bg-surface-hover px-1">{typeLabel[card.type]}</span>
     <span>{statLine(card)}</span>
   </div>
   {#if card.text}
-    <div class="mt-1 truncate text-stone-500">{card.text}</div>
+    <div class="mt-1 truncate text-text-faint">{card.text}</div>
   {/if}
 </button>

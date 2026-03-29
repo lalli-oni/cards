@@ -16,7 +16,7 @@
   }
 </script>
 
-<div class="overflow-auto rounded-lg bg-stone-900 p-2">
+<div class="overflow-auto rounded-lg bg-surface-sunken p-2">
   <div
     class="inline-grid gap-1"
     style="grid-template-columns: repeat({grid[0]?.length ?? 0}, auto)"

@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { GridCell, ItemCard } from "cards-engine";
+  import { formatRequirements } from "../lib/formatRequirements";
 
   interface Props {
     cell: GridCell;
@@ -42,7 +43,7 @@
       const dir = (open: boolean) => (open ? "open" : "blocked");
       lines.push(`${cell.location.name}`);
       lines.push(`Edges: N:${dir(e.n)} E:${dir(e.e)} S:${dir(e.s)} W:${dir(e.w)}`);
-      if (cell.location.requirements) lines.push(`Req: ${cell.location.requirements}`);
+      if (cell.location.requirements) lines.push(`Req: ${formatRequirements(cell.location.requirements)}`);
       if (cell.location.rewards) lines.push(`Rew: ${cell.location.rewards}`);
       if (cell.location.passive) lines.push(`Passive: ${cell.location.passive}`);
     }
@@ -85,7 +86,7 @@
     </span>
     {#if cell.location.requirements || cell.location.rewards}
       <span class="w-full truncate text-2xs text-text-muted">
-        {#if cell.location.requirements}R:{cell.location.requirements.slice(0, 10)}{/if}
+        {#if cell.location.requirements}{formatRequirements(cell.location.requirements)}{/if}
         {#if cell.location.rewards}{cell.location.requirements ? " " : ""}→{cell.location.rewards}{/if}
       </span>
     {/if}

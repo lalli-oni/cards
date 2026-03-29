@@ -36,38 +36,47 @@
          - r: covers to the outer stroke edge
          Colors: v3 palette (bright center → orange mid → deep orange edge)
     -->
+    <!-- All gradients normalized to r≈58, focal offset ~(-10,-12) to match 'r' look -->
     <radialGradient id="gc" gradientUnits="userSpaceOnUse"
-                    cx="57" cy="80" r="60" fx="48" fy="68">
+                    cx="57" cy="78" r="58" fx="47" fy="66">
       <stop offset="0%" stop-color="#FFD060"/>
       <stop offset="55%" stop-color="#FF9200"/>
       <stop offset="100%" stop-color="#D06A00"/>
     </radialGradient>
 
     <radialGradient id="go" gradientUnits="userSpaceOnUse"
-                    cx="168" cy="80" r="60" fx="158" fy="68">
+                    cx="168" cy="78" r="58" fx="158" fy="66">
       <stop offset="0%" stop-color="#FFD060"/>
       <stop offset="55%" stop-color="#FF9200"/>
       <stop offset="100%" stop-color="#D06A00"/>
     </radialGradient>
 
     <radialGradient id="gr" gradientUnits="userSpaceOnUse"
-                    cx="268" cy="80" r="60" fx="256" fy="65">
+                    cx="268" cy="78" r="58" fx="258" fy="66">
       <stop offset="0%" stop-color="#FFD060"/>
       <stop offset="55%" stop-color="#FF9200"/>
       <stop offset="100%" stop-color="#D06A00"/>
     </radialGradient>
 
-    <!-- d: covers both bowl (cx=366) and stem (x=404), centered between -->
+    <!-- d bowl: centered on bowl, stem falls in natural darker zone -->
     <radialGradient id="gd" gradientUnits="userSpaceOnUse"
-                    cx="382" cy="70" r="72" fx="370" fy="55">
+                    cx="370" cy="78" r="62" fx="360" fy="66">
       <stop offset="0%" stop-color="#FFD060"/>
       <stop offset="55%" stop-color="#FF9200"/>
       <stop offset="100%" stop-color="#D06A00"/>
     </radialGradient>
 
-    <!-- s: pre-translated coordinates (no transform in main render) -->
+    <!-- d stem: separate gradient centered on the stem itself -->
+    <radialGradient id="gds" gradientUnits="userSpaceOnUse"
+                    cx="404" cy="60" r="62" fx="398" fy="48">
+      <stop offset="0%" stop-color="#FFD060"/>
+      <stop offset="55%" stop-color="#FF9200"/>
+      <stop offset="100%" stop-color="#D06A00"/>
+    </radialGradient>
+
+    <!-- s: normalized radius -->
     <radialGradient id="gs" gradientUnits="userSpaceOnUse"
-                    cx="490" cy="92" r="52" fx="482" fy="80">
+                    cx="490" cy="90" r="56" fx="480" fy="78">
       <stop offset="0%" stop-color="#FFD060"/>
       <stop offset="55%" stop-color="#FF9200"/>
       <stop offset="100%" stop-color="#D06A00"/>
@@ -80,11 +89,11 @@
       <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
     </radialGradient>
 
-    <!-- Top edge specular -->
+    <!-- Edge specular (slightly visible even in darkest areas) -->
     <linearGradient id="edgeLight" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#ffffff" stop-opacity="0.9"/>
-      <stop offset="10%" stop-color="#ffffff" stop-opacity="0.35"/>
-      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="12%" stop-color="#ffffff" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.06"/>
     </linearGradient>
 
     <!-- Shadow blur (ONLY applied to shadow, not letters) -->
@@ -116,7 +125,7 @@
     <path d="M 254,128 V 62 C 254,42 276,38 296,48" stroke="url(#gr)"/>
     <!-- d: bowl + stem (same gradient covers both) -->
     <circle cx="366" cy="90" r="38" stroke="url(#gd)"/>
-    <path d="M 404,22 V 128" stroke="url(#gd)"/>
+    <path d="M 404,22 V 128" stroke="url(#gds)"/>
     <!-- s (pre-translated coordinates, no transform needed) -->
     <path d="M 523,62 A 25,25 0 1,0 490,100 A 25,25 0 1,1 457,138" stroke="url(#gs)"/>
   </g>

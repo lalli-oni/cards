@@ -1,14 +1,24 @@
 <script lang="ts">
   import type { ActivePassiveEvent, PolicyCard, Trap, TrapView } from "cards-engine";
 
-  interface Props {
+  type SelfProps = {
     policies: PolicyCard[];
-    traps: Trap[] | TrapView[];
+    traps: Trap[];
     passiveEvents: ActivePassiveEvent[];
-    isSelf: boolean;
-  }
+    isSelf: true;
+  };
 
-  let { policies, traps, passiveEvents, isSelf }: Props = $props();
+  type OpponentProps = {
+    policies: PolicyCard[];
+    traps: TrapView[];
+    isSelf: false;
+  };
+
+  type Props = SelfProps | OpponentProps;
+
+  let { policies, traps, isSelf, ...rest }: Props = $props();
+
+  const passiveEvents = $derived(isSelf ? (rest as SelfProps).passiveEvents : []);
 
   const hasEffects = $derived(
     policies.length > 0 || traps.length > 0 || passiveEvents.length > 0,
@@ -25,11 +35,12 @@
 
     {#if isSelf}
       {#each traps as trap}
+        {@const selfTrap = trap as Trap}
         <span
           class="rounded bg-orange-900/40 px-1.5 py-0.5 text-orange-300"
-          title={(trap as Trap).card.name}
+          title={selfTrap.card.name}
         >
-          {(trap as Trap).card.name.slice(0, 10)}{trap.targetId
+          {selfTrap.card.name.slice(0, 10)}{trap.targetId
             ? ` → ${trap.targetId.slice(0, 8)}`
             : ""}
         </span>

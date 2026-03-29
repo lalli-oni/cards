@@ -108,16 +108,16 @@
     </div>
     {#if equippedByUnit[unit.id]}
       {#each equippedByUnit[unit.id] as eqItem}
-        <span class="w-full truncate pl-2 text-2xs text-item-equipped">
-          +{eqItem.name.slice(0, 6)}
+        <span class="w-full truncate pl-2 text-2xs text-item-equipped" title="🛡️ {eqItem.name}{eqItem.equip ? ' — ' + eqItem.equip : ''}">
+          🛡️ {eqItem.name}{#if eqItem.equip}: {eqItem.equip}{/if}
         </span>
       {/each}
     {/if}
   {/each}
 
   {#each looseItems as looseItem}
-    <span class="w-full truncate text-item">
-      ~{looseItem.name.slice(0, 6)}
+    <span class="w-full truncate text-item" title="🛡️ {looseItem.name} (unequipped){looseItem.equip ? ' — ' + looseItem.equip : ''}">
+      🛡️ {looseItem.name} (loose)
     </span>
   {/each}
 

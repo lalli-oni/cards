@@ -41,21 +41,21 @@
                     cx="57" cy="78" r="58" fx="47" fy="66">
       <stop offset="0%" stop-color="#FFD060"/>
       <stop offset="55%" stop-color="#FF9200"/>
-      <stop offset="100%" stop-color="#D06A00"/>
+      <stop offset="100%" stop-color="#D87200"/>
     </radialGradient>
 
     <radialGradient id="go" gradientUnits="userSpaceOnUse"
                     cx="168" cy="78" r="58" fx="158" fy="66">
       <stop offset="0%" stop-color="#FFD060"/>
       <stop offset="55%" stop-color="#FF9200"/>
-      <stop offset="100%" stop-color="#D06A00"/>
+      <stop offset="100%" stop-color="#D87200"/>
     </radialGradient>
 
     <radialGradient id="gr" gradientUnits="userSpaceOnUse"
                     cx="268" cy="78" r="58" fx="258" fy="66">
       <stop offset="0%" stop-color="#FFD060"/>
       <stop offset="55%" stop-color="#FF9200"/>
-      <stop offset="100%" stop-color="#D06A00"/>
+      <stop offset="100%" stop-color="#D87200"/>
     </radialGradient>
 
     <!-- d bowl: centered on bowl, stem falls in natural darker zone -->
@@ -63,7 +63,7 @@
                     cx="370" cy="78" r="62" fx="360" fy="66">
       <stop offset="0%" stop-color="#FFD060"/>
       <stop offset="55%" stop-color="#FF9200"/>
-      <stop offset="100%" stop-color="#D06A00"/>
+      <stop offset="100%" stop-color="#D87200"/>
     </radialGradient>
 
     <!-- d stem: separate gradient centered on the stem itself -->
@@ -71,7 +71,7 @@
                     cx="404" cy="60" r="62" fx="398" fy="48">
       <stop offset="0%" stop-color="#FFD060"/>
       <stop offset="55%" stop-color="#FF9200"/>
-      <stop offset="100%" stop-color="#D06A00"/>
+      <stop offset="100%" stop-color="#D87200"/>
     </radialGradient>
 
     <!-- s: normalized radius -->
@@ -79,7 +79,7 @@
                     cx="490" cy="90" r="56" fx="480" fy="78">
       <stop offset="0%" stop-color="#FFD060"/>
       <stop offset="55%" stop-color="#FF9200"/>
-      <stop offset="100%" stop-color="#D06A00"/>
+      <stop offset="100%" stop-color="#D87200"/>
     </radialGradient>
 
     <!-- Per-letter gloss: positioned on upper portion of each letter (userSpaceOnUse) -->
@@ -98,7 +98,7 @@
       <stop offset="45%" stop-color="#fff" stop-opacity="0.1"/>
       <stop offset="100%" stop-color="#fff" stop-opacity="0"/>
     </radialGradient>
-    <radialGradient id="gld" gradientUnits="userSpaceOnUse" cx="368" cy="68" r="42">
+    <radialGradient id="gld" gradientUnits="userSpaceOnUse" cx="358" cy="68" r="42">
       <stop offset="0%" stop-color="#fff" stop-opacity="0.7"/>
       <stop offset="45%" stop-color="#fff" stop-opacity="0.1"/>
       <stop offset="100%" stop-color="#fff" stop-opacity="0"/>
@@ -108,7 +108,7 @@
       <stop offset="45%" stop-color="#fff" stop-opacity="0.08"/>
       <stop offset="100%" stop-color="#fff" stop-opacity="0"/>
     </radialGradient>
-    <radialGradient id="gls" gradientUnits="userSpaceOnUse" cx="488" cy="78" r="40">
+    <radialGradient id="gls" gradientUnits="userSpaceOnUse" cx="482" cy="72" r="40">
       <stop offset="0%" stop-color="#fff" stop-opacity="0.7"/>
       <stop offset="45%" stop-color="#fff" stop-opacity="0.1"/>
       <stop offset="100%" stop-color="#fff" stop-opacity="0"/>
@@ -168,12 +168,12 @@
     <circle cx="163" cy="68" r="42" fill="url(#glo)"/>
     <!-- r -->
     <circle cx="260" cy="62" r="38" fill="url(#glr)"/>
-    <!-- d bowl -->
-    <circle cx="368" cy="68" r="42" fill="url(#gld)"/>
+    <!-- d bowl (shifted left) -->
+    <circle cx="358" cy="68" r="42" fill="url(#gld)"/>
     <!-- d stem -->
     <ellipse cx="404" cy="38" rx="18" ry="30" fill="url(#gldst)"/>
-    <!-- s -->
-    <circle cx="488" cy="78" r="40" fill="url(#gls)"/>
+    <!-- s (shifted up-left) -->
+    <circle cx="482" cy="72" r="40" fill="url(#gls)"/>
   </g>
 
   <!-- Top edge specular (softly blurred, slightly dimmed) -->

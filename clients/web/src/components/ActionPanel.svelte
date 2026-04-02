@@ -27,8 +27,8 @@
   }
 </script>
 
-<div class="rounded-lg bg-stone-800 p-3">
-  <h3 class="mb-2 text-sm font-semibold text-stone-400">
+<div class="rounded-lg bg-surface p-3">
+  <h3 class="mb-2 text-sm font-semibold text-text-muted">
     Actions ({actions.length})
   </h3>
   <div class="space-y-1">
@@ -38,12 +38,12 @@
           onclick={() => handleGroupClick(group.type, group.actions)}
           class="w-full rounded px-3 py-1.5 text-left text-sm transition-colors
             {expandedGroup === group.type
-            ? 'bg-amber-800 text-amber-200'
-            : 'bg-stone-700 text-stone-200 hover:bg-stone-600'}"
+            ? 'bg-highlight-bg text-highlight'
+            : 'bg-surface-raised text-text-secondary hover:bg-surface-hover'}"
         >
           {group.label}
           {#if group.actions.length > 1}
-            <span class="text-stone-400">({group.actions.length})</span>
+            <span class="text-text-muted">({group.actions.length})</span>
           {/if}
         </button>
 
@@ -52,7 +52,7 @@
             {#each group.actions as action}
               <button
                 onclick={() => handleActionClick(action)}
-                class="w-full rounded px-3 py-1 text-left text-xs text-stone-300 bg-stone-700/50 hover:bg-stone-600"
+                class="w-full rounded px-3 py-1 text-left text-xs text-text-secondary bg-surface-raised/50 hover:bg-surface-hover"
               >
                 {describeAction(action)}
               </button>
@@ -63,7 +63,7 @@
     {/each}
 
     {#if actions.length === 0}
-      <span class="text-sm text-stone-500 italic">No actions available</span>
+      <span class="text-sm text-text-faint italic">No actions available</span>
     {/if}
   </div>
 </div>

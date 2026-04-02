@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Card } from "cards-engine";
+  import { formatRequirements } from "../lib/formatRequirements";
 
   interface Props {
     card: Card;
@@ -9,42 +10,76 @@
 
   let { card, highlighted = false, onclick }: Props = $props();
 
-  function statLine(c: Card): string {
-    if (c.type === "unit") {
-      return `${c.strength}/${c.cunning}/${c.charisma}${c.injured ? " 🩹" : ""}`;
-    }
-    if (c.type === "location") {
-      return c.requirements ?? "";
-    }
-    return "";
-  }
-
-  const typeLabel: Record<string, string> = {
-    unit: "U",
-    location: "L",
-    item: "I",
-    event: "E",
-    policy: "P",
+  const typeEmoji: Record<string, string> = {
+    unit: "⚔️",
+    location: "📍",
+    item: "🛡️",
+    event: "⚡",
+    policy: "📜",
   };
+
+  const tooltip = $derived.by(() => {
+    const lines = [`${card.name} (${card.type}) — Cost: ${card.cost}`];
+    if (card.keywords && card.keywords.length > 0) {
+      lines.push(`Keywords: ${card.keywords.join(", ")}`);
+    }
+    if (card.type === "unit") {
+      if (card.attributes.length > 0) lines.push(`Attributes: ${card.attributes.join(", ")}`);
+      lines.push(`Str:${card.strength} Cun:${card.cunning} Cha:${card.charisma}${card.injured ? " (injured)" : ""}`);
+    } else if (card.type === "location") {
+      if (card.requirements) lines.push(`Req: ${formatRequirements(card.requirements)}`);
+      if (card.rewards) lines.push(`Rew: ${card.rewards}`);
+      if (card.passive) lines.push(`Passive: ${card.passive}`);
+    } else if (card.type === "item") {
+      if (card.equip) lines.push(`Equip: ${card.equip}`);
+      if (card.stored) lines.push(`Stored: ${card.stored}`);
+    } else if (card.type === "event" && card.subtype === "trap") {
+      lines.push(`Trigger: ${card.trigger}`);
+    } else if (card.type === "policy") {
+      lines.push(`Effect: ${card.effect}`);
+    }
+    if (card.text) lines.push(card.text);
+    return lines.join("\n");
+  });
+
+  const attributeStr = $derived(
+    card.type === "unit" && card.attributes.length > 0
+      ? card.attributes.join(", ")
+      : "",
+  );
 </script>
 
 <button
   class="w-32 flex-shrink-0 rounded border p-2 text-left text-xs transition-colors
     {highlighted
-    ? 'border-amber-400 bg-amber-900/30'
-    : 'border-stone-600 bg-stone-700 hover:border-stone-500'}"
+    ? 'border-highlight-border bg-highlight-bg'
+    : 'border-surface-hover bg-surface-raised hover:border-text-faint'}"
+  title={tooltip}
   onclick={() => onclick?.(card)}
   disabled={!onclick}
 >
   <div class="mb-1 flex items-center justify-between">
-    <span class="truncate font-semibold text-stone-100">{card.name}</span>
-    <span class="ml-1 text-stone-400">{card.cost}</span>
+    <span class="truncate font-semibold text-text-primary">{card.name}</span>
+    <span class="ml-1 text-text-muted">{card.cost}</span>
   </div>
-  <div class="flex items-center justify-between text-stone-400">
-    <span class="rounded bg-stone-600 px-1">{typeLabel[card.type]}</span>
-    <span>{statLine(card)}</span>
+  <div class="flex items-center justify-between text-text-muted">
+    <span>{typeEmoji[card.type] ?? card.type}</span>
+    {#if card.type === "unit"}
+      <span class="text-2xs">
+        <span class="text-stat-strength">{card.strength}</span>/<span class="text-stat-cunning">{card.cunning}</span>/<span class="text-stat-charisma">{card.charisma}</span>
+        {#if card.injured}🩹{/if}
+      </span>
+    {:else if card.type === "location"}
+      <span class="text-2xs">{card.requirements ? formatRequirements(card.requirements) : ""}</span>
+    {/if}
   </div>
+  {#if attributeStr}
+    <div class="truncate text-2xs text-text-muted">{attributeStr}</div>
+  {/if}
+  {#if card.keywords && card.keywords.length > 0}
+    <div class="truncate text-2xs text-text-faint italic">{card.keywords.join(", ")}</div>
+  {/if}
   {#if card.text}
-    <div class="mt-1 truncate text-stone-500">{card.text}</div>
+    <div class="mt-1 truncate text-text-faint">{card.text}</div>
   {/if}
 </button>

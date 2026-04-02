@@ -1,1 +1,57 @@
 @import "tailwindcss";
+
+@theme {
+  /* Surfaces */
+  --color-surface: var(--color-stone-800);
+  --color-surface-sunken: var(--color-stone-900);
+  --color-surface-raised: var(--color-stone-700);
+  --color-surface-hover: var(--color-stone-600);
+
+  /* Text */
+  --color-text-primary: var(--color-stone-100);
+  --color-text-secondary: var(--color-stone-200);
+  --color-text-muted: var(--color-stone-300);
+  --color-text-faint: var(--color-stone-400);
+
+  /* Highlight (actionable / interactive) */
+  --color-highlight: var(--color-amber-400);
+  --color-highlight-bg: oklch(0.555 0.163 84.429 / 0.15); /* amber-900/15 — subtler bg */
+  --color-highlight-border: var(--color-sky-400);
+
+  /* Player identity */
+  --color-identity: var(--color-amber-400);
+  --color-identity-resource: var(--color-amber-300);
+
+  /* Ownership */
+  --color-self: var(--color-emerald-300);
+  --color-opponent: var(--color-rose-300);
+
+  /* Card type colors */
+  --color-location: var(--color-blue-300);
+  --color-item: var(--color-yellow-300);
+  --color-item-equipped: var(--color-yellow-400);
+
+  /* Effect badge colors */
+  --color-policy: var(--color-purple-300);
+  --color-policy-bg: oklch(0.345 0.128 308.515 / 0.4); /* purple-900/40 */
+  --color-trap: var(--color-orange-300);
+  --color-trap-bg: oklch(0.365 0.128 39.383 / 0.4); /* orange-900/40 */
+  --color-passive: var(--color-cyan-300);
+  --color-passive-bg: oklch(0.302 0.056 229.695 / 0.4); /* cyan-900/40 */
+
+  /* Grid cell borders */
+  --color-cell-border: var(--color-stone-700);
+  --color-cell-edge-open: var(--color-stone-600);
+  --color-cell-edge-blocked: var(--color-red-900);
+
+  /* Stat colors */
+  --color-stat-strength: var(--color-red-400);
+  --color-stat-cunning: var(--color-sky-400);
+  --color-stat-charisma: var(--color-amber-300);
+
+  /* Injury / danger */
+  --color-danger: var(--color-red-400);
+
+  /* Custom text sizes */
+  --text-2xs: 0.625rem;
+}

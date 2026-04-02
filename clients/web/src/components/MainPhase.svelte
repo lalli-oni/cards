@@ -25,7 +25,6 @@
   );
 
   function handleCardClick(card: Card) {
-    // Find the first action that references this card and select it
     const match = actions.find(
       (a) =>
         ("cardId" in a && (a as { cardId: string }).cardId === card.id) ||
@@ -54,42 +53,46 @@
 <div class="flex h-full flex-col gap-3">
   <PlayerHud {vs} />
 
-  <div class="flex min-h-0 flex-1 gap-3">
-    <!-- Main area: grid + hand -->
-    <div class="flex flex-1 flex-col gap-3 overflow-hidden">
-      <div class="flex-1 overflow-auto">
-        <GridBoard
-          grid={vs.grid}
-          {highlightedCells}
-          onCellClick={handleCellClick}
-        />
-      </div>
+  <div
+    class="min-h-0 flex-1"
+    style="display: grid; grid-template-columns: 12rem 1fr 16rem; grid-template-rows: 1fr auto; gap: 0.75rem;"
+  >
+    <!-- Market (top-left) -->
+    <div class="overflow-y-auto" style="grid-row: 1; grid-column: 1;">
+      <MarketPanel
+        cards={vs.market}
+        {actions}
+        onCardClick={handleCardClick}
+      />
+    </div>
+
+    <!-- Grid (top-center, fills area) -->
+    <div class="min-h-0" style="grid-row: 1; grid-column: 2;">
+      <GridBoard
+        grid={vs.grid}
+        selfPlayerId={vs.self.id}
+        {highlightedCells}
+        onCellClick={handleCellClick}
+      />
+    </div>
+
+    <!-- Right sidebar: Actions + Hand (spans both rows) -->
+    <div class="flex flex-col gap-3 overflow-y-auto" style="grid-row: 1 / -1; grid-column: 3;">
+      <ActionPanel {actions} />
       <HandPanel
         cards={vs.self.hand}
         {actions}
         onCardClick={handleCardClick}
       />
-      <div class="flex gap-3">
-        <div class="flex-1">
-          <MarketPanel
-            cards={vs.market}
-            {actions}
-            onCardClick={handleCardClick}
-          />
-        </div>
-        <div class="flex-1">
-          <HqPanel
-            cards={vs.self.hq}
-            {actions}
-            onCardClick={handleCardClick}
-          />
-        </div>
-      </div>
     </div>
 
-    <!-- Sidebar: actions -->
-    <div class="w-64 flex-shrink-0">
-      <ActionPanel {actions} />
+    <!-- HQ (bottom, spans market + grid columns) -->
+    <div class="overflow-x-auto" style="grid-row: 2; grid-column: 1 / 3;">
+      <HqPanel
+        cards={vs.self.hq}
+        {actions}
+        onCardClick={handleCardClick}
+      />
     </div>
   </div>
 </div>

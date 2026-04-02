@@ -2,7 +2,8 @@ import type { VisibleState } from "cards-engine";
 
 /**
  * Find a card's display name by instance ID from the visible state.
- * Searches grid (locations, units, items), market, hand, HQ, and policies.
+ * Searches: grid (locations, units, items), hand, HQ, active policies,
+ * discard pile, removed-from-game, market, and opponent visible zones.
  */
 export function findCardName(vs: VisibleState, cardId: string): string | undefined {
   // Grid: locations, units, items
@@ -18,20 +19,15 @@ export function findCardName(vs: VisibleState, cardId: string): string | undefin
     }
   }
 
-  // Self zones
-  for (const c of vs.self.hand) if (c.id === cardId) return c.name;
-  for (const c of vs.self.hq) if (c.id === cardId) return c.name;
-  for (const c of vs.self.activePolicies) if (c.id === cardId) return c.name;
-  for (const c of vs.self.discardPile) if (c.id === cardId) return c.name;
-  for (const c of vs.self.removedFromGame) if (c.id === cardId) return c.name;
-
-  // Market
-  for (const c of vs.market) if (c.id === cardId) return c.name;
-
-  // Opponent HQ and policies (visible)
-  for (const opp of vs.opponents) {
-    for (const c of opp.hq) if (c.id === cardId) return c.name;
-    for (const c of opp.activePolicies) if (c.id === cardId) return c.name;
+  // Self zones, market, opponent visible zones
+  const zones = [
+    vs.self.hand, vs.self.hq, vs.self.activePolicies,
+    vs.self.discardPile, vs.self.removedFromGame,
+    vs.market,
+    ...vs.opponents.flatMap((opp) => [opp.hq, opp.activePolicies]),
+  ];
+  for (const zone of zones) {
+    for (const c of zone) if (c.id === cardId) return c.name;
   }
 
   return undefined;

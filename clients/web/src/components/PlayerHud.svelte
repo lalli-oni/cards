@@ -10,17 +10,6 @@
 
   const self: PlayerState = $derived(vs.self);
   const opponent: OpponentView | undefined = $derived(vs.opponents[0]);
-
-  const selfHasEffects = $derived(
-    self.activePolicies.length > 0 ||
-      self.activeTraps.length > 0 ||
-      self.passiveEvents.length > 0,
-  );
-  const opponentHasEffects = $derived(
-    opponent !== undefined &&
-      (opponent.activePolicies.length > 0 ||
-        opponent.activeTraps.length > 0),
-  );
 </script>
 
 <div class="flex gap-4 rounded-lg bg-surface px-4 py-2">
@@ -43,15 +32,13 @@
         </span>
       {/if}
     </div>
-    {#if selfHasEffects}
-      <StatusEffectsBar
-        policies={self.activePolicies}
-        traps={self.activeTraps}
-        passiveEvents={self.passiveEvents}
-        isSelf={true}
-        {vs}
-      />
-    {/if}
+    <StatusEffectsBar
+      policies={self.activePolicies}
+      traps={self.activeTraps}
+      passiveEvents={self.passiveEvents}
+      isSelf={true}
+      {vs}
+    />
   </div>
 
   <!-- Turn info (center) -->
@@ -82,14 +69,12 @@
         <span title="Market deck">🏪 Market:{opponent.marketDeckSize}</span>
         <span title="Discard pile">♻️ Discard:{opponent.discardPileSize}</span>
       </div>
-      {#if opponentHasEffects}
-        <StatusEffectsBar
-          policies={opponent.activePolicies}
-          traps={opponent.activeTraps}
-          isSelf={false}
-          {vs}
-        />
-      {/if}
+      <StatusEffectsBar
+        policies={opponent.activePolicies}
+        traps={opponent.activeTraps}
+        isSelf={false}
+        {vs}
+      />
     </div>
   {/if}
 </div>

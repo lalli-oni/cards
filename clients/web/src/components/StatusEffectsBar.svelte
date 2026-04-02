@@ -2,26 +2,15 @@
   import type { ActivePassiveEvent, PolicyCard, Trap, TrapView, VisibleState } from "cards-engine";
   import { findCardName } from "../lib/cardLookup";
 
-  type SelfProps = {
+  interface Props {
     policies: PolicyCard[];
-    traps: Trap[];
-    passiveEvents: ActivePassiveEvent[];
-    isSelf: true;
+    traps: Trap[] | TrapView[];
+    passiveEvents?: ActivePassiveEvent[];
+    isSelf: boolean;
     vs: VisibleState;
-  };
+  }
 
-  type OpponentProps = {
-    policies: PolicyCard[];
-    traps: TrapView[];
-    isSelf: false;
-    vs: VisibleState;
-  };
-
-  type Props = SelfProps | OpponentProps;
-
-  let { policies, traps, isSelf, vs, ...rest }: Props = $props();
-
-  const passiveEvents = $derived(isSelf ? (rest as SelfProps).passiveEvents : []);
+  let { policies, traps, passiveEvents = [], isSelf, vs }: Props = $props();
 
   const hasEffects = $derived(
     policies.length > 0 || traps.length > 0 || passiveEvents.length > 0,

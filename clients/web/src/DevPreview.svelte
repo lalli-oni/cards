@@ -2,7 +2,6 @@
   import {
     createInstanceCounter,
     instantiateCards,
-    type Card,
     type CardDefinition,
     type Grid,
     type ItemCard,
@@ -105,8 +104,12 @@
   const selfState: PlayerState = {
     id: p1, name: "Player 1", gold: 12, vp: 8,
     hand: handCards,
-    seedingDeck: [], mainDeck: Array(18).fill(null), marketDeck: Array(4).fill(null),
-    prospectDeck: Array(6).fill(null), discardPile: Array(3).fill(null), removedFromGame: [],
+    seedingDeck: [],
+    mainDeck: instantiateCards(unitDefs.slice(14, 20), p1, counter),
+    marketDeck: instantiateCards(itemDefs.slice(8, 10), p1, counter),
+    prospectDeck: instantiateCards(locDefs.slice(9, 14), p1, counter),
+    discardPile: instantiateCards(unitDefs.slice(20), p1, counter),
+    removedFromGame: [],
     hq: [p1Units[2]],
     activePolicies: p1Policies,
     activeTraps: [mockTrap],

@@ -5,9 +5,11 @@
 
   interface Props {
     actions: Action[];
+    hasSelection?: boolean;
+    onDeselect?: () => void;
   }
 
-  let { actions }: Props = $props();
+  let { actions, hasSelection = false, onDeselect }: Props = $props();
 
   let expandedGroup = $state<string | null>(null);
 
@@ -28,9 +30,20 @@
 </script>
 
 <div class="rounded-lg bg-surface p-3">
-  <h3 class="mb-2 text-sm font-semibold text-text-muted">
-    Actions ({actions.length})
-  </h3>
+  <div class="mb-2 flex items-center justify-between">
+    <h3 class="text-sm font-semibold text-text-muted">
+      Actions ({actions.length})
+    </h3>
+    {#if hasSelection && onDeselect}
+      <button
+        onclick={onDeselect}
+        class="rounded px-2 py-0.5 text-xs text-text-muted hover:bg-surface-hover hover:text-text-secondary"
+        title="Clear selection (Esc)"
+      >
+        ✕ Clear
+      </button>
+    {/if}
+  </div>
   <div class="space-y-1">
     {#each groups as group}
       <div>

@@ -9,19 +9,39 @@
     /** When undefined, all units render in opponent color (spectator/preview mode). */
     selfPlayerId?: string;
     highlighted?: boolean;
+    selected?: boolean;
+    selectedEntityId?: string | null;
     onclick?: (row: number, col: number) => void;
+    onUnitClick?: (unitId: string) => void;
   }
 
-  let { cell, row, col, selfPlayerId, highlighted = false, onclick }: Props = $props();
+  let {
+    cell,
+    row,
+    col,
+    selfPlayerId,
+    highlighted = false,
+    selected = false,
+    selectedEntityId,
+    onclick,
+    onUnitClick,
+  }: Props = $props();
 
   const hasContent = $derived(
     cell.location !== null || cell.units.length > 0 || cell.items.length > 0,
   );
 
   const bgClass = $derived.by(() => {
+    if (selected) return "bg-highlight-bg";
     if (highlighted) return "bg-highlight-bg";
     if (hasContent) return "bg-surface-raised";
     return "bg-surface-sunken";
+  });
+
+  const outlineStyle = $derived.by(() => {
+    if (selected) return "outline: 2px solid var(--color-highlight)";
+    if (highlighted) return "outline: 2px solid var(--color-highlight-border)";
+    return "";
   });
 
   const edgeStyle = $derived.by(() => {
@@ -72,11 +92,16 @@
     ),
   );
   const looseItems = $derived(cell.items.filter((i) => !i.equippedTo));
+
+  function handleUnitClick(e: MouseEvent, unitId: string) {
+    e.stopPropagation();
+    onUnitClick?.(unitId);
+  }
 </script>
 
 <button
   class="flex min-h-24 min-w-24 flex-col items-start justify-start overflow-hidden rounded p-1 text-2xs leading-tight transition-colors {bgClass}"
-  style={highlighted ? `${edgeStyle}; outline: 2px solid var(--color-highlight-border)` : edgeStyle}
+  style="{edgeStyle}; {outlineStyle}"
   title={cellTooltip}
   onclick={() => onclick?.(row, col)}
   disabled={!onclick}
@@ -104,7 +129,17 @@
         ? 'text-self'
         : 'text-opponent'}"
     >
-      <span class="truncate font-semibold">⚔️{unit.name.slice(0, 5)}</span>
+      {#if onUnitClick}
+        <span
+          role="button"
+          tabindex="-1"
+          class="truncate font-semibold hover:underline {selectedEntityId === unit.id ? 'text-highlight' : ''}"
+          onclick={(e) => handleUnitClick(e, unit.id)}
+          onkeydown={(e) => { if (e.key === "Enter") handleUnitClick(e, unit.id); }}
+        >⚔️{unit.name.slice(0, 5)}</span>
+      {:else}
+        <span class="truncate font-semibold">⚔️{unit.name.slice(0, 5)}</span>
+      {/if}
       <span class="text-2xs"><span class="text-stat-strength">{unit.strength}</span>/<span class="text-stat-cunning">{unit.cunning}</span>/<span class="text-stat-charisma">{unit.charisma}</span></span>
       {#if unit.injured}<span class="text-danger">!</span>{/if}
       {#if unit.attributes.length > 0}

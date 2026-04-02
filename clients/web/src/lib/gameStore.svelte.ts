@@ -33,6 +33,23 @@ let _gamePhase = $state<"seeding" | "main" | "ended" | null>(null);
 let _error = $state<string | null>(null);
 let _lastTurnStartIndex = $state(0);
 
+export interface CombatOutcome {
+  type: "injured" | "killed";
+  unitId: string;
+  ownerId: string;
+}
+
+export interface CombatResult {
+  row: number;
+  col: number;
+  attackerId: string;
+  defenderId: string;
+  outcomes: CombatOutcome[];
+  winnerId: string | null;
+}
+
+let _combatResult = $state<CombatResult | null>(null);
+
 export function getScreen() {
   return _screen;
 }
@@ -53,6 +70,12 @@ export function getSavedSessions() {
 }
 export function getGamePhase() {
   return _gamePhase;
+}
+export function getCombatResult() {
+  return _combatResult;
+}
+export function dismissCombat() {
+  _combatResult = null;
 }
 export function resolveCardName(id: string): string {
   if (!_visibleState) return id;
@@ -157,6 +180,25 @@ function onEvent(events: GameEvent[], state: GameState): void {
     }
   }
 
+  // Extract combat result for popup
+  const combatStart = events.find((e) => e.type === "combat_started");
+  if (combatStart && combatStart.type === "combat_started") {
+    const combatEnd = events.find((e) => e.type === "combat_resolved");
+    const outcomes: CombatOutcome[] = [];
+    for (const e of events) {
+      if (e.type === "unit_injured") outcomes.push({ type: "injured", unitId: e.unitId, ownerId: e.ownerId });
+      if (e.type === "unit_killed") outcomes.push({ type: "killed", unitId: e.unitId, ownerId: e.ownerId });
+    }
+    _combatResult = {
+      row: combatStart.row,
+      col: combatStart.col,
+      attackerId: combatStart.attackerId,
+      defenderId: combatStart.defenderId,
+      outcomes,
+      winnerId: combatEnd?.type === "combat_resolved" ? combatEnd.winnerId : null,
+    };
+  }
+
   if (state.phase === "ended" && players.length > 0) {
     _visibleState = engineGetVisibleState(state, players[0].id);
     _validActions = [];
@@ -221,6 +263,7 @@ export function startNewGame(
   _error = null;
   _gamePhase = "seeding";
   _lastTurnStartIndex = 0;
+  _combatResult = null;
   lastActivePlayerId = null;
   autoSaveFailCount = 0;
 
@@ -272,6 +315,7 @@ export async function loadGame(key: string): Promise<void> {
   _eventLog = [];
   _error = null;
   _lastTurnStartIndex = 0;
+  _combatResult = null;
   lastActivePlayerId = null;
   autoSaveFailCount = 0;
 
@@ -354,6 +398,7 @@ export function returnToMenu(): void {
   _validActions = [];
   _eventLog = [];
   _lastTurnStartIndex = 0;
+  _combatResult = null;
   _gamePhase = null;
   _currentPlayerName = "";
   _error = null;

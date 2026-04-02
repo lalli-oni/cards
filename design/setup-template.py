@@ -17,7 +17,8 @@ import sys
 
 from penpot import (
     PenpotClient, new_uuid,
-    make_rect, make_circle, make_text, make_frame,
+    make_rect, make_circle, make_text, make_frame, make_image,
+    make_linear_gradient_fill, make_radial_gradient_fill, make_gradient_stroke,
     del_obj_change,
 )
 
@@ -30,6 +31,7 @@ FRAME_NAMES = {
     "item": "Item Card",
     "event": "Event Card",
     "policy": "Policy Card",
+    "card-back": "Card Back",
 }
 
 # Shape names per card type (used for idempotent cleanup)
@@ -80,12 +82,19 @@ POLICY_SHAPE_NAMES = SHARED_SHAPE_NAMES | {
     "Flavor Divider", "Flavor Text",
 }
 
+CARD_BACK_SHAPE_NAMES = {
+    "CB Background", "CB Inner Border",
+    "CB Badge Shadow", "CB Badge Orb", "CB Badge Gloss",
+    "CB Badge Ring", "CB Logo",
+}
+
 ALL_SHAPE_NAMES_MAP = {
     "unit": UNIT_SHAPE_NAMES,
     "location": LOCATION_SHAPE_NAMES,
     "item": ITEM_SHAPE_NAMES,
     "event": EVENT_SHAPE_NAMES,
     "policy": POLICY_SHAPE_NAMES,
+    "card-back": CARD_BACK_SHAPE_NAMES,
 }
 
 
@@ -602,6 +611,129 @@ def build_policy_shapes(tokens, page_id, frame_id) -> list:
     return changes
 
 
+# ---------------------------------------------------------------------------
+# Card back builder
+# ---------------------------------------------------------------------------
+
+# Badge gradient stops at hue=0 (red). Pre-computed from the SVG's HSL values.
+_BADGE_STOPS = [
+    {"color": "#DA5858", "offset": 0,    "opacity": 1},  # hsl(0, 64%, 60%)
+    {"color": "#B32E2E", "offset": 0.35, "opacity": 1},  # hsl(0, 59%, 44%)
+    {"color": "#791B1B", "offset": 0.70, "opacity": 1},  # hsl(0, 64%, 29%)
+    {"color": "#4F1212", "offset": 0.92, "opacity": 1},  # hsl(0, 63%, 19%)
+    {"color": "#661A1A", "offset": 1,    "opacity": 1},  # hsl(0, 60%, 25%)
+]
+
+_SILVER_STOPS = [
+    {"color": "#e8e8f0", "offset": 0,    "opacity": 1},
+    {"color": "#c8c8d8", "offset": 0.25, "opacity": 1},
+    {"color": "#7878a0", "offset": 0.70, "opacity": 1},
+    {"color": "#a8a8c0", "offset": 1,    "opacity": 1},
+]
+
+
+def build_card_back_shapes(tokens, page_id, frame_id, client=None, file_id=None):
+    """Build all shapes for the card back template."""
+    card = tokens["card"]
+    w, h = card["width"], card["height"]
+    changes = []
+
+    # Badge geometry: circle centered at (375, 440), radius 155
+    bx, by, bw, bh = 220, 285, 310, 310  # bounding box
+
+    # 1. Background with linear gradient
+    bg_fill = make_linear_gradient_fill(
+        0.5, 0, 0.5, 1,
+        [{"color": "#0d0d22", "offset": 0, "opacity": 1},
+         {"color": "#131330", "offset": 0.5, "opacity": 1},
+         {"color": "#1a1a3e", "offset": 1, "opacity": 1}],
+    )
+    _, c = make_rect("CB Background", 0, 0, w, h, [bg_fill],
+                     page_id, frame_id, frame_id,
+                     r1=16, r2=16, r3=16, r4=16)
+    changes.append(c)
+
+    # 2. Inner border
+    _, c = make_rect("CB Inner Border", 20, 20, 710, 1010, [],
+                     page_id, frame_id, frame_id,
+                     strokes=[{"stroke-color": "#2d2d44", "stroke-opacity": 1,
+                               "stroke-width": 2, "stroke-alignment": "center",
+                               "stroke-style": "solid"}],
+                     r1=12, r2=12, r3=12, r4=12)
+    changes.append(c)
+
+    # 3. Badge shadow (solid circle, offset down 4px)
+    _, c = make_circle("CB Badge Shadow", bx, by + 4, bw, bh,
+                       [{"fill-color": "#000000", "fill-opacity": 1}],
+                       page_id, frame_id, frame_id, opacity=0.35)
+    changes.append(c)
+
+    # 4. Badge orb with radial gradient
+    # Penpot radial: start=focal point, end=outer edge (determines radius).
+    # Focal slightly upper-left; edge at bottom-right to span full circle.
+    orb_fill = make_radial_gradient_fill(
+        0.42, 0.34,  # start (focal point, upper-left)
+        0.5, 1.0,    # end (bottom edge — radius covers full shape)
+        1, _BADGE_STOPS,
+    )
+    _, c = make_circle("CB Badge Orb", bx, by, bw, bh, [orb_fill],
+                       page_id, frame_id, frame_id)
+    changes.append(c)
+
+    # 5. Gloss overlay (white radial fade)
+    gloss_fill = make_radial_gradient_fill(
+        0.47, 0.28,  # focal upper-left
+        0.5, 0.85,   # end toward bottom (wide spread)
+        1,
+        [{"color": "#ffffff", "offset": 0, "opacity": 0.40},
+         {"color": "#ffffff", "offset": 0.35, "opacity": 0.08},
+         {"color": "#ffffff", "offset": 1, "opacity": 0}],
+    )
+    _, c = make_circle("CB Badge Gloss", bx, by, bw, bh, [gloss_fill],
+                       page_id, frame_id, frame_id)
+    changes.append(c)
+
+    # 6. Silver ring (gradient stroke, no fill)
+    ring_stroke = make_gradient_stroke(
+        "linear", 0.5, 0, 0.5, 1, _SILVER_STOPS, width=6,
+    )
+    _, c = make_circle("CB Badge Ring", bx, by, bw, bh, [],
+                       page_id, frame_id, frame_id,
+                       strokes=[ring_stroke])
+    changes.append(c)
+
+    # 7. Logo (upload styled wordmark as media image)
+    if client and file_id:
+        logo_path = os.path.join(SCRIPT_DIR, "logo", "cords-wordmark-styled.svg")
+        if not os.path.isfile(logo_path):
+            print(f"ERROR: Logo SVG not found at {logo_path}", file=sys.stderr)
+            print("  Ensure the styled wordmark exists in design/logo/.", file=sys.stderr)
+            sys.exit(1)
+        print("  Uploading logo media...")
+        media = client.upload_media(file_id, "cords-wordmark-styled", logo_path)
+        media_id = media.get("id")
+        if not media_id:
+            print(f"ERROR: upload_media response missing 'id'. Keys: {list(media.keys())}",
+                  file=sys.stderr)
+            sys.exit(1)
+        media_w = media.get("width")
+        media_h = media.get("height")
+        mtype = media.get("mtype")
+        if media_w is None or media_h is None:
+            print(f"  WARNING: upload response missing width/height "
+                  f"(keys: {list(media.keys())}). Using defaults.", file=sys.stderr)
+        _, c = make_image("CB Logo", 248, 402, 254, 82,
+                          media_id, media_w or 620, media_h or 200,
+                          mtype or "image/svg+xml",
+                          page_id, frame_id, frame_id)
+        changes.append(c)
+    else:
+        print("  WARNING: No client/file_id — logo will be missing from card back",
+              file=sys.stderr)
+
+    return changes
+
+
 TYPE_BUILDERS = {
     "unit": build_unit_shapes,
     "location": build_location_shapes,
@@ -671,9 +803,12 @@ def setup_card_type(client, file_id, page_id, tokens, card_type):
     )
     changes.append(frame_change)
 
-    # Build shared + type-specific shapes
-    changes.extend(build_shared_shapes(tokens, page_id, frame_id, card_type))
-    changes.extend(TYPE_BUILDERS[card_type](tokens, page_id, frame_id))
+    # Build shapes
+    if card_type == "card-back":
+        changes.extend(build_card_back_shapes(tokens, page_id, frame_id, client, file_id))
+    else:
+        changes.extend(build_shared_shapes(tokens, page_id, frame_id, card_type))
+        changes.extend(TYPE_BUILDERS[card_type](tokens, page_id, frame_id))
 
     # Send changes
     print(f"  Sending {len(changes)} changes...")

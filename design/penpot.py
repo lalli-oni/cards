@@ -148,6 +148,65 @@ def make_position_data(text, x, y, w, h, font_size="14", font_weight="400",
 
 
 # ---------------------------------------------------------------------------
+# Gradient helpers — return fill/stroke dicts for use in shape builders
+# ---------------------------------------------------------------------------
+
+def make_linear_gradient_fill(start_x, start_y, end_x, end_y, stops, opacity=1):
+    """Build a linear gradient fill entry.
+
+    Coordinates are normalized 0-1 relative to the shape's bounding box.
+    stops: [{"color": "#hex", "offset": 0-1, "opacity": 0-1}, ...]
+    """
+    return {
+        "fill-color-gradient": {
+            "type": "linear",
+            "start-x": start_x, "start-y": start_y,
+            "end-x": end_x, "end-y": end_y,
+            "width": 1,
+            "stops": stops,
+        },
+        "fill-opacity": opacity,
+    }
+
+
+def make_radial_gradient_fill(start_x, start_y, end_x, end_y, width, stops, opacity=1):
+    """Build a radial gradient fill entry.
+
+    start: gradient center (normalized 0-1).
+    end: outer edge point (determines radius direction/length).
+    width: ellipse width ratio (1 = circle).
+    """
+    return {
+        "fill-color-gradient": {
+            "type": "radial",
+            "start-x": start_x, "start-y": start_y,
+            "end-x": end_x, "end-y": end_y,
+            "width": width,
+            "stops": stops,
+        },
+        "fill-opacity": opacity,
+    }
+
+
+def make_gradient_stroke(grad_type, start_x, start_y, end_x, end_y, stops,
+                         width, grad_width=1, alignment="center", opacity=1):
+    """Build a gradient stroke entry."""
+    return {
+        "stroke-color-gradient": {
+            "type": grad_type,
+            "start-x": start_x, "start-y": start_y,
+            "end-x": end_x, "end-y": end_y,
+            "width": grad_width,
+            "stops": stops,
+        },
+        "stroke-width": width,
+        "stroke-alignment": alignment,
+        "stroke-style": "solid",
+        "stroke-opacity": opacity,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Shape builders — each returns (shape_id, add_change)
 # ---------------------------------------------------------------------------
 
@@ -177,7 +236,8 @@ def make_rect(name, x, y, w, h, fills, page_id, parent_id, frame_id,
     return sid, change
 
 
-def make_circle(name, x, y, w, h, fills, page_id, parent_id, frame_id):
+def make_circle(name, x, y, w, h, fills, page_id, parent_id, frame_id,
+                strokes=None, opacity=None):
     sid = new_uuid()
     obj = {
         "id": sid, "type": "circle", "name": name,
@@ -188,8 +248,10 @@ def make_circle(name, x, y, w, h, fills, page_id, parent_id, frame_id):
         "transform": identity_transform(),
         "transform-inverse": identity_transform(),
         "parent-id": parent_id, "frame-id": frame_id,
-        "fills": fills, "strokes": [],
+        "fills": fills, "strokes": strokes or [],
     }
+    if opacity is not None:
+        obj["opacity"] = opacity
     change = {
         "type": "add-obj", "page-id": page_id,
         "parent-id": parent_id, "frame-id": frame_id,
@@ -246,6 +308,35 @@ def make_frame(name, x, y, w, h, page_id, parent_id, frame_id, fills=None):
         "parent-id": parent_id, "frame-id": frame_id,
         "fills": fills or [{"fill-color": "#FFFFFF", "fill-opacity": 0}],
         "strokes": [], "shapes": [],
+    }
+    change = {
+        "type": "add-obj", "page-id": page_id,
+        "parent-id": parent_id, "frame-id": frame_id,
+        "id": sid, "obj": obj,
+    }
+    return sid, change
+
+
+def make_image(name, x, y, w, h, media_id, media_width, media_height, mtype,
+               page_id, parent_id, frame_id):
+    """Build an image shape from previously uploaded media."""
+    sid = new_uuid()
+    obj = {
+        "id": sid, "type": "image", "name": name,
+        "x": x, "y": y, "width": w, "height": h,
+        "rotation": 0,
+        "selrect": make_selrect(x, y, w, h),
+        "points": make_points(x, y, w, h),
+        "transform": identity_transform(),
+        "transform-inverse": identity_transform(),
+        "parent-id": parent_id, "frame-id": frame_id,
+        "fills": [], "strokes": [],
+        "metadata": {
+            "id": media_id,
+            "width": media_width,
+            "height": media_height,
+            "mtype": mtype,
+        },
     }
     change = {
         "type": "add-obj", "page-id": page_id,
@@ -445,6 +536,62 @@ class PenpotClient:
                     sys.exit(1)
                 result[n] = oid
         return result
+
+    def upload_media(self, file_id, name, file_path, content_type="image/svg+xml") -> dict:
+        """Upload a media file to a Penpot file. Returns media object with id/width/height/mtype."""
+        boundary = f"----PenpotBoundary{uuid.uuid4().hex}"
+
+        with open(file_path, "rb") as f:
+            file_data = f.read()
+
+        filename = os.path.basename(file_path)
+        parts = []
+        for field_name, field_value in [("file-id", file_id), ("is-local", "true"), ("name", name)]:
+            parts.append(f"--{boundary}\r\n"
+                         f"Content-Disposition: form-data; name=\"{field_name}\"\r\n\r\n"
+                         f"{field_value}\r\n")
+        # File part
+        parts.append(f"--{boundary}\r\n"
+                     f"Content-Disposition: form-data; name=\"content\"; filename=\"{filename}\"\r\n"
+                     f"Content-Type: {content_type}\r\n\r\n")
+
+        body = "".join(parts).encode("utf-8") + file_data + f"\r\n--{boundary}--\r\n".encode("utf-8")
+
+        url = f"{self.api_url}/upload-file-media-object"
+        req = urllib.request.Request(url, data=body, headers={
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+            "Cookie": f"auth-token={self.auth_token}",
+        })
+        try:
+            with self.opener.open(req) as resp:
+                raw = json.loads(resp.read().decode("utf-8"))
+                # Response is transit+json encoded: ["^ ", "~:key", val, ...]
+                # Convert to plain dict, stripping transit prefixes.
+                if isinstance(raw, list) and raw and raw[0] == "^ ":
+                    items = raw[1:]
+                    if len(items) % 2 != 0:
+                        print(f"ERROR: transit response has odd item count ({len(items)})", file=sys.stderr)
+                        sys.exit(1)
+                    result = {}
+                    for i in range(0, len(items), 2):
+                        k = items[i]
+                        k = k[2:] if k.startswith("~:") else k
+                        v = items[i + 1]
+                        if isinstance(v, str) and v.startswith("~u"):
+                            v = v[2:]
+                        result[k] = v
+                    return result
+                return raw
+        except json.JSONDecodeError:
+            print("ERROR: upload_media response is not valid JSON", file=sys.stderr)
+            sys.exit(1)
+        except urllib.error.HTTPError as exc:
+            err_body = exc.read().decode("utf-8", errors="replace")
+            print(f"ERROR {exc.code} uploading media: {err_body[:500]}", file=sys.stderr)
+            sys.exit(1)
+        except urllib.error.URLError as exc:
+            print(f"Connection error uploading media: {exc.reason}", file=sys.stderr)
+            sys.exit(1)
 
     def export_png(self, file_id, page_id, object_id) -> bytes:
         return self._export(file_id, page_id, object_id, "~:png")

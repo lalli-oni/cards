@@ -1,0 +1,251 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 750 1050" width="750" height="1050">
+  <!--
+    Card back v0.1
+    Universal design for all card types.
+    Dark blue gradient + hex pattern + Frutiger Aero logo badge.
+  -->
+
+  <style><![CDATA[
+    /* Badge hue — change this single value to recolor the orb */
+    svg { --badge-hue: 0; }
+
+    .badge-highlight { stop-color: hsl(var(--badge-hue) 64% 60%) }
+    .badge-mid       { stop-color: hsl(var(--badge-hue) 59% 44%) }
+    .badge-shadow    { stop-color: hsl(var(--badge-hue) 64% 29%) }
+    .badge-deep      { stop-color: hsl(var(--badge-hue) 63% 19%) }
+    .badge-rim       { stop-color: hsl(var(--badge-hue) 60% 25%) }
+  ]]></style>
+
+  <defs>
+    <!-- === CARD BACKGROUND === -->
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#0d0d22"/>
+      <stop offset="50%"  stop-color="#131330"/>
+      <stop offset="100%" stop-color="#1a1a3e"/>
+    </linearGradient>
+
+    <clipPath id="cardClip">
+      <rect width="750" height="1050" rx="16" ry="16"/>
+    </clipPath>
+
+    <!-- === HEX PATTERN === -->
+    <!-- Flat-top hex grid, r=25. Tile: 75 x 43.3.
+         5 polygons tile seamlessly (4 at tile boundaries, 1 centered). -->
+    <pattern id="hexPat" width="75" height="43.3" patternUnits="userSpaceOnUse">
+      <polygon points="25,0 12.5,21.65 -12.5,21.65 -25,0 -12.5,-21.65 12.5,-21.65"
+               fill="none" stroke="#2a2a55" stroke-width="0.8"/>
+      <polygon points="100,0 87.5,21.65 62.5,21.65 50,0 62.5,-21.65 87.5,-21.65"
+               fill="none" stroke="#2a2a55" stroke-width="0.8"/>
+      <polygon points="25,43.3 12.5,64.95 -12.5,64.95 -25,43.3 -12.5,21.65 12.5,21.65"
+               fill="none" stroke="#2a2a55" stroke-width="0.8"/>
+      <polygon points="100,43.3 87.5,64.95 62.5,64.95 50,43.3 62.5,21.65 87.5,21.65"
+               fill="none" stroke="#2a2a55" stroke-width="0.8"/>
+      <polygon points="62.5,21.65 50,43.3 25,43.3 12.5,21.65 25,0 50,0"
+               fill="none" stroke="#2a2a55" stroke-width="0.8"/>
+    </pattern>
+
+    <!-- Hex fade: hidden near badge center, visible further out -->
+    <radialGradient id="hexRadialFade" cx="375" cy="440" r="500"
+                    gradientUnits="userSpaceOnUse">
+      <stop offset="0%"  stop-color="black"/>
+      <stop offset="28%" stop-color="#111"/>
+      <stop offset="44%" stop-color="white"/>
+      <stop offset="100%" stop-color="white"/>
+    </radialGradient>
+
+    <!-- Bottom fade: hex pattern fades to transparent, revealing background gradient -->
+    <linearGradient id="hexBottomFade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="black" stop-opacity="0"/>
+      <stop offset="100%" stop-color="black" stop-opacity="1"/>
+    </linearGradient>
+
+    <mask id="hexMask">
+      <rect width="750" height="1050" fill="url(#hexRadialFade)"/>
+      <rect y="650" width="750" height="400" fill="url(#hexBottomFade)"/>
+    </mask>
+
+    <!-- === BADGE === -->
+    <!-- Frutiger Aero orb (colors driven by badge-hue) -->
+    <radialGradient id="badgeOrb" cx="375" cy="410" r="170" fx="350" fy="390"
+                    gradientUnits="userSpaceOnUse">
+      <stop offset="0%"   class="badge-highlight"/>
+      <stop offset="35%"  class="badge-mid"/>
+      <stop offset="70%"  class="badge-shadow"/>
+      <stop offset="92%"  class="badge-deep"/>
+      <stop offset="100%" class="badge-rim"/>
+    </radialGradient>
+
+    <!-- Gloss overlay (top-lit shine) -->
+    <radialGradient id="badgeGloss" cx="370" cy="390" r="135" fx="360" fy="375"
+                    gradientUnits="userSpaceOnUse">
+      <stop offset="0%"  stop-color="#fff" stop-opacity="0.40"/>
+      <stop offset="35%" stop-color="#fff" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#fff" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Silver border (top-lit) -->
+    <linearGradient id="silverRing" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#e8e8f0"/>
+      <stop offset="25%"  stop-color="#c8c8d8"/>
+      <stop offset="70%"  stop-color="#7878a0"/>
+      <stop offset="100%" stop-color="#a8a8c0"/>
+    </linearGradient>
+
+    <!-- Badge drop shadow -->
+    <filter id="badgeShadow" x="-25%" y="-25%" width="150%" height="150%">
+      <feGaussianBlur stdDeviation="12"/>
+    </filter>
+
+    <!-- Subtle outer glow on silver ring -->
+    <filter id="ringGlow" x="-15%" y="-15%" width="130%" height="130%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- ====== CARD BODY ====== -->
+  <g clip-path="url(#cardClip)">
+
+    <!-- Background gradient -->
+    <rect width="750" height="1050" fill="url(#bgGrad)"/>
+
+    <!-- Hex pattern (masked: fades near badge + at bottom) -->
+    <g mask="url(#hexMask)" opacity="0.55">
+      <rect width="750" height="1050" fill="url(#hexPat)"/>
+    </g>
+
+    <!-- Subtle inner border -->
+    <rect x="20" y="20" width="710" height="1010" rx="12" ry="12"
+          fill="none" stroke="#2d2d44" stroke-width="2"/>
+
+    <!-- ====== BADGE ====== -->
+    <!-- Drop shadow -->
+    <circle cx="375" cy="444" r="155" fill="#000" opacity="0.35"
+            filter="url(#badgeShadow)"/>
+
+    <!-- Orb fill -->
+    <circle cx="375" cy="440" r="155" fill="url(#badgeOrb)"/>
+
+    <!-- Gloss overlay -->
+    <circle cx="375" cy="440" r="155" fill="url(#badgeGloss)"/>
+
+    <!-- Silver border ring with soft glow -->
+    <circle cx="375" cy="440" r="155" fill="none"
+            stroke="url(#silverRing)" stroke-width="6"
+            filter="url(#ringGlow)"/>
+
+    <!-- ====== LOGO (styled wordmark inside badge) ====== -->
+    <!-- Nested svg: own viewBox keeps gradient coordinates aligned with shapes -->
+    <svg x="248" y="402" width="254" height="82" viewBox="-30 -10 620 200"
+         overflow="visible">
+      <defs>
+        <!-- Letter shapes (for mask + shadow reuse) -->
+        <g id="l-letters">
+          <g transform="rotate(-22, 57, 90)">
+            <path d="M 84,63 A 38,38 0 1,0 84,117"/>
+          </g>
+          <circle cx="168" cy="90" r="38"/>
+          <path d="M 254,128 V 62 C 254,42 276,38 296,48"/>
+          <circle cx="366" cy="90" r="38"/>
+          <path d="M 404,22 V 128"/>
+          <g transform="translate(8, 10)">
+            <path d="M 515,52 A 25,25 0 1,0 482,90 A 25,25 0 1,1 449,128"/>
+          </g>
+        </g>
+
+        <!-- Inner mask for gloss (narrower stroke keeps shine inside) -->
+        <mask id="l-glossMask">
+          <use href="#l-letters" fill="none" stroke="white" stroke-width="22"
+               stroke-linecap="round" stroke-linejoin="round"/>
+        </mask>
+
+        <!-- Per-letter radial gradients (fixed orange/gold palette, independent of badge-hue) -->
+        <radialGradient id="l-orbBase">
+          <stop offset="0%"   stop-color="#FFD060"/>
+          <stop offset="55%"  stop-color="#FF9200"/>
+          <stop offset="88%"  stop-color="#D87200"/>
+          <stop offset="100%" stop-color="#E88A20"/>
+        </radialGradient>
+        <radialGradient id="l-gc" href="#l-orbBase" gradientUnits="userSpaceOnUse"
+                        cx="57" cy="78" r="58" fx="47" fy="66"/>
+        <radialGradient id="l-go" href="#l-orbBase" gradientUnits="userSpaceOnUse"
+                        cx="168" cy="78" r="58" fx="158" fy="66"/>
+        <radialGradient id="l-gr" href="#l-orbBase" gradientUnits="userSpaceOnUse"
+                        cx="268" cy="78" r="58" fx="258" fy="66"/>
+        <radialGradient id="l-gd" href="#l-orbBase" gradientUnits="userSpaceOnUse"
+                        cx="370" cy="78" r="62" fx="360" fy="66"/>
+        <radialGradient id="l-gds" href="#l-orbBase" gradientUnits="userSpaceOnUse"
+                        cx="404" cy="60" r="62" fx="398" fy="48"/>
+        <radialGradient id="l-gs" href="#l-orbBase" gradientUnits="userSpaceOnUse"
+                        cx="490" cy="90" r="56" fx="480" fy="78"/>
+
+        <!-- Per-letter gloss -->
+        <radialGradient id="l-glossBase">
+          <stop offset="0%"   stop-color="#fff" stop-opacity="0.7"/>
+          <stop offset="45%"  stop-color="#fff" stop-opacity="0.1"/>
+          <stop offset="100%" stop-color="#fff" stop-opacity="0"/>
+        </radialGradient>
+        <radialGradient id="l-glc" href="#l-glossBase" gradientUnits="userSpaceOnUse"
+                        cx="52" cy="68" r="42"/>
+        <radialGradient id="l-glo" href="#l-glossBase" gradientUnits="userSpaceOnUse"
+                        cx="163" cy="68" r="42"/>
+        <radialGradient id="l-glr" href="#l-glossBase" gradientUnits="userSpaceOnUse"
+                        cx="260" cy="62" r="38"/>
+        <radialGradient id="l-gld" href="#l-glossBase" gradientUnits="userSpaceOnUse"
+                        cx="358" cy="68" r="42"/>
+        <radialGradient id="l-gldst" gradientUnits="userSpaceOnUse"
+                        cx="404" cy="38" r="30">
+          <stop offset="0%"   stop-color="#fff" stop-opacity="0.55"/>
+          <stop offset="45%"  stop-color="#fff" stop-opacity="0.08"/>
+          <stop offset="100%" stop-color="#fff" stop-opacity="0"/>
+        </radialGradient>
+        <radialGradient id="l-gls" href="#l-glossBase" gradientUnits="userSpaceOnUse"
+                        cx="482" cy="72" r="40"/>
+
+        <!-- Logo shadow filter -->
+        <filter id="l-shadowBlur" x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="2.5"/>
+        </filter>
+      </defs>
+
+      <!-- Ghost tail -->
+      <path d="M 193,102 V 128 A 13,13 0 0,0 219,128 V 102"
+            fill="none" stroke="#FF9200" stroke-width="2.5" stroke-linecap="round"
+            stroke-dasharray="5 4" opacity="0.5"/>
+
+      <!-- Drop shadow -->
+      <g filter="url(#l-shadowBlur)" opacity="0.22" transform="translate(0, 4)">
+        <use href="#l-letters" fill="none" stroke="#805000" stroke-width="34"
+             stroke-linecap="round" stroke-linejoin="round"/>
+      </g>
+
+      <!-- Main letters with per-letter gradients -->
+      <g fill="none" stroke-width="34" stroke-linecap="round" stroke-linejoin="round">
+        <g transform="rotate(-22, 57, 90)">
+          <path d="M 84,63 A 38,38 0 1,0 84,117" stroke="url(#l-gc)"/>
+        </g>
+        <circle cx="168" cy="90" r="38" stroke="url(#l-go)"/>
+        <path d="M 254,128 V 62 C 254,42 276,38 296,48" stroke="url(#l-gr)"/>
+        <circle cx="366" cy="90" r="38" stroke="url(#l-gd)"/>
+        <path d="M 404,22 V 128" stroke="url(#l-gds)"/>
+        <g transform="translate(8, 10)">
+          <path d="M 515,52 A 25,25 0 1,0 482,90 A 25,25 0 1,1 449,128" stroke="url(#l-gs)"/>
+        </g>
+      </g>
+
+      <!-- Per-letter gloss -->
+      <g mask="url(#l-glossMask)">
+        <circle cx="52"  cy="68" r="42" fill="url(#l-glc)"/>
+        <circle cx="163" cy="68" r="42" fill="url(#l-glo)"/>
+        <circle cx="260" cy="62" r="38" fill="url(#l-glr)"/>
+        <circle cx="358" cy="68" r="42" fill="url(#l-gld)"/>
+        <ellipse cx="404" cy="38" rx="18" ry="30" fill="url(#l-gldst)"/>
+        <circle cx="482" cy="72" r="40" fill="url(#l-gls)"/>
+      </g>
+    </svg>
+
+  </g>
+</svg>

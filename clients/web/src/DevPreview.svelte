@@ -1,3 +1,8 @@
+<!--
+  TODO: Remove this file once the quick-start variant (#82) is implemented.
+  This is a throwaway dev harness for visually testing board rendering
+  without a working game loop. Access via /#dev hash.
+-->
 <script lang="ts">
   import {
     createInstanceCounter,

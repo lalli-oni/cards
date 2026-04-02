@@ -6,6 +6,7 @@
     cell: GridCell;
     row: number;
     col: number;
+    /** When undefined, all units render in opponent color (spectator/preview mode). */
     selfPlayerId?: string;
     highlighted?: boolean;
     onclick?: (row: number, col: number) => void;
@@ -41,7 +42,7 @@
     if (cell.location) {
       const e = cell.location.edges;
       const dir = (open: boolean) => (open ? "open" : "blocked");
-      lines.push(`${cell.location.name}`);
+      lines.push(cell.location.name);
       lines.push(`Edges: N:${dir(e.n)} E:${dir(e.e)} S:${dir(e.s)} W:${dir(e.w)}`);
       if (cell.location.requirements) lines.push(`Req: ${formatRequirements(cell.location.requirements)}`);
       if (cell.location.rewards) lines.push(`Rew: ${cell.location.rewards}`);

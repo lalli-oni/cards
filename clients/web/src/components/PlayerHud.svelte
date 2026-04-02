@@ -10,6 +10,13 @@
 
   const self: PlayerState = $derived(vs.self);
   const opponent: OpponentView | undefined = $derived(vs.opponents[0]);
+
+  const activePlayerName = $derived.by(() => {
+    if (!vs.turn) return "";
+    if (vs.turn.activePlayerId === self.id) return self.name;
+    const match = vs.opponents.find((o) => o.id === vs.turn!.activePlayerId);
+    return match?.name ?? vs.turn.activePlayerId;
+  });
 </script>
 
 <div class="flex gap-4 rounded-lg bg-surface px-4 py-2">
@@ -49,7 +56,7 @@
         Action Points: {vs.turn.actionPointsRemaining}
       </span>
       <span class="text-xs">
-        Active: {vs.turn.activePlayerId === self.id ? self.name : opponent?.name ?? vs.turn.activePlayerId}
+        Active: {activePlayerName}
       </span>
     </div>
   {/if}

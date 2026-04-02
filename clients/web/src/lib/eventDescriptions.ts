@@ -1,5 +1,30 @@
 import type { GameEvent } from "cards-engine";
 
+export type EventCategory = "player" | "opponent" | "system";
+
+const SYSTEM_EVENT_TYPES: ReadonlySet<string> = new Set([
+  "phase_changed",
+  "game_ended",
+  "market_replenished",
+  "turn_started",
+  "turn_ended",
+  "seeding_step_changed",
+  "seeding_player_changed",
+  "prospect_deck_built",
+  "deck_constructed",
+  "deck_shuffled",
+]);
+
+export function categorizeEvent(
+  event: GameEvent,
+  selfPlayerId: string,
+): EventCategory {
+  if (SYSTEM_EVENT_TYPES.has(event.type)) return "system";
+  if ("playerId" in event && event.playerId === selfPlayerId) return "player";
+  if ("playerId" in event) return "opponent";
+  return "system";
+}
+
 export function describeEvent(event: GameEvent): string {
   switch (event.type) {
     case "card_deployed":

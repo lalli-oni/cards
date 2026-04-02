@@ -25,6 +25,7 @@ let _currentPlayerName = $state("");
 let _savedSessions = $state<string[]>([]);
 let _gamePhase = $state<"seeding" | "main" | "ended" | null>(null);
 let _error = $state<string | null>(null);
+let _lastTurnStartIndex = $state(0);
 
 export function getScreen() {
   return _screen;
@@ -49,6 +50,9 @@ export function getGamePhase() {
 }
 export function getError() {
   return _error;
+}
+export function getLastTurnEvents() {
+  return _eventLog.slice(_lastTurnStartIndex);
 }
 export function clearError() {
   _error = null;
@@ -110,8 +114,15 @@ function waitForAction(): Promise<Action> {
 }
 
 function onEvent(events: GameEvent[], state: GameState): void {
+  const baseIndex = _eventLog.length;
   _eventLog = [..._eventLog, ...events];
   _gamePhase = state.phase;
+
+  for (let i = 0; i < events.length; i++) {
+    if (events[i].type === "turn_started") {
+      _lastTurnStartIndex = baseIndex + i;
+    }
+  }
 
   if (state.phase === "ended" && players.length > 0) {
     _visibleState = engineGetVisibleState(state, players[0].id);
@@ -176,6 +187,7 @@ export function startNewGame(
   _eventLog = [];
   _error = null;
   _gamePhase = "seeding";
+  _lastTurnStartIndex = 0;
   isFirstTurn = true;
   autoSaveFailCount = 0;
 
@@ -226,6 +238,7 @@ export async function loadGame(key: string): Promise<void> {
 
   _eventLog = [];
   _error = null;
+  _lastTurnStartIndex = 0;
   isFirstTurn = true;
   autoSaveFailCount = 0;
 
@@ -307,6 +320,7 @@ export function returnToMenu(): void {
   _visibleState = null;
   _validActions = [];
   _eventLog = [];
+  _lastTurnStartIndex = 0;
   _gamePhase = null;
   _currentPlayerName = "";
   _error = null;

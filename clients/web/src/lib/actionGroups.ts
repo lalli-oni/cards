@@ -46,40 +46,46 @@ export function groupActions(actions: Action[]): ActionGroup[] {
   }));
 }
 
-export function describeAction(action: Action): string {
+type NameResolver = (id: string) => string;
+
+function idOrName(id: string, n?: NameResolver): string {
+  return n?.(id) ?? id;
+}
+
+export function describeAction(action: Action, n?: NameResolver): string {
   switch (action.type) {
     case "pass":
       return "Pass";
     case "draw":
       return "Draw a card";
     case "deploy":
-      return `Deploy ${action.cardId}`;
+      return `Deploy ${idOrName(action.cardId, n)}`;
     case "buy":
-      return `Buy ${action.cardId}`;
+      return `Buy ${idOrName(action.cardId, n)}`;
     case "enter":
-      return `Enter ${action.unitId} at (${action.row},${action.col})`;
+      return `Enter ${idOrName(action.unitId, n)} at (${action.row},${action.col})`;
     case "move":
-      return `Move ${action.unitId} to (${action.row},${action.col})`;
+      return `Move ${idOrName(action.unitId, n)} to (${action.row},${action.col})`;
     case "attack":
-      return `Attack (${action.row},${action.col}) with ${action.unitIds.length} unit(s)`;
+      return `Attack (${action.row},${action.col}) with ${action.unitIds.map((id) => idOrName(id, n)).join(", ")}`;
     case "play_event":
-      return `Play ${action.cardId}${action.targetId ? ` on ${action.targetId}` : ""}`;
+      return `Play ${idOrName(action.cardId, n)}${action.targetId ? ` on ${idOrName(action.targetId, n)}` : ""}`;
     case "equip":
-      return `Equip ${action.itemId} on ${action.unitId}`;
+      return `Equip ${idOrName(action.itemId, n)} on ${idOrName(action.unitId, n)}`;
     case "destroy":
-      return `Destroy ${action.cardId}`;
+      return `Destroy ${idOrName(action.cardId, n)}`;
     case "raze":
       return `Raze at (${action.row},${action.col})`;
     case "attempt_mission":
       return `Attempt mission at (${action.row},${action.col})`;
     case "activate":
-      return `Activate ${action.cardId}: ${action.actionName}`;
+      return `Activate ${idOrName(action.cardId, n)}: ${action.actionName}`;
     case "seed_draw":
       return "Draw seeding cards";
     case "seed_keep":
       return "Confirm keep/expose";
     case "seed_steal":
-      return `Steal ${action.cardId}`;
+      return `Steal ${idOrName(action.cardId, n)}`;
     case "seed_place_location":
       return `Place location at (${action.row},${action.col})`;
     case "policy_select":

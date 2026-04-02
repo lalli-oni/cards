@@ -70,15 +70,18 @@
     return actions;
   });
 
+  // Only highlight target cells when something is selected
   const highlightedCells = $derived(
-    new Set(
-      filteredActions
-        .filter((a) => "row" in a && "col" in a)
-        .map(
-          (a) =>
-            `${(a as { row: number }).row},${(a as { col: number }).col}`,
-        ),
-    ),
+    hasSelection
+      ? new Set(
+          filteredActions
+            .filter((a) => "row" in a && "col" in a)
+            .map(
+              (a) =>
+                `${(a as { row: number }).row},${(a as { col: number }).col}`,
+            ),
+        )
+      : new Set<string>(),
   );
 
   // ---------------------------------------------------------------------------
@@ -205,6 +208,7 @@
       <HandPanel
         cards={vs.self.hand}
         actions={filteredActions}
+        {hasSelection}
         onCardClick={handleCardClick}
       />
     </div>
@@ -214,6 +218,7 @@
       <HqPanel
         cards={vs.self.hq}
         actions={filteredActions}
+        {hasSelection}
         onCardClick={handleCardClick}
       />
     </div>

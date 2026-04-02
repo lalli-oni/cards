@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { GridCell, ItemCard } from "cards-engine";
-  import { formatRequirements } from "../lib/formatRequirements";
+  import { formatRequirements, formatRequirementsHtml } from "../lib/formatRequirements";
 
   interface Props {
     cell: GridCell;
@@ -112,7 +112,7 @@
     </span>
     {#if cell.location.requirements || cell.location.rewards}
       <span class="w-full truncate text-2xs text-text-muted">
-        {#if cell.location.requirements}{formatRequirements(cell.location.requirements)}{/if}
+        {#if cell.location.requirements}{@html formatRequirementsHtml(cell.location.requirements)}{/if}
         {#if cell.location.rewards}{cell.location.requirements ? " " : ""}→{cell.location.rewards.replace("vp", "⭐")}{/if}
       </span>
     {/if}
@@ -124,26 +124,30 @@
   {/if}
 
   {#each cell.units as unit}
-    <div
-      class="flex w-full items-center gap-0.5 truncate {unit.ownerId === selfPlayerId
-        ? 'text-self'
-        : 'text-opponent'}"
-    >
-      {#if onUnitClick}
-        <span
-          role="button"
-          tabindex="-1"
-          class="truncate font-semibold hover:underline {selectedEntityId === unit.id ? 'text-highlight' : ''}"
-          onclick={(e) => handleUnitClick(e, unit.id)}
-          onkeydown={(e) => { if (e.key === "Enter") handleUnitClick(e, unit.id); }}
-        >⚔️{unit.name.slice(0, 5)}</span>
-      {:else}
-        <span class="truncate font-semibold">⚔️{unit.name.slice(0, 5)}</span>
-      {/if}
-      <span class="text-2xs"><span class="text-stat-strength">{unit.strength}</span>/<span class="text-stat-cunning">{unit.cunning}</span>/<span class="text-stat-charisma">{unit.charisma}</span></span>
-      {#if unit.injured}<span class="text-danger">!</span>{/if}
+    {@const ownerClass = unit.ownerId === selfPlayerId ? 'text-self' : 'text-opponent'}
+    <div class="w-full {ownerClass}">
+      <div class="flex items-center gap-0.5 truncate">
+        {#if onUnitClick}
+          <span
+            role="button"
+            tabindex="-1"
+            class="truncate font-semibold hover:underline {selectedEntityId === unit.id ? 'text-highlight' : ''}"
+            onclick={(e) => handleUnitClick(e, unit.id)}
+            onkeydown={(e) => { if (e.key === "Enter") handleUnitClick(e, unit.id); }}
+          >⚔️{unit.name.slice(0, 5)}</span>
+        {:else}
+          <span class="truncate font-semibold">⚔️{unit.name.slice(0, 5)}</span>
+        {/if}
+        {#if unit.injured}<span class="text-danger">!</span>{/if}
+      </div>
+      <div class="truncate text-2xs">
+        <span class="text-stat-strength">{unit.strength}</span>/<span class="text-stat-cunning">{unit.cunning}</span>/<span class="text-stat-charisma">{unit.charisma}</span>
+      </div>
       {#if unit.attributes.length > 0}
-        <span class="text-2xs text-text-muted">{unit.attributes.join(", ")}</span>
+        <div class="truncate text-2xs text-text-muted">{unit.attributes.join(", ")}</div>
+      {/if}
+      {#if unit.text}
+        <div class="truncate text-2xs text-text-faint">{unit.text}</div>
       {/if}
     </div>
     {#if equippedByUnit[unit.id]}

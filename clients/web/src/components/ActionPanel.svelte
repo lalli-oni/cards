@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Action } from "cards-engine";
   import { groupActions, describeAction } from "../lib/actionGroups";
-  import { selectAction } from "../lib/gameStore.svelte";
+  import { selectAction, resolveCardName } from "../lib/gameStore.svelte";
 
   interface Props {
     actions: Action[];
@@ -54,8 +54,10 @@
             ? 'bg-highlight-bg text-highlight'
             : 'bg-surface-raised text-text-secondary hover:bg-surface-hover'}"
         >
-          {group.label}
-          {#if group.actions.length > 1}
+          {#if group.actions.length === 1}
+            {describeAction(group.actions[0], resolveCardName)}
+          {:else}
+            {group.label}
             <span class="text-text-muted">({group.actions.length})</span>
           {/if}
         </button>
@@ -67,7 +69,7 @@
                 onclick={() => handleActionClick(action)}
                 class="w-full rounded px-3 py-1 text-left text-xs text-text-secondary bg-surface-raised/50 hover:bg-surface-hover"
               >
-                {describeAction(action)}
+                {describeAction(action, resolveCardName)}
               </button>
             {/each}
           </div>

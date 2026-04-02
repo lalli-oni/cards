@@ -25,80 +25,93 @@ export function categorizeEvent(
   return "system";
 }
 
-export function describeEvent(event: GameEvent): string {
+export interface NameResolvers {
+  card?: (id: string) => string;
+  player?: (id: string) => string;
+}
+
+function c(id: string, r?: NameResolvers): string {
+  return r?.card?.(id) ?? id;
+}
+
+function p(id: string, r?: NameResolvers): string {
+  return r?.player?.(id) ?? id;
+}
+
+export function describeEvent(event: GameEvent, r?: NameResolvers): string {
   switch (event.type) {
     case "card_deployed":
-      return `${event.playerId} deployed ${event.cardId}`;
+      return `${p(event.playerId, r)} deployed ${c(event.cardId, r)}`;
     case "card_bought":
-      return `${event.playerId} bought ${event.cardId} for ${event.cost}g`;
+      return `${p(event.playerId, r)} bought ${c(event.cardId, r)} for ${event.cost}g`;
     case "card_drawn":
-      return `${event.playerId} drew ${event.count} card(s)`;
+      return `${p(event.playerId, r)} drew ${event.count} card(s)`;
     case "unit_entered":
-      return `${event.playerId} entered unit ${event.unitId} at (${event.row},${event.col})`;
+      return `${p(event.playerId, r)} entered ${c(event.unitId, r)} at (${event.row},${event.col})`;
     case "unit_moved":
-      return `${event.playerId} moved unit ${event.unitId} from (${event.fromRow},${event.fromCol}) to (${event.toRow},${event.toCol})`;
+      return `${p(event.playerId, r)} moved ${c(event.unitId, r)} to (${event.toRow},${event.toCol})`;
     case "unit_injured":
-      return `Unit ${event.unitId} (${event.ownerId}) was injured`;
+      return `${c(event.unitId, r)} (${p(event.ownerId, r)}) was injured`;
     case "unit_killed":
-      return `Unit ${event.unitId} (${event.ownerId}) was killed`;
+      return `${c(event.unitId, r)} (${p(event.ownerId, r)}) was killed`;
     case "unit_healed":
-      return `${event.playerId} healed unit ${event.unitId}`;
+      return `${p(event.playerId, r)} healed ${c(event.unitId, r)}`;
     case "event_played":
-      return `${event.playerId} played event ${event.cardId}`;
+      return `${p(event.playerId, r)} played ${c(event.cardId, r)}`;
     case "trap_set":
-      return `${event.playerId} set a trap`;
+      return `${p(event.playerId, r)} set a trap`;
     case "trap_triggered":
-      return `Trap triggered on ${event.targetId ?? "target"}`;
+      return `Trap triggered on ${event.targetId ? c(event.targetId, r) : "target"}`;
     case "item_equipped":
-      return `${event.playerId} equipped ${event.itemId} on unit ${event.unitId}`;
+      return `${p(event.playerId, r)} equipped ${c(event.itemId, r)} on ${c(event.unitId, r)}`;
     case "item_dropped":
-      return `Item ${event.itemId} dropped at (${event.row},${event.col})`;
+      return `${c(event.itemId, r)} dropped at (${event.row},${event.col})`;
     case "location_placed":
-      return `Location ${event.cardId} placed at (${event.row},${event.col})`;
+      return `${c(event.cardId, r)} placed at (${event.row},${event.col})`;
     case "location_razed":
-      return `Location ${event.cardId} razed at (${event.row},${event.col})`;
+      return `${c(event.cardId, r)} razed at (${event.row},${event.col})`;
     case "mission_completed":
-      return `${event.playerId} completed mission at ${event.locationId} for ${event.vp} VP`;
+      return `${p(event.playerId, r)} completed mission at ${c(event.locationId, r)} for ${event.vp} VP`;
     case "mission_attempt_failed":
-      return `${event.playerId} failed mission attempt at (${event.row},${event.col})`;
+      return `${p(event.playerId, r)} failed mission attempt at (${event.row},${event.col})`;
     case "gold_changed":
-      return `${event.playerId} ${event.amount >= 0 ? "+" : ""}${event.amount}g (${event.reason})`;
+      return `${p(event.playerId, r)} ${event.amount >= 0 ? "+" : ""}${event.amount}g (${event.reason})`;
     case "turn_started":
-      return `--- Turn: ${event.playerId} (round ${event.round}) ---`;
+      return `--- Turn: ${p(event.playerId, r)} (round ${event.round}) ---`;
     case "turn_ended":
-      return `${event.playerId} ended turn`;
+      return `${p(event.playerId, r)} ended turn`;
     case "phase_changed":
       return `Phase changed: ${event.from} → ${event.to}`;
     case "game_ended":
-      return `Game over! Winner: ${event.winner ?? "draw"}`;
+      return `Game over! Winner: ${event.winner ? p(event.winner, r) : "draw"}`;
     case "deck_shuffled":
-      return `${event.playerId} shuffled ${event.deck} deck`;
+      return `${p(event.playerId, r)} shuffled ${event.deck} deck`;
     case "card_destroyed":
-      return `${event.playerId} destroyed ${event.cardId}`;
+      return `${p(event.playerId, r)} destroyed ${c(event.cardId, r)}`;
     case "combat_started":
-      return `Combat at (${event.row},${event.col}): ${event.attackerId} vs ${event.defenderId}`;
+      return `Combat at (${event.row},${event.col}): ${p(event.attackerId, r)} vs ${p(event.defenderId, r)}`;
     case "combat_resolved":
-      return `Combat resolved at (${event.row},${event.col}): ${event.winnerId ? `winner ${event.winnerId}` : "draw"}`;
+      return `Combat resolved at (${event.row},${event.col}): ${event.winnerId ? `winner ${p(event.winnerId, r)}` : "draw"}`;
     case "market_replenished":
-      return `Market replenished: ${event.cardId} (slot ${event.slotIndex})`;
+      return `Market replenished: ${c(event.cardId, r)}`;
     case "passive_expired":
-      return `Passive effect ${event.cardId} expired (${event.playerId})`;
+      return `Passive ${c(event.cardId, r)} expired (${p(event.playerId, r)})`;
     case "seed_cards_drawn":
-      return `${event.playerId} drew ${event.count} seeding cards`;
+      return `${p(event.playerId, r)} drew ${event.count} seeding cards`;
     case "seed_kept":
-      return `${event.playerId} kept ${event.keptCount}, exposed ${event.exposedCount}`;
+      return `${p(event.playerId, r)} kept ${event.keptCount}, exposed ${event.exposedCount}`;
     case "seed_stolen":
-      return `${event.playerId} stole ${event.cardId}`;
+      return `${p(event.playerId, r)} stole ${c(event.cardId, r)}`;
     case "seeding_step_changed":
       return `Seeding step: ${event.step}`;
     case "seeding_player_changed":
-      return `Seeding turn: ${event.playerId}`;
+      return `Seeding turn: ${p(event.playerId, r)}`;
     case "prospect_deck_built":
-      return `${event.playerId} prospect deck built`;
+      return `${p(event.playerId, r)} prospect deck built`;
     case "deck_constructed":
-      return `${event.playerId} deck constructed`;
+      return `${p(event.playerId, r)} deck constructed`;
     case "policies_assigned":
-      return `${event.playerId} assigned policies: ${event.policyIds.join(", ")}`;
+      return `${p(event.playerId, r)} assigned policies: ${event.policyIds.map((id) => c(id, r)).join(", ")}`;
     default:
       return `Unknown event: ${(event as { type: string }).type}`;
   }

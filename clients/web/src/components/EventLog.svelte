@@ -1,6 +1,8 @@
 <script lang="ts">
-  import { getEventLog, getVisibleState } from "../lib/gameStore.svelte";
-  import { describeEvent, categorizeEvent } from "../lib/eventDescriptions";
+  import { getEventLog, getVisibleState, resolveCardName, resolvePlayerName } from "../lib/gameStore.svelte";
+  import { describeEvent, categorizeEvent, type NameResolvers } from "../lib/eventDescriptions";
+
+  const nameResolvers: NameResolvers = { card: resolveCardName, player: resolvePlayerName };
 
   let collapsed = $state(false);
   let showPlayer = $state(true);
@@ -78,11 +80,11 @@
           <div
             class="my-2 border-t border-stone-600 pt-2 text-center text-2xs font-semibold text-stone-500"
           >
-            {describeEvent(event)}
+            {describeEvent(event, nameResolvers)}
           </div>
         {:else}
           <div class="text-xs leading-relaxed text-stone-400">
-            {describeEvent(event)}
+            {describeEvent(event, nameResolvers)}
           </div>
         {/if}
       {/each}

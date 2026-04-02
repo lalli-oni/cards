@@ -18,6 +18,21 @@ export class HotseatAdapter implements PlayerAdapter {
     visibleState: VisibleState,
     validActions: Action[],
   ): Promise<Action> {
+    // seed_draw requires no player interaction — auto-submit immediately
+    if (
+      visibleState.seedingStep === "seed_draw" &&
+      validActions.length === 1 &&
+      validActions[0].type === "seed_draw"
+    ) {
+      return validActions[0];
+    }
+
+    // During steals, the middle area is exposed to all — no device pass needed
+    if (visibleState.seedingStep === "seed_steal") {
+      this.onTurnStart(visibleState, validActions);
+      return this.waitForAction();
+    }
+
     await this.onBeforeTurn(visibleState.currentPlayerId);
     this.onTurnStart(visibleState, validActions);
     return this.waitForAction();

@@ -3,8 +3,12 @@
     confirmPassDevice,
     getCurrentPlayerName,
     getLastTurnEvents,
+    resolveCardName,
+    resolvePlayerName,
   } from "../lib/gameStore.svelte";
-  import { describeEvent } from "../lib/eventDescriptions";
+  import { describeEvent, type NameResolvers } from "../lib/eventDescriptions";
+
+  const nameResolvers: NameResolvers = { card: resolveCardName, player: resolvePlayerName };
 
   const name = $derived(getCurrentPlayerName());
   const turnEvents = $derived(getLastTurnEvents());
@@ -34,11 +38,11 @@
             <div
               class="my-2 border-t border-stone-600 pt-2 text-center text-xs font-semibold text-stone-500"
             >
-              {describeEvent(event)}
+              {describeEvent(event, nameResolvers)}
             </div>
           {:else}
             <div class="text-xs leading-relaxed text-stone-400">
-              {describeEvent(event)}
+              {describeEvent(event, nameResolvers)}
             </div>
           {/if}
         {/each}

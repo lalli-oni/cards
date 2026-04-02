@@ -44,6 +44,9 @@
   --color-cell-edge-open: var(--color-stone-600);
   --color-cell-edge-blocked: var(--color-red-900);
 
+  /* Resource colors */
+  --color-gold: var(--color-yellow-400);
+
   /* Stat colors */
   --color-stat-strength: var(--color-red-400);
   --color-stat-cunning: var(--color-sky-400);

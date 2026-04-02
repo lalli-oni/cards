@@ -7,9 +7,15 @@ import {
   type PlayerDescriptor,
   type VisibleState,
 } from "cards-engine";
+import { setAutoFreeze } from "cards-engine";
 import { HotseatAdapter } from "./HotseatAdapter";
 import { DEFAULT_CONFIG, buildSeedingSetup } from "./gameSetup";
 import { autoSave, listSessions, loadSession, saveSession } from "./persistence";
+
+// Immer auto-freezes produce() output. Svelte 5's $state uses deep proxies.
+// Frozen objects passed into $state (and proxied objects passed back to immer)
+// cause conflicts. Disabling auto-freeze avoids the issue entirely.
+setAutoFreeze(false);
 
 // ---------------------------------------------------------------------------
 // Reactive state
@@ -48,6 +54,31 @@ export function getSavedSessions() {
 export function getGamePhase() {
   return _gamePhase;
 }
+export function resolveCardName(id: string): string {
+  if (!_visibleState) return id;
+  // Search all visible zones for the card name
+  for (const row of _visibleState.grid) {
+    for (const cell of row) {
+      if (cell.location?.id === id) return cell.location.name;
+      for (const u of cell.units) if (u.id === id) return u.name;
+      for (const i of cell.items) if (i.id === id) return i.name;
+    }
+  }
+  const zones = [
+    _visibleState.self.hand, _visibleState.self.hq,
+    _visibleState.self.activePolicies, _visibleState.self.discardPile,
+    _visibleState.self.removedFromGame, _visibleState.market,
+    ...(_visibleState.opponents?.flatMap((o) => [o.hq, o.activePolicies]) ?? []),
+  ];
+  for (const zone of zones) {
+    for (const c of zone) if (c.id === id) return c.name;
+  }
+  return id;
+}
+export function resolvePlayerName(id: string): string {
+  const p = players.find((pl) => pl.id === id);
+  return p?.name ?? id;
+}
 export function getError() {
   return _error;
 }
@@ -75,7 +106,7 @@ let resolveAction: ((action: Action) => void) | null = null;
 let rejectAction: ((reason: Error) => void) | null = null;
 let resolvePassDevice: (() => void) | null = null;
 let rejectPassDevice: ((reason: Error) => void) | null = null;
-let isFirstTurn = true;
+let lastActivePlayerId: string | null = null;
 let autoSaveFailCount = 0;
 
 // ---------------------------------------------------------------------------
@@ -83,10 +114,12 @@ let autoSaveFailCount = 0;
 // ---------------------------------------------------------------------------
 
 function onBeforeTurn(playerId: string): Promise<void> {
-  if (isFirstTurn) {
-    isFirstTurn = false;
+  // Only show pass-device overlay when the active player actually changes
+  if (playerId === lastActivePlayerId || lastActivePlayerId === null) {
+    lastActivePlayerId = playerId;
     return Promise.resolve();
   }
+  lastActivePlayerId = playerId;
   const player = players.find((p) => p.id === playerId);
   _currentPlayerName = player?.name ?? playerId;
   _screen = "passDevice";
@@ -133,7 +166,7 @@ function onEvent(events: GameEvent[], state: GameState): void {
   // Auto-save after every action
   if (controller) {
     try {
-      const session = controller.toSession(true);
+      const session = structuredClone(controller.toSession(true));
       autoSave(session)
         .then(() => {
           autoSaveFailCount = 0;
@@ -188,7 +221,7 @@ export function startNewGame(
   _error = null;
   _gamePhase = "seeding";
   _lastTurnStartIndex = 0;
-  isFirstTurn = true;
+  lastActivePlayerId = null;
   autoSaveFailCount = 0;
 
   controller = new GameController({
@@ -239,7 +272,7 @@ export async function loadGame(key: string): Promise<void> {
   _eventLog = [];
   _error = null;
   _lastTurnStartIndex = 0;
-  isFirstTurn = true;
+  lastActivePlayerId = null;
   autoSaveFailCount = 0;
 
   try {
@@ -272,7 +305,7 @@ export function selectAction(action: Action): void {
     const resolve = resolveAction;
     resolveAction = null;
     rejectAction = null;
-    resolve(action);
+    resolve($state.snapshot(action));
   }
 }
 
@@ -288,7 +321,7 @@ export function confirmPassDevice(): void {
 export async function saveGame(name: string): Promise<void> {
   if (!controller) return;
   try {
-    await saveSession(name, controller.toSession(true));
+    await saveSession(name, structuredClone(controller.toSession(true)));
     await refreshSessions();
   } catch (err) {
     _error = `Failed to save game: ${err instanceof Error ? err.message : String(err)}`;

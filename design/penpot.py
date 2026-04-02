@@ -564,7 +564,21 @@ class PenpotClient:
         })
         try:
             with self.opener.open(req) as resp:
-                return json.loads(resp.read().decode("utf-8"))
+                raw = json.loads(resp.read().decode("utf-8"))
+                # Response is transit+json encoded: ["^ ", "~:key", val, ...]
+                # Convert to plain dict, stripping transit prefixes.
+                if isinstance(raw, list) and raw and raw[0] == "^ ":
+                    items = raw[1:]
+                    result = {}
+                    for i in range(0, len(items), 2):
+                        k = items[i].lstrip("~:")
+                        v = items[i + 1]
+                        # Strip transit UUID prefix
+                        if isinstance(v, str) and v.startswith("~u"):
+                            v = v[2:]
+                        result[k] = v
+                    return result
+                return raw
         except urllib.error.HTTPError as exc:
             err_body = exc.read().decode("utf-8", errors="replace")
             print(f"ERROR {exc.code} uploading media: {err_body[:500]}", file=sys.stderr)

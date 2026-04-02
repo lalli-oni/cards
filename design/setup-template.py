@@ -669,11 +669,11 @@ def build_card_back_shapes(tokens, page_id, frame_id, client=None, file_id=None)
     changes.append(c)
 
     # 4. Badge orb with radial gradient
-    # SVG: cx=375 cy=410 fx=350 fy=390 within bbox (220,285,310,310)
-    # Normalized: start=(0.42, 0.34), end=(0.5, 0.40)
+    # Penpot radial: start=focal point, end=outer edge (determines radius).
+    # Focal slightly upper-left; edge at bottom-right to span full circle.
     orb_fill = make_radial_gradient_fill(
-        0.42, 0.34,  # start (focal point)
-        0.5, 0.40,   # end (center)
+        0.42, 0.34,  # start (focal point, upper-left)
+        0.5, 1.0,    # end (bottom edge — radius covers full shape)
         1, _BADGE_STOPS,
     )
     _, c = make_circle("CB Badge Orb", bx, by, bw, bh, [orb_fill],
@@ -682,8 +682,8 @@ def build_card_back_shapes(tokens, page_id, frame_id, client=None, file_id=None)
 
     # 5. Gloss overlay (white radial fade)
     gloss_fill = make_radial_gradient_fill(
-        0.47, 0.34,  # focal slightly left of center
-        0.5, 0.5,    # center
+        0.47, 0.28,  # focal upper-left
+        0.5, 0.85,   # end toward bottom (wide spread)
         1,
         [{"color": "#ffffff", "offset": 0, "opacity": 0.40},
          {"color": "#ffffff", "offset": 0.35, "opacity": 0.08},

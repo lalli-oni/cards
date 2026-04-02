@@ -569,16 +569,22 @@ class PenpotClient:
                 # Convert to plain dict, stripping transit prefixes.
                 if isinstance(raw, list) and raw and raw[0] == "^ ":
                     items = raw[1:]
+                    if len(items) % 2 != 0:
+                        print(f"ERROR: transit response has odd item count ({len(items)})", file=sys.stderr)
+                        sys.exit(1)
                     result = {}
                     for i in range(0, len(items), 2):
-                        k = items[i].lstrip("~:")
+                        k = items[i]
+                        k = k[2:] if k.startswith("~:") else k
                         v = items[i + 1]
-                        # Strip transit UUID prefix
                         if isinstance(v, str) and v.startswith("~u"):
                             v = v[2:]
                         result[k] = v
                     return result
                 return raw
+        except json.JSONDecodeError:
+            print("ERROR: upload_media response is not valid JSON", file=sys.stderr)
+            sys.exit(1)
         except urllib.error.HTTPError as exc:
             err_body = exc.read().decode("utf-8", errors="replace")
             print(f"ERROR {exc.code} uploading media: {err_body[:500]}", file=sys.stderr)

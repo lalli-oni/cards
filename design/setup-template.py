@@ -705,18 +705,31 @@ def build_card_back_shapes(tokens, page_id, frame_id, client=None, file_id=None)
     # 7. Logo (upload styled wordmark as media image)
     if client and file_id:
         logo_path = os.path.join(SCRIPT_DIR, "logo", "cords-wordmark-styled.svg")
+        if not os.path.isfile(logo_path):
+            print(f"ERROR: Logo SVG not found at {logo_path}", file=sys.stderr)
+            print("  Ensure the styled wordmark exists in design/logo/.", file=sys.stderr)
+            sys.exit(1)
         print("  Uploading logo media...")
         media = client.upload_media(file_id, "cords-wordmark-styled", logo_path)
-        media_id = media["id"]
-        media_w = media.get("width", 620)
-        media_h = media.get("height", 200)
-        mtype = media.get("mtype", "image/svg+xml")
+        media_id = media.get("id")
+        if not media_id:
+            print(f"ERROR: upload_media response missing 'id'. Keys: {list(media.keys())}",
+                  file=sys.stderr)
+            sys.exit(1)
+        media_w = media.get("width")
+        media_h = media.get("height")
+        mtype = media.get("mtype")
+        if media_w is None or media_h is None:
+            print(f"  WARNING: upload response missing width/height "
+                  f"(keys: {list(media.keys())}). Using defaults.", file=sys.stderr)
         _, c = make_image("CB Logo", 248, 402, 254, 82,
-                          media_id, media_w, media_h, mtype,
+                          media_id, media_w or 620, media_h or 200,
+                          mtype or "image/svg+xml",
                           page_id, frame_id, frame_id)
         changes.append(c)
     else:
-        print("  WARNING: No client/file_id — skipping logo upload", file=sys.stderr)
+        print("  WARNING: No client/file_id — logo will be missing from card back",
+              file=sys.stderr)
 
     return changes
 

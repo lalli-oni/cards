@@ -93,7 +93,7 @@
   );
   const looseItems = $derived(cell.items.filter((i) => !i.equippedTo));
 
-  function handleUnitClick(e: MouseEvent, unitId: string) {
+  function handleUnitClick(e: Event, unitId: string) {
     e.stopPropagation();
     onUnitClick?.(unitId);
   }

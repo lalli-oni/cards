@@ -26,6 +26,7 @@ export function formatRequirements(raw: string): string {
 
 /**
  * Same as formatRequirements but returns HTML with stat color classes.
+ * Output is used with {@html}, so input must be trusted (card data only, not user input).
  */
 export function formatRequirementsHtml(raw: string): string {
   return raw

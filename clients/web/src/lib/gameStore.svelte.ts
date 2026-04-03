@@ -35,17 +35,18 @@ let _lastTurnStartIndex = $state(0);
 
 export interface CombatOutcome {
   type: "injured" | "killed";
-  unitId: string;
-  ownerId: string;
+  unitName: string;
+  ownerName: string;
 }
 
 export interface CombatResult {
   row: number;
   col: number;
-  attackerId: string;
-  defenderId: string;
+  locationName: string;
+  attackerName: string;
+  defenderName: string;
   outcomes: CombatOutcome[];
-  winnerId: string | null;
+  winnerName: string | null;
 }
 
 let _combatResult = $state<CombatResult | null>(null);
@@ -77,26 +78,39 @@ export function getCombatResult() {
 export function dismissCombat() {
   _combatResult = null;
 }
-export function resolveCardName(id: string): string {
-  if (!_visibleState) return id;
-  // Search all visible zones for the card name
-  for (const row of _visibleState.grid) {
+// Derived card name lookup — rebuilt when visible state changes.
+// Covers grid, hand, HQ, policies, decks, discard, removed, market,
+// middle area, and opponent public zones.
+let _cardNameMap = $derived.by(() => {
+  const vs = _visibleState;
+  if (!vs) return new Map<string, string>();
+  const map = new Map<string, string>();
+  for (const row of vs.grid) {
     for (const cell of row) {
-      if (cell.location?.id === id) return cell.location.name;
-      for (const u of cell.units) if (u.id === id) return u.name;
-      for (const i of cell.items) if (i.id === id) return i.name;
+      if (cell.location) map.set(cell.location.id, cell.location.name);
+      for (const u of cell.units) map.set(u.id, u.name);
+      for (const i of cell.items) map.set(i.id, i.name);
     }
   }
-  const zones = [
-    _visibleState.self.hand, _visibleState.self.hq,
-    _visibleState.self.activePolicies, _visibleState.self.discardPile,
-    _visibleState.self.removedFromGame, _visibleState.market,
-    ...(_visibleState.opponents?.flatMap((o) => [o.hq, o.activePolicies]) ?? []),
+  const selfZones = [
+    vs.self.hand, vs.self.hq, vs.self.activePolicies,
+    vs.self.discardPile, vs.self.removedFromGame,
+    vs.self.seedingDeck, vs.self.prospectDeck, vs.self.policyPool,
   ];
-  for (const zone of zones) {
-    for (const c of zone) if (c.id === id) return c.name;
+  for (const zone of selfZones) {
+    for (const c of zone) map.set(c.id, c.name);
   }
-  return id;
+  for (const c of vs.market) map.set(c.id, c.name);
+  for (const c of vs.middleArea) map.set(c.id, c.name);
+  for (const opp of vs.opponents ?? []) {
+    for (const c of opp.hq) map.set(c.id, c.name);
+    for (const c of opp.activePolicies) map.set(c.id, c.name);
+  }
+  return map;
+});
+
+export function resolveCardName(id: string): string {
+  return _cardNameMap.get(id) ?? id;
 }
 export function resolvePlayerName(id: string): string {
   const p = players.find((pl) => pl.id === id);
@@ -137,6 +151,7 @@ let autoSaveFailCount = 0;
 // ---------------------------------------------------------------------------
 
 function onBeforeTurn(playerId: string): Promise<void> {
+  _combatResult = null; // Clear stale combat results before any turn
   // Only show pass-device overlay when the active player actually changes
   if (playerId === lastActivePlayerId || lastActivePlayerId === null) {
     lastActivePlayerId = playerId;
@@ -180,22 +195,30 @@ function onEvent(events: GameEvent[], state: GameState): void {
     }
   }
 
-  // Extract combat result for popup
+  // Extract combat result for popup. Names are resolved NOW because killed
+  // units will be removed from the visible state before the popup renders.
   const combatStart = events.find((e) => e.type === "combat_started");
   if (combatStart && combatStart.type === "combat_started") {
     const combatEnd = events.find((e) => e.type === "combat_resolved");
+    if (!combatEnd) {
+      console.warn("combat_started without combat_resolved in same event batch");
+    }
     const outcomes: CombatOutcome[] = [];
     for (const e of events) {
-      if (e.type === "unit_injured") outcomes.push({ type: "injured", unitId: e.unitId, ownerId: e.ownerId });
-      if (e.type === "unit_killed") outcomes.push({ type: "killed", unitId: e.unitId, ownerId: e.ownerId });
+      if (e.type === "unit_injured") outcomes.push({ type: "injured", unitName: resolveCardName(e.unitId), ownerName: resolvePlayerName(e.ownerId) });
+      if (e.type === "unit_killed") outcomes.push({ type: "killed", unitName: resolveCardName(e.unitId), ownerName: resolvePlayerName(e.ownerId) });
     }
+    const cell = _visibleState?.grid[combatStart.row]?.[combatStart.col];
     _combatResult = {
       row: combatStart.row,
       col: combatStart.col,
-      attackerId: combatStart.attackerId,
-      defenderId: combatStart.defenderId,
+      locationName: cell?.location?.name ?? `(${combatStart.row},${combatStart.col})`,
+      attackerName: resolvePlayerName(combatStart.attackerId),
+      defenderName: resolvePlayerName(combatStart.defenderId),
       outcomes,
-      winnerId: combatEnd?.type === "combat_resolved" ? combatEnd.winnerId : null,
+      winnerName: combatEnd?.type === "combat_resolved" && combatEnd.winnerId
+        ? resolvePlayerName(combatEnd.winnerId)
+        : null,
     };
   }
 
@@ -223,6 +246,10 @@ function onEvent(events: GameEvent[], state: GameState): void {
         });
     } catch (err) {
       console.error("Failed to serialize session for auto-save:", err);
+      autoSaveFailCount++;
+      if (autoSaveFailCount >= 3) {
+        _error = "Auto-save is failing. Your progress may not be saved. Try saving manually.";
+      }
     }
   }
 }
@@ -363,7 +390,10 @@ export function confirmPassDevice(): void {
 }
 
 export async function saveGame(name: string): Promise<void> {
-  if (!controller) return;
+  if (!controller) {
+    _error = "No active game to save.";
+    return;
+  }
   try {
     await saveSession(name, structuredClone(controller.toSession(true)));
     await refreshSessions();
@@ -379,6 +409,7 @@ export async function refreshSessions(): Promise<void> {
   } catch (err) {
     console.error("Failed to list sessions:", err);
     _savedSessions = [];
+    _error = "Could not load saved games. Browser storage may be unavailable.";
   }
 }
 

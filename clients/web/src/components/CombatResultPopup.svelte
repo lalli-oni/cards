@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { getCombatResult, dismissCombat } from "../lib/gameStore.svelte";
+  import { getCombatResult, dismissCombat, type CombatResult } from "../lib/gameStore.svelte";
 
-  const result = $derived(getCombatResult());
+  const result: CombatResult | null = $derived(getCombatResult());
 </script>
 
 {#if result}

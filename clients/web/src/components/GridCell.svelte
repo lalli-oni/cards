@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { GridCell, ItemCard } from "cards-engine";
-  import { formatRequirements, formatRequirementsHtml } from "../lib/formatRequirements";
+  import { formatRequirements, parseRequirementParts } from "../lib/formatRequirements";
 
   interface Props {
     cell: GridCell;
@@ -100,20 +100,20 @@
 </script>
 
 <button
-  class="flex min-h-24 min-w-24 flex-col items-start justify-start overflow-hidden rounded p-1 text-2xs leading-tight transition-colors {bgClass}"
+  class="flex min-h-24 min-w-24 flex-col items-start justify-start overflow-hidden rounded p-1 text-center text-2xs leading-tight transition-colors {bgClass}"
   style="{edgeStyle}; {outlineStyle}"
   title={cellTooltip}
   onclick={() => onclick?.(row, col)}
   disabled={!onclick}
 >
   {#if cell.location}
-    <span class="w-full truncate font-semibold text-location">
+    <span class="w-full truncate font-semibold text-location" style="font-size: 0.7rem;">
       📍 {cell.location.name}
     </span>
     {#if cell.location.requirements || cell.location.rewards}
       <span class="w-full truncate text-2xs text-text-muted">
-        {#if cell.location.requirements}{@html formatRequirementsHtml(cell.location.requirements)}{/if}
-        {#if cell.location.rewards}{cell.location.requirements ? " " : ""}→{cell.location.rewards.replace("vp", "⭐")}{/if}
+        {#if cell.location.requirements}{#each parseRequirementParts(cell.location.requirements) as part}<span class={part.className ?? ""}>{part.text}</span>{/each}{/if}
+        {#if cell.location.rewards}{cell.location.requirements ? " " : ""}→ {cell.location.rewards.replace("vp", " ⭐")}{/if}
       </span>
     {/if}
     {#if cell.location.passive}
@@ -125,7 +125,7 @@
 
   {#each cell.units as unit}
     {@const ownerClass = unit.ownerId === selfPlayerId ? 'text-self' : 'text-opponent'}
-    <div class="w-full {ownerClass}">
+    <div class="w-full text-left {ownerClass}">
       <div class="flex items-center gap-0.5 truncate">
         {#if onUnitClick}
           <span
@@ -134,13 +134,13 @@
             class="truncate font-semibold hover:underline {selectedEntityId === unit.id ? 'text-highlight' : ''}"
             onclick={(e) => handleUnitClick(e, unit.id)}
             onkeydown={(e) => { if (e.key === "Enter") handleUnitClick(e, unit.id); }}
-          >⚔️{unit.name.slice(0, 5)}</span>
+          >👤 {unit.name.slice(0, 5)}</span>
         {:else}
           <span class="truncate font-semibold">⚔️{unit.name.slice(0, 5)}</span>
         {/if}
         {#if unit.injured}<span class="text-danger">!</span>{/if}
       </div>
-      <div class="truncate text-2xs">
+      <div class="mt-0.5 truncate text-2xs">
         <span class="text-stat-strength">{unit.strength}</span>/<span class="text-stat-cunning">{unit.cunning}</span>/<span class="text-stat-charisma">{unit.charisma}</span>
       </div>
       {#if unit.attributes.length > 0}
@@ -152,7 +152,7 @@
     </div>
     {#if equippedByUnit[unit.id]}
       {#each equippedByUnit[unit.id] as eqItem}
-        <span class="w-full truncate pl-2 text-2xs text-item-equipped" title="🛡️ {eqItem.name}{eqItem.equip ? ' — ' + eqItem.equip : ''}">
+        <span class="w-full truncate pl-2 text-left text-2xs text-item-equipped" title="🛡️ {eqItem.name}{eqItem.equip ? ' — ' + eqItem.equip : ''}">
           ↳ {eqItem.name}{#if eqItem.equip}: {eqItem.equip}{/if}
         </span>
       {/each}
@@ -160,7 +160,7 @@
   {/each}
 
   {#each looseItems as looseItem}
-    <span class="w-full truncate text-item" title="🛡️ {looseItem.name} (unequipped){looseItem.equip ? ' — ' + looseItem.equip : ''}">
+    <span class="w-full truncate text-left text-item" title="🛡️ {looseItem.name} (unequipped){looseItem.equip ? ' — ' + looseItem.equip : ''}">
       🛡️ {looseItem.name} (loose)
     </span>
   {/each}

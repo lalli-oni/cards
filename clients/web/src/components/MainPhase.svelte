@@ -202,8 +202,7 @@
     <div class="flex flex-col gap-3 overflow-y-auto" style="grid-row: 1 / -1; grid-column: 3;">
       <ActionPanel
         actions={filteredActions}
-        {hasSelection}
-        onDeselect={clearSelection}
+        onDeselect={hasSelection ? clearSelection : undefined}
       />
       <HandPanel
         cards={vs.self.hand}

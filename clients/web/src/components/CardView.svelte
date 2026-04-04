@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Card } from "cards-engine";
-  import { formatRequirements, formatRequirementsHtml } from "../lib/formatRequirements";
+  import { formatRequirements, parseRequirementParts } from "../lib/formatRequirements";
 
   interface Props {
     card: Card;
@@ -11,7 +11,7 @@
   let { card, highlighted = false, onclick }: Props = $props();
 
   const typeEmoji: Record<string, string> = {
-    unit: "⚔️",
+    unit: "👤",
     location: "📍",
     item: "🛡️",
     event: "⚡",
@@ -70,7 +70,7 @@
         {#if card.injured}🩹{/if}
       </span>
     {:else if card.type === "location"}
-      <span class="text-2xs">{@html card.requirements ? formatRequirementsHtml(card.requirements) : ""}</span>
+      <span class="text-2xs">{#if card.requirements}{#each parseRequirementParts(card.requirements) as part}<span class={part.className ?? ""}>{part.text}</span>{/each}{/if}</span>
     {/if}
   </div>
   {#if attributeStr}

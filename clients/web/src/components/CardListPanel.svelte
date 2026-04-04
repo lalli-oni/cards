@@ -22,8 +22,5 @@
         onclick={onCardClick}
       />
     {/each}
-    {#if cards.length === 0}
-      <span class="text-sm text-text-faint italic">Empty</span>
-    {/if}
   </div>
 </div>

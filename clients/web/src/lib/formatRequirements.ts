@@ -6,6 +6,11 @@ const STAT_CLASSES: Record<string, string> = {
   charisma: "text-stat-charisma",
 };
 
+export interface RequirementPart {
+  text: string;
+  className?: string;
+}
+
 /**
  * Format a raw mission requirements string into human-readable text.
  *
@@ -25,14 +30,18 @@ export function formatRequirements(raw: string): string {
 }
 
 /**
- * Same as formatRequirements but returns HTML with stat color classes.
- * Output is used with {@html}, so input must be trusted (card data only, not user input).
+ * Same as formatRequirements but returns structured parts with optional
+ * CSS class names for stat-colored rendering in Svelte templates.
  */
-export function formatRequirementsHtml(raw: string): string {
-  return raw
-    .split(";")
-    .map((part) => formatOneHtml(part.trim()))
-    .join(", ");
+export function parseRequirementParts(raw: string): RequirementPart[] {
+  const parts: RequirementPart[] = [];
+  const checks = raw.split(";");
+  for (let i = 0; i < checks.length; i++) {
+    if (i > 0) parts.push({ text: ", " });
+    const parsed = formatOnePart(checks[i].trim());
+    parts.push(parsed);
+  }
+  return parts;
 }
 
 function formatOne(check: string): string {
@@ -42,37 +51,23 @@ function formatOne(check: string): string {
   const key = check.slice(0, sep);
   const value = check.slice(sep + 1);
 
-  // "units_N" → "N Units"
-  if (key === "units") {
-    return `${value} Units`;
-  }
-
-  // "stat_N" → "Stat ≥ N"
-  if (STATS.has(key)) {
-    return `${capitalize(key)} ≥ ${value}`;
-  }
-
-  // "attribute_N" → "N× Attribute"
+  if (key === "units") return `${value} Units`;
+  if (STATS.has(key)) return `${capitalize(key)} ≥ ${value}`;
   return `${value}× ${capitalize(key)}`;
 }
 
-function formatOneHtml(check: string): string {
+function formatOnePart(check: string): RequirementPart {
   const sep = check.lastIndexOf("_");
-  if (sep === -1) return check;
+  if (sep === -1) return { text: check };
 
   const key = check.slice(0, sep);
   const value = check.slice(sep + 1);
 
-  if (key === "units") {
-    return `${value} Units`;
-  }
-
+  if (key === "units") return { text: `${value} Units` };
   if (STATS.has(key)) {
-    const cls = STAT_CLASSES[key] ?? "";
-    return `<span class="${cls}">${capitalize(key)} ≥ ${value}</span>`;
+    return { text: `${capitalize(key)} ≥ ${value}`, className: STAT_CLASSES[key] };
   }
-
-  return `${value}× ${capitalize(key)}`;
+  return { text: `${value}× ${capitalize(key)}` };
 }
 
 function capitalize(s: string): string {

@@ -5,11 +5,11 @@
 
   interface Props {
     actions: Action[];
-    hasSelection?: boolean;
+    /** When provided, shows a "Clear" button — indicates an active selection. */
     onDeselect?: () => void;
   }
 
-  let { actions, hasSelection = false, onDeselect }: Props = $props();
+  let { actions, onDeselect }: Props = $props();
 
   let expandedGroup = $state<string | null>(null);
 
@@ -34,7 +34,7 @@
     <h3 class="text-sm font-semibold text-text-muted">
       Actions ({actions.length})
     </h3>
-    {#if hasSelection && onDeselect}
+    {#if onDeselect}
       <button
         onclick={onDeselect}
         class="rounded px-2 py-0.5 text-xs text-text-muted hover:bg-surface-hover hover:text-text-secondary"

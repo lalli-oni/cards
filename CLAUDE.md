@@ -6,7 +6,8 @@ A collectible card game with decoupled architecture: rules (markdown) -> engine 
 See [README.md](README.md) for full project structure.
 
 ## Code Style
-- Always add explicit type annotations to `$derived`, `$state`, and `$props` declarations in Svelte components for readability
+- Always use explicit TypeScript type annotations for readability — variables, parameters, return types, reactive declarations
+- Avoid Svelte `{@html}` — return structured data and render with `{#each}` or components instead
 
 ## Key Conventions
 - `rules/` contains only markdown files defining game rules — no code

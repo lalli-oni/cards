@@ -1,5 +1,6 @@
 // Core API
 
+export { fillAction } from "./action-helpers";
 export type { ApplyResult } from "./apply-action";
 export { applyAction } from "./apply-action";
 // Adapters
@@ -84,3 +85,5 @@ export {
 } from "./listeners";
 // Win condition
 export { findSoleLeader, getScores, shouldEndGame, toEndedState } from "./win-condition";
+// Immer re-export — clients may need to disable auto-freeze for reactive frameworks
+export { setAutoFreeze } from "immer";

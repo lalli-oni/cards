@@ -31,6 +31,7 @@ let _currentPlayerName = $state("");
 let _savedSessions = $state<string[]>([]);
 let _gamePhase = $state<"seeding" | "main" | "ended" | null>(null);
 let _error = $state<string | null>(null);
+let _prevTurnStartIndex = $state(0);
 let _lastTurnStartIndex = $state(0);
 
 export interface CombatOutcome {
@@ -119,8 +120,9 @@ export function resolvePlayerName(id: string): string {
 export function getError() {
   return _error;
 }
-export function getLastTurnEvents() {
-  return _eventLog.slice(_lastTurnStartIndex);
+/** Events from the previous turn — shown on the pass-device overlay. */
+export function getLastTurnEvents(): GameEvent[] {
+  return _eventLog.slice(_prevTurnStartIndex, _lastTurnStartIndex);
 }
 export function clearError() {
   _error = null;
@@ -191,6 +193,7 @@ function onEvent(events: GameEvent[], state: GameState): void {
 
   for (let i = 0; i < events.length; i++) {
     if (events[i].type === "turn_started") {
+      _prevTurnStartIndex = _lastTurnStartIndex;
       _lastTurnStartIndex = baseIndex + i;
     }
   }
@@ -269,6 +272,7 @@ export function startNewGame(
   p1Name: string,
   p2Name: string,
   seed?: string,
+  skipSeeding?: boolean,
 ): void {
   players = [
     { id: "p1", name: p1Name || "Player 1" },
@@ -280,15 +284,15 @@ export function startNewGame(
 
   const adapters = new Map<string, HotseatAdapter>();
   for (const p of players) {
-    adapters.set(
-      p.id,
-      new HotseatAdapter(onBeforeTurn, onTurnStart, waitForAction),
-    );
+    const adapter: HotseatAdapter = new HotseatAdapter(onBeforeTurn, onTurnStart, waitForAction);
+    if (skipSeeding) adapter.autoSeeding = true;
+    adapters.set(p.id, adapter);
   }
 
   _eventLog = [];
   _error = null;
   _gamePhase = "seeding";
+  _prevTurnStartIndex = 0;
   _lastTurnStartIndex = 0;
   _combatResult = null;
   lastActivePlayerId = null;
@@ -341,6 +345,7 @@ export async function loadGame(key: string): Promise<void> {
 
   _eventLog = [];
   _error = null;
+  _prevTurnStartIndex = 0;
   _lastTurnStartIndex = 0;
   _combatResult = null;
   lastActivePlayerId = null;
@@ -428,6 +433,7 @@ export function returnToMenu(): void {
   _visibleState = null;
   _validActions = [];
   _eventLog = [];
+  _prevTurnStartIndex = 0;
   _lastTurnStartIndex = 0;
   _combatResult = null;
   _gamePhase = null;

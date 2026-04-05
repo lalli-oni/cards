@@ -84,6 +84,18 @@
       : new Set<string>(),
   );
 
+  // HQ highlights as deploy target when a deployable hand card is selected
+  const hqDeployAction: Action | undefined = $derived(
+    hasSelection ? filteredActions.find((a) => a.type === "deploy") : undefined,
+  );
+
+  function handleHqClick() {
+    if (hqDeployAction) {
+      selectAction(hqDeployAction);
+      clearSelection();
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Click handlers
   // ---------------------------------------------------------------------------
@@ -151,7 +163,7 @@
     }
 
     // Select this cell as source
-    const hasActions = actions.some((a) => actionMatchesCell(a, row, col));
+    const hasActions: boolean = actions.some((a) => actionMatchesCell(a, row, col));
     if (hasActions) {
       clearSelection();
       selectedCell = { row, col };
@@ -218,7 +230,9 @@
         cards={vs.self.hq}
         actions={filteredActions}
         {hasSelection}
+        highlighted={!!hqDeployAction}
         onCardClick={handleCardClick}
+        onAreaClick={hqDeployAction ? handleHqClick : undefined}
       />
     </div>
   </div>

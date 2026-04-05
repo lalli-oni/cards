@@ -6,12 +6,14 @@
     cards: Card[];
     actions: Action[];
     hasSelection?: boolean;
+    highlighted?: boolean;
     onCardClick?: (card: Card) => void;
+    onAreaClick?: () => void;
   }
 
-  let { cards, actions, hasSelection = false, onCardClick }: Props = $props();
+  let { cards, actions, hasSelection = false, highlighted = false, onCardClick, onAreaClick }: Props = $props();
 
-  const actionableCardIds = $derived(
+  const actionableCardIds: Set<string> = $derived(
     new Set(
       actions
         .filter((a) => "unitId" in a || "cardId" in a || "itemId" in a)
@@ -24,4 +26,4 @@
   );
 </script>
 
-<CardListPanel title="HQ" {cards} highlightedIds={actionableCardIds} {onCardClick} />
+<CardListPanel title="HQ" {cards} highlightedIds={actionableCardIds} {highlighted} {onCardClick} {onAreaClick} />

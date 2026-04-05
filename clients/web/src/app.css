@@ -18,6 +18,10 @@
   --color-highlight-bg: oklch(0.555 0.163 84.429 / 0.15); /* amber-900/15 — subtler bg */
   --color-highlight-border: var(--color-sky-400);
 
+  /* Valid target highlighting (when a source is selected) */
+  --color-target-bg: oklch(0.4 0.1 180 / 0.15); /* teal/15 */
+  --color-target-border: var(--color-teal-400);
+
   /* Player identity */
   --color-identity: var(--color-amber-400);
   --color-identity-resource: var(--color-amber-300);
@@ -43,6 +47,9 @@
   --color-cell-border: var(--color-stone-700);
   --color-cell-edge-open: var(--color-stone-600);
   --color-cell-edge-blocked: var(--color-red-900);
+
+  /* Resource colors */
+  --color-gold: var(--color-yellow-400);
 
   /* Stat colors */
   --color-stat-strength: var(--color-red-400);

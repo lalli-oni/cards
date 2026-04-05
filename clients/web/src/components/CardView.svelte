@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Card } from "cards-engine";
-  import { formatRequirements } from "../lib/formatRequirements";
+  import { formatRequirements, parseRequirementParts } from "../lib/formatRequirements";
 
   interface Props {
     card: Card;
@@ -11,7 +11,7 @@
   let { card, highlighted = false, onclick }: Props = $props();
 
   const typeEmoji: Record<string, string> = {
-    unit: "⚔️",
+    unit: "👤",
     location: "📍",
     item: "🛡️",
     event: "⚡",
@@ -60,21 +60,33 @@
 >
   <div class="mb-1 flex items-center justify-between">
     <span class="truncate font-semibold text-text-primary">{card.name}</span>
-    <span class="ml-1 text-text-muted">{card.cost}</span>
+    <span class="ml-1 text-gold">{card.cost}g</span>
   </div>
   <div class="flex items-center justify-between text-text-muted">
     <span>{typeEmoji[card.type] ?? card.type}</span>
     {#if card.type === "unit"}
       <span class="text-2xs">
         <span class="text-stat-strength">{card.strength}</span>/<span class="text-stat-cunning">{card.cunning}</span>/<span class="text-stat-charisma">{card.charisma}</span>
-        {#if card.injured}🩹{/if}
+        {#if card.injured}🩸{/if}
       </span>
     {:else if card.type === "location"}
-      <span class="text-2xs">{card.requirements ? formatRequirements(card.requirements) : ""}</span>
+      <span class="text-2xs">{#if card.requirements}{#each parseRequirementParts(card.requirements) as part}<span class={part.className ?? ""}>{part.text}</span>{/each}{/if}</span>
     {/if}
   </div>
   {#if attributeStr}
     <div class="truncate text-2xs text-text-muted">{attributeStr}</div>
+  {/if}
+  {#if card.type === "item"}
+    {#if card.equip}
+      <div class="truncate text-2xs text-item-equipped">Equip: {card.equip}</div>
+    {/if}
+    {#if card.stored}
+      <div class="truncate text-2xs text-text-faint">Stored: {card.stored}</div>
+    {/if}
+  {:else if card.type === "policy"}
+    {#if card.effect}
+      <div class="truncate text-2xs text-policy">{card.effect}</div>
+    {/if}
   {/if}
   {#if card.keywords && card.keywords.length > 0}
     <div class="truncate text-2xs text-text-faint italic">{card.keywords.join(", ")}</div>

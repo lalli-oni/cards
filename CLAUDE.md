@@ -5,6 +5,10 @@ A collectible card game with decoupled architecture: rules (markdown) -> engine 
 
 See [README.md](README.md) for full project structure.
 
+## Code Style
+- Always use explicit TypeScript type annotations for readability — variables, parameters, return types, reactive declarations
+- Avoid Svelte `{@html}` — return structured data and render with `{#each}` or components instead
+
 ## Key Conventions
 - `rules/` contains only markdown files defining game rules — no code
 - Variant-dependent values use `[var:id:baseline_value]` format (e.g. `[var:starting_gold:10]` means the baseline value is 10, keyed by `starting_gold`)

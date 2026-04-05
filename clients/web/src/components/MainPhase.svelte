@@ -15,40 +15,171 @@
 
   let { vs, actions }: Props = $props();
 
-  // Cells targeted by any action (for grid highlighting)
+  // ---------------------------------------------------------------------------
+  // Selection state
+  // ---------------------------------------------------------------------------
+
+  let selectedEntityId = $state<string | null>(null);
+  let selectedCell = $state<{ row: number; col: number } | null>(null);
+
+  function clearSelection() {
+    selectedEntityId = null;
+    selectedCell = null;
+  }
+
+  // Clear selection when the action list changes (new turn or after action executes)
+  $effect(() => {
+    // Referencing actions registers the dependency; the body just clears selection.
+    void actions;
+    clearSelection();
+  });
+
+  const hasSelection = $derived(selectedEntityId !== null || selectedCell !== null);
+
+  // ---------------------------------------------------------------------------
+  // Filtered actions & highlighting
+  // ---------------------------------------------------------------------------
+
+  function actionReferencesEntity(a: Action, id: string): boolean {
+    return (
+      ("unitId" in a && (a as { unitId: string }).unitId === id) ||
+      ("cardId" in a && (a as { cardId: string }).cardId === id) ||
+      ("itemId" in a && (a as { itemId: string }).itemId === id) ||
+      (a.type === "attack" && a.unitIds.includes(id))
+    );
+  }
+
+  function actionMatchesCell(a: Action, row: number, col: number): boolean {
+    return (
+      "row" in a &&
+      "col" in a &&
+      (a as { row: number }).row === row &&
+      (a as { col: number }).col === col
+    );
+  }
+
+  const filteredActions = $derived.by(() => {
+    if (selectedEntityId) {
+      const id = selectedEntityId;
+      return actions.filter((a) => actionReferencesEntity(a, id));
+    }
+    if (selectedCell) {
+      const { row, col } = selectedCell;
+      return actions.filter((a) => actionMatchesCell(a, row, col));
+    }
+    return actions;
+  });
+
+  // Only highlight target cells when something is selected
   const highlightedCells = $derived(
-    new Set(
-      actions
-        .filter((a) => "row" in a && "col" in a)
-        .map((a) => `${(a as { row: number }).row},${(a as { col: number }).col}`),
-    ),
+    hasSelection
+      ? new Set(
+          filteredActions
+            .filter((a) => "row" in a && "col" in a)
+            .map(
+              (a) =>
+                `${(a as { row: number }).row},${(a as { col: number }).col}`,
+            ),
+        )
+      : new Set<string>(),
   );
 
+  // HQ highlights as deploy target when a deployable hand card is selected
+  const hqDeployAction: Action | undefined = $derived(
+    hasSelection ? filteredActions.find((a) => a.type === "deploy") : undefined,
+  );
+
+  function handleHqClick() {
+    if (hqDeployAction) {
+      selectAction(hqDeployAction);
+      clearSelection();
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Click handlers
+  // ---------------------------------------------------------------------------
+
+  function handleUnitClick(unitId: string) {
+    if (selectedEntityId === unitId) {
+      clearSelection();
+      return;
+    }
+    const hasActions = actions.some((a) => actionReferencesEntity(a, unitId));
+    if (hasActions) {
+      clearSelection();
+      selectedEntityId = unitId;
+    } else {
+      clearSelection();
+    }
+  }
+
   function handleCardClick(card: Card) {
-    const match = actions.find(
-      (a) =>
-        ("cardId" in a && (a as { cardId: string }).cardId === card.id) ||
+    // If entity selected and this card is a valid target (e.g. equip)
+    if (selectedEntityId) {
+      const match = filteredActions.find((a) =>
         ("unitId" in a && (a as { unitId: string }).unitId === card.id) ||
+        ("cardId" in a && (a as { cardId: string }).cardId === card.id) ||
         ("itemId" in a && (a as { itemId: string }).itemId === card.id),
-    );
-    if (match) {
-      selectAction(match);
+      );
+      if (match && card.id !== selectedEntityId) {
+        selectAction(match);
+        clearSelection();
+        return;
+      }
+    }
+
+    // Toggle if clicking the same card
+    if (selectedEntityId === card.id) {
+      clearSelection();
+      return;
+    }
+
+    // Select this card as source
+    const hasActions = actions.some((a) => actionReferencesEntity(a, card.id));
+    if (hasActions) {
+      clearSelection();
+      selectedEntityId = card.id;
+    } else {
+      clearSelection();
     }
   }
 
   function handleCellClick(row: number, col: number) {
-    const match = actions.find(
-      (a) =>
-        "row" in a &&
-        "col" in a &&
-        (a as { row: number }).row === row &&
-        (a as { col: number }).col === col,
-    );
-    if (match) {
-      selectAction(match);
+    // If entity selected, try to execute an action targeting this cell
+    if (selectedEntityId) {
+      const match = filteredActions.find((a) => actionMatchesCell(a, row, col));
+      if (match) {
+        selectAction(match);
+        clearSelection();
+        return;
+      }
+    }
+
+    // Toggle if clicking the same cell
+    if (selectedCell?.row === row && selectedCell?.col === col) {
+      clearSelection();
+      return;
+    }
+
+    // Select this cell as source
+    const hasActions: boolean = actions.some((a) => actionMatchesCell(a, row, col));
+    if (hasActions) {
+      clearSelection();
+      selectedCell = { row, col };
+    } else {
+      clearSelection();
+    }
+  }
+
+  function handleKeydown(e: KeyboardEvent) {
+    if (e.key === "Escape" && hasSelection) {
+      clearSelection();
     }
   }
 </script>
+
+<svelte:window onkeydown={handleKeydown} />
 
 <div class="flex h-full flex-col gap-3">
   <PlayerHud {vs} />
@@ -61,7 +192,7 @@
     <div class="overflow-y-auto" style="grid-row: 1; grid-column: 1;">
       <MarketPanel
         cards={vs.market}
-        {actions}
+        actions={filteredActions}
         onCardClick={handleCardClick}
       />
     </div>
@@ -72,16 +203,23 @@
         grid={vs.grid}
         selfPlayerId={vs.self.id}
         {highlightedCells}
+        {selectedEntityId}
+        {selectedCell}
         onCellClick={handleCellClick}
+        onUnitClick={handleUnitClick}
       />
     </div>
 
     <!-- Right sidebar: Actions + Hand (spans both rows) -->
     <div class="flex flex-col gap-3 overflow-y-auto" style="grid-row: 1 / -1; grid-column: 3;">
-      <ActionPanel {actions} />
+      <ActionPanel
+        actions={filteredActions}
+        onDeselect={hasSelection ? clearSelection : undefined}
+      />
       <HandPanel
         cards={vs.self.hand}
-        {actions}
+        actions={filteredActions}
+        {hasSelection}
         onCardClick={handleCardClick}
       />
     </div>
@@ -90,8 +228,11 @@
     <div class="overflow-x-auto" style="grid-row: 2; grid-column: 1 / 3;">
       <HqPanel
         cards={vs.self.hq}
-        {actions}
+        actions={filteredActions}
+        {hasSelection}
+        highlighted={!!hqDeployAction}
         onCardClick={handleCardClick}
+        onAreaClick={hqDeployAction ? handleHqClick : undefined}
       />
     </div>
   </div>

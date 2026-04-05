@@ -67,7 +67,7 @@
     {#if card.type === "unit"}
       <span class="text-2xs">
         <span class="text-stat-strength">{card.strength}</span>/<span class="text-stat-cunning">{card.cunning}</span>/<span class="text-stat-charisma">{card.charisma}</span>
-        {#if card.injured}🩹{/if}
+        {#if card.injured}🩸{/if}
       </span>
     {:else if card.type === "location"}
       <span class="text-2xs">{#if card.requirements}{#each parseRequirementParts(card.requirements) as part}<span class={part.className ?? ""}>{part.text}</span>{/each}{/if}</span>

@@ -153,13 +153,13 @@ let autoSaveFailCount = 0;
 // ---------------------------------------------------------------------------
 
 function onBeforeTurn(playerId: string): Promise<void> {
-  _combatResult = null; // Clear stale combat results before any turn
   // Only show pass-device overlay when the active player actually changes
   if (playerId === lastActivePlayerId || lastActivePlayerId === null) {
     lastActivePlayerId = playerId;
     return Promise.resolve();
   }
   lastActivePlayerId = playerId;
+  _combatResult = null; // Clear stale combat results on player change
   const player = players.find((p) => p.id === playerId);
   _currentPlayerName = player?.name ?? playerId;
   _screen = "passDevice";

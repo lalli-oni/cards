@@ -20,8 +20,14 @@ export function categorizeEvent(
   selfPlayerId: string,
 ): EventCategory {
   if (SYSTEM_EVENT_TYPES.has(event.type)) return "system";
+  // Standard playerId field
   if ("playerId" in event && event.playerId === selfPlayerId) return "player";
   if ("playerId" in event) return "opponent";
+  // Combat events use attackerId/ownerId instead of playerId
+  if ("attackerId" in event && event.attackerId === selfPlayerId) return "player";
+  if ("attackerId" in event) return "opponent";
+  if ("ownerId" in event && event.ownerId === selfPlayerId) return "player";
+  if ("ownerId" in event) return "opponent";
   return "system";
 }
 

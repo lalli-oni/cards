@@ -139,7 +139,7 @@
           <span class="font-semibold">👤 {unit.name}</span>
         {/if}
         <span class="text-2xs"><span class="text-stat-strength">{unit.strength}</span>/<span class="text-stat-cunning">{unit.cunning}</span>/<span class="text-stat-charisma">{unit.charisma}</span></span>
-        {#if unit.injured}<span class="text-danger">!</span>{/if}
+        {#if unit.injured}<span>🩸</span>{/if}
         {#if unit.attributes.length > 0}
           <span class="text-2xs text-text-muted">{unit.attributes.join(", ")}</span>
         {/if}

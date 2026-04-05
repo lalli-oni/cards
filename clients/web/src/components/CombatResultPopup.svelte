@@ -26,18 +26,18 @@
           {#each result.outcomes as outcome}
             <div class="flex items-center gap-2 rounded bg-surface-raised px-3 py-1.5 text-sm">
               {#if outcome.type === "injured"}
-                <span class="text-stat-strength">!</span>
+                <span>🩸</span>
                 <span class="text-text-secondary">
                   {outcome.unitName}
                   <span class="text-text-muted">({outcome.ownerName})</span>
-                  was injured
+                  injured
                 </span>
               {:else}
-                <span class="text-danger">✕</span>
+                <span>💀</span>
                 <span class="text-text-secondary">
                   {outcome.unitName}
                   <span class="text-text-muted">({outcome.ownerName})</span>
-                  was killed
+                  killed
                 </span>
               {/if}
             </div>

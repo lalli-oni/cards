@@ -251,12 +251,17 @@ function getMainValidActions(
     ];
 
     for (const pos of positions) {
+      // HQ: all items/units belong to the player by definition.
+      // Grid: filter by ownerId since multiple players share cells.
+      const ownerFilter = pos.type === "hq";
       const items = getItemsAtPosition(state.players, state.grid, pos)
-        .filter((i) => i.ownerId === playerId);
+        .filter((i) => ownerFilter || i.ownerId === playerId);
       const units = getUnitsAtPosition(state.players, state.grid, pos)
-        .filter((u) => u.ownerId === playerId);
+        .filter((u) => ownerFilter || u.ownerId === playerId);
       for (const item of items) {
         for (const unit of units) {
+          // Skip if already equipped on this unit
+          if (item.equippedTo === unit.id) continue;
           actions.push({ type: "equip", playerId, itemId: item.id, unitId: unit.id });
         }
       }

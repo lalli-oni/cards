@@ -112,6 +112,7 @@ function runEndOfTurn(
   while (player.hand.length > maxHandSize) {
     const discarded = player.hand.pop()!;
     player.discardPile.push(discarded);
+    emit({ type: "card_discarded", playerId: player.id, cardId: discarded.id, reason: "hand_limit" });
   }
 
   // Passive event duration tracking

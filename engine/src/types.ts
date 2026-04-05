@@ -429,6 +429,7 @@ export type GameEvent =
       cardId: string;
       slotIndex: number;
     }
+  | { type: "card_discarded"; playerId: string; cardId: string; reason: string }
   | { type: "passive_expired"; playerId: string; cardId: string }
   | { type: "unit_healed"; playerId: string; unitId: string }
   // Seeding phase events

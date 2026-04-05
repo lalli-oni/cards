@@ -692,6 +692,20 @@ describe("turn lifecycle", () => {
     expect(ns.players[ACTIVE_IDX].hand.length).toBeLessThanOrEqual(7);
   });
 
+  it("emits card_discarded events when hand exceeds limit", () => {
+    const state = gameWith((d) => {
+      for (let i = 0; i < 10; i++) {
+        d.players[ACTIVE_IDX].hand.push(makeUnit({ ownerId: ACTIVE }));
+      }
+    });
+
+    const { events } = applyAction(state, { type: "pass", playerId: ACTIVE });
+    const discardEvents = events.filter(
+      (e) => e.type === "card_discarded" && "reason" in e && e.reason === "hand_limit",
+    );
+    expect(discardEvents.length).toBe(3); // 10 → 7 = 3 discarded
+  });
+
   it("does not auto-advance when AP exhausted (player can still buy)", () => {
     const marketCard = makeUnit({ ownerId: "neutral", cost: "0" });
     const state = gameWith((d) => {

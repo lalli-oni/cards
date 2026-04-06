@@ -1,9 +1,11 @@
 import { describe, it, expect, beforeEach } from "bun:test";
 import { produce, type Draft } from "immer";
 import prand from "pure-rand";
-import { parse, type Expression } from "../effect-dsl";
+import { parse } from "../effect-dsl";
 import { executeEffect, type ExecutionContext } from "../effect-dsl/executor";
 import type { MainGameState, GameEvent } from "../types";
+import { applyAction } from "../apply-action";
+import { makeInstantEvent } from "./helpers";
 import { rebuildListeners } from "../listeners/rebuild";
 import {
   createTestGame,
@@ -297,5 +299,95 @@ describe("Effect DSL executor — contests", () => {
     expect(
       events.some((e) => e.type === "unit_injured" || e.type === "unit_killed"),
     ).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Integration — Bug 4: instant event effects
+// ---------------------------------------------------------------------------
+
+describe("Integration — instant event effects", () => {
+  it("Harvest Festival: play instant event → gain 3 gold", () => {
+    const state = gameWith((d, p) => {
+      d.players[p.activeIdx].gold = 10;
+      d.players[p.activeIdx].hand.push(
+        makeInstantEvent({ ownerId: p.active, definitionId: "harvest-festival", cost: "1", effect: "gold[3]" }),
+      );
+    });
+    const { active, activeIdx } = getPlayers(state);
+    const card = state.players[activeIdx].hand.find((c) => c.type === "event")!;
+
+    const { state: next, events } = applyAction(state, {
+      type: "play_event",
+      playerId: active,
+      cardId: card.id,
+    });
+    const ns = next as MainGameState;
+
+    // Started with 10, paid 1 gold cost, gained 3 = 12
+    expect(ns.players[activeIdx].gold).toBe(12);
+    expect(events.some((e) => e.type === "event_played")).toBe(true);
+    expect(events.some((e) => e.type === "gold_changed" && "reason" in e && e.reason === "effect")).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Integration — Bug 5: activate unit actions
+// ---------------------------------------------------------------------------
+
+describe("Integration — activate unit actions", () => {
+  it("Mansa Musa pilgrimage: activate → gain 5 gold", () => {
+    const state = gameWith((d, p) => {
+      d.players[p.activeIdx].gold = 5;
+      const unit = makeUnit({
+        ownerId: p.active,
+        definitionId: "mansa-musa",
+        actions: [{ name: "pilgrimage", apCost: 2, effect: "gold[5]" }],
+      });
+      d.grid[0][0].location = makeLocation({ ownerId: p.active });
+      d.grid[0][0].units.push(unit);
+    });
+    const { active, activeIdx } = getPlayers(state);
+    const unit = state.grid[0][0].units[0];
+
+    const { state: next, events } = applyAction(state, {
+      type: "activate",
+      playerId: active,
+      cardId: unit.id,
+      actionName: "pilgrimage",
+    });
+    const ns = next as MainGameState;
+
+    expect(ns.players[activeIdx].gold).toBe(10); // 5 + 5
+    expect(ns.turn.actionPointsRemaining).toBe(1); // 3 - 2 AP
+  });
+
+  it("Da Vinci design: activate → draw 2 cards", () => {
+    const state = gameWith((d, p) => {
+      const unit = makeUnit({
+        ownerId: p.active,
+        definitionId: "leonardo-da-vinci",
+        actions: [{ name: "design", apCost: 1, effect: "draw[2]" }],
+      });
+      d.grid[0][0].location = makeLocation({ ownerId: p.active });
+      d.grid[0][0].units.push(unit);
+      d.players[p.activeIdx].hand = [];
+      for (let i = 0; i < 5; i++) {
+        d.players[p.activeIdx].mainDeck.push(makeUnit({ ownerId: p.active }));
+      }
+    });
+    const { active, activeIdx } = getPlayers(state);
+    const unit = state.grid[0][0].units[0];
+
+    const { state: next } = applyAction(state, {
+      type: "activate",
+      playerId: active,
+      cardId: unit.id,
+      actionName: "design",
+    });
+    const ns = next as MainGameState;
+
+    expect(ns.players[activeIdx].hand).toHaveLength(2);
+    expect(ns.players[activeIdx].mainDeck).toHaveLength(3);
   });
 });

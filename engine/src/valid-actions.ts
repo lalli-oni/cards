@@ -1,3 +1,4 @@
+import { parse } from "./effect-dsl";
 import { tryParseCost } from "./cost-helpers";
 import { checkMissionRequirements, parseRequirements } from "./mission-helpers";
 import type { BoardPosition } from "./position-helpers";
@@ -333,7 +334,156 @@ function getMainValidActions(
     }
   }
 
-  // activate — deferred to #20
+  // activate — unit actions from grid units
+  for (let r = 0; r < gridRows; r++) {
+    for (let c = 0; c < gridCols; c++) {
+      for (const unit of state.grid[r][c].units) {
+        if (unit.ownerId !== playerId) continue;
+        if (!unit.actions) continue;
+        for (const actionDef of unit.actions) {
+          if (ap < actionDef.apCost) continue;
+          const targets = inferActivateTargets(state, unit.id, actionDef.effect, r, c, playerId);
+          for (const t of targets) {
+            actions.push({
+              type: "activate",
+              playerId,
+              cardId: unit.id,
+              actionName: actionDef.name,
+              ...t,
+            });
+          }
+        }
+      }
+    }
+  }
 
   return actions;
+}
+
+// ---------------------------------------------------------------------------
+// Activate target inference
+// ---------------------------------------------------------------------------
+
+type ActivateTarget = {
+  targetId?: string;
+  targetRow?: number;
+  targetCol?: number;
+};
+
+/**
+ * Infer valid targets for an activate action by doing a shallow parse of
+ * the DSL effect string. Returns one entry per valid target combination.
+ */
+function inferActivateTargets(
+  state: MainGameState,
+  unitId: string,
+  effectStr: string,
+  unitRow: number,
+  unitCol: number,
+  playerId: string,
+): ActivateTarget[] {
+  let ast;
+  try {
+    ast = parse(effectStr);
+  } catch {
+    return [{}]; // Unparseable — let executor handle the error
+  }
+
+  // Scan the first verb in each compound member to determine targeting needs
+  const targetSets: ActivateTarget[][] = [];
+
+  for (const effect of ast) {
+    if (effect.length === 0) continue;
+    const first = effect[0].primitive;
+    const tokenNames = first.target?.tokens.map((t) => t.name) ?? [];
+
+    if (tokenNames.includes("self") || tokenNames.length === 0) {
+      // Self or no target — check if the verb is "move"
+      if (first.verb === "move" && tokenNames.includes("self")) {
+        // One action per valid adjacent cell
+        const moves = getAdjacentMoveTargets(state, unitRow, unitCol);
+        targetSets.push(moves.map((m) => ({ targetRow: m.row, targetCol: m.col })));
+      } else {
+        targetSets.push([{}]);
+      }
+    } else if (tokenNames.includes("enemy")) {
+      const adjacent = tokenNames.includes("adjacent");
+      const enemies = getUnitsInRange(state, unitRow, unitCol, playerId, "enemy", adjacent);
+      if (enemies.length === 0) return []; // No valid targets
+      targetSets.push(enemies.map((u) => ({ targetId: u.id })));
+    } else if (tokenNames.includes("friendly")) {
+      if (tokenNames.includes("all")) {
+        targetSets.push([{}]); // All friendly — no individual targeting
+      } else {
+        const friends = getUnitsInRange(state, unitRow, unitCol, playerId, "friendly", false);
+        if (friends.length === 0) return [];
+        targetSets.push(friends.map((u) => ({ targetId: u.id })));
+      }
+    } else if (tokenNames.includes("opponent") || tokenNames.includes("deck") ||
+               tokenNames.includes("location") || tokenNames.includes("market")) {
+      targetSets.push([{}]); // No unit targeting needed
+    } else {
+      targetSets.push([{}]);
+    }
+  }
+
+  if (targetSets.length === 0) return [{}];
+
+  // For compound effects, the first compound member that needs targeting
+  // determines the action targets. Later members use the same context.
+  // Find the first set with actual targeting (not just [{}])
+  for (const set of targetSets) {
+    if (set.length > 0 && set.some((t) => t.targetId || t.targetRow !== undefined)) {
+      return set;
+    }
+  }
+  return [{}];
+}
+
+function getAdjacentMoveTargets(
+  state: MainGameState,
+  row: number,
+  col: number,
+): { row: number; col: number }[] {
+  const results: { row: number; col: number }[] = [];
+  const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]] as const;
+  for (const [dr, dc] of dirs) {
+    const r = row + dr;
+    const c = col + dc;
+    if (r < 0 || r >= state.grid.length || c < 0 || c >= state.grid[0].length) continue;
+    if (!state.grid[r][c].location) continue;
+    if (areFacingEdgesOpen(state.grid, row, col, r, c)) {
+      results.push({ row: r, col: c });
+    }
+  }
+  return results;
+}
+
+function getUnitsInRange(
+  state: MainGameState,
+  row: number,
+  col: number,
+  playerId: string,
+  filter: "enemy" | "friendly",
+  adjacent: boolean,
+): { id: string }[] {
+  const units: { id: string }[] = [];
+  if (adjacent) {
+    const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]] as const;
+    for (const [dr, dc] of dirs) {
+      const r = row + dr;
+      const c = col + dc;
+      if (r < 0 || r >= state.grid.length || c < 0 || c >= state.grid[0].length) continue;
+      for (const u of state.grid[r][c].units) {
+        if (filter === "enemy" && u.ownerId !== playerId) units.push({ id: u.id });
+        if (filter === "friendly" && u.ownerId === playerId) units.push({ id: u.id });
+      }
+    }
+  } else {
+    for (const u of state.grid[row][col].units) {
+      if (filter === "enemy" && u.ownerId !== playerId) units.push({ id: u.id });
+      if (filter === "friendly" && u.ownerId === playerId) units.push({ id: u.id });
+    }
+  }
+  return units;
 }

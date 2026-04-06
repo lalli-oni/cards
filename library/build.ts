@@ -10,7 +10,8 @@
  */
 
 import { readdirSync, readFileSync, mkdirSync, writeFileSync, existsSync } from "fs";
-import { join, basename } from "path";
+import { join } from "path";
+import { parse as parseDSL, DSLParseError } from "../engine/src/effect-dsl";
 
 const LIBRARY_DIR = join(import.meta.dir);
 const SETS_DIR = join(LIBRARY_DIR, "sets");
@@ -141,6 +142,7 @@ function transformCard(type: CardType, raw: Record<string, string>): Record<stri
       base.subtype = raw.subtype;
       base.duration = intOrNull(raw.duration || "");
       base.trigger = raw.trigger || null;
+      if (raw.effect) base.effect = raw.effect;
       break;
 
     case "policies":
@@ -168,6 +170,27 @@ function validate(type: CardType, card: Record<string, unknown>): ValidationErro
 
   if (type === "events" && !EVENT_SUBTYPES.includes(card.subtype as any)) {
     errors.push({ card: id, field: "subtype", message: `invalid subtype: ${card.subtype}` });
+  }
+
+  // DSL effect validation
+  const actions = card.actions as { name: string; apCost: number; effect: string }[] | undefined;
+  if (actions) {
+    for (const action of actions) {
+      try {
+        parseDSL(action.effect);
+      } catch (e) {
+        const msg = e instanceof DSLParseError ? e.message : String(e);
+        errors.push({ card: id, field: "actions", message: `invalid DSL in action "${action.name}": ${msg}` });
+      }
+    }
+  }
+  if (card.subtype === "instant" && card.effect) {
+    try {
+      parseDSL(card.effect as string);
+    } catch (e) {
+      const msg = e instanceof DSLParseError ? e.message : String(e);
+      errors.push({ card: id, field: "effect", message: `invalid DSL: ${msg}` });
+    }
   }
 
   return errors;

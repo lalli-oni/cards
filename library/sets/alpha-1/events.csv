@@ -1,13 +1,13 @@
-id,name,set,rarity,cost,subtype,duration,trigger,keywords,text,flavor
-plague,Plague,alpha-1,epic,4,passive,,,Catastrophe,Place on target location. All units at this location and adjacent locations get -2 strength. Discarded when the location is removed from the grid.,It spared no one.
-golden-age,Golden Age,alpha-1,epic,5,passive,3,,Prosperity,You gain +1 gold per turn for 3 turns.,The coffers overflow and the people rejoice.
-ambush,Ambush,alpha-1,uncommon,2,trap,,enemy_unit_enters_location,Military,When an enemy unit enters this location: injure that unit.,They never saw it coming.
-diplomatic-summit,Diplomatic Summit,alpha-1,uncommon,2,passive,1,,Diplomacy,All Diplomat units get +2 charisma for 1 turn.,Words sharper than any blade.
-earthquake,Earthquake,alpha-1,epic,4,instant,,,Catastrophe,Remove target location from the grid. All units there are injured. Replacement is drawn.,The earth decides who stays.
-renaissance,Renaissance,alpha-1,epic,5,passive,3,,Prosperity,All your Scientist units get +2 cunning for 3 turns.,The world woke up and started asking questions.
-arms-race,Arms Race,alpha-1,uncommon,3,passive,2,,Military,All your Warrior units get +2 strength for 2 turns.,Build faster. Build stronger. Build more.
-highway-robbery,Highway Robbery,alpha-1,uncommon,2,trap,,enemy_unit_enters_location,Commerce,When an enemy unit enters this location: steal 2 gold from that unit's owner.,The road giveth the road taketh away.
-trade-embargo,Trade Embargo,alpha-1,uncommon,3,passive,2,,Commerce,Target opponent's market purchases cost 2 more gold for 2 turns.,The ships turned away.
-assassination-attempt,Assassination Attempt,alpha-1,epic,4,trap,,enemy_unit_enters_location,Military,When an enemy unit enters this location: if that unit's strength is 6 or less kill it.,History turns on a single blade.
-forced-march,Forced March,alpha-1,common,1,instant,,,Military,Move up to 2 of your units to adjacent locations.,No rest until the objective.
-harvest-festival,Harvest Festival,alpha-1,common,1,instant,,,Prosperity,Gain 3 gold.,The fields provide.
+id,name,set,rarity,cost,subtype,duration,trigger,keywords,text,flavor,effect
+plague,Plague,alpha-1,epic,4,passive,,,Catastrophe,Place on target location. All units at this location and adjacent locations get -2 strength. Discarded when the location is removed from the grid.,It spared no one.,
+golden-age,Golden Age,alpha-1,epic,5,passive,3,,Prosperity,You gain +1 gold per turn for 3 turns.,The coffers overflow and the people rejoice.,
+ambush,Ambush,alpha-1,uncommon,2,trap,,enemy_unit_enters_location,Military,When an enemy unit enters this location: injure that unit.,They never saw it coming.,
+diplomatic-summit,Diplomatic Summit,alpha-1,uncommon,2,passive,1,,Diplomacy,All Diplomat units get +2 charisma for 1 turn.,Words sharper than any blade.,
+earthquake,Earthquake,alpha-1,epic,4,instant,,,Catastrophe,Remove target location from the grid. All units there are injured. Replacement is drawn.,The earth decides who stays.,injure(all + here) + remove(location)
+renaissance,Renaissance,alpha-1,epic,5,passive,3,,Prosperity,All your Scientist units get +2 cunning for 3 turns.,The world woke up and started asking questions.,
+arms-race,Arms Race,alpha-1,uncommon,3,passive,2,,Military,All your Warrior units get +2 strength for 2 turns.,Build faster. Build stronger. Build more.,
+highway-robbery,Highway Robbery,alpha-1,uncommon,2,trap,,enemy_unit_enters_location,Commerce,When an enemy unit enters this location: steal 2 gold from that unit's owner.,The road giveth the road taketh away.,
+trade-embargo,Trade Embargo,alpha-1,uncommon,3,passive,2,,Commerce,Target opponent's market purchases cost 2 more gold for 2 turns.,The ships turned away.,
+assassination-attempt,Assassination Attempt,alpha-1,epic,4,trap,,enemy_unit_enters_location,Military,When an enemy unit enters this location: if that unit's strength is 6 or less kill it.,History turns on a single blade.,
+forced-march,Forced March,alpha-1,common,1,instant,,,Military,Move up to 2 of your units to adjacent locations.,No rest until the objective.,move(friendly[2])
+harvest-festival,Harvest Festival,alpha-1,common,1,instant,,,Prosperity,Gain 3 gold.,The fields provide.,gold[3]

@@ -59,14 +59,15 @@ export const LOCATION_EFFECTS: Record<string, LocationEffectFactory> = {
       source: { type: "location", cardId: loc.id, definitionId: "the-silk-road", ownerId, position: { row, col } },
       on: "turn_started",
       condition: (state, event) => {
-        if (!("playerId" in event) || event.playerId !== ownerId) return false;
+        if (!("playerId" in event)) return false;
         const cell = state.grid[row]?.[col];
-        return cell != null && cell.units.length > 0;
+        return cell != null && cell.units.some((u) => u.ownerId === event.playerId);
       },
       apply: (_draft, _event, emit) => {
-        const player = getPlayerById(_draft, ownerId);
+        const pid = ("playerId" in _event) ? _event.playerId as string : ownerId;
+        const player = getPlayerById(_draft, pid);
         player.gold += 1;
-        emit({ type: "gold_changed", playerId: ownerId, amount: 1, reason: "the-silk-road" });
+        emit({ type: "gold_changed", playerId: pid, amount: 1, reason: "the-silk-road" });
       },
     }],
     queries: [],
@@ -77,15 +78,16 @@ export const LOCATION_EFFECTS: Record<string, LocationEffectFactory> = {
       source: { type: "location", cardId: loc.id, definitionId: "trade-port", ownerId, position: { row, col } },
       on: "turn_started",
       condition: (state, event) => {
-        if (!("playerId" in event) || event.playerId !== ownerId) return false;
+        if (!("playerId" in event)) return false;
         const cell = state.grid[row]?.[col];
         if (!cell) return false;
-        return cell.units.some((u) => u.attributes.includes("Diplomat"));
+        return cell.units.some((u) => u.ownerId === event.playerId && u.attributes.includes("Diplomat"));
       },
       apply: (_draft, _event, emit) => {
-        const player = getPlayerById(_draft, ownerId);
+        const pid = ("playerId" in _event) ? _event.playerId as string : ownerId;
+        const player = getPlayerById(_draft, pid);
         player.gold += 1;
-        emit({ type: "gold_changed", playerId: ownerId, amount: 1, reason: "trade-port" });
+        emit({ type: "gold_changed", playerId: pid, amount: 1, reason: "trade-port" });
       },
     }],
     queries: [],
@@ -602,6 +604,21 @@ export const TRAP_EFFECTS: Record<string, TrapEffectFactory> = {
         killUnit(draft, cell, unit, row, col, emit);
       } else {
         injureUnit(cell, unit, row, col, emit);
+      }
+    }),
+    queries: [],
+  }),
+
+  "highway-robbery": (trap, ownerId) => ({
+    listeners: makeEntryTrapListeners(trap, ownerId, (draft, _cell, unit, _row, _col, emit) => {
+      const victim = getPlayerById(draft, unit.ownerId);
+      const trapOwner = getPlayerById(draft, ownerId);
+      const stolen = Math.min(2, victim.gold);
+      victim.gold -= stolen;
+      trapOwner.gold += stolen;
+      if (stolen > 0) {
+        emit({ type: "gold_changed", playerId: unit.ownerId, amount: -stolen, reason: "highway-robbery" });
+        emit({ type: "gold_changed", playerId: ownerId, amount: stolen, reason: "highway-robbery" });
       }
     }),
     queries: [],

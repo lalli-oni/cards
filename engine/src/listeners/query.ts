@@ -32,6 +32,11 @@ export function getModifiedStat(
     delta += q.modify(state, ctx);
   }
 
+  // Include temporary stat modifiers from effects (buff verb)
+  for (const mod of unit.statModifiers ?? []) {
+    if (mod.stat === stat) delta += mod.delta;
+  }
+
   return Math.max(0, base + delta);
 }
 

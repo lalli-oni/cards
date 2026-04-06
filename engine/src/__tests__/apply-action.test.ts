@@ -117,8 +117,8 @@ describe("applyAction", () => {
     });
   });
 
-  describe("unimplemented actions", () => {
-    it("throws for activate action (deferred to #20)", () => {
+  describe("activate action", () => {
+    it("throws when card is not on the grid", () => {
       const state = createTestGame();
       expect(() =>
         applyAction(state, {
@@ -127,7 +127,7 @@ describe("applyAction", () => {
           cardId: "some-card",
           actionName: "test",
         }),
-      ).toThrow("not yet implemented");
+      ).toThrow("not found on grid");
     });
   });
 });

@@ -268,6 +268,7 @@ export function instantiateCard(
         charisma: def.charisma ?? 0,
         attributes: def.attributes ?? [],
         injured: false,
+        actions: def.actions ?? undefined,
       } satisfies UnitCard;
 
     case "location":
@@ -294,7 +295,7 @@ export function instantiateCard(
       }
       switch (def.subtype) {
         case "instant":
-          return { ...base, type: "event", subtype: "instant" } satisfies InstantEventCard;
+          return { ...base, type: "event", subtype: "instant", effect: def.effect ?? undefined } satisfies InstantEventCard;
         case "passive":
           return {
             ...base,

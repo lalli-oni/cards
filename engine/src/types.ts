@@ -67,6 +67,13 @@ interface CardBase {
   ownerId: string;
 }
 
+export interface StatModifier {
+  stat: "strength" | "cunning" | "charisma";
+  delta: number;
+  remainingDuration: number;
+  source: string;
+}
+
 export interface UnitCard extends CardBase {
   type: "unit";
   strength: number;
@@ -74,6 +81,9 @@ export interface UnitCard extends CardBase {
   charisma: number;
   attributes: string[];
   injured: boolean;
+  actions?: { name: string; apCost: number; effect: string }[];
+  statModifiers?: StatModifier[];
+  controlOverride?: { previousOwnerId: string; remainingDuration: number };
 }
 
 export interface LocationCard extends CardBase {
@@ -98,6 +108,7 @@ interface EventCardBase extends CardBase {
 
 export interface InstantEventCard extends EventCardBase {
   subtype: "instant";
+  effect?: string;
 }
 
 export interface PassiveEventCard extends EventCardBase {
@@ -272,6 +283,8 @@ export type MainAction =
       cardId: string;
       actionName: string;
       targetId?: string;
+      targetRow?: number;
+      targetCol?: number;
     }
   | { type: "draw"; playerId: string }
   | {
@@ -429,6 +442,10 @@ export type GameEvent =
       cardId: string;
       slotIndex: number;
     }
+  | { type: "card_discarded"; playerId: string; cardId: string; reason: string }
+  | { type: "unit_buffed"; unitId: string; stat: string; delta: number; source: string }
+  | { type: "cards_revealed"; playerId: string; cardIds: string[]; source: string }
+  | { type: "unit_controlled"; unitId: string; controllerId: string; previousOwnerId: string; duration: number }
   | { type: "passive_expired"; playerId: string; cardId: string }
   | { type: "unit_healed"; playerId: string; unitId: string }
   // Seeding phase events

@@ -392,6 +392,70 @@ describe("trap listeners", () => {
 
     expect(events.some((e) => e.type === "trap_triggered")).toBe(true);
   });
+
+  it("highway-robbery: steals 2 gold from entering enemy unit's owner", () => {
+    const state = gameWith((d, p) => {
+      const trap = makeTrapEvent({
+        ownerId: p.other,
+        definitionId: "highway-robbery",
+        trigger: "enemy_unit_enters_location",
+      });
+      const unit = makeUnit({ ownerId: p.active, strength: 8 });
+      d.grid[0][0].location = makeLocation({ ownerId: p.active });
+      d.players[p.activeIdx].hq.push(unit);
+      d.players[p.otherIdx].activeTraps.push({ card: trap });
+      d.players[p.activeIdx].gold = 5;
+      d.players[p.otherIdx].gold = 3;
+    });
+
+    const { active, activeIdx, otherIdx } = getPlayers(state);
+    const unit = state.players[activeIdx].hq[0];
+
+    const { state: next, events } = applyAction(state, {
+      type: "enter",
+      playerId: active,
+      unitId: unit.id,
+      row: 0,
+      col: 0,
+    });
+
+    const ns = next as MainGameState;
+    expect(events.some((e) => e.type === "trap_triggered")).toBe(true);
+    expect(ns.players[activeIdx].gold).toBe(5 - 2); // victim loses 2
+    expect(ns.players[otherIdx].gold).toBe(3 + 2); // trap owner gains 2
+  });
+
+  it("highway-robbery: steals only available gold when victim has less than 2", () => {
+    const state = gameWith((d, p) => {
+      const trap = makeTrapEvent({
+        ownerId: p.other,
+        definitionId: "highway-robbery",
+        trigger: "enemy_unit_enters_location",
+      });
+      const unit = makeUnit({ ownerId: p.active, strength: 8 });
+      d.grid[0][0].location = makeLocation({ ownerId: p.active });
+      d.players[p.activeIdx].hq.push(unit);
+      d.players[p.otherIdx].activeTraps.push({ card: trap });
+      d.players[p.activeIdx].gold = 1;
+      d.players[p.otherIdx].gold = 0;
+    });
+
+    const { active, activeIdx, otherIdx } = getPlayers(state);
+    const unit = state.players[activeIdx].hq[0];
+
+    const { state: next, events } = applyAction(state, {
+      type: "enter",
+      playerId: active,
+      unitId: unit.id,
+      row: 0,
+      col: 0,
+    });
+
+    const ns = next as MainGameState;
+    expect(events.some((e) => e.type === "trap_triggered")).toBe(true);
+    expect(ns.players[activeIdx].gold).toBe(0); // had 1, lost 1
+    expect(ns.players[otherIdx].gold).toBe(1); // gained 1
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -422,6 +486,41 @@ describe("turn-start listeners", () => {
     )).toBe(true);
   });
 
+  it("Silk Road: bonus goes to player with units, not location owner", () => {
+    const state = gameWith((d, p) => {
+      // Location owned by other player, but active player has units there
+      d.grid[0][0].location = makeLocation({ ownerId: p.other, definitionId: "the-silk-road" });
+      d.grid[0][0].units.push(makeUnit({ ownerId: p.active }));
+      d.players[p.activeIdx].mainDeck.push(makeUnit({ ownerId: p.active }));
+      d.players[p.otherIdx].mainDeck.push(makeUnit({ ownerId: p.other }));
+    });
+
+    const { active } = getPlayers(state);
+    const { events } = passBothPlayers(state);
+
+    const goldEvent = events.find((e) =>
+      e.type === "gold_changed" && "reason" in e && e.reason === "the-silk-road"
+    );
+    expect(goldEvent).toBeDefined();
+    expect("playerId" in goldEvent! && goldEvent.playerId).toBe(active);
+  });
+
+  it("Silk Road: no gold for location owner without units there", () => {
+    const state = gameWith((d, p) => {
+      // Location owned by active player, but only opponent has units
+      d.grid[0][0].location = makeLocation({ ownerId: p.active, definitionId: "the-silk-road" });
+      d.grid[0][0].units.push(makeUnit({ ownerId: p.other }));
+      d.players[p.activeIdx].mainDeck.push(makeUnit({ ownerId: p.active }));
+      d.players[p.otherIdx].mainDeck.push(makeUnit({ ownerId: p.other }));
+    });
+
+    const { events } = passBothPlayers(state);
+
+    expect(events.some((e) =>
+      e.type === "gold_changed" && "reason" in e && e.reason === "the-silk-road"
+    )).toBe(false);
+  });
+
   it("Silk Road: no gold when no units at location", () => {
     const state = gameWith((d, p) => {
       d.grid[0][0].location = makeLocation({ ownerId: p.active, definitionId: "the-silk-road" });
@@ -449,6 +548,24 @@ describe("turn-start listeners", () => {
     expect(events.some((e) =>
       e.type === "gold_changed" && "reason" in e && e.reason === "trade-port"
     )).toBe(true);
+  });
+
+  it("Trade Port: bonus goes to player with Diplomat, not location owner", () => {
+    const state = gameWith((d, p) => {
+      d.grid[0][0].location = makeLocation({ ownerId: p.other, definitionId: "trade-port" });
+      d.grid[0][0].units.push(makeUnit({ ownerId: p.active, attributes: ["Diplomat"] }));
+      d.players[p.activeIdx].mainDeck.push(makeUnit({ ownerId: p.active }));
+      d.players[p.otherIdx].mainDeck.push(makeUnit({ ownerId: p.other }));
+    });
+
+    const { active } = getPlayers(state);
+    const { events } = passBothPlayers(state);
+
+    const goldEvent = events.find((e) =>
+      e.type === "gold_changed" && "reason" in e && e.reason === "trade-port"
+    );
+    expect(goldEvent).toBeDefined();
+    expect("playerId" in goldEvent! && goldEvent.playerId).toBe(active);
   });
 
   it("Trade Port: no gold without Diplomat", () => {

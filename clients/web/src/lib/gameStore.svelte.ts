@@ -8,7 +8,7 @@ import {
   type VisibleState,
 } from "cards-engine";
 import { HotseatAdapter } from "./HotseatAdapter";
-import { DEFAULT_CONFIG, buildSeedingSetup } from "./gameSetup";
+import { DEFAULT_CONFIG, buildSeedingSetup, buildMainSetup } from "./gameSetup";
 import { autoSave, listSessions, loadSession, saveSession } from "./persistence";
 
 // ---------------------------------------------------------------------------
@@ -156,13 +156,16 @@ export function startNewGame(
   p1Name: string,
   p2Name: string,
   seed?: string,
+  skipSeeding = false,
 ): void {
   players = [
     { id: "p1", name: p1Name || "Player 1" },
     { id: "p2", name: p2Name || "Player 2" },
   ];
 
-  const setupInput = buildSeedingSetup(players);
+  const setupInput = skipSeeding
+    ? buildMainSetup(players, DEFAULT_CONFIG)
+    : buildSeedingSetup(players);
   const gameSeed = seed || crypto.randomUUID();
 
   const adapters = new Map<string, HotseatAdapter>();
@@ -175,7 +178,7 @@ export function startNewGame(
 
   _eventLog = [];
   _error = null;
-  _gamePhase = "seeding";
+  _gamePhase = skipSeeding ? "main" : "seeding";
   isFirstTurn = true;
   autoSaveFailCount = 0;
 
@@ -259,7 +262,9 @@ export function selectAction(action: Action): void {
     const resolve = resolveAction;
     resolveAction = null;
     rejectAction = null;
-    resolve(action);
+    // Strip Svelte's $state proxy before passing back to the engine.
+    // Immer's produce uses Object.defineProperty which conflicts with $state proxies.
+    resolve(JSON.parse(JSON.stringify(action)));
   }
 }
 

@@ -12,13 +12,14 @@
   let p1Name = $state("Player 1");
   let p2Name = $state("Player 2");
   let seed = $state("");
+  let skipSeeding = $state(false);
 
   $effect(() => {
     refreshSessions();
   });
 
   function handleStart() {
-    startNewGame(p1Name, p2Name, seed || undefined);
+    startNewGame(p1Name, p2Name, seed || undefined, skipSeeding);
   }
 
   async function handleLoad(key: string) {
@@ -81,6 +82,10 @@
           class="w-full rounded bg-stone-700 px-3 py-2 text-stone-100 placeholder-stone-400"
         />
       </div>
+      <label class="flex items-center gap-2 text-stone-300">
+        <input type="checkbox" bind:checked={skipSeeding} class="accent-amber-600" />
+        Skip seeding phase
+      </label>
       <button
         onclick={handleStart}
         class="w-full rounded bg-amber-600 px-4 py-2 font-semibold text-white hover:bg-amber-500"

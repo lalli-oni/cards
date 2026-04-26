@@ -130,4 +130,24 @@ describe("applyAction", () => {
       ).toThrow("not found on grid");
     });
   });
+
+  describe("frozen action objects", () => {
+    it("accepts Object.freeze'd actions without throwing", () => {
+      const state = createTestGame();
+      const action = Object.freeze({
+        type: "pass" as const,
+        playerId: state.turn.activePlayerId,
+      });
+      expect(() => applyAction(state, action)).not.toThrow();
+    });
+
+    it("accepts deeply frozen actions without throwing", () => {
+      const state = createTestGame();
+      const action = Object.freeze({
+        type: "draw" as const,
+        playerId: Object.freeze(state.turn.activePlayerId),
+      });
+      expect(() => applyAction(state, action)).not.toThrow();
+    });
+  });
 });

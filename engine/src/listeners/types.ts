@@ -42,7 +42,6 @@ export interface EffectListener {
 // Query listeners (pure — no mutation)
 // ---------------------------------------------------------------------------
 
-// StatName imported from ../types (canonical definition)
 
 export interface StatQueryContext {
   unit: UnitCard;

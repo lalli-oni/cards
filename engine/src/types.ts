@@ -47,6 +47,11 @@ export type CardType = "unit" | "location" | "item" | "event" | "policy";
 export type Rarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
 export type EventSubtype = "instant" | "passive" | "trap";
 
+export interface GridPosition {
+  row: number;
+  col: number;
+}
+
 /** Edge state for location cards. */
 export interface LocationEdges {
   n: boolean; // true = open, false = blocked
@@ -67,11 +72,25 @@ interface CardBase {
   ownerId: string;
 }
 
+export type StatName = "strength" | "cunning" | "charisma";
+
+export interface ActionDef {
+  name: string;
+  apCost: number;
+  effect: string;
+}
+
 export interface StatModifier {
-  stat: "strength" | "cunning" | "charisma";
+  stat: StatName;
   delta: number;
+  /** Decremented at end of each turn. Removed when reaching 0. */
   remainingDuration: number;
   source: string;
+}
+
+export interface ControlOverride {
+  previousOwnerId: string;
+  remainingDuration: number;
 }
 
 export interface UnitCard extends CardBase {
@@ -81,9 +100,9 @@ export interface UnitCard extends CardBase {
   charisma: number;
   attributes: string[];
   injured: boolean;
-  actions?: { name: string; apCost: number; effect: string }[];
+  actions?: ActionDef[];
   statModifiers?: StatModifier[];
-  controlOverride?: { previousOwnerId: string; remainingDuration: number };
+  controlOverride?: ControlOverride;
 }
 
 export interface LocationCard extends CardBase {
@@ -283,8 +302,7 @@ export type MainAction =
       cardId: string;
       actionName: string;
       targetId?: string;
-      targetRow?: number;
-      targetCol?: number;
+      targetCell?: GridPosition;
     }
   | { type: "draw"; playerId: string }
   | {
@@ -443,9 +461,10 @@ export type GameEvent =
       slotIndex: number;
     }
   | { type: "card_discarded"; playerId: string; cardId: string; reason: string }
-  | { type: "unit_buffed"; unitId: string; stat: string; delta: number; source: string }
+  | { type: "unit_buffed"; unitId: string; stat: StatName; delta: number; source: string }
   | { type: "cards_revealed"; playerId: string; cardIds: string[]; source: string }
   | { type: "unit_controlled"; unitId: string; controllerId: string; previousOwnerId: string; duration: number }
+  | { type: "contest_resolved"; stat: StatName; attackerId: string; defenderId: string; attackerPower: number; defenderPower: number; winnerId: string }
   | { type: "passive_expired"; playerId: string; cardId: string }
   | { type: "unit_healed"; playerId: string; unitId: string }
   // Seeding phase events

@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type {
+  ActionDef,
   Card,
   CardType,
   EventSubtype,
@@ -34,7 +35,7 @@ export interface CardDefinition {
   cunning?: number | null;
   charisma?: number | null;
   attributes?: string[];
-  actions?: { name: string; apCost: number; effect: string }[];
+  actions?: ActionDef[];
 
   // Location fields
   mission?: string | null;

@@ -1,4 +1,4 @@
-import { parse } from "./effect-dsl";
+import { parse, DSLParseError } from "./effect-dsl";
 import { tryParseCost } from "./cost-helpers";
 import { checkMissionRequirements, parseRequirements } from "./mission-helpers";
 import type { BoardPosition } from "./position-helpers";
@@ -366,8 +366,7 @@ function getMainValidActions(
 
 type ActivateTarget = {
   targetId?: string;
-  targetRow?: number;
-  targetCol?: number;
+  targetCell?: { row: number; col: number };
 };
 
 /**
@@ -376,7 +375,7 @@ type ActivateTarget = {
  */
 function inferActivateTargets(
   state: MainGameState,
-  unitId: string,
+  _unitId: string,
   effectStr: string,
   unitRow: number,
   unitCol: number,
@@ -385,8 +384,12 @@ function inferActivateTargets(
   let ast;
   try {
     ast = parse(effectStr);
-  } catch {
-    return [{}]; // Unparseable — let executor handle the error
+  } catch (err) {
+    if (err instanceof DSLParseError) {
+      console.warn(`Unparseable effect "${effectStr}": ${err.message}`);
+      return [{}];
+    }
+    throw err;
   }
 
   // Scan the first verb in each compound member to determine targeting needs
@@ -402,7 +405,7 @@ function inferActivateTargets(
       if (first.verb === "move" && tokenNames.includes("self")) {
         // One action per valid adjacent cell
         const moves = getAdjacentMoveTargets(state, unitRow, unitCol);
-        targetSets.push(moves.map((m) => ({ targetRow: m.row, targetCol: m.col })));
+        targetSets.push(moves.map((m) => ({ targetCell: { row: m.row, col: m.col } })));
       } else {
         targetSets.push([{}]);
       }
@@ -433,7 +436,7 @@ function inferActivateTargets(
   // determines the action targets. Later members use the same context.
   // Find the first set with actual targeting (not just [{}])
   for (const set of targetSets) {
-    if (set.length > 0 && set.some((t) => t.targetId || t.targetRow !== undefined)) {
+    if (set.length > 0 && set.some((t) => t.targetId || t.targetCell)) {
       return set;
     }
   }

@@ -2,9 +2,8 @@ import type { Draft } from "immer";
 import prand from "pure-rand";
 import { parse } from "./parser";
 import type { Expression, Effect, Step, Primitive, Selector } from "./types";
-import type { GameEvent, MainGameState, UnitCard } from "../types";
-import type { QueryListener } from "../listeners/types";
-import type { EmitFn } from "../listeners/types";
+import type { Card, GameEvent, LocationCard, MainGameState, StatName, UnitCard } from "../types";
+import type { QueryListener, EmitFn } from "../listeners/types";
 import { getPlayerById } from "../state-helpers";
 import { drawOneCard } from "../deck-helpers";
 import { killUnit, injureUnit } from "../unit-helpers";
@@ -20,15 +19,24 @@ export interface ExecutionContext {
   playerId: string;
   actingUnitId?: string;
   targetId?: string;
-  targetRow?: number;
-  targetCol?: number;
-  position?: { row: number; col: number };
+  targetCell?: { row: number; col: number };
   emit: EmitFn;
   events: GameEvent[];
   queries: QueryListener[];
   rng: prand.RandomGenerator;
   /** Back-reference to last resolved target (for chains). */
   _lastTarget?: Draft<UnitCard>;
+  /** Cards revealed by a `reveal` verb, consumed by a subsequent `pick`. */
+  _revealedCards?: Draft<Card>[];
+  /** Location removed by a `raze` verb, consumed by a subsequent `to`. */
+  _razedLocation?: Draft<LocationCard>;
+}
+
+/** Resolve the acting unit's current position from the grid (lazy, always fresh). */
+function getActingPosition(ctx: ExecutionContext): { row: number; col: number } | undefined {
+  if (!ctx.actingUnitId) return undefined;
+  const found = findUnitOnGrid(ctx.draft.grid, ctx.actingUnitId);
+  return found ? { row: found.row, col: found.col } : undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -49,7 +57,6 @@ export function executeEffect(
 // ---------------------------------------------------------------------------
 
 function executeExpression(expr: Expression, ctx: ExecutionContext): void {
-  // Compound effects ("+"): execute all in parallel (sequential in practice)
   for (const effect of expr) {
     executeEffectChain(effect, ctx);
   }
@@ -123,7 +130,6 @@ function resolveUnitTargets(
 
   const tokenNames = selector.tokens.map((t) => t.name);
   const hasAll = tokenNames.includes("all");
-  const hasHere = tokenNames.includes("here");
   const hasAdjacent = tokenNames.includes("adjacent");
   const hasSelf = tokenNames.includes("self");
   const hasEnemy = tokenNames.includes("enemy");
@@ -147,13 +153,13 @@ function resolveUnitTargets(
     return found ? [found.unit as Draft<UnitCard>] : [];
   }
 
-  // Positional: collect units at location(s)
-  if (!ctx.position) return [];
-  const { row, col } = ctx.position;
+  // Positional: resolve lazily from acting unit's current position
+  const position = getActingPosition(ctx);
+  if (!position) return [];
+  const { row, col } = position;
   let units: Draft<UnitCard>[] = [];
 
   if (hasAdjacent) {
-    // Units at adjacent cells
     const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
     for (const [dr, dc] of dirs) {
       const r = row + dr;
@@ -163,7 +169,6 @@ function resolveUnitTargets(
       }
     }
   } else {
-    // Units at same cell (here)
     units = [...(ctx.draft.grid[row][col].units as Draft<UnitCard>[])];
   }
 
@@ -172,11 +177,10 @@ function resolveUnitTargets(
     units = units.filter((u) => u.ownerId !== ctx.playerId);
   } else if (hasFriendly) {
     units = units.filter((u) => u.ownerId === ctx.playerId);
-  }
-
-  // Exclude self from friendly (unless "all" is also specified)
-  if (hasFriendly && !hasAll && ctx.actingUnitId) {
-    // Keep self in "all + friendly"
+    // Exclude self from single-target friendly (unless "all" is specified)
+    if (!hasAll && ctx.actingUnitId) {
+      units = units.filter((u) => u.id !== ctx.actingUnitId);
+    }
   }
 
   // Apply count limit from token
@@ -195,7 +199,7 @@ function resolveUnitTargets(
 function execGold(p: Primitive, ctx: ExecutionContext): void {
   const amount = p.value ?? 0;
   const player = getPlayerById(ctx.draft, ctx.playerId);
-  player.gold += amount;
+  player.gold = Math.max(0, player.gold + amount);
   ctx.emit({ type: "gold_changed", playerId: ctx.playerId, amount, reason: "effect" });
 }
 
@@ -211,6 +215,8 @@ function execDraw(p: Primitive, ctx: ExecutionContext): void {
   for (let i = 0; i < count; i++) {
     drawOneCard(ctx.draft, player, ctx.events);
   }
+  // Sync RNG — drawOneCard may have updated draft.rngState via deck reshuffle
+  ctx.rng = prand.mersenne.fromState(ctx.draft.rngState);
 }
 
 function execKill(p: Primitive, ctx: ExecutionContext): void {
@@ -238,7 +244,7 @@ function execInjure(p: Primitive, ctx: ExecutionContext): void {
 }
 
 function execBuff(p: Primitive, ctx: ExecutionContext): void {
-  const stat = p.subVerb as "strength" | "cunning" | "charisma";
+  const stat = p.subVerb as StatName;
   if (!stat) throw new Error("buff verb requires a stat subVerb (e.g. buff.strength)");
   const delta = p.value ?? 0;
   const duration = p.modifiers.includes("turn") ? 1 : p.modifiers.includes("round") ? 2 : 1;
@@ -259,7 +265,8 @@ function execBuff(p: Primitive, ctx: ExecutionContext): void {
 function execMove(p: Primitive, ctx: ExecutionContext): void {
   const targets = resolveUnitTargets(p.target, ctx);
   if (targets.length === 0) return;
-  if (ctx.targetRow === undefined || ctx.targetCol === undefined) return;
+  if (!ctx.targetCell) return;
+  const { row: toRow, col: toCol } = ctx.targetCell;
 
   for (const unit of targets) {
     const pos = findUnitOnGrid(ctx.draft.grid, unit.id);
@@ -271,9 +278,15 @@ function execMove(p: Primitive, ctx: ExecutionContext): void {
     if (idx === -1) continue;
     srcCell.units.splice(idx, 1);
 
+    // Move equipped items with the unit
+    for (let i = srcCell.items.length - 1; i >= 0; i--) {
+      if (srcCell.items[i].equippedTo === unit.id) {
+        ctx.draft.grid[toRow][toCol].items.push(srcCell.items.splice(i, 1)[0]);
+      }
+    }
+
     // Add to destination cell
-    const dstCell = ctx.draft.grid[ctx.targetRow][ctx.targetCol];
-    dstCell.units.push(unit);
+    ctx.draft.grid[toRow][toCol].units.push(unit);
 
     ctx.emit({
       type: "unit_moved",
@@ -281,8 +294,8 @@ function execMove(p: Primitive, ctx: ExecutionContext): void {
       unitId: unit.id,
       fromRow: pos.row,
       fromCol: pos.col,
-      toRow: ctx.targetRow,
-      toCol: ctx.targetCol,
+      toRow,
+      toCol,
     });
   }
 }
@@ -297,24 +310,21 @@ function execReveal(p: Primitive, ctx: ExecutionContext): void {
     const cardIds = opponent.hand.map((c) => c.id);
     ctx.emit({ type: "cards_revealed", playerId: ctx.playerId, cardIds, source: "reveal" });
   } else if (tokenNames.includes("deck")) {
-    // Reveal top N from player's deck
     const player = getPlayerById(ctx.draft, ctx.playerId);
     const revealed = player.mainDeck.slice(0, count);
     const cardIds = revealed.map((c) => c.id);
     ctx.emit({ type: "cards_revealed", playerId: ctx.playerId, cardIds, source: "reveal-deck" });
-    // Store revealed cards for pick step
-    (ctx as any)._revealedCards = revealed;
+    ctx._revealedCards = revealed as Draft<Card>[];
   }
 }
 
 function execPick(p: Primitive, ctx: ExecutionContext): void {
   const count = p.value ?? 1;
-  const revealed = (ctx as any)._revealedCards as Draft<typeof ctx.draft.players[0]["mainDeck"]> | undefined;
-  if (!revealed || revealed.length === 0) return;
+  if (!ctx._revealedCards || ctx._revealedCards.length === 0) return;
 
   const player = getPlayerById(ctx.draft, ctx.playerId);
-  // Auto-pick first N cards for v0.1 (player choice refinement later)
-  const picked = revealed.slice(0, count);
+  // Auto-pick first N cards for v0.1 (player choice refinement: #101)
+  const picked = ctx._revealedCards.slice(0, count);
   for (const card of picked) {
     const idx = player.mainDeck.findIndex((c) => c.id === card.id);
     if (idx !== -1) {
@@ -322,6 +332,7 @@ function execPick(p: Primitive, ctx: ExecutionContext): void {
       player.hand.push(card);
     }
   }
+  ctx._revealedCards = undefined;
 }
 
 function execControl(p: Primitive, ctx: ExecutionContext): void {
@@ -347,14 +358,15 @@ function execControl(p: Primitive, ctx: ExecutionContext): void {
 
 function execRemove(p: Primitive, ctx: ExecutionContext): void {
   const tokenNames = p.target?.tokens.map((t) => t.name) ?? [];
-  if (tokenNames.includes("location") && ctx.position) {
-    const { row, col } = ctx.position;
-    const cell = ctx.draft.grid[row][col];
-    if (cell.location) {
-      const locId = cell.location.id;
-      cell.location = null;
-      ctx.emit({ type: "location_razed", row, col, cardId: locId });
-    }
+  if (!tokenNames.includes("location")) return;
+  const position = getActingPosition(ctx);
+  if (!position) return;
+  const { row, col } = position;
+  const cell = ctx.draft.grid[row][col];
+  if (cell.location) {
+    const locId = cell.location.id;
+    cell.location = null;
+    ctx.emit({ type: "location_razed", row, col, cardId: locId });
   }
 }
 
@@ -364,7 +376,6 @@ function execBuy(p: Primitive, ctx: ExecutionContext): void {
   const typeFilter = tokenNames.find((t) => ["item", "unit", "event"].includes(t));
 
   const player = getPlayerById(ctx.draft, ctx.playerId);
-  // Find first matching card in market
   const marketIdx = ctx.draft.market.findIndex((c) => {
     if (!c) return false;
     if (typeFilter && c.type !== typeFilter) return false;
@@ -381,28 +392,25 @@ function execBuy(p: Primitive, ctx: ExecutionContext): void {
 }
 
 function execRaze(p: Primitive, ctx: ExecutionContext): void {
-  // Raze the location at the acting unit's position
-  if (!ctx.position) return;
-  const { row, col } = ctx.position;
+  const position = getActingPosition(ctx);
+  if (!position) return;
+  const { row, col } = position;
   const cell = ctx.draft.grid[row][col];
   if (!cell.location) return;
 
   const loc = cell.location;
   cell.location = null;
   ctx.emit({ type: "location_razed", row, col, cardId: loc.id });
-
-  // Store for potential "to" redirect
-  (ctx as any)._razedLocation = loc;
+  ctx._razedLocation = loc as Draft<LocationCard>;
 }
 
 function execTo(p: Primitive, ctx: ExecutionContext): void {
   const tokenNames = p.target?.tokens.map((t) => t.name) ?? [];
-  const razedLoc = (ctx as any)._razedLocation;
 
-  if (tokenNames.includes("hq") && razedLoc) {
+  if (tokenNames.includes("hq") && ctx._razedLocation) {
     const player = getPlayerById(ctx.draft, ctx.playerId);
-    player.hq.push(razedLoc);
-    (ctx as any)._razedLocation = undefined;
+    player.hq.push(ctx._razedLocation);
+    ctx._razedLocation = undefined;
   }
 }
 
@@ -412,7 +420,7 @@ function execTo(p: Primitive, ctx: ExecutionContext): void {
 
 function executeContest(step: Step, ctx: ExecutionContext): void {
   const p = step.primitive;
-  const stat = p.subVerb as "strength" | "cunning" | "charisma";
+  const stat = p.subVerb as StatName;
   if (!stat) throw new Error("contest verb requires a stat subVerb");
 
   const bonus = p.value ?? 0;
@@ -443,8 +451,8 @@ function executeContest(step: Step, ctx: ExecutionContext): void {
   );
 
   // Roll d6 for each
-  let [atkRoll, rng1] = prand.uniformIntDistribution(1, 6, ctx.rng);
-  let [defRoll, rng2] = prand.uniformIntDistribution(1, 6, rng1);
+  const [atkRoll, rng1] = prand.uniformIntDistribution(1, 6, ctx.rng);
+  const [defRoll, rng2] = prand.uniformIntDistribution(1, 6, rng1);
   ctx.rng = rng2;
 
   const atkPower = atkStat + atkRoll + bonus;
@@ -464,7 +472,6 @@ function executeContest(step: Step, ctx: ExecutionContext): void {
   });
 
   if (step.consequence) {
-    // Custom consequences
     if (attackerWins && step.consequence.winEffect) {
       for (const winStep of step.consequence.winEffect) {
         executeStep(winStep, ctx);
@@ -477,7 +484,6 @@ function executeContest(step: Step, ctx: ExecutionContext): void {
   } else {
     // Default consequences for strength contests
     if (stat === "strength") {
-      const winner = attackerWins ? attacker : target;
       const loser = attackerWins ? target : attacker;
       const loserPos = findUnitOnGrid(ctx.draft.grid, loser.id);
       if (!loserPos) return;
@@ -492,6 +498,5 @@ function executeContest(step: Step, ctx: ExecutionContext): void {
         injureUnit(cell, loser, loserPos.row, loserPos.col, ctx.emit);
       }
     }
-    // Other stats: no default consequence
   }
 }

@@ -3,9 +3,10 @@ import { produce, type Draft } from "immer";
 import prand from "pure-rand";
 import { parse } from "../effect-dsl";
 import { executeEffect, type ExecutionContext } from "../effect-dsl/executor";
-import type { MainGameState, GameEvent } from "../types";
+import type { MainGameState, GameEvent, ItemCard } from "../types";
 import { applyAction } from "../apply-action";
-import { makeInstantEvent } from "./helpers";
+import { getValidActions } from "../valid-actions";
+import { makeInstantEvent, makeItem } from "./helpers";
 import { rebuildListeners } from "../listeners/rebuild";
 import {
   createTestGame,
@@ -200,7 +201,6 @@ describe("Effect DSL executor", () => {
     const unit = state.grid[0][0].units[0];
     const { state: next, events } = runEffect(state, "kill(self)", {
       actingUnitId: unit.id,
-      position: { row: 0, col: 0 },
     });
     expect(next.grid[0][0].units).toHaveLength(0);
     expect(events.some((e) => e.type === "unit_killed")).toBe(true);
@@ -217,7 +217,6 @@ describe("Effect DSL executor", () => {
     const { state: next, events } = runEffect(state, "injure(enemy)", {
       actingUnitId: actingUnit.id,
       targetId: enemyUnit.id,
-      position: { row: 0, col: 0 },
     });
     const injured = next.grid[0][0].units.find((u) => u.id === enemyUnit.id);
     expect(injured?.injured).toBe(true);
@@ -234,7 +233,6 @@ describe("Effect DSL executor", () => {
     const unit = state.grid[0][0].units[0];
     const { state: next, activeIdx, events } = runEffect(state, "vp[1] + kill(self)", {
       actingUnitId: unit.id,
-      position: { row: 0, col: 0 },
     });
     expect(next.players[activeIdx].vp).toBe(1);
     expect(next.grid[0][0].units).toHaveLength(0);
@@ -257,7 +255,7 @@ describe("Effect DSL executor — buffs", () => {
     const { state: next, events } = runEffect(
       state,
       "buff.strength(all + friendly)[2]~turn",
-      { actingUnitId: actingUnit.id, position: { row: 0, col: 0 } },
+      { actingUnitId: actingUnit.id },
     );
     // Both friendly units should have the modifier
     const friendlyUnits = next.grid[0][0].units.filter(
@@ -281,7 +279,7 @@ describe("Effect DSL executor — buffs", () => {
 // ---------------------------------------------------------------------------
 
 describe("Effect DSL executor — contests", () => {
-  it("contest.strength(enemy): resolves with default consequence (loser injured)", () => {
+  it("contest.strength(enemy): emits contest_resolved and applies default consequence", () => {
     const state = gameWith((d, p) => {
       d.grid[0][0].location = makeLocation({ ownerId: p.active });
       d.grid[0][0].units.push(makeUnit({ ownerId: p.active, strength: 10 }));
@@ -292,13 +290,202 @@ describe("Effect DSL executor — contests", () => {
     const { events } = runEffect(state, "contest.strength(enemy)", {
       actingUnitId: actingUnit.id,
       targetId: enemyUnit.id,
-      position: { row: 0, col: 0 },
     });
-    // With str 10 vs 1 + d6 each, the strong unit should almost certainly win
-    // and the loser should be injured or killed
+    // Contest event must always be emitted regardless of outcome
+    expect(events.some((e) => e.type === "contest_resolved")).toBe(true);
+    // Default strength consequence: loser is injured or killed
     expect(
       events.some((e) => e.type === "unit_injured" || e.type === "unit_killed"),
     ).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Executor — gold floor
+// ---------------------------------------------------------------------------
+
+describe("Effect DSL executor — gold floor", () => {
+  it("gold[-10] does not go below zero", () => {
+    const state = gameWith((d, p) => {
+      d.players[p.activeIdx].gold = 3;
+    });
+    const { state: next, activeIdx } = runEffect(state, "gold[-10]");
+    expect(next.players[activeIdx].gold).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Executor — stat modifier expiry
+// ---------------------------------------------------------------------------
+
+describe("Effect DSL — stat modifier expiry", () => {
+  it("buff.strength~turn expires after end of turn", () => {
+    const state = gameWith((d, p) => {
+      d.grid[0][0].location = makeLocation({ ownerId: p.active });
+      d.grid[0][0].units.push(makeUnit({ ownerId: p.active, strength: 5 }));
+      d.players[p.activeIdx].mainDeck.push(makeUnit({ ownerId: p.active }));
+      d.players[p.otherIdx].mainDeck.push(makeUnit({ ownerId: p.other }));
+    });
+    const unit = state.grid[0][0].units[0];
+    const { active, other, activeIdx } = getPlayers(state);
+
+    // Apply buff
+    const { state: buffed } = runEffect(state, "buff.strength(all + friendly)[2]~turn", {
+      actingUnitId: unit.id,
+    });
+
+    // Verify modifier is present
+    const buffedUnit = (buffed as MainGameState).grid[0][0].units[0];
+    expect(buffedUnit.statModifiers).toHaveLength(1);
+
+    // Pass both players → triggers runEndOfTurn for active player
+    const { state: s1 } = applyAction(buffed, { type: "pass", playerId: active });
+    const { state: s2 } = applyAction(s1, { type: "pass", playerId: other });
+    const ns = s2 as MainGameState;
+
+    // Modifier should be expired after the turn ended
+    const expiredUnit = ns.grid[0][0].units.find((u) => u.id === unit.id);
+    expect(expiredUnit?.statModifiers ?? []).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Equipped items following units
+// ---------------------------------------------------------------------------
+
+describe("equipped items follow units", () => {
+  it("enter: equipped item moves from HQ to grid with unit", () => {
+    const state = gameWith((d, p) => {
+      const unit = makeUnit({ ownerId: p.active });
+      const item = makeItem({ ownerId: p.active, equippedTo: unit.id });
+      d.players[p.activeIdx].hq.push(unit, item);
+      d.grid[0][0].location = makeLocation({ ownerId: p.active });
+    });
+    const { active, activeIdx } = getPlayers(state);
+    const unit = state.players[activeIdx].hq.find((c) => c.type === "unit")!;
+
+    const { state: next } = applyAction(state, {
+      type: "enter",
+      playerId: active,
+      unitId: unit.id,
+      row: 0,
+      col: 0,
+    });
+    const ns = next as MainGameState;
+
+    expect(ns.grid[0][0].units).toHaveLength(1);
+    expect(ns.grid[0][0].items).toHaveLength(1);
+    expect((ns.grid[0][0].items[0] as ItemCard).equippedTo).toBe(unit.id);
+    expect(ns.players[activeIdx].hq.filter((c) => c.type === "item")).toHaveLength(0);
+  });
+
+  it("move: equipped item moves between grid cells with unit", () => {
+    const state = gameWith((d, p) => {
+      const unit = makeUnit({ ownerId: p.active });
+      const item = makeItem({ ownerId: p.active, equippedTo: unit.id });
+      d.grid[0][0].location = makeLocation({ ownerId: p.active });
+      d.grid[0][1].location = makeLocation({ ownerId: p.active });
+      d.grid[0][0].units.push(unit);
+      d.grid[0][0].items.push(item);
+    });
+    const { active } = getPlayers(state);
+    const unit = state.grid[0][0].units[0];
+
+    const { state: next } = applyAction(state, {
+      type: "move",
+      playerId: active,
+      unitId: unit.id,
+      row: 0,
+      col: 1,
+    });
+    const ns = next as MainGameState;
+
+    expect(ns.grid[0][0].units).toHaveLength(0);
+    expect(ns.grid[0][0].items).toHaveLength(0);
+    expect(ns.grid[0][1].units).toHaveLength(1);
+    expect(ns.grid[0][1].items).toHaveLength(1);
+  });
+
+  it("unit without equipment moves without affecting other items", () => {
+    const state = gameWith((d, p) => {
+      const unit = makeUnit({ ownerId: p.active });
+      const looseItem = makeItem({ ownerId: p.active }); // not equipped
+      d.grid[0][0].location = makeLocation({ ownerId: p.active });
+      d.grid[0][1].location = makeLocation({ ownerId: p.active });
+      d.grid[0][0].units.push(unit);
+      d.grid[0][0].items.push(looseItem);
+    });
+    const { active } = getPlayers(state);
+    const unit = state.grid[0][0].units[0];
+
+    const { state: next } = applyAction(state, {
+      type: "move",
+      playerId: active,
+      unitId: unit.id,
+      row: 0,
+      col: 1,
+    });
+    const ns = next as MainGameState;
+
+    expect(ns.grid[0][0].items).toHaveLength(1); // loose item stays
+    expect(ns.grid[0][1].items).toHaveLength(0); // nothing followed
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Valid actions — activate
+// ---------------------------------------------------------------------------
+
+describe("valid actions — activate", () => {
+  it("unit with gold[5] action appears in valid actions", () => {
+    const state = gameWith((d, p) => {
+      const unit = makeUnit({
+        ownerId: p.active,
+        actions: [{ name: "pilgrimage", apCost: 2, effect: "gold[5]" }],
+      });
+      d.grid[0][0].location = makeLocation({ ownerId: p.active });
+      d.grid[0][0].units.push(unit);
+    });
+    const { active } = getPlayers(state);
+    const actions = getValidActions(state, active);
+    const activateActions = actions.filter((a) => a.type === "activate");
+
+    expect(activateActions.length).toBeGreaterThan(0);
+    expect(activateActions[0].type === "activate" && activateActions[0].actionName).toBe("pilgrimage");
+  });
+
+  it("action does not appear when AP is insufficient", () => {
+    const state = gameWith((d, p) => {
+      d.turn.actionPointsRemaining = 1;
+      const unit = makeUnit({
+        ownerId: p.active,
+        actions: [{ name: "pilgrimage", apCost: 2, effect: "gold[5]" }],
+      });
+      d.grid[0][0].location = makeLocation({ ownerId: p.active });
+      d.grid[0][0].units.push(unit);
+    });
+    const { active } = getPlayers(state);
+    const actions = getValidActions(state, active);
+    const activateActions = actions.filter((a) => a.type === "activate");
+
+    expect(activateActions).toHaveLength(0);
+  });
+
+  it("enemy-targeted action only appears when enemies are co-located", () => {
+    const state = gameWith((d, p) => {
+      const unit = makeUnit({
+        ownerId: p.active,
+        actions: [{ name: "duel", apCost: 1, effect: "contest.strength(enemy)" }],
+      });
+      d.grid[0][0].location = makeLocation({ ownerId: p.active });
+      d.grid[0][0].units.push(unit);
+      // No enemy units at location
+    });
+    const { active } = getPlayers(state);
+    const actions = getValidActions(state, active);
+    const activateActions = actions.filter((a) => a.type === "activate");
+
+    expect(activateActions).toHaveLength(0);
   });
 });
 

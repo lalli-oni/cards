@@ -6,36 +6,36 @@
  */
 
 /** Top-level: one or more parallel effects joined by "+". */
-export type Expression = Effect[];
+export type Expression = readonly Effect[];
 
 /** A chain of steps joined by ">". */
-export type Effect = Step[];
+export type Effect = readonly Step[];
 
 export interface Step {
-  primitive: Primitive;
+  readonly primitive: Primitive;
   /** Ternary consequence — appears after ":" in a chain. */
-  consequence?: Consequence;
+  readonly consequence?: Consequence;
 }
 
 export interface Primitive {
-  verb: string;
-  subVerb?: string;
-  target?: Selector;
-  value?: number;
-  modifiers: string[];
+  readonly verb: string;
+  readonly subVerb?: string;
+  readonly target?: Selector;
+  readonly value?: number;
+  readonly modifiers: readonly string[];
 }
 
 export interface Selector {
-  tokens: Token[];
+  readonly tokens: readonly Token[];
 }
 
 export interface Token {
-  name: string;
-  count?: number;
+  readonly name: string;
+  readonly count?: number;
 }
 
 /** Win/lose branching for contests: `> winEffect : loseEffect` */
 export interface Consequence {
-  winEffect: Effect;
-  loseEffect?: Effect;
+  readonly winEffect: Effect;
+  readonly loseEffect?: Effect;
 }

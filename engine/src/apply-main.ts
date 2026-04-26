@@ -841,22 +841,19 @@ function handleActivate(
   cardId: string,
   actionName: string,
   targetId: string | undefined,
-  targetRow: number | undefined,
-  targetCol: number | undefined,
+  targetCell: { row: number; col: number } | undefined,
   emit: EmitFn,
   events: GameEvent[],
   queries: QueryListener[],
 ): void {
   // Find the card with actions — search grid units
   let card: Draft<UnitCard> | undefined;
-  let position: { row: number; col: number } | undefined;
 
   for (let r = 0; r < draft.grid.length; r++) {
     for (let c = 0; c < draft.grid[r].length; c++) {
       const found = draft.grid[r][c].units.find((u) => u.id === cardId);
       if (found) {
         card = found;
-        position = { row: r, col: c };
         break;
       }
     }
@@ -878,9 +875,7 @@ function handleActivate(
     playerId,
     actingUnitId: cardId,
     targetId,
-    targetRow,
-    targetCol,
-    position,
+    targetCell,
     emit,
     events,
     queries,
@@ -956,7 +951,7 @@ export function applyMainAction(
         handleActivate(
           draft, action.playerId, action.cardId,
           action.actionName, action.targetId,
-          action.targetRow, action.targetCol,
+          action.targetCell,
           emit, events, queries,
         );
         break;

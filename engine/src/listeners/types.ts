@@ -1,5 +1,5 @@
 import type { Draft } from "immer";
-import type { Card, GameEvent, MainAction, MainGameState, UnitCard } from "../types";
+import type { Card, GameEvent, MainAction, MainGameState, StatName, UnitCard } from "../types";
 
 /** Where the effect originates — enough to identify the source card. */
 export interface EffectSource {
@@ -42,7 +42,7 @@ export interface EffectListener {
 // Query listeners (pure — no mutation)
 // ---------------------------------------------------------------------------
 
-export type StatName = "strength" | "cunning" | "charisma";
+// StatName imported from ../types (canonical definition)
 
 export interface StatQueryContext {
   unit: UnitCard;

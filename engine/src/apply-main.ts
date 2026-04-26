@@ -304,6 +304,15 @@ function handleEnter(
   const unit = player.hq.splice(unitIdx, 1)[0] as UnitCard;
   cell.units.push(unit);
 
+  // Move equipped items from HQ to the grid cell with the unit
+  for (let i = player.hq.length - 1; i >= 0; i--) {
+    const card = player.hq[i];
+    if (card.type === "item" && card.equippedTo === unitId) {
+      player.hq.splice(i, 1);
+      cell.items.push(card as ItemCard);
+    }
+  }
+
   emit({ type: "unit_entered", playerId, unitId, row, col });
 }
 
@@ -366,6 +375,13 @@ function handleMove(
     const player = getPlayerById(draft, playerId);
     player.hq.push(removed);
 
+    // Move equipped items from grid cell to HQ with the unit
+    for (let i = cell.items.length - 1; i >= 0; i--) {
+      if (cell.items[i].equippedTo === unitId) {
+        player.hq.push(cell.items.splice(i, 1)[0]);
+      }
+    }
+
     emit({
       type: "unit_moved",
       playerId,
@@ -375,7 +391,6 @@ function handleMove(
       toRow: -1,
       toCol: -1,
     });
-
 
     return;
   }
@@ -408,6 +423,13 @@ function handleMove(
   }
   const removed = fromCell.units.splice(idx, 1)[0];
   draft.grid[toRow][toCol].units.push(removed);
+
+  // Move equipped items from source cell to destination cell with the unit
+  for (let i = fromCell.items.length - 1; i >= 0; i--) {
+    if (fromCell.items[i].equippedTo === unitId) {
+      draft.grid[toRow][toCol].items.push(fromCell.items.splice(i, 1)[0]);
+    }
+  }
 
   emit({ type: "unit_moved", playerId, unitId, fromRow, fromCol, toRow, toCol });
 }

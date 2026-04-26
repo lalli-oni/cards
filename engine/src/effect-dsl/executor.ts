@@ -453,6 +453,16 @@ function executeContest(step: Step, ctx: ExecutionContext): void {
   // Ties go to defender
   const attackerWins = atkPower > defPower;
 
+  ctx.emit({
+    type: "contest_resolved",
+    stat,
+    attackerId: attacker.id,
+    defenderId: target.id,
+    attackerPower: atkPower,
+    defenderPower: defPower,
+    winnerId: attackerWins ? attacker.id : target.id,
+  });
+
   if (step.consequence) {
     // Custom consequences
     if (attackerWins && step.consequence.winEffect) {

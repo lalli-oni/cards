@@ -279,10 +279,10 @@ export function startNewGame(
     { id: "p2", name: p2Name || "Player 2" },
   ];
 
-  const setupInput = skipSeeding
-    ? buildMainSetup(players, DEFAULT_CONFIG)
-    : buildSeedingSetup(players);
   const gameSeed = seed || crypto.randomUUID();
+  const setupInput = skipSeeding
+    ? buildMainSetup(players, DEFAULT_CONFIG, gameSeed)
+    : buildSeedingSetup(players);
 
   const adapters = new Map<string, HotseatAdapter>();
   for (const p of players) {

@@ -1,3 +1,4 @@
+import prand from "pure-rand";
 import {
   createInstanceCounter,
   instantiateCards,
@@ -12,6 +13,10 @@ import {
   type LocationCard,
 } from "cards-engine";
 import cardDefsJson from "@library/all.json";
+
+export function generateSeed(): string {
+  return crypto.randomUUID().slice(0, 8);
+}
 
 export const DEFAULT_CONFIG: GameConfig = {
   starting_gold: 10,
@@ -63,9 +68,11 @@ export function buildSeedingSetup(
 export function buildMainSetup(
   players: PlayerDescriptor[],
   config: GameConfig,
+  seed: string,
 ): SetupInput {
   const defs = getCardDefinitions();
   const counter = createInstanceCounter();
+  let rng: prand.RandomGenerator = prand.mersenne(hashSeed(seed));
 
   const locations = defs.filter((d) => d.type === "location");
   const policies = defs.filter((d) => d.type === "policy");
@@ -85,15 +92,21 @@ export function buildMainSetup(
   }> = {};
 
   for (const p of players) {
-    const playerLocs = instantiateCards(locations, p.id, counter);
-    const playerOther = instantiateCards(other, p.id, counter);
+    const playerLocs = shuffleCards(instantiateCards(locations, p.id, counter));
+    const playerOther = shuffleCards(instantiateCards(other, p.id, counter));
     const playerPolicies = instantiateCards(policies, p.id, counter) as PolicyCard[];
 
+    const hand = playerOther.splice(0, handSize);
+    // Split remaining cards: half to main deck, half to market deck
+    const midpoint = Math.floor(playerOther.length / 2);
+    const mainDeck = playerOther.slice(0, midpoint);
+    const marketDeck = playerOther.slice(midpoint);
+
     playerDecks[p.id] = {
-      hand: playerOther.splice(0, handSize),
-      mainDeck: playerOther,
+      hand,
+      mainDeck,
       prospectDeck: playerLocs,
-      marketDeck: [],
+      marketDeck,
       activePolicies: playerPolicies.length > 0 ? [playerPolicies[0]] : [],
     };
   }
@@ -122,8 +135,36 @@ export function buildMainSetup(
     }
   }
 
+  // Pre-populate market by drawing from each player's market deck
+  const marketSize = Number(config.market_draw_count ?? 3);
+  const market: Card[] = [];
+  for (const p of players) {
+    const deck = playerDecks[p.id];
+    market.push(...deck.marketDeck.splice(0, marketSize));
+  }
+
   return buildPrebuiltSetup({
     players: playerDecks,
     grid,
+    market,
   });
+
+  function shuffleCards<T>(arr: T[]): T[] {
+    const result = [...arr];
+    for (let i = result.length - 1; i > 0; i--) {
+      const [j, nextRng] = prand.uniformIntDistribution(0, i, rng);
+      rng = nextRng;
+      [result[i], result[j]] = [result[j], result[i]];
+    }
+    return result;
+  }
+}
+
+function hashSeed(seed: string): number {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < seed.length; i++) {
+    hash ^= seed.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return hash >>> 0;
 }

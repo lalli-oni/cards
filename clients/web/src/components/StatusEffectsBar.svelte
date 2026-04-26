@@ -26,7 +26,7 @@
 {#if hasEffects}
   <div class="flex flex-wrap items-center gap-2 text-xs">
     {#each policies as policy}
-      <span class="rounded bg-policy-bg px-1.5 py-0.5 text-policy" title={"Effect: " + policy.effect}>
+      <span class="rounded bg-policy-bg px-1.5 py-0.5 text-policy" title={policy.name + "\n" + (policy.effect ?? "").split(";").map(e => e.trim()).join("\n")}>
         {policy.name}
       </span>
     {/each}

@@ -22,6 +22,10 @@
     startNewGame(p1Name, p2Name, seed || undefined, skipSeeding);
   }
 
+  function handleQuickStart() {
+    startNewGame(p1Name, p2Name, seed || undefined, true);
+  }
+
   async function handleLoad(key: string) {
     await loadGame(key);
   }
@@ -86,12 +90,21 @@
         <input type="checkbox" bind:checked={skipSeeding} class="accent-amber-600" />
         Skip seeding phase
       </label>
-      <button
-        onclick={handleStart}
-        class="w-full rounded bg-amber-600 px-4 py-2 font-semibold text-white hover:bg-amber-500"
-      >
-        Start Game
-      </button>
+      <div class="flex gap-2">
+        <button
+          onclick={handleStart}
+          class="flex-1 rounded bg-amber-600 px-4 py-2 font-semibold text-white hover:bg-amber-500"
+        >
+          Start Game
+        </button>
+        <button
+          onclick={handleQuickStart}
+          class="rounded bg-stone-600 px-4 py-2 text-sm text-stone-200 hover:bg-stone-500"
+          title="Auto-play seeding phase with random choices"
+        >
+          Quick Start
+        </button>
+      </div>
     </div>
 
     {#if sessions.length > 0}

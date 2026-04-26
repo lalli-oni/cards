@@ -17,8 +17,21 @@
 
   const step = $derived(vs.seedingStep);
   const config = $derived(vs.config);
-  const keepCount = $derived(Number(config.seed_keep) || 8);
-  const exposeCount = $derived(Number(config.seed_expose) || 2);
+  const configKeep = $derived(Number(config.seed_keep) || 8);
+  const configExpose = $derived(Number(config.seed_expose) || 2);
+
+  // Match engine's proportional split when fewer cards are in hand
+  const totalInHand = $derived(vs.self.hand.length);
+  const keepCount = $derived(
+    totalInHand < configKeep + configExpose
+      ? Math.ceil(totalInHand * (configKeep / (configKeep + configExpose)))
+      : configKeep,
+  );
+  const exposeCount = $derived(
+    totalInHand < configKeep + configExpose
+      ? totalInHand - keepCount
+      : configExpose,
+  );
 
   function handleSimpleAction() {
     if (actions.length > 0) {
@@ -93,15 +106,7 @@
       Seeding — {step?.replace(/_/g, " ") ?? ""}
     </h2>
 
-    {#if step === "seed_draw"}
-      <button
-        onclick={handleSimpleAction}
-        class="rounded bg-amber-600 px-6 py-2 font-semibold text-white hover:bg-amber-500"
-      >
-        Draw Seeding Cards
-      </button>
-
-    {:else if step === "seed_keep"}
+    {#if step === "seed_keep"}
       <p class="mb-3 text-sm text-stone-400">
         Select {keepCount} cards to keep ({keepSet.size}/{keepCount}).
         Remaining {exposeCount} will be exposed.
@@ -140,13 +145,28 @@
       </div>
 
     {:else if step === "seed_place_location"}
-      <p class="mb-3 text-sm text-stone-400">Click a cell to place the location.</p>
-      <GridBoard
-        grid={vs.grid}
-        selfPlayerId={vs.self.id}
-        highlightedCells={placementCells}
-        onCellClick={handlePlaceLocation}
-      />
+      {@const nextLocation = vs.self.prospectDeck.find((c) => c.type === "location")}
+      <p class="mb-3 text-sm text-stone-400">
+        Click a cell to place
+        {#if nextLocation}
+          <span class="font-semibold text-location">{nextLocation.name}</span>
+        {:else}
+          the location
+        {/if}.
+      </p>
+      {#if nextLocation}
+        <div class="mb-3">
+          <CardView card={nextLocation} />
+        </div>
+      {/if}
+      <div class="max-h-80">
+        <GridBoard
+          grid={vs.grid}
+          selfPlayerId={vs.self.id}
+          highlightedCells={placementCells}
+          onCellClick={handlePlaceLocation}
+        />
+      </div>
 
     {:else if step === "policy_selection"}
       <p class="mb-3 text-sm text-stone-400">Confirm policy selection.</p>

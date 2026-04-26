@@ -15,6 +15,7 @@
   import MainPhase from "./components/MainPhase.svelte";
   import EndedScreen from "./components/EndedScreen.svelte";
   import EventLog from "./components/EventLog.svelte";
+  import CombatResultPopup from "./components/CombatResultPopup.svelte";
   // TODO: Remove DevPreview import and /#dev route once quick-start variant (#82) lands
   import DevPreview from "./DevPreview.svelte";
 
@@ -66,6 +67,8 @@
     {#if screen === "passDevice"}
       <PassDeviceOverlay />
     {/if}
+
+    <CombatResultPopup />
 
     {#if vs}
       {#if phase === "ended"}

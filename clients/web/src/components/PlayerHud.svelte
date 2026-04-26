@@ -29,10 +29,13 @@
       <span class="text-text-secondary" title="Hand size">✋{self.hand.length}</span>
     </div>
     <div class="flex gap-3 text-xs text-text-faint">
+      {#if self.seedingDeck.length > 0}
+        <span title="Seeding deck">🎴 Seeding:{self.seedingDeck.length}</span>
+      {/if}
       <span title="Main deck">📚 Main:{self.mainDeck.length}</span>
       <span title="Prospect deck">🗺️ Prospect:{self.prospectDeck.length}</span>
       <span title="Market deck">🏪 Market:{self.marketDeck.length}</span>
-      <span title="Discard pile">♻️ Discard:{self.discardPile.length}</span>
+      <span title="Discard pile{self.discardPile.length > 0 ? ': ' + self.discardPile.map(c => c.name).join(', ') : ''}">♻️ Discard:{self.discardPile.length}</span>
       {#if self.removedFromGame.length > 0}
         <span title="Cards removed from game: {self.removedFromGame.map(c => c.name).join(', ')}">
           ❌ Removed:{self.removedFromGame.length}
@@ -71,6 +74,9 @@
         <span class="text-text-secondary" title="Hand size">✋{opponent.handSize}</span>
       </div>
       <div class="flex gap-3 text-xs text-text-faint">
+        {#if opponent.seedingDeckSize > 0}
+          <span title="Seeding deck">🎴 Seeding:{opponent.seedingDeckSize}</span>
+        {/if}
         <span title="Main deck">📚 Main:{opponent.mainDeckSize}</span>
         <span title="Prospect deck">🗺️ Prospect:{opponent.prospectDeckSize}</span>
         <span title="Market deck">🏪 Market:{opponent.marketDeckSize}</span>

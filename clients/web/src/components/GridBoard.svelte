@@ -6,13 +6,28 @@
     grid: Grid;
     selfPlayerId?: string;
     highlightedCells?: Set<string>;
+    selectedEntityId?: string | null;
+    selectedCell?: { row: number; col: number } | null;
     onCellClick?: (row: number, col: number) => void;
+    onUnitClick?: (unitId: string) => void;
   }
 
-  let { grid, selfPlayerId, highlightedCells, onCellClick }: Props = $props();
+  let {
+    grid,
+    selfPlayerId,
+    highlightedCells,
+    selectedEntityId,
+    selectedCell,
+    onCellClick,
+    onUnitClick,
+  }: Props = $props();
 
   function cellKey(row: number, col: number): string {
     return `${row},${col}`;
+  }
+
+  function isCellSelected(row: number, col: number): boolean {
+    return selectedCell?.row === row && selectedCell?.col === col;
   }
 </script>
 
@@ -29,7 +44,10 @@
           col={c}
           {selfPlayerId}
           highlighted={highlightedCells?.has(cellKey(r, c)) ?? false}
+          selected={isCellSelected(r, c)}
+          {selectedEntityId}
           onclick={onCellClick}
+          {onUnitClick}
         />
       {/each}
     {/each}

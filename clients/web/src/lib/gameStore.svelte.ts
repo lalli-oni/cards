@@ -7,9 +7,15 @@ import {
   type PlayerDescriptor,
   type VisibleState,
 } from "cards-engine";
+import { setAutoFreeze } from "cards-engine";
 import { HotseatAdapter } from "./HotseatAdapter";
 import { DEFAULT_CONFIG, buildSeedingSetup, buildMainSetup } from "./gameSetup";
 import { autoSave, listSessions, loadSession, saveSession } from "./persistence";
+
+// Immer auto-freezes produce() output. Svelte 5's $state uses deep proxies.
+// Frozen objects passed into $state (and proxied objects passed back to immer)
+// cause conflicts. Disabling auto-freeze avoids the issue entirely.
+setAutoFreeze(false);
 
 // ---------------------------------------------------------------------------
 // Reactive state
@@ -25,6 +31,26 @@ let _currentPlayerName = $state("");
 let _savedSessions = $state<string[]>([]);
 let _gamePhase = $state<"seeding" | "main" | "ended" | null>(null);
 let _error = $state<string | null>(null);
+let _prevTurnStartIndex = $state(0);
+let _lastTurnStartIndex = $state(0);
+
+export interface CombatOutcome {
+  type: "injured" | "killed";
+  unitName: string;
+  ownerName: string;
+}
+
+export interface CombatResult {
+  row: number;
+  col: number;
+  locationName: string;
+  attackerName: string;
+  defenderName: string;
+  outcomes: CombatOutcome[];
+  winnerName: string | null;
+}
+
+let _combatResult = $state<CombatResult | null>(null);
 
 export function getScreen() {
   return _screen;
@@ -47,8 +73,56 @@ export function getSavedSessions() {
 export function getGamePhase() {
   return _gamePhase;
 }
+export function getCombatResult() {
+  return _combatResult;
+}
+export function dismissCombat() {
+  _combatResult = null;
+}
+// Derived card name lookup — rebuilt when visible state changes.
+// Covers grid, hand, HQ, policies, decks, discard, removed, market,
+// middle area, and opponent public zones.
+let _cardNameMap = $derived.by(() => {
+  const vs = _visibleState;
+  if (!vs) return new Map<string, string>();
+  const map = new Map<string, string>();
+  for (const row of vs.grid) {
+    for (const cell of row) {
+      if (cell.location) map.set(cell.location.id, cell.location.name);
+      for (const u of cell.units) map.set(u.id, u.name);
+      for (const i of cell.items) map.set(i.id, i.name);
+    }
+  }
+  const selfZones = [
+    vs.self.hand, vs.self.hq, vs.self.activePolicies,
+    vs.self.discardPile, vs.self.removedFromGame,
+    vs.self.seedingDeck, vs.self.prospectDeck, vs.self.policyPool,
+  ];
+  for (const zone of selfZones) {
+    for (const c of zone) map.set(c.id, c.name);
+  }
+  for (const c of vs.market) map.set(c.id, c.name);
+  for (const c of vs.middleArea) map.set(c.id, c.name);
+  for (const opp of vs.opponents ?? []) {
+    for (const c of opp.hq) map.set(c.id, c.name);
+    for (const c of opp.activePolicies) map.set(c.id, c.name);
+  }
+  return map;
+});
+
+export function resolveCardName(id: string): string {
+  return _cardNameMap.get(id) ?? id;
+}
+export function resolvePlayerName(id: string): string {
+  const p = players.find((pl) => pl.id === id);
+  return p?.name ?? id;
+}
 export function getError() {
   return _error;
+}
+/** Events from the previous turn — shown on the pass-device overlay. */
+export function getLastTurnEvents(): GameEvent[] {
+  return _eventLog.slice(_prevTurnStartIndex, _lastTurnStartIndex);
 }
 export function clearError() {
   _error = null;
@@ -71,7 +145,7 @@ let resolveAction: ((action: Action) => void) | null = null;
 let rejectAction: ((reason: Error) => void) | null = null;
 let resolvePassDevice: (() => void) | null = null;
 let rejectPassDevice: ((reason: Error) => void) | null = null;
-let isFirstTurn = true;
+let lastActivePlayerId: string | null = null;
 let autoSaveFailCount = 0;
 
 // ---------------------------------------------------------------------------
@@ -79,10 +153,13 @@ let autoSaveFailCount = 0;
 // ---------------------------------------------------------------------------
 
 function onBeforeTurn(playerId: string): Promise<void> {
-  if (isFirstTurn) {
-    isFirstTurn = false;
+  // Only show pass-device overlay when the active player actually changes
+  if (playerId === lastActivePlayerId || lastActivePlayerId === null) {
+    lastActivePlayerId = playerId;
     return Promise.resolve();
   }
+  lastActivePlayerId = playerId;
+  _combatResult = null; // Clear stale combat results on player change
   const player = players.find((p) => p.id === playerId);
   _currentPlayerName = player?.name ?? playerId;
   _screen = "passDevice";
@@ -110,8 +187,43 @@ function waitForAction(): Promise<Action> {
 }
 
 function onEvent(events: GameEvent[], state: GameState): void {
+  const baseIndex = _eventLog.length;
   _eventLog = [..._eventLog, ...events];
   _gamePhase = state.phase;
+
+  for (let i = 0; i < events.length; i++) {
+    if (events[i].type === "turn_started") {
+      _prevTurnStartIndex = _lastTurnStartIndex;
+      _lastTurnStartIndex = baseIndex + i;
+    }
+  }
+
+  // Extract combat result for popup. Names are resolved NOW because killed
+  // units will be removed from the visible state before the popup renders.
+  const combatStart = events.find((e) => e.type === "combat_started");
+  if (combatStart && combatStart.type === "combat_started") {
+    const combatEnd = events.find((e) => e.type === "combat_resolved");
+    if (!combatEnd) {
+      console.warn("combat_started without combat_resolved in same event batch");
+    }
+    const outcomes: CombatOutcome[] = [];
+    for (const e of events) {
+      if (e.type === "unit_injured") outcomes.push({ type: "injured", unitName: resolveCardName(e.unitId), ownerName: resolvePlayerName(e.ownerId) });
+      if (e.type === "unit_killed") outcomes.push({ type: "killed", unitName: resolveCardName(e.unitId), ownerName: resolvePlayerName(e.ownerId) });
+    }
+    const cell = _visibleState?.grid[combatStart.row]?.[combatStart.col];
+    _combatResult = {
+      row: combatStart.row,
+      col: combatStart.col,
+      locationName: cell?.location?.name ?? `(${combatStart.row},${combatStart.col})`,
+      attackerName: resolvePlayerName(combatStart.attackerId),
+      defenderName: resolvePlayerName(combatStart.defenderId),
+      outcomes,
+      winnerName: combatEnd?.type === "combat_resolved" && combatEnd.winnerId
+        ? resolvePlayerName(combatEnd.winnerId)
+        : null,
+    };
+  }
 
   if (state.phase === "ended" && players.length > 0) {
     _visibleState = engineGetVisibleState(state, players[0].id);
@@ -122,7 +234,7 @@ function onEvent(events: GameEvent[], state: GameState): void {
   // Auto-save after every action
   if (controller) {
     try {
-      const session = controller.toSession(true);
+      const session = structuredClone(controller.toSession(true));
       autoSave(session)
         .then(() => {
           autoSaveFailCount = 0;
@@ -137,6 +249,10 @@ function onEvent(events: GameEvent[], state: GameState): void {
         });
     } catch (err) {
       console.error("Failed to serialize session for auto-save:", err);
+      autoSaveFailCount++;
+      if (autoSaveFailCount >= 3) {
+        _error = "Auto-save is failing. Your progress may not be saved. Try saving manually.";
+      }
     }
   }
 }
@@ -156,7 +272,7 @@ export function startNewGame(
   p1Name: string,
   p2Name: string,
   seed?: string,
-  skipSeeding = false,
+  skipSeeding?: boolean,
 ): void {
   players = [
     { id: "p1", name: p1Name || "Player 1" },
@@ -170,16 +286,18 @@ export function startNewGame(
 
   const adapters = new Map<string, HotseatAdapter>();
   for (const p of players) {
-    adapters.set(
-      p.id,
-      new HotseatAdapter(onBeforeTurn, onTurnStart, waitForAction),
-    );
+    const adapter: HotseatAdapter = new HotseatAdapter(onBeforeTurn, onTurnStart, waitForAction);
+    if (skipSeeding) adapter.autoSeeding = true;
+    adapters.set(p.id, adapter);
   }
 
   _eventLog = [];
   _error = null;
   _gamePhase = skipSeeding ? "main" : "seeding";
-  isFirstTurn = true;
+  _prevTurnStartIndex = 0;
+  _lastTurnStartIndex = 0;
+  _combatResult = null;
+  lastActivePlayerId = null;
   autoSaveFailCount = 0;
 
   controller = new GameController({
@@ -229,7 +347,10 @@ export async function loadGame(key: string): Promise<void> {
 
   _eventLog = [];
   _error = null;
-  isFirstTurn = true;
+  _prevTurnStartIndex = 0;
+  _lastTurnStartIndex = 0;
+  _combatResult = null;
+  lastActivePlayerId = null;
   autoSaveFailCount = 0;
 
   try {
@@ -262,9 +383,7 @@ export function selectAction(action: Action): void {
     const resolve = resolveAction;
     resolveAction = null;
     rejectAction = null;
-    // Strip Svelte's $state proxy before passing back to the engine.
-    // Immer's produce uses Object.defineProperty which conflicts with $state proxies.
-    resolve(JSON.parse(JSON.stringify(action)));
+    resolve($state.snapshot(action));
   }
 }
 
@@ -278,9 +397,12 @@ export function confirmPassDevice(): void {
 }
 
 export async function saveGame(name: string): Promise<void> {
-  if (!controller) return;
+  if (!controller) {
+    _error = "No active game to save.";
+    return;
+  }
   try {
-    await saveSession(name, controller.toSession(true));
+    await saveSession(name, structuredClone(controller.toSession(true)));
     await refreshSessions();
   } catch (err) {
     _error = `Failed to save game: ${err instanceof Error ? err.message : String(err)}`;
@@ -294,6 +416,7 @@ export async function refreshSessions(): Promise<void> {
   } catch (err) {
     console.error("Failed to list sessions:", err);
     _savedSessions = [];
+    _error = "Could not load saved games. Browser storage may be unavailable.";
   }
 }
 
@@ -312,6 +435,9 @@ export function returnToMenu(): void {
   _visibleState = null;
   _validActions = [];
   _eventLog = [];
+  _prevTurnStartIndex = 0;
+  _lastTurnStartIndex = 0;
+  _combatResult = null;
   _gamePhase = null;
   _currentPlayerName = "";
   _error = null;

@@ -97,13 +97,16 @@ export function createGame(
   });
 
   // Populate decks based on input mode
+  let currentRng = nextRng;
   if (setupInput.mode === "seeding") {
     for (const ps of playerStates) {
       const input = setupInput.decks[ps.id];
       if (!input) {
         throw new Error(`No seeding deck provided for player "${ps.id}"`);
       }
-      ps.seedingDeck = [...input.seedingDeck];
+      const [shuffled, rngAfter] = shuffle([...input.seedingDeck], currentRng);
+      currentRng = rngAfter;
+      ps.seedingDeck = shuffled;
       ps.policyPool = [...input.policyPool];
     }
   } else {
@@ -141,7 +144,7 @@ export function createGame(
       setupInput.mode === "main" && setupInput.market
         ? [...setupInput.market]
         : [],
-    rngState: extractRngState(nextRng),
+    rngState: extractRngState(currentRng),
     seed,
     actionLog: [],
   };

@@ -117,8 +117,8 @@ describe("applyAction", () => {
     });
   });
 
-  describe("unimplemented actions", () => {
-    it("throws for activate action (deferred to #20)", () => {
+  describe("activate action", () => {
+    it("throws when card is not on the grid", () => {
       const state = createTestGame();
       expect(() =>
         applyAction(state, {
@@ -127,7 +127,27 @@ describe("applyAction", () => {
           cardId: "some-card",
           actionName: "test",
         }),
-      ).toThrow("not yet implemented");
+      ).toThrow("not found on grid");
+    });
+  });
+
+  describe("frozen action objects", () => {
+    it("accepts Object.freeze'd actions without throwing", () => {
+      const state = createTestGame();
+      const action = Object.freeze({
+        type: "pass" as const,
+        playerId: state.turn.activePlayerId,
+      });
+      expect(() => applyAction(state, action)).not.toThrow();
+    });
+
+    it("accepts deeply frozen actions without throwing", () => {
+      const state = createTestGame();
+      const action = Object.freeze({
+        type: "draw" as const,
+        playerId: Object.freeze(state.turn.activePlayerId),
+      });
+      expect(() => applyAction(state, action)).not.toThrow();
     });
   });
 });

@@ -8,6 +8,7 @@
     "test": "bun test src/__tests__/"
   },
   "dependencies": {
+    "chevrotain": "^12.0.0",
     "immer": "^11.1.4",
     "pure-rand": "6"
   }

@@ -1,21 +1,21 @@
 id,name,set,rarity,cost,strength,cunning,charisma,attributes,keywords,actions,text,flavor
-cleopatra,Cleopatra,alpha-1,legendary,6,4,8,9,Politician;Diplomat,,diplomacy:1:charisma_contest_control,Target 1 adjacent unit. Move it to Cleopatra's location. Charisma contest: on win take control of target unit for this round.,The last pharaoh played Rome like a harp.
-nikola-tesla,Nikola Tesla,alpha-1,epic,4,3,9,5,Scientist;Engineer,,invent:2:buy_item_free,Buy an item from the market for free.,The man who lit the world — then vanished from it.
-miyamoto-musashi,Miyamoto Musashi,alpha-1,epic,5,9,7,4,Warrior,,duel:1:strength_contest_injure,Strength contest: injure target unit at same location.,Undefeated in sixty duels.
-ada-lovelace,Ada Lovelace,alpha-1,epic,3,3,8,5,Scientist,,analyze:1:look_at_top_3_deck,Look at the top 3 cards of your main deck. Keep one.,The first programmer — before the first computer.
-genghis-khan,Genghis Khan,alpha-1,legendary,7,8,7,6,Warrior;Politician,Military,conquer:3:raze_keep_location,Raze target location. Place it in your HQ instead of discarding. Mission VP is not awarded. Your Equip actions involving a Mount cost 0 AP.,He did not build. He took.
-leonardo-da-vinci,Leonardo da Vinci,alpha-1,legendary,7,5,10,7,Scientist;Engineer,,design:1:draw_2_cards,Draw 2 cards from your main deck.,The universal man needed no specialization.
-mansa-musa,Mansa Musa,alpha-1,legendary,8,4,6,10,Politician;Diplomat,,pilgrimage:2:gain_5_gold,Gain 5 gold.,His generosity crashed an economy.
-hypatia,Hypatia,alpha-1,epic,4,3,9,6,Scientist,,lecture:1:give_friendly_unit_plus2_cunning,Target friendly unit at same location gets +2 cunning until end of turn.,She taught Alexandria to think.
-sun-tzu,Sun Tzu,alpha-1,epic,5,7,9,4,Warrior;Scientist,,stratagem:1:move_enemy_unit,Move target enemy unit at same location to an adjacent location.,Supreme excellence consists in breaking the enemy's resistance without fighting.
-joan-of-arc,Joan of Arc,alpha-1,epic,5,7,4,8,Warrior;Spiritual,,rally:1:plus2_strength_friendly_units,All friendly units at this location get +2 strength until end of turn.,She heard voices — and a nation followed.
-marco-polo,Marco Polo,alpha-1,uncommon,3,4,5,8,Diplomat;Merchant,,trade-route:1:move_and_gain_gold,Move Marco Polo to an adjacent location and gain 1 gold.,Twenty-four years of road and wonder.
-alexander-the-great,Alexander the Great,alpha-1,legendary,8,9,7,8,Warrior;Politician,,march:1:move_and_attack,Move to adjacent location and initiate a strength contest against target unit there.,He wept for there were no more worlds to conquer.
-nefertiti,Nefertiti,alpha-1,uncommon,3,4,5,8,Politician;Spiritual,,inspire:1:plus2_charisma_all_friendly,All friendly units at this location get +2 charisma until end of turn.,Beauty was the least of her powers.
-galileo-galilei,Galileo Galilei,alpha-1,uncommon,3,3,8,4,Scientist,,observe:1:look_at_opponent_hand,Look at target opponent's hand.,And yet it moves.
-hannibal-barca,Hannibal Barca,alpha-1,epic,6,8,8,5,Warrior,,flank:2:strength_contest_plus3,Strength contest against target unit at same location with +3 bonus.,He brought elephants across mountains.
-harriet-tubman,Harriet Tubman,alpha-1,uncommon,2,5,7,7,Politician,,underground:1:move_friendly_unit_through_blocked,Move target friendly unit to an adjacent location ignoring one blocked edge.,She never lost a passenger.
-ibn-battuta,Ibn Battuta,alpha-1,common,2,3,7,6,Diplomat;Scientist,,wander:1:move_and_gain_gold,Move Ibn Battuta to an adjacent location and gain 1 gold.,Seventy-five thousand miles before the age of jet.
-ramesses-ii,Ramesses II,alpha-1,uncommon,4,7,5,7,Warrior;Politician,,monument:2:gain_1_vp_kill_self,Gain 1 VP. Ramesses II is killed.,He carved his name into eternity.
+cleopatra,Cleopatra,alpha-1,legendary,6,4,8,9,Politician;Diplomat,,diplomacy:1:contest.charisma(enemy + adjacent) > control(target)~round,Target 1 adjacent unit. Move it to Cleopatra's location. Charisma contest: on win take control of target unit for this round.,The last pharaoh played Rome like a harp.
+nikola-tesla,Nikola Tesla,alpha-1,epic,4,3,9,5,Scientist;Engineer,,invent:2:buy(item)[0],Buy an item from the market for free.,The man who lit the world — then vanished from it.
+miyamoto-musashi,Miyamoto Musashi,alpha-1,epic,5,9,7,4,Warrior,,duel:1:contest.strength(enemy),Strength contest: injure target unit at same location.,Undefeated in sixty duels.
+ada-lovelace,Ada Lovelace,alpha-1,epic,3,3,8,5,Scientist,,analyze:1:reveal(deck)[3] > pick[1],Look at the top 3 cards of your main deck. Keep one.,The first programmer — before the first computer.
+genghis-khan,Genghis Khan,alpha-1,legendary,7,8,7,6,Warrior;Politician,Military,conquer:3:raze(location) > to(hq),Raze target location. Place it in your HQ instead of discarding. Mission VP is not awarded. Your Equip actions involving a Mount cost 0 AP.,He did not build. He took.
+leonardo-da-vinci,Leonardo da Vinci,alpha-1,legendary,7,5,10,7,Scientist;Engineer,,design:1:draw[2],Draw 2 cards from your main deck.,The universal man needed no specialization.
+mansa-musa,Mansa Musa,alpha-1,legendary,8,4,6,10,Politician;Diplomat,,pilgrimage:2:gold[5],Gain 5 gold.,His generosity crashed an economy.
+hypatia,Hypatia,alpha-1,epic,4,3,9,6,Scientist,,lecture:1:buff.cunning(friendly)[2]~turn,Target friendly unit at same location gets +2 cunning until end of turn.,She taught Alexandria to think.
+sun-tzu,Sun Tzu,alpha-1,epic,5,7,9,4,Warrior;Scientist,,stratagem:1:move(enemy),Move target enemy unit at same location to an adjacent location.,Supreme excellence consists in breaking the enemy's resistance without fighting.
+joan-of-arc,Joan of Arc,alpha-1,epic,5,7,4,8,Warrior;Spiritual,,rally:1:buff.strength(all + friendly)[2]~turn,All friendly units at this location get +2 strength until end of turn.,She heard voices — and a nation followed.
+marco-polo,Marco Polo,alpha-1,uncommon,3,4,5,8,Diplomat;Merchant,,trade-route:1:move(self) + gold[1],Move Marco Polo to an adjacent location and gain 1 gold.,Twenty-four years of road and wonder.
+alexander-the-great,Alexander the Great,alpha-1,legendary,8,9,7,8,Warrior;Politician,,march:1:move(self) + contest.strength(enemy),Move to adjacent location and initiate a strength contest against target unit there.,He wept for there were no more worlds to conquer.
+nefertiti,Nefertiti,alpha-1,uncommon,3,4,5,8,Politician;Spiritual,,inspire:1:buff.charisma(all + friendly)[2]~turn,All friendly units at this location get +2 charisma until end of turn.,Beauty was the least of her powers.
+galileo-galilei,Galileo Galilei,alpha-1,uncommon,3,3,8,4,Scientist,,observe:1:reveal(opponent + hand),Look at target opponent's hand.,And yet it moves.
+hannibal-barca,Hannibal Barca,alpha-1,epic,6,8,8,5,Warrior,,flank:2:contest.strength(enemy)[3],Strength contest against target unit at same location with +3 bonus.,He brought elephants across mountains.
+harriet-tubman,Harriet Tubman,alpha-1,uncommon,2,5,7,7,Politician,,underground:1:move(friendly)~ignore_blocked,Move target friendly unit to an adjacent location ignoring one blocked edge.,She never lost a passenger.
+ibn-battuta,Ibn Battuta,alpha-1,common,2,3,7,6,Diplomat;Scientist,,wander:1:move(self) + gold[1],Move Ibn Battuta to an adjacent location and gain 1 gold.,Seventy-five thousand miles before the age of jet.
+ramesses-ii,Ramesses II,alpha-1,uncommon,4,7,5,7,Warrior;Politician,,monument:2:vp[1] + kill(self),Gain 1 VP. Ramesses II is killed.,He carved his name into eternity.
 mary-shelley,Mary Shelley,alpha-1,common,2,3,7,5,Scientist,,,The first event you play each turn costs 0 AP.,She gave lightning a soul.
 spartacus,Spartacus,alpha-1,common,2,7,4,6,Warrior,,,When Spartacus wins combat you may injure him to kill the target instead.,He fought not for glory but for freedom.

@@ -118,6 +118,16 @@ export function describeEvent(event: GameEvent, r?: NameResolvers): string {
       return `${p(event.playerId, r)} deck constructed`;
     case "policies_assigned":
       return `${p(event.playerId, r)} assigned policies: ${event.policyIds.map((id) => c(id, r)).join(", ")}`;
+    case "card_discarded":
+      return `${p(event.playerId, r)} discarded ${c(event.cardId, r)} (${event.reason})`;
+    case "unit_buffed":
+      return `${c(event.unitId, r)} got ${event.delta > 0 ? "+" : ""}${event.delta} ${event.stat}`;
+    case "cards_revealed":
+      return `${p(event.playerId, r)} revealed ${event.cardIds.length} card(s)`;
+    case "unit_controlled":
+      return `${p(event.controllerId, r)} took control of ${c(event.unitId, r)}`;
+    case "contest_resolved":
+      return `${event.stat} contest: ${c(event.attackerId, r)} (${event.attackerPower}) vs ${c(event.defenderId, r)} (${event.defenderPower}) — ${c(event.winnerId, r)} wins`;
     default:
       return `Unknown event: ${(event as { type: string }).type}`;
   }

@@ -10,7 +10,8 @@
   },
   "dependencies": {
     "cards-engine": "workspace:*",
-    "idb-keyval": "^6.2.2"
+    "idb-keyval": "^6.2.2",
+    "pure-rand": "^8.4.0"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^5.0.0",

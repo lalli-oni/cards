@@ -8,21 +8,19 @@
     clearError,
   } from "../lib/gameStore.svelte";
   import { deleteSession } from "../lib/persistence";
+  import { generateSeed } from "../lib/gameSetup";
 
   let p1Name = $state("Player 1");
   let p2Name = $state("Player 2");
-  let seed = $state("");
+  let seed = $state(generateSeed());
+  let skipSeeding = $state(false);
 
   $effect(() => {
     refreshSessions();
   });
 
   function handleStart() {
-    startNewGame(p1Name, p2Name, seed || undefined);
-  }
-
-  function handleQuickStart() {
-    startNewGame(p1Name, p2Name, seed || undefined, true);
+    startNewGame(p1Name, p2Name, seed || undefined, skipSeeding);
   }
 
   async function handleLoad(key: string) {
@@ -85,21 +83,16 @@
           class="w-full rounded bg-stone-700 px-3 py-2 text-stone-100 placeholder-stone-400"
         />
       </div>
-      <div class="flex gap-2">
-        <button
-          onclick={handleStart}
-          class="flex-1 rounded bg-amber-600 px-4 py-2 font-semibold text-white hover:bg-amber-500"
-        >
-          Start Game
-        </button>
-        <button
-          onclick={handleQuickStart}
-          class="rounded bg-stone-600 px-4 py-2 text-sm text-stone-200 hover:bg-stone-500"
-          title="Auto-play seeding phase with random choices"
-        >
-          Quick Start
-        </button>
-      </div>
+      <label class="flex items-center gap-2 text-stone-300">
+        <input type="checkbox" bind:checked={skipSeeding} class="accent-amber-600" />
+        Skip seeding phase
+      </label>
+      <button
+        onclick={handleStart}
+        class="w-full rounded bg-amber-600 px-4 py-2 font-semibold text-white hover:bg-amber-500"
+      >
+        Start Game
+      </button>
     </div>
 
     {#if sessions.length > 0}

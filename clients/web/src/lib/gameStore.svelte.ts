@@ -9,7 +9,7 @@ import {
 } from "cards-engine";
 import { setAutoFreeze } from "cards-engine";
 import { HotseatAdapter } from "./HotseatAdapter";
-import { DEFAULT_CONFIG, buildSeedingSetup } from "./gameSetup";
+import { DEFAULT_CONFIG, buildSeedingSetup, buildMainSetup } from "./gameSetup";
 import { autoSave, listSessions, loadSession, saveSession } from "./persistence";
 
 // Immer auto-freezes produce() output. Svelte 5's $state uses deep proxies.
@@ -279,8 +279,10 @@ export function startNewGame(
     { id: "p2", name: p2Name || "Player 2" },
   ];
 
-  const setupInput = buildSeedingSetup(players);
   const gameSeed = seed || crypto.randomUUID();
+  const setupInput = skipSeeding
+    ? buildMainSetup(players, DEFAULT_CONFIG, gameSeed)
+    : buildSeedingSetup(players);
 
   const adapters = new Map<string, HotseatAdapter>();
   for (const p of players) {
@@ -291,7 +293,7 @@ export function startNewGame(
 
   _eventLog = [];
   _error = null;
-  _gamePhase = "seeding";
+  _gamePhase = skipSeeding ? "main" : "seeding";
   _prevTurnStartIndex = 0;
   _lastTurnStartIndex = 0;
   _combatResult = null;

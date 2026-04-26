@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type {
+  ActionDef,
   Card,
   CardType,
   EventSubtype,
@@ -34,7 +35,7 @@ export interface CardDefinition {
   cunning?: number | null;
   charisma?: number | null;
   attributes?: string[];
-  actions?: { name: string; apCost: number; effect: string }[];
+  actions?: ActionDef[];
 
   // Location fields
   mission?: string | null;
@@ -268,6 +269,7 @@ export function instantiateCard(
         charisma: def.charisma ?? 0,
         attributes: def.attributes ?? [],
         injured: false,
+        actions: def.actions ?? undefined,
       } satisfies UnitCard;
 
     case "location":
@@ -294,7 +296,7 @@ export function instantiateCard(
       }
       switch (def.subtype) {
         case "instant":
-          return { ...base, type: "event", subtype: "instant" } satisfies InstantEventCard;
+          return { ...base, type: "event", subtype: "instant", effect: def.effect ?? undefined } satisfies InstantEventCard;
         case "passive":
           return {
             ...base,

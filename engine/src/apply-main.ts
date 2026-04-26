@@ -21,6 +21,7 @@ import {
   placeLocationOnGrid,
 } from "./state-helpers";
 import { emit as emitEvent } from "./listeners/emit";
+import { executeEffect } from "./effect-dsl/executor";
 import { rebuildListeners } from "./listeners/rebuild";
 import { getModifiedStat, getModifiedCost, getModifiedAPCost } from "./listeners/query";
 import type { EmitFn, QueryListener } from "./listeners/types";
@@ -112,6 +113,7 @@ function runEndOfTurn(
   while (player.hand.length > maxHandSize) {
     const discarded = player.hand.pop()!;
     player.discardPile.push(discarded);
+    emit({ type: "card_discarded", playerId: player.id, cardId: discarded.id, reason: "hand_limit" });
   }
 
   // Passive event duration tracking
@@ -122,6 +124,31 @@ function runEndOfTurn(
       player.passiveEvents.splice(i, 1);
       player.discardPile.push(evt);
       emit({ type: "passive_expired", playerId: player.id, cardId: evt.id });
+    }
+  }
+
+  // Expire stat modifiers and control overrides on all grid units
+  for (const row of draft.grid) {
+    for (const cell of row) {
+      for (const unit of cell.units) {
+        // Stat modifiers
+        if (unit.statModifiers && unit.statModifiers.length > 0) {
+          for (let i = unit.statModifiers.length - 1; i >= 0; i--) {
+            unit.statModifiers[i].remainingDuration -= 1;
+            if (unit.statModifiers[i].remainingDuration <= 0) {
+              unit.statModifiers.splice(i, 1);
+            }
+          }
+        }
+        // Control override
+        if (unit.controlOverride) {
+          unit.controlOverride.remainingDuration -= 1;
+          if (unit.controlOverride.remainingDuration <= 0) {
+            unit.ownerId = unit.controlOverride.previousOwnerId;
+            unit.controlOverride = undefined;
+          }
+        }
+      }
     }
   }
 }
@@ -277,6 +304,15 @@ function handleEnter(
   const unit = player.hq.splice(unitIdx, 1)[0] as UnitCard;
   cell.units.push(unit);
 
+  // Move equipped items from HQ to the grid cell with the unit
+  for (let i = player.hq.length - 1; i >= 0; i--) {
+    const card = player.hq[i];
+    if (card.type === "item" && card.equippedTo === unitId) {
+      player.hq.splice(i, 1);
+      cell.items.push(card as ItemCard);
+    }
+  }
+
   emit({ type: "unit_entered", playerId, unitId, row, col });
 }
 
@@ -339,6 +375,13 @@ function handleMove(
     const player = getPlayerById(draft, playerId);
     player.hq.push(removed);
 
+    // Move equipped items from grid cell to HQ with the unit
+    for (let i = cell.items.length - 1; i >= 0; i--) {
+      if (cell.items[i].equippedTo === unitId) {
+        player.hq.push(cell.items.splice(i, 1)[0]);
+      }
+    }
+
     emit({
       type: "unit_moved",
       playerId,
@@ -348,7 +391,6 @@ function handleMove(
       toRow: -1,
       toCol: -1,
     });
-
 
     return;
   }
@@ -382,6 +424,13 @@ function handleMove(
   const removed = fromCell.units.splice(idx, 1)[0];
   draft.grid[toRow][toCol].units.push(removed);
 
+  // Move equipped items from source cell to destination cell with the unit
+  for (let i = fromCell.items.length - 1; i >= 0; i--) {
+    if (fromCell.items[i].equippedTo === unitId) {
+      draft.grid[toRow][toCol].items.push(fromCell.items.splice(i, 1)[0]);
+    }
+  }
+
   emit({ type: "unit_moved", playerId, unitId, fromRow, fromCol, toRow, toCol });
 }
 
@@ -392,6 +441,7 @@ function handlePlayEvent(
   targetId: string | undefined,
   emit: EmitFn,
   events: GameEvent[],
+  queries: QueryListener[],
 ): void {
   const player = getPlayerById(draft, playerId);
   const cardIdx = player.hand.findIndex((c) => c.id === cardId);
@@ -411,11 +461,20 @@ function handlePlayEvent(
   player.hand.splice(cardIdx, 1);
 
   switch (card.subtype) {
-    case "instant":
-      // Effect resolution deferred — for now just discard
+    case "instant": {
+      if (card.effect) {
+        let rng = prand.mersenne.fromState(draft.rngState);
+        const result = executeEffect(card.effect, {
+          draft, playerId, emit,
+          events, queries,
+          rng,
+        });
+        draft.rngState = extractRngState(result.rng) as number[];
+      }
       player.discardPile.push(card);
       emit({ type: "event_played", playerId, cardId });
       break;
+    }
 
     case "passive":
       player.passiveEvents.push({
@@ -777,17 +836,52 @@ function handleAttemptMission(
 }
 
 function handleActivate(
-  _draft: Draft<MainGameState>,
-  _playerId: string,
-  _cardId: string,
-  _actionName: string,
-  _targetId: string | undefined,
-  _emit: EmitFn,
+  draft: Draft<MainGameState>,
+  playerId: string,
+  cardId: string,
+  actionName: string,
+  targetId: string | undefined,
+  targetCell: { row: number; col: number } | undefined,
+  emit: EmitFn,
+  events: GameEvent[],
+  queries: QueryListener[],
 ): void {
-  // Stub — effect resolution deferred to issue #20
-  throw new Error(
-    "activate action is not yet implemented — waiting on stat contest mechanics (#20)",
-  );
+  // Find the card with actions — search grid units
+  let card: Draft<UnitCard> | undefined;
+
+  for (let r = 0; r < draft.grid.length; r++) {
+    for (let c = 0; c < draft.grid[r].length; c++) {
+      const found = draft.grid[r][c].units.find((u) => u.id === cardId);
+      if (found) {
+        card = found;
+        break;
+      }
+    }
+    if (card) break;
+  }
+
+  if (!card) throw new Error(`Card "${cardId}" not found on grid`);
+  if (!card.actions) throw new Error(`Card "${cardId}" has no actions`);
+  if (card.ownerId !== playerId) throw new Error(`Card "${cardId}" not owned by "${playerId}"`);
+
+  const actionDef = card.actions.find((a) => a.name === actionName);
+  if (!actionDef) throw new Error(`Action "${actionName}" not found on card "${cardId}"`);
+
+  spendAP(draft, actionDef.apCost);
+
+  let rng = prand.mersenne.fromState(draft.rngState);
+  const result = executeEffect(actionDef.effect, {
+    draft,
+    playerId,
+    actingUnitId: cardId,
+    targetId,
+    targetCell,
+    emit,
+    events,
+    queries,
+    rng,
+  });
+  draft.rngState = extractRngState(result.rng) as number[];
 }
 
 // ---------------------------------------------------------------------------
@@ -831,7 +925,7 @@ export function applyMainAction(
         break;
 
       case "play_event":
-        handlePlayEvent(draft, action.playerId, action.cardId, action.targetId, emit, events);
+        handlePlayEvent(draft, action.playerId, action.cardId, action.targetId, emit, events, queries);
         break;
 
       case "equip":
@@ -856,7 +950,9 @@ export function applyMainAction(
       case "activate":
         handleActivate(
           draft, action.playerId, action.cardId,
-          action.actionName, action.targetId, emit,
+          action.actionName, action.targetId,
+          action.targetCell,
+          emit, events, queries,
         );
         break;
 

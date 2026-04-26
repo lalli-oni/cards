@@ -1,14 +1,22 @@
+import prand from "pure-rand";
 import {
   createInstanceCounter,
   instantiateCards,
+  buildPrebuiltSetup,
   type Card,
   type CardDefinition,
   type GameConfig,
   type PlayerDescriptor,
   type PolicyCard,
   type SetupInput,
+  type Grid,
+  type LocationCard,
 } from "cards-engine";
 import cardDefsJson from "@library/all.json";
+
+export function generateSeed(): string {
+  return crypto.randomUUID().slice(0, 8);
+}
 
 export const DEFAULT_CONFIG: GameConfig = {
   starting_gold: 10,
@@ -49,4 +57,114 @@ export function buildSeedingSetup(
     };
   }
   return { mode: "seeding" as const, decks };
+}
+
+/**
+ * Build a SetupInput that skips seeding and goes straight to main phase.
+ * Distributes cards evenly to players: locations go to prospect decks,
+ * non-locations split between hand and main deck. Builds a basic grid
+ * with locations placed.
+ */
+export function buildMainSetup(
+  players: PlayerDescriptor[],
+  config: GameConfig,
+  seed: string,
+): SetupInput {
+  const defs = getCardDefinitions();
+  const counter = createInstanceCounter();
+  let rng: prand.RandomGenerator = prand.mersenne(hashSeed(seed));
+
+  const locations = defs.filter((d) => d.type === "location");
+  const policies = defs.filter((d) => d.type === "policy");
+  const other = defs.filter((d) => d.type !== "location" && d.type !== "policy");
+
+  const handSize = Number(config.starting_hand_size ?? 5);
+  const gridPadding = Number(config.grid_padding ?? 2);
+  const gridSize = players.length + gridPadding;
+
+  // Build per-player decks
+  const playerDecks: Record<string, {
+    mainDeck: Card[];
+    hand: Card[];
+    prospectDeck: Card[];
+    marketDeck: Card[];
+    activePolicies: PolicyCard[];
+  }> = {};
+
+  for (const p of players) {
+    const playerLocs = shuffleCards(instantiateCards(locations, p.id, counter));
+    const playerOther = shuffleCards(instantiateCards(other, p.id, counter));
+    const playerPolicies = instantiateCards(policies, p.id, counter) as PolicyCard[];
+
+    const hand = playerOther.splice(0, handSize);
+    // Split remaining cards: half to main deck, half to market deck
+    const midpoint = Math.floor(playerOther.length / 2);
+    const mainDeck = playerOther.slice(0, midpoint);
+    const marketDeck = playerOther.slice(midpoint);
+
+    playerDecks[p.id] = {
+      hand,
+      mainDeck,
+      prospectDeck: playerLocs,
+      marketDeck,
+      activePolicies: playerPolicies.length > 0 ? [playerPolicies[0]] : [],
+    };
+  }
+
+  // Build grid with locations placed
+  const grid: Grid = [];
+  for (let r = 0; r < gridSize; r++) {
+    grid.push(
+      Array.from({ length: gridSize }, () => ({ location: null, units: [], items: [] })),
+    );
+  }
+
+  // Place locations from each player's prospect deck onto the grid
+  let cellIdx = 0;
+  const locsPerPlayer = Math.floor((gridSize * gridSize) / players.length);
+  for (const p of players) {
+    const deck = playerDecks[p.id];
+    const locsToPlace = deck.prospectDeck.splice(0, locsPerPlayer);
+    for (const loc of locsToPlace) {
+      const r = Math.floor(cellIdx / gridSize);
+      const c = cellIdx % gridSize;
+      if (r < gridSize) {
+        grid[r][c].location = loc as LocationCard;
+      }
+      cellIdx++;
+    }
+  }
+
+  // Pre-populate market by drawing from each player's market deck
+  const marketSize = Number(config.market_draw_count ?? 3);
+  const market: Card[] = [];
+  for (const p of players) {
+    const deck = playerDecks[p.id];
+    market.push(...deck.marketDeck.splice(0, marketSize));
+  }
+
+  return buildPrebuiltSetup({
+    players: playerDecks,
+    grid,
+    market,
+  });
+
+  function shuffleCards<T>(arr: T[]): T[] {
+    const result = [...arr];
+    for (let i = result.length - 1; i > 0; i--) {
+      const [j, nextRng] = prand.uniformIntDistribution(0, i, rng);
+      rng = nextRng;
+      [result[i], result[j]] = [result[j], result[i]];
+    }
+    return result;
+  }
+}
+
+function hashSeed(seed: string): number {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < seed.length; i++) {
+    hash ^= seed.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return hash >>> 0;
 }

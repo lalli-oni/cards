@@ -18,6 +18,7 @@ import type {
   GameState,
   MainAction,
   MainGameState,
+  PendingPick,
   SeedingAction,
   SeedingGameState,
 } from "./types";
@@ -118,6 +119,10 @@ function getMainValidActions(
   state: MainGameState,
   playerId: string,
 ): MainAction[] {
+  if (state.pendingPick && state.pendingPick.playerId === playerId) {
+    return getResolvePickActions(state.pendingPick, playerId);
+  }
+
   const actions: MainAction[] = [];
   const player = getPlayerById(state, playerId);
   const ap = state.turn.actionPointsRemaining;
@@ -358,6 +363,40 @@ function getMainValidActions(
   }
 
   return actions;
+}
+
+// ---------------------------------------------------------------------------
+// Pending pick resolution
+// ---------------------------------------------------------------------------
+
+function getResolvePickActions(
+  pending: PendingPick,
+  playerId: string,
+): MainAction[] {
+  return subsetsOfSize(pending.revealedCardIds, pending.pickCount).map(
+    (pickedCardIds) => ({ type: "resolve_pick", playerId, pickedCardIds }),
+  );
+}
+
+function subsetsOfSize<T>(items: readonly T[], size: number): T[][] {
+  if (size < 0 || size > items.length) return [];
+  if (size === 0) return [[]];
+  if (size === items.length) return [[...items]];
+  const result: T[][] = [];
+  const buf: T[] = new Array(size);
+  const choose = (start: number, depth: number): void => {
+    if (depth === size) {
+      result.push([...buf]);
+      return;
+    }
+    const remaining = size - depth;
+    for (let i = start; i <= items.length - remaining; i++) {
+      buf[depth] = items[i];
+      choose(i + 1, depth + 1);
+    }
+  };
+  choose(0, 0);
+  return result;
 }
 
 // ---------------------------------------------------------------------------

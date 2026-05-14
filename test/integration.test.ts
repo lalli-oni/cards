@@ -113,10 +113,11 @@ async function runFullGame(opts: {
 // ---------------------------------------------------------------------------
 
 describe("full game flow", () => {
-  // seed-2 is known to produce a decisive winner with the current alpha-1
-  // card library and greedy bots. If the card set changes, this seed may
-  // need updating — pick one where scores differ at the turn limit.
-  const DECISIVE_SEED = "seed-2";
+  // seed-3 is known to produce a decisive winner across 2/3/4 player counts
+  // with the current alpha-1 card library and greedy bots. If the card set
+  // changes, this seed may need updating — pick one where scores differ at
+  // the turn limit.
+  const DECISIVE_SEED = "seed-3";
 
   it("runs a 1v1 game to completion (seeding → main → ended)", async () => {
     const controller = await runFullGame({ seed: DECISIVE_SEED });
@@ -192,8 +193,8 @@ describe("determinism", () => {
   });
 
   it("different seeds produce different games", async () => {
-    const c1 = await runFullGame({ seed: "seed-2" });
-    const c2 = await runFullGame({ seed: "seed-4" });
+    const c1 = await runFullGame({ seed: "seed-3" });
+    const c2 = await runFullGame({ seed: "seed-8" });
 
     const s1 = c1.getState() as EndedGameState;
     const s2 = c2.getState() as EndedGameState;

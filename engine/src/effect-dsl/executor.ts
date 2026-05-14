@@ -30,6 +30,8 @@ export interface ExecutionContext {
   _revealedCards?: Draft<Card>[];
   /** Location removed by a `raze` verb, consumed by a subsequent `to`. */
   _razedLocation?: Draft<LocationCard>;
+  /** Set true when a verb (e.g. `pick`) needs to suspend the chain for player input. */
+  aborted?: boolean;
 }
 
 /** Resolve the acting unit's current position from the grid (lazy, always fresh). */
@@ -58,12 +60,14 @@ export function executeEffect(
 
 function executeExpression(expr: Expression, ctx: ExecutionContext): void {
   for (const effect of expr) {
+    if (ctx.aborted) return;
     executeEffectChain(effect, ctx);
   }
 }
 
 function executeEffectChain(effect: Effect, ctx: ExecutionContext): void {
   for (const step of effect) {
+    if (ctx.aborted) return;
     executeStep(step, ctx);
   }
 }
@@ -320,19 +324,38 @@ function execReveal(p: Primitive, ctx: ExecutionContext): void {
 
 function execPick(p: Primitive, ctx: ExecutionContext): void {
   const count = p.value ?? 1;
-  if (!ctx._revealedCards || ctx._revealedCards.length === 0) return;
+  const revealed = ctx._revealedCards;
+  if (!revealed || revealed.length === 0) return;
 
-  const player = getPlayerById(ctx.draft, ctx.playerId);
-  // Auto-pick first N cards for v0.1 (player choice refinement: #101)
-  const picked = ctx._revealedCards.slice(0, count);
-  for (const card of picked) {
-    const idx = player.mainDeck.findIndex((c) => c.id === card.id);
-    if (idx !== -1) {
-      player.mainDeck.splice(idx, 1);
-      player.hand.push(card);
+  // Forced pick (count >= revealed) leaves nothing to choose — auto-take all
+  // and continue the chain without pausing.
+  if (count >= revealed.length) {
+    const player = getPlayerById(ctx.draft, ctx.playerId);
+    for (const card of revealed) {
+      const idx = player.mainDeck.findIndex((c) => c.id === card.id);
+      if (idx !== -1) {
+        player.mainDeck.splice(idx, 1);
+        player.hand.push(card);
+      }
     }
+    ctx.emit({
+      type: "cards_picked",
+      playerId: ctx.playerId,
+      cardIds: revealed.map((c) => c.id),
+      source: "main_deck",
+    });
+    ctx._revealedCards = undefined;
+    return;
   }
+
+  ctx.draft.pendingPick = {
+    playerId: ctx.playerId,
+    revealedCardIds: revealed.map((c) => c.id),
+    pickCount: count,
+    source: "main_deck",
+  };
   ctx._revealedCards = undefined;
+  ctx.aborted = true;
 }
 
 function execControl(p: Primitive, ctx: ExecutionContext): void {

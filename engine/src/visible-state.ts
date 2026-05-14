@@ -55,6 +55,7 @@ export function getVisibleState(
     middleArea: state.phase === "seeding" ? state.seedingState.middleArea : [],
     seedingStep:
       state.phase === "seeding" ? state.seedingState.step : undefined,
+    pendingPick: state.phase === "main" ? state.pendingPick : undefined,
     winner: state.phase === "ended" ? state.winner : undefined,
     scores: state.phase === "ended" ? state.scores : undefined,
   };

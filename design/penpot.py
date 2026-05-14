@@ -445,7 +445,11 @@ FEATURES = [
 
 class PenpotClient:
     def __init__(self, base_url=None, email=None, password=None):
-        self.base_url = base_url or os.environ.get("PENPOT_URL", "http://localhost:9011")
+        self.base_url = (
+            base_url
+            or os.environ.get("PENPOT_URL")
+            or f"http://localhost:{os.environ.get('PENPOT_PORT', '9011')}"
+        )
         self.email = email or os.environ.get("PENPOT_EMAIL")
         self.password = password or os.environ.get("PENPOT_PASSWORD")
         self.api_url = f"{self.base_url}/api/rpc/command"

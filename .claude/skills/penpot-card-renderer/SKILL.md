@@ -23,9 +23,9 @@ design/
 ```
 
 ## Prerequisites
-- Penpot must be running: `docker compose -f design/docker-compose.yaml up -d`
-- Verify: `curl -s -o /dev/null -w '%{http_code}' http://localhost:9011` should return 200
-- `design/.env` must exist with credentials (copy from `design/.env.example`)
+- `design/.env` must exist with credentials and `PENPOT_PORT` (copy from `design/.env.example`)
+- Penpot must be running: `docker compose -f design/docker-compose.yaml --env-file design/.env up -d`
+- Verify: `curl -s -o /dev/null -w '%{http_code}' "http://localhost:$(grep ^PENPOT_PORT design/.env | cut -d= -f2)"` should return 200 (default port is 9011)
 
 ## Workflows
 

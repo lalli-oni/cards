@@ -27,7 +27,7 @@ x-flags: &penpot-flags
   PENPOT_FLAGS: disable-email-verification enable-smtp enable-prepl-server disable-secure-session-cookies
 
 x-uri: &penpot-public-uri
-  PENPOT_PUBLIC_URI: http://localhost:9011
+  PENPOT_PUBLIC_URI: http://localhost:${PENPOT_PORT:-9011}
 
 x-body-size: &penpot-http-body-size
   # Max body size
@@ -81,7 +81,7 @@ services:
     image: "penpotapp/frontend:${PENPOT_VERSION:-latest}"
     restart: always
     ports:
-      - 9011:8080
+      - ${PENPOT_PORT:-9011}:8080
 
     volumes:
       - penpot_assets:/opt/data/assets

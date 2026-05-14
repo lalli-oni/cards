@@ -6,6 +6,7 @@
       "args": ["penpot-mcp"],
       "env": {
         "PENPOT_API_URL": "http://localhost:9011/api",
+        "_comment": "If you changed PENPOT_PORT in design/.env, update the port above to match.",
         "PENPOT_USERNAME": "<PENPOT_EMAIL from design/.env>",
         "PENPOT_PASSWORD": "<PENPOT_PASSWORD from design/.env>"
       }

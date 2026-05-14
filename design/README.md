@@ -22,7 +22,7 @@ Penpot-based pipeline that renders card data from `library/` CSVs into PNG and S
 
 ## URLs
 
-- **Penpot UI**: http://localhost:9001
+- **Penpot UI**: http://localhost:9011
 - **Mailcatch** (dev email): http://localhost:1080
 
 ## Quick start
@@ -35,7 +35,7 @@ docker compose -f design/docker-compose.yaml up -d
 cp design/.env.example design/.env
 # Edit design/.env with your email, password, and generated secret key
 
-# Register an account at http://localhost:9001 (verification emails appear at http://localhost:1080)
+# Register an account at http://localhost:9011 (verification emails appear at http://localhost:1080)
 
 # Setup Claude Code MCP integration (uses credentials from design/.env)
 cp .mcp.json.example .mcp.json

@@ -24,7 +24,7 @@ design/
 
 ## Prerequisites
 - Penpot must be running: `docker compose -f design/docker-compose.yaml up -d`
-- Verify: `curl -s -o /dev/null -w '%{http_code}' http://localhost:9001` should return 200
+- Verify: `curl -s -o /dev/null -w '%{http_code}' http://localhost:9011` should return 200
 - `design/.env` must exist with credentials (copy from `design/.env.example`)
 
 ## Workflows

@@ -5,7 +5,7 @@
       "command": "uvx",
       "args": ["penpot-mcp"],
       "env": {
-        "PENPOT_API_URL": "http://localhost:9001/api",
+        "PENPOT_API_URL": "http://localhost:9011/api",
         "PENPOT_USERNAME": "<PENPOT_EMAIL from design/.env>",
         "PENPOT_PASSWORD": "<PENPOT_PASSWORD from design/.env>"
       }

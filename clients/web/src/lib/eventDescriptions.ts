@@ -124,7 +124,8 @@ export function describeEvent(event: GameEvent, r?: NameResolvers): string {
       return `${c(event.unitId, r)} got ${event.delta > 0 ? "+" : ""}${event.delta} ${event.stat}`;
     case "cards_revealed":
       return `${p(event.playerId, r)} revealed ${event.cardIds.length} card(s)`;
-    // TODO(#101 client PR): improve formatting + i18n; this is a stub
+    case "cards_peeked":
+      return `${p(event.playerId, r)} peeked at ${event.cardIds.length} card(s)`;
     case "cards_picked":
       return `${p(event.playerId, r)} picked ${event.cardIds.length} card(s)`;
     case "unit_controlled":

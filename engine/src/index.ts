@@ -59,6 +59,7 @@ export type {
   PlayerDescriptor,
   PlayerState,
   PassiveEventCard,
+  PickPrompt,
   PolicyCard,
   Rarity,
   SeedingGameState,

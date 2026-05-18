@@ -1,33 +1,22 @@
 <script lang="ts">
   import { getError, getVisibleState, selectAction, setError } from "../lib/gameStore.svelte";
+  import { resolvePickOptions, togglePickSelection } from "../lib/pickPrompt";
   import CardView from "./CardView.svelte";
   import Modal from "./Modal.svelte";
 
   const vs = $derived(getVisibleState());
   const prompt = $derived(vs?.pickPrompt);
-  const optionCards = $derived(
-    prompt && vs
-      ? prompt.options
-          .map((id) => vs.self.mainDeck.find((c) => c.id === id))
-          .filter((c): c is NonNullable<typeof c> => c !== undefined)
-      : [],
-  );
-  // Engine invariant: every option id is findable in mainDeck while the prompt
-  // is set (peek slices non-destructively; the pre-produce guard rejects any
-  // action but resolve_pick). If we find fewer cards than ids, something
-  // out-of-band has mutated the deck — fail loud via the global error banner.
-  const invariantBroken = $derived(
-    !!prompt && optionCards.length !== prompt.options.length,
-  );
+  const resolution = $derived(resolvePickOptions(prompt, vs?.self.mainDeck ?? []));
+  const invariantBroken = $derived(!!prompt && resolution.missingIds.length > 0);
 
+  // Engine invariant: every option id is findable in mainDeck while the prompt
+  // is set. When that fails, fail loud via the global error banner rather than
+  // soft-locking the dialog.
   $effect(() => {
-    if (invariantBroken && prompt && vs) {
-      const missing = prompt.options.filter(
-        (id) => !vs.self.mainDeck.some((c) => c.id === id),
-      );
+    if (invariantBroken && prompt) {
       console.error(
         "PickPromptOverlay: option ids missing from mainDeck — engine/client invariant broken",
-        { missing, promptOptions: prompt.options },
+        { missing: resolution.missingIds, promptOptions: prompt.options },
       );
       setError(
         "Engine state is inconsistent (pick options missing from deck). " +
@@ -60,19 +49,7 @@
 
   function toggle(cardId: string): void {
     if (!prompt) return;
-    const next = new Set(selected);
-    if (next.has(cardId)) {
-      next.delete(cardId);
-    } else {
-      // At the cap — drop the oldest selection FIFO so the user can
-      // re-pick freely without manually deselecting first.
-      if (next.size >= prompt.count) {
-        const oldest = next.values().next().value;
-        if (oldest !== undefined) next.delete(oldest);
-      }
-      next.add(cardId);
-    }
-    selected = next;
+    selected = togglePickSelection(selected, cardId, prompt.count);
   }
 
   function confirm(): void {
@@ -99,7 +76,7 @@
     </p>
 
     <div class="mb-4 flex flex-wrap justify-center gap-3">
-      {#each optionCards as card (card.id)}
+      {#each resolution.cards as card (card.id)}
         <CardView
           {card}
           highlighted={selected.has(card.id)}

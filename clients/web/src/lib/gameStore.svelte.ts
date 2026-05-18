@@ -127,6 +127,12 @@ export function getLastTurnEvents(): GameEvent[] {
 export function clearError() {
   _error = null;
 }
+// Minimal v0.1 export so components can surface engine/client invariant
+// violations via the shared banner. #110 tracks proper error-handling infra
+// (consolidated setError, structured logError helper, severity levels).
+export function setError(message: string): void {
+  _error = message;
+}
 
 // ---------------------------------------------------------------------------
 // Internal state
@@ -379,12 +385,20 @@ export async function loadGame(key: string): Promise<void> {
 }
 
 export function selectAction(action: Action): void {
-  if (resolveAction) {
-    const resolve = resolveAction;
-    resolveAction = null;
-    rejectAction = null;
-    resolve($state.snapshot(action));
+  if (!resolveAction) {
+    // No pending resolver — most likely a double-click or a click after
+    // returnToMenu cleared the slots. Drop the action loudly rather than
+    // silently. #110 tracks proper logError infrastructure.
+    console.warn(
+      "selectAction called with no pending resolver — action dropped",
+      { actionType: action.type, actionPlayerId: action.playerId },
+    );
+    return;
   }
+  const resolve = resolveAction;
+  resolveAction = null;
+  rejectAction = null;
+  resolve($state.snapshot(action));
 }
 
 export function confirmPassDevice(): void {
@@ -421,7 +435,9 @@ export async function refreshSessions(): Promise<void> {
 }
 
 export function returnToMenu(): void {
-  // Reject pending promises so the game loop terminates cleanly
+  // Reject pending promises so the game loop terminates cleanly.
+  // Any pending pickPrompt on the abandoned state is implicitly discarded:
+  // `controller = null` below GCs the entire state, including the prompt.
   const abandon = new GameAbandoned();
   if (rejectAction) {
     rejectAction(abandon);

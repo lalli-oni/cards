@@ -26,8 +26,8 @@ export interface ExecutionContext {
   rng: prand.RandomGenerator;
   /** Back-reference to last resolved target (for chains). */
   _lastTarget?: Draft<UnitCard>;
-  /** Cards revealed by a `reveal` verb, consumed by a subsequent `pick`. */
-  _revealedCards?: Draft<Card>[];
+  /** Cards privately peeked by a `peek` verb, consumed by a subsequent `pick`. */
+  _peekedCards?: Draft<Card>[];
   /** Location removed by a `raze` verb, consumed by a subsequent `to`. */
   _razedLocation?: Draft<LocationCard>;
 }
@@ -58,12 +58,14 @@ export function executeEffect(
 
 function executeExpression(expr: Expression, ctx: ExecutionContext): void {
   for (const effect of expr) {
+    if (ctx.draft.pickPrompt) return;
     executeEffectChain(effect, ctx);
   }
 }
 
 function executeEffectChain(effect: Effect, ctx: ExecutionContext): void {
   for (const step of effect) {
+    if (ctx.draft.pickPrompt) return;
     executeStep(step, ctx);
   }
 }
@@ -101,6 +103,8 @@ function executePrimitive(p: Primitive, ctx: ExecutionContext): void {
       return execMove(p, ctx);
     case "reveal":
       return execReveal(p, ctx);
+    case "peek":
+      return execPeek(p, ctx);
     case "pick":
       return execPick(p, ctx);
     case "control":
@@ -302,37 +306,87 @@ function execMove(p: Primitive, ctx: ExecutionContext): void {
 
 function execReveal(p: Primitive, ctx: ExecutionContext): void {
   const tokenNames = p.target?.tokens.map((t) => t.name) ?? [];
-  const count = p.value ?? 0;
 
   if (tokenNames.includes("opponent") && tokenNames.includes("hand")) {
     const opponent = ctx.draft.players.find((pl) => pl.id !== ctx.playerId);
     if (!opponent) return;
     const cardIds = opponent.hand.map((c) => c.id);
-    ctx.emit({ type: "cards_revealed", playerId: ctx.playerId, cardIds, source: "reveal" });
-  } else if (tokenNames.includes("deck")) {
-    const player = getPlayerById(ctx.draft, ctx.playerId);
-    const revealed = player.mainDeck.slice(0, count);
-    const cardIds = revealed.map((c) => c.id);
-    ctx.emit({ type: "cards_revealed", playerId: ctx.playerId, cardIds, source: "reveal-deck" });
-    ctx._revealedCards = revealed as Draft<Card>[];
+    ctx.emit({ type: "cards_revealed", playerId: ctx.playerId, cardIds, source: "opponent_hand" });
   }
+}
+
+// Private peek: look at top N of own deck, store for a chained `pick`.
+// Emits `cards_peeked` for engine record-keeping (replay, listeners, debug).
+// Privacy filtering of the event log is tracked separately.
+function execPeek(p: Primitive, ctx: ExecutionContext): void {
+  const tokenNames = p.target?.tokens.map((t) => t.name) ?? [];
+  if (!tokenNames.includes("deck")) return;
+
+  const count = p.value ?? 0;
+  const player = getPlayerById(ctx.draft, ctx.playerId);
+  const peeked = player.mainDeck.slice(0, count);
+  ctx.emit({
+    type: "cards_peeked",
+    playerId: ctx.playerId,
+    cardIds: peeked.map((c) => c.id),
+    source: "main_deck",
+  });
+  ctx._peekedCards = peeked as Draft<Card>[];
 }
 
 function execPick(p: Primitive, ctx: ExecutionContext): void {
   const count = p.value ?? 1;
-  if (!ctx._revealedCards || ctx._revealedCards.length === 0) return;
+  const peeked = ctx._peekedCards;
+  if (peeked === undefined) {
+    // Validator (`validateEffectChain`) guarantees a `peek` precedes any
+    // `pick` in the same chain. If this fires, something has bypassed it.
+    throw new Error(
+      "execPick: no peeked cards — validator should have rejected this effect at parse time",
+    );
+  }
+  // Empty deck at runtime: `cards_peeked` event already recorded the empty
+  // attempt; no further action.
+  if (peeked.length === 0) return;
 
-  const player = getPlayerById(ctx.draft, ctx.playerId);
-  // Auto-pick first N cards for v0.1 (player choice refinement: #101)
-  const picked = ctx._revealedCards.slice(0, count);
-  for (const card of picked) {
-    const idx = player.mainDeck.findIndex((c) => c.id === card.id);
-    if (idx !== -1) {
+  // Forced pick (count >= peeked) leaves nothing to choose — auto-take all
+  // and continue the chain without pausing.
+  // NB: this is one of two `cards_picked` emit sites. The other is
+  // handleResolvePick (apply-main.ts), which fires when a player resolves
+  // a paused PickPrompt. Keep both sites in sync.
+  if (count >= peeked.length) {
+    const player = getPlayerById(ctx.draft, ctx.playerId);
+    for (const card of peeked) {
+      const idx = player.mainDeck.findIndex((c) => c.id === card.id);
+      // Defensive: in valid DSL today the cards are guaranteed to still be
+      // in mainDeck (peek slices without mutating; nothing runs between
+      // peek and pick). If a future verb or listener side-effect mutates
+      // the deck mid-execution, fail loud rather than silently emit a
+      // lying event. Mirrors handleResolvePick's behavior.
+      if (idx === -1) {
+        throw new Error(
+          `execPick: peeked card "${card.id}" no longer in mainDeck — invariant broken`,
+        );
+      }
       player.mainDeck.splice(idx, 1);
       player.hand.push(card);
     }
+    ctx.emit({
+      type: "cards_picked",
+      playerId: ctx.playerId,
+      cardIds: peeked.map((c) => c.id),
+      source: "main_deck",
+    });
+    ctx._peekedCards = undefined;
+    return;
   }
-  ctx._revealedCards = undefined;
+
+  ctx.draft.pickPrompt = {
+    playerId: ctx.playerId,
+    options: peeked.map((c) => c.id),
+    count,
+    source: "main_deck",
+  };
+  ctx._peekedCards = undefined;
 }
 
 function execControl(p: Primitive, ctx: ExecutionContext): void {

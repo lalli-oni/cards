@@ -234,9 +234,22 @@ export interface SeedingGameState extends GameStateBase {
   seedingState: SeedingState;
 }
 
+/** A prompt asking the player to pick from a set of revealed cards. */
+export interface PickPrompt {
+  playerId: string;
+  /** Card instance IDs the player may pick from, in revealed order. */
+  options: string[];
+  /** How many of the options the player must pick. Always >= 1 (validator enforces). */
+  count: number;
+  /** Where the options came from. */
+  source: "main_deck";
+}
+
 export interface MainGameState extends GameStateBase {
   phase: "main";
   turn: TurnState;
+  /** Set mid-effect when a `pick` verb needs player input. Cleared by `resolve_pick`. */
+  pickPrompt?: PickPrompt;
 }
 
 export interface EndedGameState extends GameStateBase {
@@ -333,7 +346,8 @@ export type MainAction =
       col: number;
     }
   | { type: "attempt_mission"; playerId: string; row: number; col: number }
-  | { type: "pass"; playerId: string };
+  | { type: "pass"; playerId: string }
+  | { type: "resolve_pick"; playerId: string; pickedCardIds: [string, ...string[]] };
 
 export type Action = SeedingAction | MainAction;
 
@@ -462,7 +476,9 @@ export type GameEvent =
     }
   | { type: "card_discarded"; playerId: string; cardId: string; reason: string }
   | { type: "unit_buffed"; unitId: string; stat: StatName; delta: number; source: string }
-  | { type: "cards_revealed"; playerId: string; cardIds: string[]; source: string }
+  | { type: "cards_revealed"; playerId: string; cardIds: string[]; source: "opponent_hand" }
+  | { type: "cards_peeked"; playerId: string; cardIds: string[]; source: "main_deck" }
+  | { type: "cards_picked"; playerId: string; cardIds: string[]; source: "main_deck" }
   | { type: "unit_controlled"; unitId: string; controllerId: string; previousOwnerId: string; duration: number }
   | { type: "contest_resolved"; stat: StatName; attackerId: string; defenderId: string; attackerPower: number; defenderPower: number; winnerId: string }
   | { type: "passive_expired"; playerId: string; cardId: string }
@@ -519,6 +535,8 @@ export interface VisibleState {
   middleArea: Card[];
   /** Current seeding step, if in seeding phase. */
   seedingStep?: SeedingStep;
+  /** Set during main phase when the active player must resolve a `pick`. */
+  pickPrompt?: PickPrompt;
   winner?: string;
   scores?: Record<string, number>;
 }

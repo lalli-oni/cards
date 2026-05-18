@@ -11,7 +11,7 @@
 
 import { readdirSync, readFileSync, mkdirSync, writeFileSync, existsSync } from "fs";
 import { join } from "path";
-import { parse as parseDSL, DSLParseError } from "../engine/src/effect-dsl";
+import { parse as parseDSL, DSLParseError, DSLValidationError } from "../engine/src/effect-dsl";
 
 const LIBRARY_DIR = join(import.meta.dir);
 const SETS_DIR = join(LIBRARY_DIR, "sets");
@@ -179,7 +179,7 @@ function validate(type: CardType, card: Record<string, unknown>): ValidationErro
       try {
         parseDSL(action.effect);
       } catch (e) {
-        const msg = e instanceof DSLParseError ? e.message : String(e);
+        const msg = (e instanceof DSLParseError || e instanceof DSLValidationError) ? e.message : String(e);
         errors.push({ card: id, field: "actions", message: `invalid DSL in action "${action.name}": ${msg}` });
       }
     }
@@ -188,7 +188,7 @@ function validate(type: CardType, card: Record<string, unknown>): ValidationErro
     try {
       parseDSL(card.effect as string);
     } catch (e) {
-      const msg = e instanceof DSLParseError ? e.message : String(e);
+      const msg = (e instanceof DSLParseError || e instanceof DSLValidationError) ? e.message : String(e);
       errors.push({ card: id, field: "effect", message: `invalid DSL: ${msg}` });
     }
   }

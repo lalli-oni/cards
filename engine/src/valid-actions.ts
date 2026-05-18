@@ -1,4 +1,5 @@
-import { parse, DSLParseError } from "./effect-dsl";
+import { parse, DSLParseError, DSLValidationError } from "./effect-dsl";
+import type { Primitive } from "./effect-dsl/types";
 import { tryParseCost } from "./cost-helpers";
 import { checkMissionRequirements, parseRequirements } from "./mission-helpers";
 import type { BoardPosition } from "./position-helpers";
@@ -18,6 +19,7 @@ import type {
   GameState,
   MainAction,
   MainGameState,
+  PickPrompt,
   SeedingAction,
   SeedingGameState,
 } from "./types";
@@ -118,6 +120,10 @@ function getMainValidActions(
   state: MainGameState,
   playerId: string,
 ): MainAction[] {
+  if (state.pickPrompt && state.pickPrompt.playerId === playerId) {
+    return getResolvePickActions(state.pickPrompt, playerId);
+  }
+
   const actions: MainAction[] = [];
   const player = getPlayerById(state, playerId);
   const ap = state.turn.actionPointsRemaining;
@@ -361,6 +367,85 @@ function getMainValidActions(
 }
 
 // ---------------------------------------------------------------------------
+// Pending pick resolution
+// ---------------------------------------------------------------------------
+
+function getResolvePickActions(
+  prompt: PickPrompt,
+  playerId: string,
+): MainAction[] {
+  // PickPrompt.count is validated >= 1 (validator rejects peek[0]/pick[0]),
+  // so every subset is non-empty — safe to assert the non-empty-tuple shape.
+  return subsetsOfSize(prompt.options, prompt.count).map(
+    (pickedCardIds) => ({
+      type: "resolve_pick" as const,
+      playerId,
+      pickedCardIds: pickedCardIds as [string, ...string[]],
+    }),
+  );
+}
+
+function subsetsOfSize<T>(items: readonly T[], size: number): T[][] {
+  if (size < 0 || size > items.length) return [];
+  if (size === 0) return [[]];
+  if (size === items.length) return [[...items]];
+  const result: T[][] = [];
+  const buf: T[] = new Array(size);
+  const choose = (start: number, depth: number): void => {
+    if (depth === size) {
+      result.push([...buf]);
+      return;
+    }
+    const remaining = size - depth;
+    for (let i = start; i <= items.length - remaining; i++) {
+      buf[depth] = items[i];
+      choose(i + 1, depth + 1);
+    }
+  };
+  choose(0, 0);
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Activate preconditions
+// ---------------------------------------------------------------------------
+
+// Verb-level runtime preconditions for activate effects. When a precondition
+// fails for any primitive in the AST, the activate action is filtered out of
+// getValidActions so the player never sees a button that would no-op.
+//
+// To add a new precondition: append an entry. `matches` identifies the
+// primitive shape; `passes` returns true if the precondition holds. Keep
+// each entry narrow (verb + token combo) to avoid over-rejection.
+const ACTIVATE_PRECONDITIONS: Array<{
+  description: string;
+  matches: (p: Primitive) => boolean;
+  passes: (state: MainGameState, playerId: string) => boolean;
+}> = [
+  {
+    description: "peek(deck) requires at least 1 card in mainDeck",
+    matches: (p) =>
+      p.verb === "peek" &&
+      (p.target?.tokens.map((t) => t.name) ?? []).includes("deck"),
+    passes: (state, playerId) =>
+      getPlayerById(state, playerId).mainDeck.length > 0,
+  },
+];
+
+function activatePreconditionsPass(
+  primitives: readonly Primitive[],
+  state: MainGameState,
+  playerId: string,
+): boolean {
+  for (const p of primitives) {
+    for (const check of ACTIVATE_PRECONDITIONS) {
+      if (check.matches(p) && !check.passes(state, playerId)) return false;
+    }
+  }
+  return true;
+}
+
+// ---------------------------------------------------------------------------
 // Activate target inference
 // ---------------------------------------------------------------------------
 
@@ -381,15 +466,25 @@ function inferActivateTargets(
   unitCol: number,
   playerId: string,
 ): ActivateTarget[] {
+  // Library build (library/build.ts) parses and validates every card effect,
+  // so reaching either error class here means the runtime got out of sync
+  // with the library. Log + skip rather than crash the player's turn.
   let ast;
   try {
     ast = parse(effectStr);
   } catch (err) {
-    if (err instanceof DSLParseError) {
-      console.warn(`Unparseable effect "${effectStr}": ${err.message}`);
-      return [{}];
+    if (err instanceof DSLParseError || err instanceof DSLValidationError) {
+      console.warn(`Invalid DSL effect "${effectStr}": ${err.message}`);
+      return [];
     }
     throw err;
+  }
+
+  // Filter out activations whose effects would no-op due to missing runtime
+  // preconditions (e.g. peek(deck) with an empty deck).
+  const allPrimitives = ast.flatMap((effect) => effect.map((step) => step.primitive));
+  if (!activatePreconditionsPass(allPrimitives, state, playerId)) {
+    return [];
   }
 
   // Scan the first verb in each compound member to determine targeting needs

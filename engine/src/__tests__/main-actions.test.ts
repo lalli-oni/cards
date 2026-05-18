@@ -9,6 +9,7 @@ import {
   makeItem,
   makeLocation,
   makePassiveEvent,
+  makePolicy,
   makeTrapEvent,
   makeUnit,
   resetIds,
@@ -350,6 +351,35 @@ describe("move", () => {
     expect(ns.grid[0][1].units).toHaveLength(1);
     expect(ns.grid[0][1].units[0].id).toBe(unit.id);
     expect(events.some((e) => e.type === "unit_moved")).toBe(true);
+  });
+
+  it("first move under Pioneer policy costs 0 AP", () => {
+    // Regression for #104: handleMove now uses getModifiedAPCost in the
+    // regular branch, matching the retreat branch and getValidActions.
+    // Previously the regular branch used raw AP cost, which made the
+    // pioneer policy's free-first-move discount inconsistent (validation
+    // accepted the move, apply threw "Not enough AP").
+    const unit = makeUnit({ ownerId: ACTIVE });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][1].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][0].units.push(unit);
+      d.players[ACTIVE_IDX].activePolicies.push(
+        makePolicy({ ownerId: ACTIVE, definitionId: "pioneer" }),
+      );
+      d.turn.actionPointsRemaining = 0; // would normally reject; pioneer makes it free
+    });
+
+    const { state: next } = applyAction(state, {
+      type: "move",
+      playerId: ACTIVE,
+      unitId: unit.id,
+      row: 0,
+      col: 1,
+    });
+    const ns = next as MainGameState;
+    expect(ns.grid[0][1].units[0].id).toBe(unit.id);
+    expect(ns.turn.actionPointsRemaining).toBe(0); // still 0 — was free
   });
 
   it("rejects move when facing edges are blocked", () => {

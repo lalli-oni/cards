@@ -55,6 +55,11 @@ export function getVisibleState(
     middleArea: state.phase === "seeding" ? state.seedingState.middleArea : [],
     seedingStep:
       state.phase === "seeding" ? state.seedingState.step : undefined,
+    // pickPrompt is private to the picker — peek() options must not leak to opponents.
+    pickPrompt:
+      state.phase === "main" && state.pickPrompt?.playerId === playerId
+        ? state.pickPrompt
+        : undefined,
     winner: state.phase === "ended" ? state.winner : undefined,
     scores: state.phase === "ended" ? state.scores : undefined,
   };

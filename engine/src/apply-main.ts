@@ -411,9 +411,13 @@ function handleMove(
     );
   }
 
-  const apCost = unit.injured
+  const baseApCost = unit.injured
     ? 1 + getConfigNumber(draft, "injury_move_penalty", 1)
     : 1;
+  const apCost = getModifiedAPCost(
+    draft as MainGameState, queries,
+    { type: "move", playerId, unitId, row: toRow, col: toCol }, baseApCost,
+  );
   spendAP(draft, apCost);
 
   const fromCell = draft.grid[fromRow][fromCol];
@@ -884,6 +888,67 @@ function handleActivate(
   draft.rngState = extractRngState(result.rng) as number[];
 }
 
+function handleResolvePick(
+  draft: Draft<MainGameState>,
+  playerId: string,
+  pickedCardIds: string[],
+  emit: EmitFn,
+): void {
+  const submitted = `submitted ids=[${pickedCardIds.join(",")}] by player "${playerId}"`;
+  const prompt = draft.pickPrompt;
+  if (!prompt) {
+    throw new Error(`resolve_pick rejected: no pending pick (${submitted})`);
+  }
+  if (prompt.playerId !== playerId) {
+    throw new Error(
+      `resolve_pick rejected: pending pick is for "${prompt.playerId}", not "${playerId}" (${submitted})`,
+    );
+  }
+  if (pickedCardIds.length !== prompt.count) {
+    throw new Error(
+      `resolve_pick rejected: expected ${prompt.count} cards, got ${pickedCardIds.length} (${submitted})`,
+    );
+  }
+  const seen = new Set<string>();
+  const dupes: string[] = [];
+  for (const id of pickedCardIds) {
+    if (seen.has(id)) dupes.push(id);
+    seen.add(id);
+  }
+  if (dupes.length > 0) {
+    throw new Error(
+      `resolve_pick rejected: duplicate card ids [${dupes.join(",")}] (${submitted})`,
+    );
+  }
+  const candidates = new Set(prompt.options);
+  for (const id of pickedCardIds) {
+    if (!candidates.has(id)) {
+      throw new Error(
+        `resolve_pick rejected: card "${id}" was not revealed (${submitted}, options=[${prompt.options.join(",")}])`,
+      );
+    }
+  }
+
+  const player = getPlayerById(draft, playerId);
+  for (const id of pickedCardIds) {
+    const idx = player.mainDeck.findIndex((c) => c.id === id);
+    if (idx === -1) {
+      throw new Error(
+        `resolve_pick: card "${id}" no longer in deck — invariant broken (${submitted})`,
+      );
+    }
+    const [card] = player.mainDeck.splice(idx, 1);
+    player.hand.push(card);
+  }
+  emit({
+    type: "cards_picked",
+    playerId,
+    cardIds: pickedCardIds,
+    source: prompt.source,
+  });
+  draft.pickPrompt = undefined;
+}
+
 // ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
@@ -894,6 +959,15 @@ export function applyMainAction(
 ): ApplyResult {
   const events: GameEvent[] = [];
   let roundIncremented = false;
+
+  if (state.pickPrompt && action.type !== "resolve_pick") {
+    throw new Error(
+      `Action "${action.type}" by "${action.playerId}" rejected: ` +
+        `pending pick must be resolved first ` +
+        `(picker="${state.pickPrompt.playerId}", count=${state.pickPrompt.count}, ` +
+        `options=[${state.pickPrompt.options.join(",")}])`,
+    );
+  }
 
   const nextState = produce(state, (draft) => {
     const { listeners, queries } = rebuildListeners(draft as MainGameState);
@@ -958,6 +1032,10 @@ export function applyMainAction(
 
       case "attempt_mission":
         handleAttemptMission(draft, action.playerId, action.row, action.col, emit, events, queries);
+        break;
+
+      case "resolve_pick":
+        handleResolvePick(draft, action.playerId, action.pickedCardIds, emit);
         break;
 
       default: {

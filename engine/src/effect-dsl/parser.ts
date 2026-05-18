@@ -2,6 +2,7 @@ import { EmbeddedActionsParser } from "chevrotain";
 import { allTokens, Ident, Int, LParen, RParen, LBrack, RBrack, Plus, Dot, Gt, Tilde, Colon } from "./tokens";
 import { lexer } from "./tokens";
 import type { Expression, Effect, Step, Primitive, Selector, Token } from "./types";
+import { validateEffectChain } from "./validate";
 
 // ---------------------------------------------------------------------------
 // Post-processing: raw chain segments → proper AST with consequences
@@ -151,5 +152,6 @@ export function parse(input: string): Expression {
   if (parserInstance.errors.length > 0) {
     throw new DSLParseError(`Parse error in "${input}": ${parserInstance.errors[0].message}`);
   }
+  validateEffectChain(ast);
   return ast;
 }

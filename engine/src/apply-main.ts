@@ -894,26 +894,38 @@ function handleResolvePick(
   pickedCardIds: string[],
   emit: EmitFn,
 ): void {
-  const pending = draft.pendingPick;
-  if (!pending) throw new Error("resolve_pick rejected: no pending pick");
-  if (pending.playerId !== playerId) {
+  const submitted = `submitted ids=[${pickedCardIds.join(",")}] by player "${playerId}"`;
+  const prompt = draft.pickPrompt;
+  if (!prompt) {
+    throw new Error(`resolve_pick rejected: no pending pick (${submitted})`);
+  }
+  if (prompt.playerId !== playerId) {
     throw new Error(
-      `resolve_pick rejected: pending pick is for "${pending.playerId}", not "${playerId}"`,
+      `resolve_pick rejected: pending pick is for "${prompt.playerId}", not "${playerId}" (${submitted})`,
     );
   }
-  if (pickedCardIds.length !== pending.pickCount) {
+  if (pickedCardIds.length !== prompt.count) {
     throw new Error(
-      `resolve_pick rejected: expected ${pending.pickCount} cards, got ${pickedCardIds.length}`,
+      `resolve_pick rejected: expected ${prompt.count} cards, got ${pickedCardIds.length} (${submitted})`,
     );
   }
-  const unique = new Set(pickedCardIds);
-  if (unique.size !== pickedCardIds.length) {
-    throw new Error("resolve_pick rejected: duplicate card ids");
+  const seen = new Set<string>();
+  const dupes: string[] = [];
+  for (const id of pickedCardIds) {
+    if (seen.has(id)) dupes.push(id);
+    seen.add(id);
   }
-  const candidates = new Set(pending.revealedCardIds);
+  if (dupes.length > 0) {
+    throw new Error(
+      `resolve_pick rejected: duplicate card ids [${dupes.join(",")}] (${submitted})`,
+    );
+  }
+  const candidates = new Set(prompt.options);
   for (const id of pickedCardIds) {
     if (!candidates.has(id)) {
-      throw new Error(`resolve_pick rejected: card "${id}" was not revealed`);
+      throw new Error(
+        `resolve_pick rejected: card "${id}" was not revealed (${submitted}, options=[${prompt.options.join(",")}])`,
+      );
     }
   }
 
@@ -921,7 +933,9 @@ function handleResolvePick(
   for (const id of pickedCardIds) {
     const idx = player.mainDeck.findIndex((c) => c.id === id);
     if (idx === -1) {
-      throw new Error(`resolve_pick rejected: card "${id}" no longer in deck`);
+      throw new Error(
+        `resolve_pick: card "${id}" no longer in deck — invariant broken (${submitted})`,
+      );
     }
     const [card] = player.mainDeck.splice(idx, 1);
     player.hand.push(card);
@@ -930,9 +944,9 @@ function handleResolvePick(
     type: "cards_picked",
     playerId,
     cardIds: pickedCardIds,
-    source: pending.source,
+    source: prompt.source,
   });
-  draft.pendingPick = undefined;
+  draft.pickPrompt = undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -946,9 +960,12 @@ export function applyMainAction(
   const events: GameEvent[] = [];
   let roundIncremented = false;
 
-  if (state.pendingPick && action.type !== "resolve_pick") {
+  if (state.pickPrompt && action.type !== "resolve_pick") {
     throw new Error(
-      `Action "${action.type}" rejected: pending pick must be resolved first`,
+      `Action "${action.type}" by "${action.playerId}" rejected: ` +
+        `pending pick must be resolved first ` +
+        `(picker="${state.pickPrompt.playerId}", count=${state.pickPrompt.count}, ` +
+        `options=[${state.pickPrompt.options.join(",")}])`,
     );
   }
 

@@ -1,4 +1,5 @@
 export { parse, DSLParseError } from "./parser";
+export { DSLValidationError } from "./validate";
 export type {
   Expression,
   Effect,

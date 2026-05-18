@@ -114,9 +114,11 @@ async function runFullGame(opts: {
 
 describe("full game flow", () => {
   // seed-3 is known to produce a decisive winner across 2/3/4 player counts
-  // with the current alpha-1 card library and greedy bots. If the card set
-  // changes, this seed may need updating — pick one where scores differ at
-  // the turn limit.
+  // with the current card library and greedy bots. If card behavior changes
+  // (new effects, bot tweaks), this seed may need updating — pick one where
+  // scores differ at the turn limit and games terminate cleanly.
+  // The `determinism` block below uses the same seed value as DET_SEED;
+  // keep them in sync when rotating.
   const DECISIVE_SEED = "seed-3";
 
   it("runs a 1v1 game to completion (seeding → main → ended)", async () => {
@@ -175,6 +177,7 @@ describe("full game flow", () => {
 // ---------------------------------------------------------------------------
 
 describe("determinism", () => {
+  // Same value as DECISIVE_SEED above — when rotating, update both.
   const DET_SEED = "seed-3";
 
   it("same seed produces identical final state", async () => {

@@ -117,10 +117,10 @@ describe("Effect DSL parser", () => {
   });
 
   it("parses chain with >", () => {
-    const ast = parse("reveal(deck)[3] > pick[1]");
+    const ast = parse("peek(deck)[3] > pick[1]");
     expect(ast).toHaveLength(1);
     expect(ast[0]).toHaveLength(2);
-    expect(ast[0][0].primitive.verb).toBe("reveal");
+    expect(ast[0][0].primitive.verb).toBe("peek");
     expect(ast[0][1].primitive.verb).toBe("pick");
   });
 

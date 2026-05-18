@@ -114,7 +114,7 @@ consequence = ">" effect ( ":" effect )?      -- ternary: win_effect : lose_effe
 | `+` inside `()` | target | Composable filter. Each token narrows the selection: `(all + friendly + here)` |
 | `+` outside `()` | effect | Compound — both effects happen in parallel. `gold[1] + move(self)` |
 | `[]`     | value   | Numeric parameter. Inside `()` = target count. Outside = effect value. |
-| `>`      | chain   | Pipe/sequence — output of left feeds into right. `reveal(deck)[3] > pick[1]` |
+| `>`      | chain   | Pipe/sequence — output of left feeds into right. `peek(deck)[3] > pick[1]` |
 | `~`      | modifier | Modifies preceding effect. Duration (`~turn`, `~round`) or rule flag (`~ignore_blocked`). |
 | `:`      | consequence | Separates win/lose effects (ternary). `> win_effect : lose_effect` |
 
@@ -129,8 +129,9 @@ Core primitives the engine implements. New cards compose these — no per-card c
 | `draw` | count | Draw cards from your deck. `draw[2]`. Implicit `[1]`. |
 | `buy` | cost override | Buy a card from market. `buy(item)[0]` = buy item for free. `buy[-1]` = 1 gold discount on anything. |
 | `move` | distance | Move a unit. `move(self)[2]` = 2 spaces. Implicit `[1]`. |
-| `reveal` | count | Reveal cards from a zone. `reveal(deck)[3]`, `reveal(opponent + hand)` |
-| `pick` | count | Player picks N from previously revealed cards (used after `>` pipe from `reveal`). `reveal(deck)[3] > pick[1]` |
+| `reveal` | — | Publicly reveal cards (visible to all players). `reveal(opponent + hand)` |
+| `peek` | count | Privately look at the top N of your own deck. Feeds into `pick`. `peek(deck)[3]` |
+| `pick` | count | Player picks N from previously peeked cards (used after `>` pipe from `peek`). `peek(deck)[3] > pick[1]` |
 | `buff.STAT` | amount | Temporary stat increase. Requires `~duration`. `buff.strength(all + friendly)[2]~turn` |
 | `contest.STAT` | bonus | Stat contest using named stat. Value = attacker bonus. `contest.strength[3]` = +3 bonus. |
 | `injure` | — | Injure target unit. `injure(enemy)` |
@@ -237,7 +238,7 @@ Complete action definitions (`name:ap_cost:effect`):
 | Sun Tzu | `stratagem:1:move(enemy)` |
 | Harriet Tubman | `underground:1:move(friendly)~ignore_blocked` |
 | Alexander the Great | `march:1:move(self) + contest.strength(enemy)` |
-| Ada Lovelace | `analyze:1:reveal(deck)[3] > pick[1]` |
+| Ada Lovelace | `analyze:1:peek(deck)[3] > pick[1]` |
 | Galileo Galilei | `observe:1:reveal(opponent + hand)` |
 | Nikola Tesla | `invent:2:buy(item)[0]` |
 | Genghis Khan | `conquer:3:raze(location) > to(hq)` |

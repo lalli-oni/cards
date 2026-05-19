@@ -1,5 +1,6 @@
 node_modules/
 dist/
+*.tsbuildinfo
 library/build/
 rules/build/
 

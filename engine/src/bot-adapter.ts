@@ -1,4 +1,4 @@
-import prand from "pure-rand";
+import { mersenne, uniformIntDistribution, type RandomGenerator } from "./rng";
 import { fillAction } from "./action-helpers";
 import type { Action, Grid, PlayerAdapter, VisibleState } from "./types";
 
@@ -14,11 +14,11 @@ export type BotStrategy = "random" | "greedy";
  *   with friendly units. Still deterministic for a given seed.
  */
 export class BotAdapter implements PlayerAdapter {
-  private rng: prand.RandomGenerator;
+  private rng: RandomGenerator;
   private strategy: BotStrategy;
 
   constructor(seed: number, strategy: BotStrategy = "random") {
-    this.rng = prand.mersenne(seed);
+    this.rng = mersenne(seed);
     this.strategy = strategy;
   }
 
@@ -34,7 +34,7 @@ export class BotAdapter implements PlayerAdapter {
       ? this.prioritise(validActions, visibleState)
       : validActions;
 
-    const [index, nextRng] = prand.uniformIntDistribution(
+    const [index, nextRng] = uniformIntDistribution(
       0,
       candidates.length - 1,
       this.rng,

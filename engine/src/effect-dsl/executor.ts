@@ -1,5 +1,5 @@
 import type { Draft } from "immer";
-import prand from "pure-rand";
+import { fromState, uniformIntDistribution, type RandomGenerator } from "../rng";
 import { parse } from "./parser";
 import type { Expression, Effect, Step, Primitive, Selector } from "./types";
 import type { Card, GameEvent, LocationCard, MainGameState, StatName, UnitCard } from "../types";
@@ -23,7 +23,7 @@ export interface ExecutionContext {
   emit: EmitFn;
   events: GameEvent[];
   queries: QueryListener[];
-  rng: prand.RandomGenerator;
+  rng: RandomGenerator;
   /** Back-reference to last resolved target (for chains). */
   _lastTarget?: Draft<UnitCard>;
   /** Cards privately peeked by a `peek` verb, consumed by a subsequent `pick`. */
@@ -46,7 +46,7 @@ function getActingPosition(ctx: ExecutionContext): { row: number; col: number } 
 export function executeEffect(
   effectStr: string,
   ctx: ExecutionContext,
-): { rng: prand.RandomGenerator } {
+): { rng: RandomGenerator } {
   const ast = parse(effectStr);
   executeExpression(ast, ctx);
   return { rng: ctx.rng };
@@ -220,7 +220,7 @@ function execDraw(p: Primitive, ctx: ExecutionContext): void {
     drawOneCard(ctx.draft, player, ctx.events);
   }
   // Sync RNG — drawOneCard may have updated draft.rngState via deck reshuffle
-  ctx.rng = prand.mersenne.fromState(ctx.draft.rngState);
+  ctx.rng = fromState(ctx.draft.rngState);
 }
 
 function execKill(p: Primitive, ctx: ExecutionContext): void {
@@ -380,9 +380,13 @@ function execPick(p: Primitive, ctx: ExecutionContext): void {
     return;
   }
 
+  // Cast: by this point peeked.length >= 2 — the early return handles length
+  // 0, and the auto-pick branch above handles any case where count >=
+  // peeked.length (which subsumes length 1 with the default count of 1), so
+  // the mapped array is non-empty by construction.
   ctx.draft.pickPrompt = {
     playerId: ctx.playerId,
-    options: peeked.map((c) => c.id),
+    options: peeked.map((c) => c.id) as [string, ...string[]],
     count,
     source: "main_deck",
   };
@@ -505,8 +509,8 @@ function executeContest(step: Step, ctx: ExecutionContext): void {
   );
 
   // Roll d6 for each
-  const [atkRoll, rng1] = prand.uniformIntDistribution(1, 6, ctx.rng);
-  const [defRoll, rng2] = prand.uniformIntDistribution(1, 6, rng1);
+  const [atkRoll, rng1] = uniformIntDistribution(1, 6, ctx.rng);
+  const [defRoll, rng2] = uniformIntDistribution(1, 6, rng1);
   ctx.rng = rng2;
 
   const atkPower = atkStat + atkRoll + bonus;

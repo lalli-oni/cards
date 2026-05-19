@@ -1,6 +1,6 @@
 import type { Draft } from "immer";
 import { castDraft, produce } from "immer";
-import prand from "pure-rand";
+import { fromState, uniformIntDistribution } from "./rng";
 import { parseCost, spendAP, spendGold } from "./cost-helpers";
 import { drawLocationFromProspect, drawMarketCard, drawOneCard } from "./deck-helpers";
 import { checkMissionRequirements, parseRequirements, parseRewards } from "./mission-helpers";
@@ -467,7 +467,7 @@ function handlePlayEvent(
   switch (card.subtype) {
     case "instant": {
       if (card.effect) {
-        let rng = prand.mersenne.fromState(draft.rngState);
+        let rng = fromState(draft.rngState);
         const result = executeEffect(card.effect, {
           draft, playerId, emit,
           events, queries,
@@ -659,7 +659,7 @@ function handleAttack(
 
   emit({ type: "combat_started", row, col, attackerId: playerId, defenderId });
 
-  let rng = prand.mersenne.fromState(draft.rngState);
+  let rng = fromState(draft.rngState);
 
   // Auto-resolve combat rounds
   const maxRounds = 10; // safety limit
@@ -672,7 +672,7 @@ function handleAttack(
     // Roll for each unit
     const atkRolls: { unit: Draft<UnitCard>; power: number }[] = [];
     for (const u of livingAttackers) {
-      const [roll, nextRng] = prand.uniformIntDistribution(1, 6, rng);
+      const [roll, nextRng] = uniformIntDistribution(1, 6, rng);
       rng = nextRng;
       const modifiedStr = getModifiedStat(
         draft as MainGameState, queries, u as UnitCard, "strength",
@@ -684,7 +684,7 @@ function handleAttack(
 
     const defRolls: { unit: Draft<UnitCard>; power: number }[] = [];
     for (const u of livingDefenders) {
-      const [roll, nextRng] = prand.uniformIntDistribution(1, 6, rng);
+      const [roll, nextRng] = uniformIntDistribution(1, 6, rng);
       rng = nextRng;
       const modifiedStr = getModifiedStat(
         draft as MainGameState, queries, u as UnitCard, "strength",
@@ -873,7 +873,7 @@ function handleActivate(
 
   spendAP(draft, actionDef.apCost);
 
-  let rng = prand.mersenne.fromState(draft.rngState);
+  let rng = fromState(draft.rngState);
   const result = executeEffect(actionDef.effect, {
     draft,
     playerId,

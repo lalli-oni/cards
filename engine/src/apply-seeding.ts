@@ -1,8 +1,12 @@
 import type { Draft } from "immer";
 import { produce } from "immer";
-import prand from "pure-rand";
 import { runStartOfTurn } from "./apply-main";
-import { extractRngState, shuffle } from "./rng";
+import {
+  extractRngState,
+  fromState,
+  shuffle,
+  type RandomGenerator,
+} from "./rng";
 import { isFull } from "./grid-helpers";
 import {
   advanceSeedingCursor,
@@ -288,7 +292,7 @@ function handleSeedSteal(
       events.push({ type: "seeding_step_changed", step: "seed_draw" });
     } else {
       // Auto-shuffle prospect decks and build main decks
-      let rng = prand.mersenne.fromState(draft.rngState);
+      let rng = fromState(draft.rngState);
       for (const player of draft.players) {
         const [shuffled, nextRng] = shuffle(player.prospectDeck, rng);
         player.prospectDeck = shuffled;
@@ -317,9 +321,9 @@ function handleSeedSteal(
 /** After steal rounds are exhausted: shuffle prospect/market decks, draw main decks, draw starting hands. */
 function buildMainDecksAndHands(
   draft: Draft<SeedingGameState>,
-  rng: prand.RandomGenerator,
+  rng: RandomGenerator,
   events: GameEvent[],
-): prand.RandomGenerator {
+): RandomGenerator {
   const mainDeckDraw = getConfigNumber(draft, "seed_main_deck_draw", 15);
   const startingHandSize = getConfigNumber(draft, "starting_hand_size", 5);
 
@@ -413,7 +417,7 @@ function handlePolicySelection(
   const final = produce(state, (draft) => {
     draft.actionLog.push(action);
 
-    let rng = prand.mersenne.fromState(draft.rngState);
+    let rng = fromState(draft.rngState);
 
     for (const player of draft.players) {
       if (player.policyPool.length < 2) {

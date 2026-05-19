@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["bun-types"]
+  },
+  "references": [{ "path": "../../engine" }],
+  "include": ["src/**/*.test.ts", "src/**/__tests__/**/*"],
+  "exclude": []
+}

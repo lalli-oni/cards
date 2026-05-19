@@ -1,5 +1,4 @@
-import prand from "pure-rand";
-import { extractRngState, shuffle } from "./rng";
+import { extractRngState, mersenne, shuffle } from "./rng";
 import type {
   SetupInput,
   GameConfig,
@@ -82,7 +81,7 @@ export function createGame(
     throw new Error("createGame requires a non-empty seed string");
   }
 
-  const rng = prand.mersenne(hashSeed(seed));
+  const rng = mersenne(hashSeed(seed));
 
   // Shuffle player IDs to determine players array ordering (which defines turn order)
   const [turnOrder, nextRng] = shuffle(ids, rng);

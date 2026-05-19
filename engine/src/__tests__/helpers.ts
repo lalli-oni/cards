@@ -1,4 +1,4 @@
-import prand from "pure-rand";
+import { fromState, type RandomGenerator } from "../rng";
 import { createGame } from "../create-game";
 import type {
   Card,
@@ -248,6 +248,6 @@ export function createSeedingGame(overrides?: {
 }
 
 /** Get the RNG from a game state (reconstructed from stored state). */
-export function getRng(state: GameState): prand.RandomGenerator {
-  return prand.mersenne.fromState(state.rngState);
+export function getRng(state: GameState): RandomGenerator {
+  return fromState(state.rngState);
 }

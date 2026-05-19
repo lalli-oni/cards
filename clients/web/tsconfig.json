@@ -10,5 +10,7 @@
       "@library/*": ["../../library/build/*"]
     }
   },
-  "include": ["src"]
+  "references": [{ "path": "../../engine" }],
+  "include": ["src"],
+  "exclude": ["src/**/*.test.ts", "src/**/__tests__/**"]
 }

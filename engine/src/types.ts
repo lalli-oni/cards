@@ -223,7 +223,7 @@ interface GameStateBase {
   players: PlayerState[];
   grid: Grid;
   market: Card[];
-  /** Serializable RNG state. Reconstruct generator with prand.mersenne.fromState(). */
+  /** Serializable RNG state. Reconstruct generator with `fromState()` from `./rng`. */
   rngState: readonly number[];
   seed: string;
   actionLog: Action[];
@@ -234,15 +234,31 @@ export interface SeedingGameState extends GameStateBase {
   seedingState: SeedingState;
 }
 
-/** A prompt asking the player to pick from a set of revealed cards. */
+/**
+ * Origin zone for the cards in a `PickPrompt`. Extend the union when new
+ * sources are added (e.g. market, discard) so consumers stay exhaustive.
+ */
+export type PickSource = "main_deck";
+
+/**
+ * A prompt asking the player to pick from a set of revealed cards.
+ *
+ * Appears on `MainGameState.pickPrompt` (full engine state) and
+ * `VisibleState.pickPrompt` (only populated when the viewer is the picker).
+ * It is only meaningful while the engine is paused mid-effect waiting for a
+ * player choice.
+ */
 export interface PickPrompt {
   playerId: string;
-  /** Card instance IDs the player may pick from, in revealed order. */
-  options: string[];
-  /** How many of the options the player must pick. Always >= 1 (validator enforces). */
+  /** Card instance IDs the player may pick from, in revealed order. Always non-empty. Items are unique (instance ids). */
+  options: readonly [string, ...string[]];
+  /**
+   * How many of the options the player must pick. Always `1 <= count < options.length`.
+   * The DSL validator enforces `count >= 1` at parse time; `execPick` enforces the upper
+   * bound by auto-picking instead of suspending when `count >= peeked.length`.
+   */
   count: number;
-  /** Where the options came from. */
-  source: "main_deck";
+  source: PickSource;
 }
 
 export interface MainGameState extends GameStateBase {
@@ -477,8 +493,8 @@ export type GameEvent =
   | { type: "card_discarded"; playerId: string; cardId: string; reason: string }
   | { type: "unit_buffed"; unitId: string; stat: StatName; delta: number; source: string }
   | { type: "cards_revealed"; playerId: string; cardIds: string[]; source: "opponent_hand" }
-  | { type: "cards_peeked"; playerId: string; cardIds: string[]; source: "main_deck" }
-  | { type: "cards_picked"; playerId: string; cardIds: string[]; source: "main_deck" }
+  | { type: "cards_peeked"; playerId: string; cardIds: string[]; source: PickSource }
+  | { type: "cards_picked"; playerId: string; cardIds: string[]; source: PickSource }
   | { type: "unit_controlled"; unitId: string; controllerId: string; previousOwnerId: string; duration: number }
   | { type: "contest_resolved"; stat: StatName; attackerId: string; defenderId: string; attackerPower: number; defenderPower: number; winnerId: string }
   | { type: "passive_expired"; playerId: string; cardId: string }

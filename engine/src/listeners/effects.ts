@@ -1,5 +1,13 @@
 import type { Draft } from "immer";
-import type { EffectDefinition, EffectListener, EmitFn } from "./types";
+import type {
+  APModifierListener,
+  CostModifierListener,
+  EffectDefinition,
+  EffectListener,
+  EmitFn,
+  ProtectionListener,
+  StatModifierListener,
+} from "./types";
 import type {
   GameEvent,
   ItemCard,
@@ -97,100 +105,100 @@ export const LOCATION_EFFECTS: Record<string, LocationEffectFactory> = {
     listeners: [],
     queries: [{
       source: { type: "location", cardId: _loc.id, definitionId: "the-forge", ownerId: _ownerId, position: { row, col } },
-      query: "stat" as const,
+      query: "stat",
       modify: (_state, ctx) =>
         ctx.stat === "strength" && ctx.position?.row === row && ctx.position?.col === col ? 1 : 0,
-    }],
+    } satisfies StatModifierListener],
   }),
 
   "the-great-library": (_loc, _ownerId, row, col) => ({
     listeners: [],
     queries: [{
       source: { type: "location", cardId: _loc.id, definitionId: "the-great-library", ownerId: _ownerId, position: { row, col } },
-      query: "stat" as const,
+      query: "stat",
       modify: (_state, ctx) =>
         ctx.stat === "cunning" && ctx.position?.row === row && ctx.position?.col === col
         && ctx.unit.attributes.includes("Scientist") ? 1 : 0,
-    }],
+    } satisfies StatModifierListener],
   }),
 
   "versailles": (_loc, _ownerId, row, col) => ({
     listeners: [],
     queries: [{
       source: { type: "location", cardId: _loc.id, definitionId: "versailles", ownerId: _ownerId, position: { row, col } },
-      query: "stat" as const,
+      query: "stat",
       modify: (_state, ctx) =>
         ctx.stat === "charisma" && ctx.position?.row === row && ctx.position?.col === col
         && ctx.unit.attributes.includes("Politician") ? 1 : 0,
-    }],
+    } satisfies StatModifierListener],
   }),
 
   "the-arena": (_loc, _ownerId, row, col) => ({
     listeners: [],
     queries: [{
       source: { type: "location", cardId: _loc.id, definitionId: "the-arena", ownerId: _ownerId, position: { row, col } },
-      query: "stat" as const,
+      query: "stat",
       modify: (_state, ctx) =>
         ctx.stat === "strength" && ctx.combat?.role === "attacker"
         && ctx.combat.row === row && ctx.combat.col === col ? 1 : 0,
-    }],
+    } satisfies StatModifierListener],
   }),
 
   "the-great-wall": (_loc, _ownerId, row, col) => ({
     listeners: [],
     queries: [{
       source: { type: "location", cardId: _loc.id, definitionId: "the-great-wall", ownerId: _ownerId, position: { row, col } },
-      query: "stat" as const,
+      query: "stat",
       modify: (_state, ctx) =>
         ctx.stat === "strength" && ctx.combat?.role === "defender"
         && ctx.combat.row === row && ctx.combat.col === col ? 1 : 0,
-    }],
+    } satisfies StatModifierListener],
   }),
 
   "the-bazaar": (_loc, _ownerId, row, col) => ({
     listeners: [],
     queries: [{
       source: { type: "location", cardId: _loc.id, definitionId: "the-bazaar", ownerId: _ownerId, position: { row, col } },
-      query: "cost" as const,
+      query: "cost",
       min: 1,
       modify: (state, ctx) => {
         if (ctx.action !== "buy") return 0;
         const cell = state.grid[row]?.[col];
         return cell?.units.some((u) => u.ownerId === ctx.playerId) ? -1 : 0;
       },
-    }],
+    } satisfies CostModifierListener],
   }),
 
   "machu-picchu": (_loc, _ownerId, row, col) => ({
     listeners: [],
     queries: [{
       source: { type: "location", cardId: _loc.id, definitionId: "machu-picchu", ownerId: _ownerId, position: { row, col } },
-      query: "protection" as const,
+      query: "protection",
       isProtected: (_state, ctx) =>
         ctx.kind === "event_target" && ctx.position.row === row && ctx.position.col === col,
-    }],
+    } satisfies ProtectionListener],
   }),
 
   "the-catacombs": (_loc, _ownerId, row, col) => ({
     listeners: [],
     queries: [{
       source: { type: "location", cardId: _loc.id, definitionId: "the-catacombs", ownerId: _ownerId, position: { row, col } },
-      query: "protection" as const,
+      query: "protection",
       isProtected: (_state, ctx) =>
         ctx.kind === "event_injury" && ctx.position.row === row && ctx.position.col === col,
-    }],
+    } satisfies ProtectionListener],
   }),
 
   "sherwood-forest": (_loc, _ownerId, row, col) => ({
     listeners: [],
     queries: [{
       source: { type: "location", cardId: _loc.id, definitionId: "sherwood-forest", ownerId: _ownerId, position: { row, col } },
-      query: "protection" as const,
+      query: "protection",
       isProtected: (_state, ctx) =>
         ctx.kind === "contest_target" && ctx.contestStat === "strength"
         && ctx.position.row === row && ctx.position.col === col
         && ctx.unit.cunning >= 7,
-    }],
+    } satisfies ProtectionListener],
   }),
 };
 
@@ -227,7 +235,7 @@ export const POLICY_EFFECTS: Record<string, PolicyEffectFactory> = {
     listeners: [],
     queries: [{
       source: { type: "policy", cardId: policy.id, definitionId: "militarist", ownerId },
-      query: "cost" as const,
+      query: "cost",
       min: 1,
       modify: (_state, ctx) => {
         if (ctx.playerId !== ownerId) return 0;
@@ -236,14 +244,14 @@ export const POLICY_EFFECTS: Record<string, PolicyEffectFactory> = {
         if (card.type === "item" && card.keywords?.includes("Weapon")) return -1;
         return 0;
       },
-    }],
+    } satisfies CostModifierListener],
   }),
 
   "diplomat": (policy, ownerId) => ({
     listeners: [],
     queries: [{
       source: { type: "policy", cardId: policy.id, definitionId: "diplomat", ownerId },
-      query: "cost" as const,
+      query: "cost",
       min: 1,
       modify: (state, ctx) => {
         if (ctx.playerId !== ownerId || ctx.action !== "buy") return 0;
@@ -253,32 +261,32 @@ export const POLICY_EFFECTS: Record<string, PolicyEffectFactory> = {
         if (!isPolitician && !isAccessory) return 0;
         return countActionsThisTurn(state, ownerId, (a) => a.type === "buy") === 0 ? -1 : 0;
       },
-    }],
+    } satisfies CostModifierListener],
   }),
 
   "industrialist": (policy, ownerId) => ({
     listeners: [],
     queries: [{
       source: { type: "policy", cardId: policy.id, definitionId: "industrialist", ownerId },
-      query: "cost" as const,
+      query: "cost",
       min: 1,
       modify: (state, ctx) => {
         if (ctx.playerId !== ownerId || ctx.action !== "buy") return 0;
         return countActionsThisTurn(state, ownerId, (a) => a.type === "buy") === 0 ? -1 : 0;
       },
-    }],
+    } satisfies CostModifierListener],
   }),
 
   "pioneer": (policy, ownerId) => ({
     listeners: [],
     queries: [{
       source: { type: "policy", cardId: policy.id, definitionId: "pioneer", ownerId },
-      query: "ap" as const,
+      query: "ap",
       modify: (state, ctx) => {
         if (ctx.playerId !== ownerId || ctx.action.type !== "move") return 0;
         return countActionsThisTurn(state, ownerId, (a) => a.type === "move") === 0 ? -99 : 0;
       },
-    }],
+    } satisfies APModifierListener],
   }),
 
   "scholar": (policy, ownerId) => ({
@@ -302,7 +310,7 @@ export const PASSIVE_EVENT_EFFECTS: Record<string, PassiveEventEffectFactory> = 
     listeners: [],
     queries: [{
       source: { type: "passive_event", cardId: pe.id, definitionId: "plague", ownerId },
-      query: "stat" as const,
+      query: "stat",
       modify: (state, ctx) => {
         if (ctx.stat !== "strength" || !ctx.position || !pe.targetId) return 0;
         // Find the target location's position
@@ -321,50 +329,50 @@ export const PASSIVE_EVENT_EFFECTS: Record<string, PassiveEventEffectFactory> = 
         }
         return 0;
       },
-    }],
+    } satisfies StatModifierListener],
   }),
 
   "arms-race": (pe, ownerId) => ({
     listeners: [],
     queries: [{
       source: { type: "passive_event", cardId: pe.id, definitionId: "arms-race", ownerId },
-      query: "stat" as const,
+      query: "stat",
       modify: (_state, ctx) =>
         ctx.stat === "strength" && ctx.unit.ownerId === ownerId
         && ctx.unit.attributes.includes("Warrior") ? 2 : 0,
-    }],
+    } satisfies StatModifierListener],
   }),
 
   "renaissance": (pe, ownerId) => ({
     listeners: [],
     queries: [{
       source: { type: "passive_event", cardId: pe.id, definitionId: "renaissance", ownerId },
-      query: "stat" as const,
+      query: "stat",
       modify: (_state, ctx) =>
         ctx.stat === "cunning" && ctx.unit.ownerId === ownerId
         && ctx.unit.attributes.includes("Scientist") ? 2 : 0,
-    }],
+    } satisfies StatModifierListener],
   }),
 
   "diplomatic-summit": (pe, ownerId) => ({
     listeners: [],
     queries: [{
       source: { type: "passive_event", cardId: pe.id, definitionId: "diplomatic-summit", ownerId },
-      query: "stat" as const,
+      query: "stat",
       modify: (_state, ctx) =>
         ctx.stat === "charisma" && ctx.unit.ownerId === ownerId
         && ctx.unit.attributes.includes("Diplomat") ? 2 : 0,
-    }],
+    } satisfies StatModifierListener],
   }),
 
   "trade-embargo": (pe, ownerId) => ({
     listeners: [],
     queries: [{
       source: { type: "passive_event", cardId: pe.id, definitionId: "trade-embargo", ownerId },
-      query: "cost" as const,
+      query: "cost",
       modify: (_state, ctx) =>
         ctx.action === "buy" && ctx.playerId !== ownerId ? 2 : 0,
-    }],
+    } satisfies CostModifierListener],
   }),
 
   "golden-age": (pe, ownerId) => ({
@@ -387,10 +395,10 @@ export const ITEM_EFFECTS: Record<string, ItemEffectFactory> = {
     listeners: [],
     queries: [{
       source: { type: "item", cardId: item.id, definitionId: "ancient-scroll", ownerId: _ownerId },
-      query: "stat" as const,
+      query: "stat",
       modify: (_state, ctx) =>
         ctx.stat === "cunning" && item.equippedTo === ctx.unit.id ? 2 : 0,
-    }],
+    } satisfies StatModifierListener],
   }),
 
   "war-banner": (item, ownerId, position) => ({
@@ -399,23 +407,23 @@ export const ITEM_EFFECTS: Record<string, ItemEffectFactory> = {
       // Equipped: +1 str to friendly units at same location
       {
         source: { type: "item" as const, cardId: item.id, definitionId: "war-banner", ownerId, position },
-        query: "stat" as const,
+        query: "stat",
         modify: (_state, ctx) => {
           if (!item.equippedTo || ctx.stat !== "strength" || !position) return 0;
           if (ctx.position?.row !== position.row || ctx.position?.col !== position.col) return 0;
           return ctx.unit.ownerId === ownerId ? 1 : 0;
         },
-      },
+      } satisfies StatModifierListener,
       // Stored: +2 str to attackers in contests here
       {
         source: { type: "item" as const, cardId: item.id, definitionId: "war-banner", ownerId, position },
-        query: "stat" as const,
+        query: "stat",
         modify: (_state, ctx) => {
           if (item.equippedTo || ctx.stat !== "strength" || !position) return 0;
           return ctx.combat?.role === "attacker"
             && ctx.combat.row === position.row && ctx.combat.col === position.col ? 2 : 0;
         },
-      },
+      } satisfies StatModifierListener,
     ],
   }),
 
@@ -425,21 +433,21 @@ export const ITEM_EFFECTS: Record<string, ItemEffectFactory> = {
       // Equipped: +3 charisma if Spiritual
       {
         source: { type: "item" as const, cardId: item.id, definitionId: "holy-relic", ownerId, position },
-        query: "stat" as const,
+        query: "stat",
         modify: (_state, ctx) =>
           ctx.stat === "charisma" && item.equippedTo === ctx.unit.id
           && ctx.unit.attributes.includes("Spiritual") ? 3 : 0,
-      },
+      } satisfies StatModifierListener,
       // Stored: +1 charisma to Spiritual units at location
       {
         source: { type: "item" as const, cardId: item.id, definitionId: "holy-relic", ownerId, position },
-        query: "stat" as const,
+        query: "stat",
         modify: (_state, ctx) => {
           if (item.equippedTo || ctx.stat !== "charisma" || !position) return 0;
           if (ctx.position?.row !== position.row || ctx.position?.col !== position.col) return 0;
           return ctx.unit.attributes.includes("Spiritual") ? 1 : 0;
         },
-      },
+      } satisfies StatModifierListener,
     ],
   }),
 
@@ -447,20 +455,20 @@ export const ITEM_EFFECTS: Record<string, ItemEffectFactory> = {
     listeners: [],
     queries: [{
       source: { type: "item", cardId: item.id, definitionId: "philosophers-stone", ownerId: _ownerId },
-      query: "stat" as const,
+      query: "stat",
       modify: (_state, ctx) => item.equippedTo === ctx.unit.id ? 2 : 0,
-    }],
+    } satisfies StatModifierListener],
   }),
 
   "crowning-jewel": (item, _ownerId) => ({
     listeners: [],
     queries: [{
       source: { type: "item", cardId: item.id, definitionId: "crowning-jewel", ownerId: _ownerId },
-      query: "stat" as const,
+      query: "stat",
       modify: (_state, ctx) =>
         ctx.stat === "charisma" && item.equippedTo === ctx.unit.id
         && ctx.unit.attributes.includes("Politician") ? 2 : 0,
-    }],
+    } satisfies StatModifierListener],
   }),
 
   "merchant-ledger": (item, ownerId) => ({

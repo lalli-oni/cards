@@ -2,6 +2,9 @@
   "name": "cards-test",
   "version": "0.1.0",
   "private": true,
+  "scripts": {
+    "typecheck": "tsc -b tsconfig.json"
+  },
   "dependencies": {
     "cards-engine": "workspace:*",
     "immer": "^10.1.1"

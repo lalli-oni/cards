@@ -1,7 +1,7 @@
 import { EmbeddedActionsParser } from "chevrotain";
 import { allTokens, Ident, Int, LParen, RParen, LBrack, RBrack, Plus, Dot, Gt, Tilde, Colon } from "./tokens";
 import { lexer } from "./tokens";
-import type { Expression, Effect, Step, Primitive, Selector, Token } from "./types";
+import type { Consequence, Expression, Effect, Step, Primitive, Selector, Token } from "./types";
 import { validateEffectChain } from "./validate";
 
 // ---------------------------------------------------------------------------
@@ -15,26 +15,28 @@ interface ChainSegment {
 
 function buildEffect(first: Primitive, segments: ChainSegment[]): Effect {
   const steps: Step[] = [];
-  let current: Step = { primitive: first };
+  let primitive: Primitive = first;
+  let consequence: Consequence | undefined;
 
   for (const seg of segments) {
     if (seg.sep === ":") {
       // Lose branch of ternary consequence
-      if (current.consequence) {
-        current.consequence.loseEffect = [{ primitive: seg.primitive }];
+      if (consequence) {
+        consequence = { ...consequence, loseEffect: [{ primitive: seg.primitive }] };
       } else {
-        current.consequence = { winEffect: [], loseEffect: [{ primitive: seg.primitive }] };
+        consequence = { winEffect: [], loseEffect: [{ primitive: seg.primitive }] };
       }
-    } else if (current.primitive.verb === "contest" && !current.consequence) {
+    } else if (primitive.verb === "contest" && !consequence) {
       // First ">" after a contest = win consequence
-      current.consequence = { winEffect: [{ primitive: seg.primitive }] };
+      consequence = { winEffect: [{ primitive: seg.primitive }] };
     } else {
-      // Regular chain step
-      steps.push(current);
-      current = { primitive: seg.primitive };
+      // Regular chain step — push the current and start a new one
+      steps.push({ primitive, consequence });
+      primitive = seg.primitive;
+      consequence = undefined;
     }
   }
-  steps.push(current);
+  steps.push({ primitive, consequence });
   return steps;
 }
 

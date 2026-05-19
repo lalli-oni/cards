@@ -9,7 +9,7 @@ layer, and no AI logic built in.
 | Package | Purpose |
 |---------|---------|
 | **immer** | Immutable state with mutable-style code via `produce()`. Proxy-based structural sharing — only changed paths are copied. |
-| **pure-rand** | Seeded PRNG with a pure functional API. Returns new RNG state instead of mutating, so RNG state lives inside `GameState` and serializes naturally. Uses **Mersenne Twister** (`prand.mersenne`). |
+| **pure-rand** | Seeded PRNG, **Mersenne Twister** algorithm. As of v8 the library exposes a mutable API; all engine and client code must use the wrapper in [`src/rng.ts`](src/rng.ts), which adapts v8's primitives back to the immutable `[value, nextRng]` style the engine state model depends on. Do not import `pure-rand` directly. |
 
 ### Alternatives considered
 
@@ -41,17 +41,22 @@ All game randomness (shuffles, draws, contests) uses a seeded
 pseudo-random number generator. Given the same seed and action sequence,
 a game produces identical results.
 
-Uses **pure-rand** with the **Mersenne Twister** algorithm
-(`prand.mersenne`). The pure functional API returns a new RNG state with
-each draw, so the RNG state is part of `GameState` and
-serializes/deserializes with everything else — no separate RNG
-restoration logic needed.
+Uses **pure-rand** (Mersenne Twister) via the [`src/rng.ts`](src/rng.ts)
+wrapper. The wrapper is an anti-corruption layer between pure-rand v8's
+mutable primitives and the engine's `[value, nextRng]` immutable style,
+so the RNG state is part of `GameState` and serializes/deserializes with
+everything else — no separate RNG restoration logic needed.
 
 ```ts
-const rng0 = prand.mersenne(gameSeed)
-const [value, rng1] = prand.uniformIntDistribution(1, 6, rng0)
+import { mersenne, uniformIntDistribution } from "./rng";
+
+const rng0 = mersenne(gameSeed);
+const [value, rng1] = uniformIntDistribution(1, 6, rng0);
 // rng1 is stored in GameState
 ```
+
+Importing `pure-rand` directly is forbidden — all RNG operations go
+through the wrapper so future library upgrades stay contained.
 
 This enables:
 - **Regression testing**: replay the same game across engine versions.

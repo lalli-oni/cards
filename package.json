@@ -9,7 +9,8 @@
   ],
   "scripts": {
     "build:library": "bun library/build.ts",
-    "build:rules": "bun engine/src/rules-config.ts"
+    "build:rules": "bun engine/src/rules-config.ts",
+    "typecheck": "bun --filter '*' typecheck"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.8",

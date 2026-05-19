@@ -1,13 +1,15 @@
-import prand from "pure-rand";
 import {
   createInstanceCounter,
   instantiateCards,
   buildPrebuiltSetup,
+  mersenne,
+  uniformIntDistribution,
   type Card,
   type CardDefinition,
   type GameConfig,
   type PlayerDescriptor,
   type PolicyCard,
+  type RandomGenerator,
   type SetupInput,
   type Grid,
   type LocationCard,
@@ -72,7 +74,7 @@ export function buildMainSetup(
 ): SetupInput {
   const defs = getCardDefinitions();
   const counter = createInstanceCounter();
-  let rng: prand.RandomGenerator = prand.mersenne(hashSeed(seed));
+  let rng: RandomGenerator = mersenne(hashSeed(seed));
 
   const locations = defs.filter((d) => d.type === "location");
   const policies = defs.filter((d) => d.type === "policy");
@@ -152,7 +154,7 @@ export function buildMainSetup(
   function shuffleCards<T>(arr: T[]): T[] {
     const result = [...arr];
     for (let i = result.length - 1; i > 0; i--) {
-      const [j, nextRng] = prand.uniformIntDistribution(0, i, rng);
+      const [j, nextRng] = uniformIntDistribution(0, i, rng);
       rng = nextRng;
       [result[i], result[j]] = [result[j], result[i]];
     }

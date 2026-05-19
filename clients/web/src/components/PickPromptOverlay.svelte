@@ -6,17 +6,18 @@
 
   const vs = $derived(getVisibleState());
   const prompt = $derived(vs?.pickPrompt);
-  const resolution = $derived(resolvePickOptions(prompt, vs?.self.mainDeck ?? []));
-  const invariantBroken = $derived(!!prompt && resolution.missingIds.length > 0);
+  const resolution = $derived(
+    prompt && vs ? resolvePickOptions(prompt, vs.self.mainDeck) : null,
+  );
 
   // Engine invariant: every option id is findable in mainDeck while the prompt
   // is set. When that fails, fail loud via the global error banner rather than
   // soft-locking the dialog.
   $effect(() => {
-    if (invariantBroken && prompt) {
+    if (resolution && !resolution.ok && prompt) {
       console.error(
         "PickPromptOverlay: option ids missing from mainDeck — engine/client invariant broken",
-        { missing: resolution.missingIds, promptOptions: prompt.options },
+        { missing: resolution.missing, promptOptions: prompt.options },
       );
       setError(
         "Engine state is inconsistent (pick options missing from deck). " +
@@ -66,7 +67,7 @@
   }
 </script>
 
-{#if prompt && !invariantBroken}
+{#if prompt && resolution?.ok}
   <Modal width="w-auto max-w-3xl">
     <h3 class="mb-2 text-center text-lg font-bold text-text-primary">
       Choose {prompt.count} card{prompt.count === 1 ? "" : "s"} to keep
@@ -76,7 +77,7 @@
     </p>
 
     <div class="mb-4 flex flex-wrap justify-center gap-3">
-      {#each resolution.cards as card (card.id)}
+      {#each resolution.found as card (card.id)}
         <CardView
           {card}
           highlighted={selected.has(card.id)}

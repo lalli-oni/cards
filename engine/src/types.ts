@@ -234,15 +234,26 @@ export interface SeedingGameState extends GameStateBase {
   seedingState: SeedingState;
 }
 
-/** A prompt asking the player to pick from a set of revealed cards. */
+/**
+ * Origin zone for the cards in a `PickPrompt`. Extend the union when new
+ * sources are added (e.g. market, discard) so consumers stay exhaustive.
+ */
+export type PickSource = "main_deck";
+
+/**
+ * A prompt asking the player to pick from a set of revealed cards.
+ *
+ * Appears as a field on `MainGameState.pickPrompt` (server state) and
+ * `VisibleState.pickPrompt` (filtered to the picker). It is only meaningful
+ * while the engine is paused mid-effect waiting for a player choice.
+ */
 export interface PickPrompt {
   playerId: string;
-  /** Card instance IDs the player may pick from, in revealed order. */
-  options: string[];
-  /** How many of the options the player must pick. Always >= 1 (validator enforces). */
+  /** Card instance IDs the player may pick from, in revealed order. Always non-empty. */
+  options: readonly [string, ...string[]];
+  /** How many of the options the player must pick. Always `1 <= count <= options.length` (validator-enforced). */
   count: number;
-  /** Where the options came from. */
-  source: "main_deck";
+  source: PickSource;
 }
 
 export interface MainGameState extends GameStateBase {

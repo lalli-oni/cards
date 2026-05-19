@@ -380,9 +380,12 @@ function execPick(p: Primitive, ctx: ExecutionContext): void {
     return;
   }
 
+  // Cast: peeked.length > 0 was checked above (the `peeked.length === 0`
+  // early return and the auto-pick branch both exit before reaching here),
+  // so the mapped array is non-empty by construction.
   ctx.draft.pickPrompt = {
     playerId: ctx.playerId,
-    options: peeked.map((c) => c.id),
+    options: peeked.map((c) => c.id) as [string, ...string[]],
     count,
     source: "main_deck",
   };

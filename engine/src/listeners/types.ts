@@ -1,6 +1,8 @@
 import type { Draft } from "immer";
 import type { Card, GameEvent, MainAction, MainGameState, StatName, UnitCard } from "../types";
 
+export type { StatName };
+
 /** Where the effect originates — enough to identify the source card. */
 export interface EffectSource {
   type: "location" | "policy" | "passive_event" | "trap" | "item";

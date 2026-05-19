@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from "bun:test";
 import { produce } from "immer";
 import { fillAction } from "../action-helpers";
-import { applyAction } from "../apply-action";
-import type { GameState, SeedingAction, SeedingGameState } from "../types";
+import { applyAction, type ApplyResult } from "../apply-action";
+import type { GameEvent, GameState, SeedingAction, SeedingGameState } from "../types";
 import { getActivePlayerId } from "../types";
 import { getValidActions } from "../valid-actions";
 import { createSeedingGame, DEFAULT_CONFIG, resetIds } from "./helpers";
@@ -385,17 +385,17 @@ describe("seeding phase", () => {
     });
 
     it("emits turn_started for first main-phase turn", () => {
-      const allEvents: any[] = [];
+      const allEvents: GameEvent[] = [];
       let s: GameState = e2eGame();
       while (s.phase === "seeding") {
         const activeId = getActivePlayerId(s);
         const actions = getValidActions(s, activeId);
-        const { state, events } = applyAction(
+        const result: ApplyResult = applyAction(
           s,
           fillAction(s, actions[0]) as SeedingAction,
         );
-        allEvents.push(...events);
-        s = state;
+        allEvents.push(...result.events);
+        s = result.state;
       }
 
       const turnStartedEvents = allEvents.filter(

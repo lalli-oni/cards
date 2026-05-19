@@ -5,7 +5,8 @@
   "main": "src/index.ts",
   "types": "src/index.ts",
   "scripts": {
-    "test": "bun test src/__tests__/"
+    "test": "bun test src/__tests__/",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "chevrotain": "^12.0.0",

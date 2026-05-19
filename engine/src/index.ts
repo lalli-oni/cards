@@ -88,3 +88,14 @@ export {
 export { findSoleLeader, getScores, shouldEndGame, toEndedState } from "./win-condition";
 // Immer re-export — clients may need to disable auto-freeze for reactive frameworks
 export { setAutoFreeze } from "immer";
+// RNG — wrapper around pure-rand v8 exposing the engine's serializable
+// immutable-style API. All consumers should use these, not import
+// pure-rand directly. See engine/src/rng.ts for the boundary rationale.
+export {
+  mersenne,
+  fromState,
+  uniformIntDistribution,
+  shuffle,
+  extractRngState,
+} from "./rng";
+export type { RandomGenerator } from "./rng";

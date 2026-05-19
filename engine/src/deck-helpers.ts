@@ -1,6 +1,5 @@
 import type { Draft } from "immer";
-import prand from "pure-rand";
-import { extractRngState, shuffle } from "./rng";
+import { extractRngState, fromState, shuffle } from "./rng";
 import type {
   Card,
   GameEvent,
@@ -20,7 +19,7 @@ export function drawOneCard(
   events: GameEvent[],
 ): Card | null {
   if (player.mainDeck.length === 0 && player.discardPile.length > 0) {
-    let rng = prand.mersenne.fromState(draft.rngState);
+    let rng = fromState(draft.rngState);
     let shuffled: Card[];
     [shuffled, rng] = shuffle(player.discardPile, rng);
     player.mainDeck = shuffled;

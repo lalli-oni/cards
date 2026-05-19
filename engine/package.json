@@ -3,14 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "main": "src/index.ts",
-  "types": "src/index.ts",
+  "types": "dist/index.d.ts",
   "scripts": {
     "test": "bun test src/__tests__/",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc -b tsconfig.json"
   },
   "dependencies": {
     "chevrotain": "^12.0.0",
     "immer": "^11.1.4",
-    "pure-rand": "6"
+    "pure-rand": "^8.4.0"
   }
 }

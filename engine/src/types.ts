@@ -223,7 +223,7 @@ interface GameStateBase {
   players: PlayerState[];
   grid: Grid;
   market: Card[];
-  /** Serializable RNG state. Reconstruct generator with prand.mersenne.fromState(). */
+  /** Serializable RNG state. Reconstruct generator with `fromState()` from `./rng`. */
   rngState: readonly number[];
   seed: string;
   actionLog: Action[];

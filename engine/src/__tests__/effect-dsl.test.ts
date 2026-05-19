@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "bun:test";
 import { produce, type Draft } from "immer";
-import prand from "pure-rand";
+import { fromState } from "../rng";
 import { parse } from "../effect-dsl";
 import { executeEffect, type ExecutionContext } from "../effect-dsl/executor";
 import type { MainGameState, GameEvent, ItemCard } from "../types";
@@ -46,7 +46,7 @@ function runEffect(
   const { queries } = rebuildListeners(state);
 
   const nextState = produce(state, (draft) => {
-    const rng = prand.mersenne.fromState(draft.rngState);
+    const rng = fromState(draft.rngState);
     const ctx: ExecutionContext = {
       draft,
       playerId: active,

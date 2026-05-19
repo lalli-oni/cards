@@ -1,7 +1,7 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
-    "types": ["bun-types"],
+    "types": [],
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "rootDir": "src",
     "outDir": "dist",
@@ -10,6 +10,7 @@
       "@library/*": ["../../library/build/*"]
     }
   },
+  "references": [{ "path": "../../engine" }],
   "include": ["src"],
   "exclude": ["src/**/*.test.ts", "src/**/__tests__/**"]
 }

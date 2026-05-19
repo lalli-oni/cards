@@ -28,13 +28,15 @@ describe("resolvePickOptions", () => {
     const deck: Card[] = [makeUnit("a"), makeUnit("b"), makeUnit("c")];
     const result = resolvePickOptions(makePrompt(["a", "c"]), deck);
     expect(result.ok).toBe(true);
-    expect(result.found.map((c) => c.id)).toEqual(["a", "c"]);
+    if (!result.ok) throw new Error("expected ok=true");
+    expect(result.found.map((c: Card) => c.id)).toEqual(["a", "c"]);
   });
 
   it("preserves the option order from the prompt, not the deck order", () => {
     const deck: Card[] = [makeUnit("c"), makeUnit("a"), makeUnit("b")];
     const result = resolvePickOptions(makePrompt(["a", "b", "c"]), deck);
-    expect(result.found.map((c) => c.id)).toEqual(["a", "b", "c"]);
+    if (!result.ok) throw new Error("expected ok=true");
+    expect(result.found.map((c: Card) => c.id)).toEqual(["a", "b", "c"]);
   });
 
   it("returns ok=false with missing ids when some options aren't in mainDeck", () => {
@@ -42,7 +44,6 @@ describe("resolvePickOptions", () => {
     const result = resolvePickOptions(makePrompt(["a", "b", "c"]), deck);
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error("expected ok=false");
-    expect(result.found.map((c) => c.id)).toEqual(["a"]);
     expect(result.missing).toEqual(["b", "c"]);
   });
 
@@ -50,16 +51,20 @@ describe("resolvePickOptions", () => {
     const result = resolvePickOptions(makePrompt(["a", "b"]), []);
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error("expected ok=false");
-    expect(result.found).toEqual([]);
     expect(result.missing).toEqual(["a", "b"]);
   });
 
-  it("partitions options into found + missing (sum invariant)", () => {
-    const deck: Card[] = [makeUnit("a"), makeUnit("c")];
-    const prompt = makePrompt(["a", "b", "c", "d"]);
-    const result = resolvePickOptions(prompt, deck);
-    const missingCount = result.ok ? 0 : result.missing.length;
-    expect(result.found.length + missingCount).toBe(prompt.options.length);
+  it("narrows correctly under the discriminant — failure arm has no `found`", () => {
+    const deck: Card[] = [makeUnit("a")];
+    const result = resolvePickOptions(makePrompt(["a", "b"]), deck);
+    if (result.ok) {
+      // @ts-expect-error — `missing` is not on the ok=true arm
+      result.missing;
+    } else {
+      // @ts-expect-error — `found` is not on the ok=false arm
+      result.found;
+    }
+    expect(result.ok).toBe(false);
   });
 });
 
@@ -123,5 +128,13 @@ describe("togglePickSelection", () => {
     expect(() => togglePickSelection(new Set(), "a", 1.5)).toThrow(RangeError);
     expect(() => togglePickSelection(new Set(), "a", NaN)).toThrow(RangeError);
     expect(() => togglePickSelection(new Set(), "a", Infinity)).toThrow(RangeError);
+  });
+
+  it("eviction is FIFO by insertion order, not lexicographic", () => {
+    const input = new Set<string>();
+    input.add("zebra");
+    input.add("apple");
+    const next = togglePickSelection(input, "mango", 2);
+    expect([...next]).toEqual(["apple", "mango"]);
   });
 });

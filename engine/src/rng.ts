@@ -37,6 +37,10 @@ export function fromState(state: readonly number[]): RandomGenerator {
  * Returns `[value, nextRng]` immutable-style — the input `rng` is not
  * mutated. Internally clones, applies v8's mutating `uniformInt`, and
  * returns the clone as the "next" generator.
+ *
+ * Arg order is intentionally v6-style `(min, max, rng)`; the wrapper insulates
+ * ~14 engine and client call sites from pure-rand v8's `(rng, min, max)`.
+ * Do not "fix" the order — flipping it would touch every caller.
  */
 export function uniformIntDistribution(
   min: number,
@@ -50,7 +54,7 @@ export function uniformIntDistribution(
 
 /** Fisher-Yates shuffle using an RNG. Returns shuffled array and next RNG state. */
 export function shuffle<T>(
-  array: T[],
+  array: readonly T[],
   rng: RandomGenerator,
 ): [T[], RandomGenerator] {
   const result = [...array];
@@ -65,15 +69,11 @@ export function shuffle<T>(
 
 /** Serialize RNG state to a JSON-safe array for storage on GameState. */
 export function extractRngState(rng: RandomGenerator): readonly number[] {
-  const state = rng.getState?.();
-  if (!state) {
-    throw new Error("RNG generator does not support getState()");
-  }
-  return state;
+  return rng.getState();
 }
 
 // ---------------------------------------------------------------------------
-// Performance note for future high-throughput callers
+// Performance note for future high-throughput callers — SKETCH (not implemented)
 // ---------------------------------------------------------------------------
 //
 // `uniformIntDistribution` and `shuffle` clone the input generator per call to
@@ -82,8 +82,8 @@ export function extractRngState(rng: RandomGenerator): readonly number[] {
 // running thousands of games per second the clone tax dominates.
 //
 // When that need arrives, add a batch helper here that holds a live mutable
-// generator across many operations and returns the final state at the end —
-// something like:
+// generator across many operations and returns the final state at the end.
+// Proposed signature (not real code — `withMutableGenerator` does not exist):
 //
 //   export function withMutableGenerator<T>(
 //     initialState: readonly number[],
@@ -97,3 +97,7 @@ export function extractRngState(rng: RandomGenerator): readonly number[] {
 // Inside `run`, the caller can use pure-rand's mutable primitives directly
 // (uniformInt(rng, ...), rng.next(), etc.) without cloning. State extraction
 // happens once at the end. Same wrapper boundary, faster inner loop.
+//
+// Caveat: on a thrown `run` the partial RNG advancement is lost. If callers
+// need to persist progress even on partial failure, wrap the body in
+// try/finally and call `extractRngState(rng)` from the finally block.

@@ -380,9 +380,10 @@ function execPick(p: Primitive, ctx: ExecutionContext): void {
     return;
   }
 
-  // Cast: peeked.length > 0 was checked above (the `peeked.length === 0`
-  // early return and the auto-pick branch both exit before reaching here),
-  // so the mapped array is non-empty by construction.
+  // Cast: by this point peeked.length >= 2 — the early return handles length
+  // 0, and the auto-pick branch above handles any case where count >=
+  // peeked.length (which subsumes length 1 with the default count of 1), so
+  // the mapped array is non-empty by construction.
   ctx.draft.pickPrompt = {
     playerId: ctx.playerId,
     options: peeked.map((c) => c.id) as [string, ...string[]],

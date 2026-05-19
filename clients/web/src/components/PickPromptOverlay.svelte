@@ -10,9 +10,7 @@
     prompt && vs ? resolvePickOptions(prompt, vs.self.mainDeck) : null,
   );
 
-  // Engine invariant: every option id is findable in mainDeck while the prompt
-  // is set. When that fails, fail loud via the global error banner rather than
-  // soft-locking the dialog.
+  // Surface broken engine/client invariant via the global error banner.
   $effect(() => {
     if (resolution && !resolution.ok && prompt) {
       console.error(

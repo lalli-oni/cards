@@ -4,19 +4,15 @@ import type { Card, PickPrompt } from "cards-engine";
  * Result of resolving a `PickPrompt`'s option ids against the viewer's `mainDeck`.
  *
  * Discriminated by `ok`: when the engine invariant holds (every option id is
- * findable in `mainDeck`), `ok` is `true` and the caller can render `found`.
- * When the invariant breaks (out-of-band deck mutation, engine/client desync),
- * `ok` is `false`, `missing` lists the unresolved ids, and `found` carries
- * whatever was resolvable. Callers should surface the broken state — not
- * silently render the partial result.
+ * findable in `mainDeck`), `ok` is `true` and `found` holds the resolved cards
+ * in `prompt.options` order. When the invariant breaks (out-of-band deck
+ * mutation, engine/client desync), `ok` is `false` and `missing` lists the
+ * unresolved ids. The failure arm intentionally omits `found` so callers
+ * cannot silently render a partial result by skipping the discriminant.
  */
 export type PickPromptResolution =
   | { readonly ok: true; readonly found: readonly Card[] }
-  | {
-      readonly ok: false;
-      readonly found: readonly Card[];
-      readonly missing: readonly [string, ...string[]];
-    };
+  | { readonly ok: false; readonly missing: readonly [string, ...string[]] };
 
 /**
  * Resolve a `PickPrompt`'s option ids against the viewer's `mainDeck`.
@@ -35,8 +31,9 @@ export function resolvePickOptions(
     if (card) found.push(card);
     else missing.push(id);
   }
-  if (missing.length === 0) return { ok: true, found };
-  return { ok: false, found, missing: missing as [string, ...string[]] };
+  const [head, ...rest] = missing;
+  if (head === undefined) return { ok: true, found };
+  return { ok: false, missing: [head, ...rest] };
 }
 
 /**
@@ -46,8 +43,9 @@ export function resolvePickOptions(
  * order) is evicted FIFO so users can re-pick freely without manually
  * deselecting first.
  *
- * Throws on non-positive integer `count` — the engine validator enforces
- * `count >= 1` for `PickPrompt`, so this is defensive against caller bugs.
+ * Throws on non-positive or non-integer `count`. `PickPrompt.count` is
+ * guaranteed `>= 1` by the DSL validator and the `execPick` prompt-creation
+ * branch; this throw is purely defensive against caller bugs.
  */
 export function togglePickSelection(
   selected: ReadonlySet<string>,
@@ -64,7 +62,10 @@ export function togglePickSelection(
   }
   if (next.size >= count) {
     const oldest = next.values().next().value;
-    if (oldest !== undefined) next.delete(oldest);
+    if (oldest === undefined) {
+      throw new Error("togglePickSelection: set unexpectedly empty at cap");
+    }
+    next.delete(oldest);
   }
   next.add(cardId);
   return next;

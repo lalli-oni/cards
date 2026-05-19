@@ -6,7 +6,8 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "test": "bun test src/__tests__/",
-    "typecheck": "tsc -b tsconfig.json"
+    "typecheck": "tsc -b tsconfig.json",
+    "prepare": "tsc -b tsconfig.json"
   },
   "dependencies": {
     "chevrotain": "^12.0.0",

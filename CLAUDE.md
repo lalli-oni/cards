@@ -9,6 +9,10 @@ See [README.md](README.md) for full project structure.
 
 Use canonical terms from `rules/README.md`. If the user uses informal or ambiguous terms (e.g. "location deck" instead of "prospect deck", "board" instead of "grid", "base" instead of "HQ"), gently note the correct term from the rules. When a term like "deck" is ambiguous, ask which one (main deck, market deck, prospect deck, seeding deck).
 
+## Project Management
+
+Route routine issue work to the **`project-manager` subagent** — picking what to work on next, status reports, triage, labelling, sub-issue creation, and roadmap updates. The agent owns the label model, sub-issue workflow, and the "issues as living documents" convention; consult its definition (`.claude/agents/project-manager.md`) for current conventions rather than improvising.
+
 ## Code Style
 - Always use explicit TypeScript type annotations for readability — variables, parameters, return types, reactive declarations
 - Avoid Svelte `{@html}` — return structured data and render with `{#each}` or components instead

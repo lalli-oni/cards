@@ -1,4 +1,4 @@
-import { parse, DSLParseError, DSLValidationError } from "./effect-dsl";
+import { parse, DSLParseError, DSLValidationError, isHqSafeVerb } from "./effect-dsl";
 import type { Primitive } from "./effect-dsl/types";
 import { tryParseCost } from "./cost-helpers";
 import { checkMissionRequirements, parseRequirements } from "./mission-helpers";
@@ -22,6 +22,7 @@ import type {
   PickPrompt,
   SeedingAction,
   SeedingGameState,
+  UnitCard,
 } from "./types";
 import { getActivePlayerId } from "./types";
 
@@ -340,7 +341,7 @@ function getMainValidActions(
     }
   }
 
-  // activate — unit actions from grid units
+  // activate — unit actions from grid units and HQ units
   for (let r = 0; r < gridRows; r++) {
     for (let c = 0; c < gridCols; c++) {
       for (const unit of state.grid[r][c].units) {
@@ -348,7 +349,13 @@ function getMainValidActions(
         if (!unit.actions) continue;
         for (const actionDef of unit.actions) {
           if (ap < actionDef.apCost) continue;
-          const targets = inferActivateTargets(state, unit.id, actionDef.effect, r, c, playerId);
+          const targets = inferActivateTargets(
+            state,
+            unit.id,
+            actionDef.effect,
+            { type: "grid", row: r, col: c },
+            playerId,
+          );
           for (const t of targets) {
             actions.push({
               type: "activate",
@@ -359,6 +366,34 @@ function getMainValidActions(
             });
           }
         }
+      }
+    }
+  }
+
+  // HQ-origin activates: each verb is HQ-safe iff it operates purely on player
+  // state (no grid coords). inferActivateTargets enforces the all-primitives
+  // rule per AST and returns [] for any compound containing a non-HQ-safe verb.
+  for (const card of player.hq) {
+    if (card.type !== "unit") continue;
+    const unit = card as UnitCard;
+    if (!unit.actions) continue;
+    for (const actionDef of unit.actions) {
+      if (ap < actionDef.apCost) continue;
+      const targets = inferActivateTargets(
+        state,
+        unit.id,
+        actionDef.effect,
+        { type: "hq", playerId },
+        playerId,
+      );
+      for (const t of targets) {
+        actions.push({
+          type: "activate",
+          playerId,
+          cardId: unit.id,
+          actionName: actionDef.name,
+          ...t,
+        });
       }
     }
   }
@@ -457,13 +492,14 @@ type ActivateTarget = {
 /**
  * Infer valid targets for an activate action by doing a shallow parse of
  * the DSL effect string. Returns one entry per valid target combination.
+ *
+ * Exported for direct testing (see valid-actions.test.ts).
  */
-function inferActivateTargets(
+export function inferActivateTargets(
   state: MainGameState,
   _unitId: string,
   effectStr: string,
-  unitRow: number,
-  unitCol: number,
+  origin: BoardPosition,
   playerId: string,
 ): ActivateTarget[] {
   // Library build (library/build.ts) parses and validates every card effect,
@@ -486,6 +522,16 @@ function inferActivateTargets(
   if (!activatePreconditionsPass(allPrimitives, state, playerId)) {
     return [];
   }
+
+  // HQ origin: every primitive must be HQ-safe (player-state-only). Reject
+  // compounds that mix positional verbs (move, kill, etc.) with safe ones —
+  // partial execution would silently drop the positional half.
+  if (origin.type === "hq") {
+    if (allPrimitives.some((p) => !isHqSafeVerb(p.verb))) return [];
+    return [{}];
+  }
+
+  const { row: unitRow, col: unitCol } = origin;
 
   // Scan the first verb in each compound member to determine targeting needs
   const targetSets: ActivateTarget[][] = [];

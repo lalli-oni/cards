@@ -850,7 +850,10 @@ function handleActivate(
   events: GameEvent[],
   queries: QueryListener[],
 ): void {
-  // Find the card with actions — search grid units
+  // Find the card with actions — search grid units, then HQ.
+  // HQ units only surface non-positional activates (see valid-actions.ts's
+  // isHqSafeVerb gate); positional verbs no-op cleanly when actingUnitId
+  // resolves to no grid position (see executor's getActingPosition).
   let card: Draft<UnitCard> | undefined;
 
   for (let r = 0; r < draft.grid.length; r++) {
@@ -864,7 +867,17 @@ function handleActivate(
     if (card) break;
   }
 
-  if (!card) throw new Error(`Card "${cardId}" not found on grid`);
+  if (!card) {
+    for (const p of draft.players) {
+      const found = p.hq.find((c) => c.id === cardId && c.type === "unit");
+      if (found) {
+        card = found as Draft<UnitCard>;
+        break;
+      }
+    }
+  }
+
+  if (!card) throw new Error(`Card "${cardId}" not found on grid or HQ`);
   if (!card.actions) throw new Error(`Card "${cardId}" has no actions`);
   if (card.ownerId !== playerId) throw new Error(`Card "${cardId}" not owned by "${playerId}"`);
 

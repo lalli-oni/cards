@@ -3,7 +3,7 @@ import { produce } from "immer";
 import { applyAction } from "../apply-action";
 import { getValidActions } from "../valid-actions";
 import type { MainAction, MainGameState, UnitCard } from "../types";
-import { createTestGame, makeItem, makeUnit, resetIds } from "./helpers";
+import { createTestGame, makeItem, makeLocation, makeUnit, resetIds } from "./helpers";
 
 beforeEach(() => resetIds());
 
@@ -139,31 +139,10 @@ describe("HQ activate — non-positional verbs", () => {
   it("Grid Marco Polo regression — trade-route IS offered with an adjacent open cell", () => {
     const marco = makeHqUnit("Marco Polo", "move(self) + gold[1]");
     const state = gameWith((d) => {
-      // Place Marco at (0,0); ensure (0,1) has a location reachable via open edges.
-      // createTestGame seeds a fresh main-phase game without grid locations, so we
-      // need both cells to have locations whose facing edges are open.
-      const fromLoc = {
-        id: "loc-from",
-        definitionId: "test-loc-from",
-        type: "location" as const,
-        name: "From",
-        cost: "0",
-        rarity: "common" as const,
-        edges: { n: true, e: true, s: true, w: true },
-        ownerId: ACTIVE,
-      };
-      const toLoc = {
-        id: "loc-to",
-        definitionId: "test-loc-to",
-        type: "location" as const,
-        name: "To",
-        cost: "0",
-        rarity: "common" as const,
-        edges: { n: true, e: true, s: true, w: true },
-        ownerId: ACTIVE,
-      };
-      d.grid[0][0].location = fromLoc;
-      d.grid[0][1].location = toLoc;
+      // Place Marco at (0,0); both cells need a location with open facing edges
+      // — createTestGame seeds an empty grid.
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE, name: "From" });
+      d.grid[0][1].location = makeLocation({ ownerId: ACTIVE, name: "To" });
       d.grid[0][0].units.push(marco);
     });
     const activates: MainAction[] = getValidActions(state, ACTIVE).filter(

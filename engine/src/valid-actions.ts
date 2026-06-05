@@ -22,7 +22,6 @@ import type {
   PickPrompt,
   SeedingAction,
   SeedingGameState,
-  UnitCard,
 } from "./types";
 import { getActivePlayerId } from "./types";
 
@@ -341,59 +340,44 @@ function getMainValidActions(
     }
   }
 
-  // activate — unit actions from grid units and HQ units
-  for (let r = 0; r < gridRows; r++) {
-    for (let c = 0; c < gridCols; c++) {
-      for (const unit of state.grid[r][c].units) {
-        if (unit.ownerId !== playerId) continue;
-        if (!unit.actions) continue;
-        for (const actionDef of unit.actions) {
-          if (ap < actionDef.apCost) continue;
-          const targets = inferActivateTargets(
-            state,
-            unit.id,
-            actionDef.effect,
-            { type: "grid", row: r, col: c },
-            playerId,
-          );
-          for (const t of targets) {
-            actions.push({
-              type: "activate",
-              playerId,
-              cardId: unit.id,
-              actionName: actionDef.name,
-              ...t,
-            });
-          }
-        }
-      }
-    }
-  }
-
-  // HQ-origin activates: each verb is HQ-safe iff it operates purely on player
-  // state (no grid coords). inferActivateTargets enforces the all-primitives
-  // rule per AST and returns [] for any compound containing a non-HQ-safe verb.
-  for (const card of player.hq) {
-    if (card.type !== "unit") continue;
-    const unit = card as UnitCard;
-    if (!unit.actions) continue;
-    for (const actionDef of unit.actions) {
-      if (ap < actionDef.apCost) continue;
-      const targets = inferActivateTargets(
-        state,
-        unit.id,
-        actionDef.effect,
-        { type: "hq", playerId },
-        playerId,
-      );
-      for (const t of targets) {
-        actions.push({
-          type: "activate",
+  // activate — unit actions, across all positions
+  // HQ-origin activates rely on inferActivateTargets to reject any compound
+  // containing a non-HQ-safe verb (move, kill, contest, …) so positional
+  // primitives never reach the executor without grid coords.
+  const activatePositions: BoardPosition[] = [
+    { type: "hq", playerId },
+    ...Array.from({ length: gridRows * gridCols }, (_, i) => ({
+      type: "grid" as const,
+      row: Math.floor(i / gridCols),
+      col: i % gridCols,
+    })),
+  ];
+  for (const pos of activatePositions) {
+    // HQ: units belong to the player by definition. Grid: filter by ownerId
+    // since multiple players share cells.
+    const ownerFilter = pos.type === "hq";
+    const units = getUnitsAtPosition(state.players, state.grid, pos)
+      .filter((u) => ownerFilter || u.ownerId === playerId);
+    for (const unit of units) {
+      if (!unit.actions) continue;
+      for (const actionDef of unit.actions) {
+        if (ap < actionDef.apCost) continue;
+        const targets = inferActivateTargets(
+          state,
+          unit.id,
+          actionDef.effect,
+          pos,
           playerId,
-          cardId: unit.id,
-          actionName: actionDef.name,
-          ...t,
-        });
+        );
+        for (const t of targets) {
+          actions.push({
+            type: "activate",
+            playerId,
+            cardId: unit.id,
+            actionName: actionDef.name,
+            ...t,
+          });
+        }
       }
     }
   }

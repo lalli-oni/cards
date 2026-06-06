@@ -19,5 +19,6 @@ design/exports/
 .claude/bin/
 .mcp.json
 
-# VS Code task context
-.vscode/task-context.md
+# Claude Code per-worktree scaffolding (start-task / new-workspace / open-tab)
+.worktree/
+.vscode/*.code-workspace

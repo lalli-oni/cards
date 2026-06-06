@@ -868,18 +868,22 @@ function handleActivate(
     if (!card.actions) throw new Error(`Card "${cardId}" has no actions`);
     if (card.ownerId !== playerId) throw new Error(`Card "${cardId}" not owned by "${playerId}"`);
     actionDef = card.actions.find((a) => a.name === actionName);
+    if (!actionDef) throw new Error(`Action "${actionName}" not found on unit "${cardId}"`);
   } else {
-    // Not a unit — try active policies. Policy actions live in POLICY_ACTIONS
-    // keyed by definitionId (CSV-driven extraction is tracked in #68).
+    // Not a unit — try active policies.
     const owner = draft.players.find((p) => p.id === playerId);
     const policy = owner?.activePolicies.find((p) => p.id === cardId);
     if (!policy) throw new Error(`Card "${cardId}" not found on grid, HQ, or active policies`);
-    const policyActions = POLICY_ACTIONS[policy.definitionId] ?? [];
+    const policyActions = POLICY_ACTIONS[policy.definitionId];
+    if (!policyActions) {
+      throw new Error(
+        `Policy "${policy.definitionId}" (id="${cardId}") has no actions registered in POLICY_ACTIONS`,
+      );
+    }
     actionDef = policyActions.find((a) => a.name === actionName);
+    if (!actionDef) throw new Error(`Action "${actionName}" not found on policy "${cardId}"`);
     actingUnitId = undefined;
   }
-
-  if (!actionDef) throw new Error(`Action "${actionName}" not found on card "${cardId}"`);
 
   spendAP(draft, actionDef.apCost);
 
@@ -912,6 +916,11 @@ function handleResolvePick(
   if (prompt.playerId !== playerId) {
     throw new Error(
       `resolve_pick rejected: pending pick is for "${prompt.playerId}", not "${playerId}" (${submitted})`,
+    );
+  }
+  if (prompt.kind !== "deck_pick") {
+    throw new Error(
+      `resolve_pick rejected: main-phase handler only supports "deck_pick" prompts (got "${prompt.kind}")`,
     );
   }
   if (pickedCardIds.length !== prompt.count) {
@@ -974,7 +983,7 @@ export function applyMainAction(
     throw new Error(
       `Action "${action.type}" by "${action.playerId}" rejected: ` +
         `pending pick must be resolved first ` +
-        `(picker="${state.pickPrompt.playerId}", count=${state.pickPrompt.count}, ` +
+        `(picker="${state.pickPrompt.playerId}", kind="${state.pickPrompt.kind}", ` +
         `options=[${state.pickPrompt.options.join(",")}])`,
     );
   }

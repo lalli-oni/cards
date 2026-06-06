@@ -424,8 +424,9 @@ export const ITEM_EFFECTS: Record<string, ItemEffectFactory> = {
     queries: [],
     reveals: (state, viewerId) => {
       // Only the Spy Glass owner gets reveal rights. Equipped + on grid required:
-      // rebuild calls this factory with `position` only when the item is at a
-      // grid cell; HQ-stored Spy Glasses don't fire.
+      // computeReveals (visible-state.ts) passes `position` only for items found
+      // via the grid loop; HQ-stored items reach this factory without position
+      // so the guard below short-circuits.
       if (viewerId !== ownerId || !item.equippedTo || !position) return {};
       const cell = state.grid[position.row]?.[position.col];
       if (!cell?.location) return {};

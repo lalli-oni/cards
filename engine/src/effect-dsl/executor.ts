@@ -385,6 +385,7 @@ function execPick(p: Primitive, ctx: ExecutionContext): void {
   // peeked.length (which subsumes length 1 with the default count of 1), so
   // the mapped array is non-empty by construction.
   ctx.draft.pickPrompt = {
+    kind: "deck_pick",
     playerId: ctx.playerId,
     options: peeked.map((c) => c.id) as [string, ...string[]],
     count,

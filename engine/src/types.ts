@@ -202,22 +202,34 @@ export type SeedingStep =
   /** Post-policy reorder pass for cards like Scholar that reorder owner's main deck. */
   | "post_policy_pick";
 
-export interface SeedingState {
-  step: SeedingStep;
+interface SeedingStateBase {
   /** Whose input is needed next during seeding. */
   currentPlayerId: string;
   middleArea: Card[];
   /** Index into players array for whose turn it is to steal. */
   stealTurnIndex: number;
-  /**
-   * Queue of player ids waiting for a post-policy prompt (e.g. Scholar reorder).
-   * Populated by handlePolicySelection; drained by resolve_pick during the
-   * `post_policy_pick` step. Main-phase transition happens when this empties.
-   */
-  pendingPostPolicyPicks?: string[];
   /** Players who have submitted seed_keep this round. Reset at step entry. */
   keepSubmitted: string[];
 }
+
+/**
+ * Seeding state. The `pendingPostPolicyPicks` field exists only on the
+ * `post_policy_pick` variant — keeping `step` and the queue in lockstep
+ * makes the two illegal combinations (`post_policy_pick` with no queue,
+ * other steps with a non-empty queue) unrepresentable.
+ *
+ * Order matters: the queue is populated in turn order so multi-player
+ * Scholar games drain deterministically (player 0 reorders first, then
+ * player 1, etc.). Independent of game outcome.
+ */
+export type SeedingState =
+  | (SeedingStateBase & {
+      step: Exclude<SeedingStep, "post_policy_pick">;
+    })
+  | (SeedingStateBase & {
+      step: "post_policy_pick";
+      pendingPostPolicyPicks: readonly [string, ...string[]];
+    });
 
 export interface TurnState {
   activePlayerId: string;
@@ -259,37 +271,36 @@ export interface SeedingGameState extends GameStateBase {
 export type PickSource = "main_deck";
 
 /**
- * A prompt asking the player to pick from a set of revealed cards.
+ * Fields shared by every `PickPrompt` variant.
  *
- * Appears on `MainGameState.pickPrompt` (full engine state) and
- * `VisibleState.pickPrompt` (only populated when the viewer is the picker).
- * It is only meaningful while the engine is paused mid-effect waiting for a
- * player choice.
+ * Lives on `GameStateBase.pickPrompt` (so it surfaces in main and seeding
+ * phases) and on `VisibleState.pickPrompt` (only populated when the viewer
+ * is the picker). Used both mid-effect during main and during the
+ * `post_policy_pick` seeding step.
  */
-export interface PickPrompt {
+interface PickPromptBase {
   playerId: string;
   /** Card instance IDs the player may pick from, in revealed order. Always non-empty. Items are unique (instance ids). */
   options: readonly [string, ...string[]];
-  /**
-   * How many of the options the player must pick. Always `1 <= count < options.length`.
-   * The DSL validator enforces `count >= 1` at parse time; `execPick` enforces the upper
-   * bound by auto-picking instead of suspending when `count >= peeked.length`.
-   */
-  count: number;
   source: PickSource;
-  /**
-   * When true, the picker must select all `options` and the submission order
-   * defines the outcome (e.g. Scholar's top-5 reorder). When false (default),
-   * the picker selects a subset of size `count` and order does not matter.
-   */
-  ordered?: boolean;
-  /**
-   * Distinguishes resolution semantics. "deck_pick" (default) is the existing
-   * pick-from-revealed-cards flow used by the DSL `pick` verb. Other kinds
-   * trigger card-specific resolution (e.g. Scholar's reorder).
-   */
-  purpose?: "deck_pick" | "scholar_reorder";
 }
+
+/**
+ * A prompt asking the player to pick from a set of revealed cards.
+ *
+ * Discriminated on `kind`:
+ *
+ * - `"deck_pick"`: the picker chooses a `count`-sized subset of `options`;
+ *   order does not matter. `1 <= count < options.length` (the DSL validator
+ *   enforces `count >= 1` at parse time; `execPick` auto-picks instead of
+ *   suspending when `count >= peeked.length`).
+ * - `"scholar_reorder"`: the picker submits a permutation of `options` (all
+ *   of them, in chosen order). `count` is implicitly `options.length` and
+ *   not stored on the variant. The submission order is the outcome.
+ */
+export type PickPrompt =
+  | (PickPromptBase & { kind: "deck_pick"; count: number })
+  | (PickPromptBase & { kind: "scholar_reorder" });
 
 export interface MainGameState extends GameStateBase {
   phase: "main";
@@ -301,6 +312,8 @@ export interface EndedGameState extends GameStateBase {
   turn: TurnState;
   winner?: string;
   scores: Record<string, number>;
+  /** Ended games never carry a pending pick — make that compile-time. */
+  pickPrompt?: never;
 }
 
 export type GameState = SeedingGameState | MainGameState | EndedGameState;
@@ -349,7 +362,18 @@ export type SeedingAction =
       rotation?: number;
     }
   | { type: "policy_select"; playerId: string }
-  | { type: "resolve_pick"; playerId: string; pickedCardIds: [string, ...string[]] };
+  | ResolvePickAction;
+
+/**
+ * Submitted by the picker to resolve a pending `pickPrompt`. Valid in both
+ * main and seeding phases (during `post_policy_pick`); the dispatcher routes
+ * by phase. `pickedCardIds` must be non-empty.
+ */
+export interface ResolvePickAction {
+  type: "resolve_pick";
+  playerId: string;
+  pickedCardIds: [string, ...string[]];
+}
 
 export type MainAction =
   | { type: "deploy"; playerId: string; cardId: string }
@@ -392,7 +416,7 @@ export type MainAction =
     }
   | { type: "attempt_mission"; playerId: string; row: number; col: number }
   | { type: "pass"; playerId: string }
-  | { type: "resolve_pick"; playerId: string; pickedCardIds: [string, ...string[]] };
+  | ResolvePickAction;
 
 export type Action = SeedingAction | MainAction;
 
@@ -561,13 +585,23 @@ export type GameEvent =
 /**
  * Conditional information surfaced to a specific viewer by active card
  * passives — e.g. Alexandria Harbor lets its owner see the top of their
- * main deck; Spy Glass un-redacts specific opponent trap cards. Computed
- * fresh from active listeners each time the visible state is built.
+ * main deck; Spy Glass un-redacts specific opponent trap cards.
+ *
+ * Computed fresh by walking the same card surfaces as `rebuildListeners`
+ * (locations, items, units, policies, passive events, traps, HQ cards)
+ * each time the visible state is built. Each card's effect factory may
+ * return a `reveals` provider (separate from the `listeners`/`queries`
+ * surface) that contributes to this object.
  */
 export interface Reveals {
   /** Top card of viewer's own main deck (Alexandria Harbor and similar). */
   mainDeckTop?: Card;
-  /** Opponent trap card-instance ids the viewer is allowed to see un-redacted. */
+  /**
+   * Opponent trap card-instance ids the viewer is allowed to see
+   * un-redacted. Always deduplicated (set semantics, list representation
+   * for JSON serialization). Set by `computeReveals` via a `Set` and
+   * converted to an array at return.
+   */
   revealedTrapIds: string[];
 }
 
@@ -593,7 +627,7 @@ export interface VisibleState {
   middleArea: Card[];
   /** Current seeding step, if in seeding phase. */
   seedingStep?: SeedingStep;
-  /** Set during main phase when the active player must resolve a `pick`. */
+  /** Set during main or seeding phase when this viewer is the picker. */
   pickPrompt?: PickPrompt;
   winner?: string;
   scores?: Record<string, number>;

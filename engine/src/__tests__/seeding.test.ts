@@ -646,8 +646,7 @@ describe("seeding phase", () => {
       const seedingNext = next as SeedingGameState;
       expect(seedingNext.seedingState.step).toBe("post_policy_pick");
       expect(seedingNext.pickPrompt).toBeDefined();
-      expect(seedingNext.pickPrompt!.purpose).toBe("scholar_reorder");
-      expect(seedingNext.pickPrompt!.ordered).toBe(true);
+      expect(seedingNext.pickPrompt!.kind).toBe("scholar_reorder");
       // Top-5 ids (or fewer if deck shorter) match owner's main deck top.
       const ownerId = seedingNext.pickPrompt!.playerId;
       const owner = getPlayer(seedingNext, ownerId);
@@ -660,28 +659,45 @@ describe("seeding phase", () => {
       let s: GameState = apply(seeded, { type: "policy_select", playerId: seeded.seedingState.currentPlayerId });
 
       // Resolve each player's reorder. Reverse the options each time so we can
-      // verify the order took effect.
+      // verify the order took effect. Also assert the queue drains in turn
+      // order, one player per resolve.
+      const initialQueueLength =
+        s.phase === "seeding" && s.seedingState.step === "post_policy_pick"
+          ? s.seedingState.pendingPostPolicyPicks.length
+          : 0;
+      let resolvedCount = 0;
+      let prevQueueHead: string | undefined;
       while (s.phase === "seeding") {
         if (s.seedingState.step !== "post_policy_pick") {
           throw new Error(`unexpected step "${s.seedingState.step}"`);
         }
+        const queueHead = s.seedingState.pendingPostPolicyPicks[0];
         const prompt = s.pickPrompt!;
+        // Prompt and queue head agree.
+        expect(prompt.playerId).toBe(queueHead);
+        // Queue advances strictly — never re-prompts the same player.
+        expect(queueHead).not.toBe(prevQueueHead);
+        prevQueueHead = queueHead;
+        const queueLenBefore = s.seedingState.pendingPostPolicyPicks.length;
         const reversed = [...prompt.options].reverse() as [string, ...string[]];
         const ownerId = prompt.playerId;
         const beforeMainDeck = getPlayer(s, ownerId).mainDeck.map((c) => c.id);
+        const expectedOrder = [...reversed];
         s = apply(s as SeedingGameState, {
           type: "resolve_pick",
           playerId: ownerId,
           pickedCardIds: reversed,
         });
-        // Verify top N now matches the reversed order.
         const owner = getPlayer(s, ownerId);
-        expect(owner.mainDeck.slice(0, reversed.length).map((c) => c.id)).toEqual(
-          [...reversed],
-        );
-        // Same set of cards, just reordered — total length unchanged.
+        expect(owner.mainDeck.slice(0, expectedOrder.length).map((c) => c.id)).toEqual(expectedOrder);
         expect(owner.mainDeck.length).toBe(beforeMainDeck.length);
+        resolvedCount++;
+        // Queue shrunk by exactly one, or empty + transitioned.
+        if (s.phase === "seeding" && s.seedingState.step === "post_policy_pick") {
+          expect(s.seedingState.pendingPostPolicyPicks.length).toBe(queueLenBefore - 1);
+        }
       }
+      expect(resolvedCount).toBe(initialQueueLength);
       expect(s.phase).toBe("main");
       expect("pickPrompt" in s && s.pickPrompt).toBeFalsy();
     });

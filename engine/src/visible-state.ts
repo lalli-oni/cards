@@ -107,7 +107,17 @@ function toOpponentView(player: PlayerState, revealedTrapIds: string[]): Opponen
 
 function redactTrap(trap: Trap, revealedTrapIds: string[]): TrapView {
   const view: TrapView = { targetId: trap.targetId, cardId: trap.card.id };
-  if (revealedTrapIds.includes(trap.card.id)) view.card = trap.card;
+  if (revealedTrapIds.includes(trap.card.id)) {
+    view.card = trap.card;
+    // Defensive invariant: revealed `card.id` must equal `cardId`. A
+    // mismatch indicates an upstream bug populating revealedTrapIds with
+    // ids that don't belong to this trap.
+    if (view.card.id !== view.cardId) {
+      throw new Error(
+        `redactTrap invariant: revealed card id "${view.card.id}" does not match cardId "${view.cardId}"`,
+      );
+    }
+  }
   return view;
 }
 
@@ -115,9 +125,9 @@ function redactTrap(trap: Trap, revealedTrapIds: string[]): TrapView {
  * Compute the union of reveal contributions from all active cards for a
  * specific viewer. Walks the same surfaces as rebuildListeners; each card's
  * factory may return a `reveals` provider that maps (state, viewerId) →
- * partial Reveals. Contributions are merged: mainDeckTop is last-write-wins
- * (cards owned by the viewer that grant deck-top access are mutually
- * exclusive in practice); revealedTrapIds are deduped.
+ * partial Reveals. Contributions are merged: mainDeckTop must be set by at
+ * most one provider per viewer (throw on conflict — see assertion below);
+ * revealedTrapIds are deduped.
  */
 function computeReveals(state: MainGameState, viewerId: string): Reveals {
   const result: Reveals = { revealedTrapIds: [] };
@@ -126,7 +136,17 @@ function computeReveals(state: MainGameState, viewerId: string): Reveals {
   const apply = (provider: RevealsProvider | undefined) => {
     if (!provider) return;
     const contribution = provider(state, viewerId);
-    if (contribution.mainDeckTop) result.mainDeckTop = contribution.mainDeckTop;
+    if (contribution.mainDeckTop) {
+      if (result.mainDeckTop && result.mainDeckTop.id !== contribution.mainDeckTop.id) {
+        // No two passives should grant mainDeckTop for the same viewer.
+        // Surface as an invariant violation rather than silently picking
+        // the iteration-order winner.
+        throw new Error(
+          `computeReveals invariant: multiple providers contributed conflicting mainDeckTop for viewer "${viewerId}" (saw "${result.mainDeckTop.id}" then "${contribution.mainDeckTop.id}")`,
+        );
+      }
+      result.mainDeckTop = contribution.mainDeckTop;
+    }
     for (const id of contribution.revealedTrapIds ?? []) trapIds.add(id);
   };
 

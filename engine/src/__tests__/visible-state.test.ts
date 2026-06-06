@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { produce } from "immer";
 import type { EndedGameState, MainGameState } from "../types";
 import { getVisibleState } from "../visible-state";
+import { UNIT_EFFECTS } from "../listeners/effects";
 import {
   createSeedingGame,
   createTestGame,
@@ -98,12 +99,14 @@ describe("getVisibleState", () => {
       expect(typeof opp.discardPileSize).toBe("number");
     });
 
-    it("redacts trap card contents", () => {
+    it("redacts trap card contents but always exposes cardId", () => {
       const state = withTrap(createTestGame(), "p2", "target-123");
       const vis = getVisibleState(state, "p1");
       const trap = vis.opponents[0].activeTraps[0];
+      const p2 = state.players.find((p) => p.id === "p2")!;
       expect(trap.targetId).toBe("target-123");
-      expect("card" in trap).toBe(false);
+      expect(trap.cardId).toBe(p2.activeTraps[0].card.id);
+      expect(trap.card).toBeUndefined();
     });
   });
 
@@ -157,7 +160,12 @@ describe("getVisibleState", () => {
   describe("ended phase", () => {
     it("does not throw for ended game", () => {
       const base = createTestGame();
-      const endedState: EndedGameState = { ...base, phase: "ended", scores: {} };
+      const endedState: EndedGameState = {
+        ...base,
+        phase: "ended",
+        scores: {},
+        pickPrompt: undefined,
+      };
       const vis = getVisibleState(endedState, "p1");
       expect(vis.phase).toBe("ended");
       expect(vis.currentPlayerId).toBe(base.turn.activePlayerId);
@@ -225,6 +233,7 @@ describe("getVisibleState", () => {
       const opp = vis.opponents.find((o) => o.id === "p2")!;
       expect(opp.activeTraps).toHaveLength(1);
       expect(opp.activeTraps[0].card).toBeDefined();
+      expect(opp.activeTraps[0].cardId).toBe(opp.activeTraps[0].card!.id);
     });
 
     it("keeps opponent traps redacted when Spy Glass is not at the trap's location", () => {
@@ -249,6 +258,58 @@ describe("getVisibleState", () => {
       expect(opp.activeTraps[0].card).toBeUndefined();
     });
 
+    it("does not fire when Spy Glass is stored in HQ (not on grid)", () => {
+      const state = produce(createTestGame(), (d) => {
+        const loc = makeLocation({ ownerId: "p1" });
+        d.grid[0][0].location = loc;
+        const p1 = d.players.find((p) => p.id === "p1")!;
+        p1.hq.push(makeItem({ ownerId: "p1", definitionId: "spy-glass" }));
+        const p2 = d.players.find((p) => p.id === "p2")!;
+        p2.activeTraps.push({
+          card: makeTrapEvent({ ownerId: "p2", trigger: "test" }),
+          targetId: loc.id,
+        });
+      });
+      const vis = getVisibleState(state, "p1");
+      expect(vis.reveals.revealedTrapIds).toHaveLength(0);
+    });
+
+    it("does not fire when equipped unit is on a cell with no location", () => {
+      const state = produce(createTestGame(), (d) => {
+        const unit = makeUnit({ ownerId: "p1" });
+        // No location on (0,0)
+        d.grid[0][0].units.push(unit);
+        d.grid[0][0].items.push(
+          makeItem({ ownerId: "p1", definitionId: "spy-glass", equippedTo: unit.id }),
+        );
+        const p2 = d.players.find((p) => p.id === "p2")!;
+        p2.activeTraps.push({
+          card: makeTrapEvent({ ownerId: "p2", trigger: "test" }),
+          targetId: "any",
+        });
+      });
+      const vis = getVisibleState(state, "p1");
+      expect(vis.reveals.revealedTrapIds).toHaveLength(0);
+    });
+
+    it("does not fire when Spy Glass is on grid but not equipped to any unit", () => {
+      const state = produce(createTestGame(), (d) => {
+        const loc = makeLocation({ ownerId: "p1" });
+        d.grid[0][0].location = loc;
+        // Spy Glass on cell with no equippedTo
+        d.grid[0][0].items.push(
+          makeItem({ ownerId: "p1", definitionId: "spy-glass" }),
+        );
+        const p2 = d.players.find((p) => p.id === "p2")!;
+        p2.activeTraps.push({
+          card: makeTrapEvent({ ownerId: "p2", trigger: "test" }),
+          targetId: loc.id,
+        });
+      });
+      const vis = getVisibleState(state, "p1");
+      expect(vis.reveals.revealedTrapIds).toHaveLength(0);
+    });
+
     it("does not surface trap reveal rights to the wrong viewer", () => {
       const state = produce(createTestGame(), (d) => {
         const loc = makeLocation({ ownerId: "p1" });
@@ -267,6 +328,49 @@ describe("getVisibleState", () => {
       // Spy Glass belongs to p1 — viewing as p2 should not grant trap reveals.
       const visP2 = getVisibleState(state, "p2");
       expect(visP2.reveals.revealedTrapIds).toHaveLength(0);
+    });
+  });
+
+  describe("reveals — UNIT_EFFECTS factory branches in computeReveals", () => {
+    // Register a fixture-only unit definitionId with a reveals provider so
+    // both the grid and HQ walker branches in computeReveals get exercised
+    // beyond the cards that ship with reveals today.
+    const STUB_DEF = "__reveals-test-unit__";
+    let stubInvocations: { viewerId: string; hasPosition: boolean }[] = [];
+
+    beforeEach(() => {
+      stubInvocations = [];
+      UNIT_EFFECTS[STUB_DEF] = (_unit, ownerId, position) => ({
+        listeners: [],
+        queries: [],
+        reveals: (_state, viewerId) => {
+          stubInvocations.push({ viewerId, hasPosition: position != null });
+          return viewerId === ownerId ? { revealedTrapIds: [`stub-${ownerId}`] } : {};
+        },
+      });
+    });
+
+    afterEach(() => {
+      delete UNIT_EFFECTS[STUB_DEF];
+    });
+
+    it("invokes a unit's reveals provider for grid-deployed units (with position)", () => {
+      const state = produce(createTestGame(), (d) => {
+        d.grid[1][1].units.push(makeUnit({ ownerId: "p1", definitionId: STUB_DEF }));
+      });
+      const vis = getVisibleState(state, "p1");
+      expect(vis.reveals.revealedTrapIds).toContain("stub-p1");
+      expect(stubInvocations.some((c) => c.hasPosition)).toBe(true);
+    });
+
+    it("invokes a unit's reveals provider for HQ-stored units (no position)", () => {
+      const state = produce(createTestGame(), (d) => {
+        const p1 = d.players.find((p) => p.id === "p1")!;
+        p1.hq.push(makeUnit({ ownerId: "p1", definitionId: STUB_DEF }));
+      });
+      const vis = getVisibleState(state, "p1");
+      expect(vis.reveals.revealedTrapIds).toContain("stub-p1");
+      expect(stubInvocations.some((c) => !c.hasPosition)).toBe(true);
     });
   });
 });

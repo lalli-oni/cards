@@ -13,6 +13,7 @@ import {
 } from "./grid-helpers";
 import { getConfigNumber, getPlayerById } from "./state-helpers";
 import { rebuildListeners } from "./listeners/rebuild";
+import { POLICY_ACTIONS } from "./listeners/effects";
 import { getModifiedCost, getModifiedAPCost } from "./listeners/query";
 import type {
   Action,
@@ -109,6 +110,13 @@ function getSeedingValidActions(
 
     case "policy_selection":
       return [{ type: "policy_select", playerId }];
+
+    case "post_policy_pick": {
+      if (state.pickPrompt && state.pickPrompt.playerId === playerId) {
+        return getResolvePickActions(state.pickPrompt, playerId) as SeedingAction[];
+      }
+      return [];
+    }
   }
 }
 
@@ -235,15 +243,16 @@ function getMainValidActions(
     }
   }
 
-  // play_event — events in hand that player can afford (1 AP)
-  if (ap >= 1) {
-    for (const card of player.hand) {
-      if (card.type !== "event") continue;
-      const cost = tryParseCost(card.cost);
-      if (cost !== null && player.gold >= cost) {
-        actions.push({ type: "play_event", playerId, cardId: card.id });
-      }
-    }
+  // play_event — events in hand that player can afford. AP cost goes through
+  // getModifiedAPCost so passives like Mary Shelley (first event free) surface
+  // at AP=0; checking gold cost separately.
+  for (const card of player.hand) {
+    if (card.type !== "event") continue;
+    const cost = tryParseCost(card.cost);
+    if (cost === null || player.gold < cost) continue;
+    const candidate: MainAction = { type: "play_event", playerId, cardId: card.id };
+    const apCost = getModifiedAPCost(state, queries, candidate, 1);
+    if (ap >= apCost) actions.push(candidate);
   }
 
   // equip — items to co-located units, across all positions (1 AP)
@@ -382,6 +391,28 @@ function getMainValidActions(
     }
   }
 
+  // activate — policy actions (HQ-origin: no grid position)
+  const ownerPlayer = state.players.find((p) => p.id === playerId);
+  if (ownerPlayer) {
+    const hqOrigin: BoardPosition = { type: "hq", playerId };
+    for (const policy of ownerPlayer.activePolicies) {
+      const policyActions = POLICY_ACTIONS[policy.definitionId] ?? [];
+      for (const actionDef of policyActions) {
+        if (ap < actionDef.apCost) continue;
+        const targets = inferActivateTargets(state, policy.id, actionDef.effect, hqOrigin, playerId);
+        for (const t of targets) {
+          actions.push({
+            type: "activate",
+            playerId,
+            cardId: policy.id,
+            actionName: actionDef.name,
+            ...t,
+          });
+        }
+      }
+    }
+  }
+
   return actions;
 }
 
@@ -393,15 +424,40 @@ function getResolvePickActions(
   prompt: PickPrompt,
   playerId: string,
 ): MainAction[] {
-  // PickPrompt.count is validated >= 1 (validator rejects peek[0]/pick[0]),
-  // so every subset is non-empty — safe to assert the non-empty-tuple shape.
-  return subsetsOfSize(prompt.options, prompt.count).map(
-    (pickedCardIds) => ({
-      type: "resolve_pick" as const,
-      playerId,
-      pickedCardIds: pickedCardIds as [string, ...string[]],
-    }),
-  );
+  // `deck_pick` enumerates count-sized subsets (set selection); `scholar_reorder`
+  // enumerates permutations of the full options list (the submission order is
+  // the outcome). Both shapes produce non-empty pickedCardIds tuples — safe
+  // to assert via `as`.
+  const combos = prompt.kind === "scholar_reorder"
+    ? permutationsOf(prompt.options)
+    : subsetsOfSize(prompt.options, prompt.count);
+  return combos.map((pickedCardIds) => ({
+    type: "resolve_pick" as const,
+    playerId,
+    pickedCardIds: pickedCardIds as [string, ...string[]],
+  }));
+}
+
+function permutationsOf<T>(items: readonly T[]): T[][] {
+  if (items.length === 0) return [[]];
+  const result: T[][] = [];
+  const buf: T[] = new Array(items.length);
+  const used = new Array(items.length).fill(false);
+  const choose = (depth: number): void => {
+    if (depth === items.length) {
+      result.push([...buf]);
+      return;
+    }
+    for (let i = 0; i < items.length; i++) {
+      if (used[i]) continue;
+      used[i] = true;
+      buf[depth] = items[i];
+      choose(depth + 1);
+      used[i] = false;
+    }
+  };
+  choose(0);
+  return result;
 }
 
 function subsetsOfSize<T>(items: readonly T[], size: number): T[][] {

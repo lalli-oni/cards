@@ -9,6 +9,7 @@ import type {
   StatModifierListener,
 } from "./types";
 import type {
+  ActionDef,
   GameEvent,
   ItemCard,
   LocationCard,
@@ -53,6 +54,12 @@ export type TrapEffectFactory = (
 
 export type ItemEffectFactory = (
   item: ItemCard,
+  ownerId: string,
+  position?: { row: number; col: number },
+) => EffectDefinition;
+
+export type UnitEffectFactory = (
+  unit: UnitCard,
   ownerId: string,
   position?: { row: number; col: number },
 ) => EffectDefinition;
@@ -199,6 +206,17 @@ export const LOCATION_EFFECTS: Record<string, LocationEffectFactory> = {
         && ctx.position.row === row && ctx.position.col === col
         && ctx.unit.cunning >= 7,
     } satisfies ProtectionListener],
+  }),
+
+  "alexandria-harbor": (_loc, ownerId) => ({
+    listeners: [],
+    queries: [],
+    reveals: (state, viewerId) => {
+      if (viewerId !== ownerId) return {};
+      const player = state.players.find((p) => p.id === viewerId);
+      const top = player?.mainDeck[0];
+      return top ? { mainDeckTop: top } : {};
+    },
   }),
 };
 
@@ -401,6 +419,29 @@ export const ITEM_EFFECTS: Record<string, ItemEffectFactory> = {
     } satisfies StatModifierListener],
   }),
 
+  "spy-glass": (item, ownerId, position) => ({
+    listeners: [],
+    queries: [],
+    reveals: (state, viewerId) => {
+      // Only the Spy Glass owner gets reveal rights. Equipped + on grid required:
+      // computeReveals (visible-state.ts) passes `position` only for items found
+      // via the grid loop; HQ-stored items reach this factory without position
+      // so the guard below short-circuits.
+      if (viewerId !== ownerId || !item.equippedTo || !position) return {};
+      const cell = state.grid[position.row]?.[position.col];
+      if (!cell?.location) return {};
+      const locationId = cell.location.id;
+      const revealedTrapIds: string[] = [];
+      for (const player of state.players) {
+        if (player.id === viewerId) continue;
+        for (const trap of player.activeTraps) {
+          if (trap.targetId === locationId) revealedTrapIds.push(trap.card.id);
+        }
+      }
+      return { revealedTrapIds };
+    },
+  }),
+
   "war-banner": (item, ownerId, position) => ({
     listeners: [],
     queries: [
@@ -497,6 +538,37 @@ export const ITEM_EFFECTS: Record<string, ItemEffectFactory> = {
       },
     }],
     queries: [],
+  }),
+};
+
+// ---------------------------------------------------------------------------
+// Policy actions — activatable actions surfaced on active policies.
+// Keyed by policy definitionId. The action shape mirrors UnitCard.actions.
+// CSV-driven extraction of policy actions is tracked in #68; until then,
+// actions live here so handleActivate can dispatch them by definitionId.
+// ---------------------------------------------------------------------------
+
+export const POLICY_ACTIONS: Record<string, ActionDef[]> = {
+  "spymaster": [
+    { name: "Infiltrate", apCost: 1, effect: "reveal(opponent + hand)" },
+  ],
+};
+
+// ---------------------------------------------------------------------------
+// Unit effects — passives that fire while a unit is in play (HQ or grid).
+// ---------------------------------------------------------------------------
+
+export const UNIT_EFFECTS: Record<string, UnitEffectFactory> = {
+  "mary-shelley": (unit, ownerId) => ({
+    listeners: [],
+    queries: [{
+      source: { type: "unit", cardId: unit.id, definitionId: "mary-shelley", ownerId },
+      query: "ap",
+      modify: (state, ctx) => {
+        if (ctx.playerId !== ownerId || ctx.action.type !== "play_event") return 0;
+        return countActionsThisTurn(state, ownerId, (a) => a.type === "play_event") === 0 ? -99 : 0;
+      },
+    } satisfies APModifierListener],
   }),
 };
 

@@ -50,6 +50,7 @@ describe("HQ activate — non-positional verbs", () => {
     });
     const ns = next as MainGameState;
     expect(ns.pickPrompt).toEqual({
+      kind: "deck_pick",
       playerId: ACTIVE,
       options: [top1.id, top2.id, top3.id],
       count: 1,

@@ -6,6 +6,7 @@ import {
   PASSIVE_EVENT_EFFECTS,
   TRAP_EFFECTS,
   ITEM_EFFECTS,
+  UNIT_EFFECTS,
 } from "./effects";
 
 export interface RebuildResult {
@@ -51,6 +52,16 @@ export function rebuildListeners(state: MainGameState): RebuildResult {
           queries.push(...result.queries);
         }
       }
+
+      // Unit effects (units on the grid)
+      for (const unit of cell.units) {
+        const factory = UNIT_EFFECTS[unit.definitionId];
+        if (factory) {
+          const result = factory(unit, unit.ownerId, { row: r, col: c });
+          listeners.push(...result.listeners);
+          queries.push(...result.queries);
+        }
+      }
     }
   }
 
@@ -83,10 +94,17 @@ export function rebuildListeners(state: MainGameState): RebuildResult {
       }
     }
 
-    // HQ items (stored items not on grid)
+    // HQ items + units (stored cards not yet on grid)
     for (const card of player.hq) {
       if (card.type === "item") {
         const factory = ITEM_EFFECTS[card.definitionId];
+        if (factory) {
+          const result = factory(card, player.id);
+          listeners.push(...result.listeners);
+          queries.push(...result.queries);
+        }
+      } else if (card.type === "unit") {
+        const factory = UNIT_EFFECTS[card.definitionId];
         if (factory) {
           const result = factory(card, player.id);
           listeners.push(...result.listeners);

@@ -51,10 +51,28 @@ export function applySeedingAction(
   state: SeedingGameState,
   action: SeedingAction,
 ): ApplyResult {
+  // Symmetric guard with applyMainAction: while a pickPrompt is set,
+  // only resolve_pick is accepted. Surfaces the actual blocker rather
+  // than relying on each per-step handler's step-mismatch throw.
+  if (state.pickPrompt && action.type !== "resolve_pick") {
+    throw new Error(
+      `Seeding action "${action.type}" by "${action.playerId}" rejected: ` +
+        `pending pick must be resolved first ` +
+        `(picker="${state.pickPrompt.playerId}", kind="${state.pickPrompt.kind}", ` +
+        `options=[${state.pickPrompt.options.join(",")}])`,
+    );
+  }
+
   // policy_select triggers a phase transition — handled separately
   // so we can construct MainGameState explicitly with full type checking.
   if (action.type === "policy_select") {
     return handlePolicySelection(state, action);
+  }
+
+  // resolve_pick during seeding (e.g. Scholar's post-policy reorder).
+  // May itself transition to main once the queue empties.
+  if (action.type === "resolve_pick") {
+    return handleSeedingResolvePick(state, action);
   }
 
   const events: GameEvent[] = [];
@@ -413,8 +431,8 @@ function handlePolicySelection(
 
   const events: GameEvent[] = [];
 
-  // Step 1: Apply policy assignment within seeding state (Immer)
-  const final = produce(state, (draft) => {
+  // Assign policies within seeding state (Immer)
+  const afterAssign = produce(state, (draft) => {
     draft.actionLog.push(action);
 
     let rng = fromState(draft.rngState);
@@ -441,31 +459,211 @@ function handlePolicySelection(
     draft.rngState = extractRngState(rng) as number[];
   });
 
-  // Step 2: Construct MainGameState explicitly (full type checking)
+  // Queue post-policy reorder prompts for players whose policies need them
+  // (e.g. Scholar's top-5 reorder). Players are processed in turn order.
+  const pendingPicks = afterAssign.players
+    .filter((p) => p.activePolicies.some((pol) => pol.definitionId === "scholar"))
+    .filter((p) => p.mainDeck.length > 0)
+    .map((p) => p.id);
+
+  if (pendingPicks.length > 0) {
+    const queue = pendingPicks as [string, ...string[]];
+    const withQueue = produce(afterAssign, (draft) => {
+      // Reassign the whole seedingState so the discriminated union narrows
+      // cleanly to the post_policy_pick variant (and the queue field is
+      // present and non-empty as required).
+      draft.seedingState = {
+        step: "post_policy_pick",
+        currentPlayerId: queue[0],
+        middleArea: draft.seedingState.middleArea,
+        stealTurnIndex: draft.seedingState.stealTurnIndex,
+        keepSubmitted: draft.seedingState.keepSubmitted,
+        pendingPostPolicyPicks: queue,
+      };
+      openScholarReorderPrompt(draft, queue[0], events);
+    });
+    events.push({ type: "seeding_step_changed", step: "post_policy_pick" });
+    return { state: withQueue, events };
+  }
+
+  return finalizeSeeding(afterAssign, events);
+}
+
+/** Open a Scholar-reorder pickPrompt for the given player on the seeding draft. */
+function openScholarReorderPrompt(
+  draft: Draft<SeedingGameState>,
+  playerId: string,
+  events: GameEvent[],
+): void {
+  const player = getPlayerById(draft, playerId);
+  const peekCount = Math.min(5, player.mainDeck.length);
+  if (peekCount === 0) {
+    // Queue construction filters empty-deck players at handlePolicySelection.
+    // Reaching here means the filter was bypassed — surface as an invariant
+    // violation rather than silently leaving the queue stuck.
+    throw new Error(
+      `openScholarReorderPrompt invariant: player "${playerId}" has empty mainDeck — handlePolicySelection should have filtered them out`,
+    );
+  }
+  const topIds = player.mainDeck.slice(0, peekCount).map((c) => c.id) as [string, ...string[]];
+  draft.pickPrompt = {
+    kind: "scholar_reorder",
+    playerId,
+    options: topIds,
+    source: "main_deck",
+  };
+  events.push({
+    type: "cards_peeked",
+    playerId,
+    cardIds: [...topIds],
+    source: "main_deck",
+  });
+}
+
+function handleSeedingResolvePick(
+  state: SeedingGameState,
+  action: SeedingAction & { type: "resolve_pick" },
+): ApplyResult {
+  const prompt = state.pickPrompt;
+  if (!prompt) {
+    throw new Error("resolve_pick during seeding rejected: no pending pick");
+  }
+  if (prompt.playerId !== action.playerId) {
+    throw new Error(
+      `resolve_pick during seeding rejected: pending pick is for "${prompt.playerId}", not "${action.playerId}"`,
+    );
+  }
+  if (prompt.kind !== "scholar_reorder") {
+    throw new Error(
+      `resolve_pick during seeding only supports "scholar_reorder" prompts (got "${prompt.kind}")`,
+    );
+  }
+  if (state.seedingState.step !== "post_policy_pick") {
+    throw new Error(
+      `resolve_pick during seeding invariant: pickPrompt is set but step is "${state.seedingState.step}", not "post_policy_pick"`,
+    );
+  }
+
+  // Ordered prompts: submission must be a permutation of options.
+  const submitted = action.pickedCardIds;
+  if (submitted.length !== prompt.options.length) {
+    throw new Error(
+      `resolve_pick (scholar_reorder): expected ${prompt.options.length} ids, got ${submitted.length}`,
+    );
+  }
+  const expected = new Set(prompt.options);
+  const submittedSet = new Set(submitted);
+  if (expected.size !== submittedSet.size || ![...expected].every((id) => submittedSet.has(id))) {
+    throw new Error(
+      `resolve_pick (scholar_reorder): submitted ids must be a permutation of [${prompt.options.join(",")}]`,
+    );
+  }
+  // Queue invariant: the actor must be at the head of the post-policy queue.
+  // The prompt.playerId === action.playerId check above passes any matching
+  // player; this additionally guards against the prompt being stale relative
+  // to the queue (which would silently corrupt the wrong player's deck).
+  const currentQueue = state.seedingState.pendingPostPolicyPicks;
+  if (currentQueue.indexOf(action.playerId) < 0) {
+    throw new Error(
+      `resolve_pick (scholar_reorder) invariant: actor "${action.playerId}" ` +
+      `not in pendingPostPolicyPicks queue [${currentQueue.join(",")}]`,
+    );
+  }
+
+  const events: GameEvent[] = [];
+  const after = produce(state, (draft) => {
+    draft.actionLog.push(action);
+    const player = getPlayerById(draft, action.playerId);
+    // Splice the top `options.length` cards out (count === options.length for
+    // ordered prompts) and put them back in the submitted order.
+    const removed = player.mainDeck.splice(0, prompt.options.length);
+    const lookup = new Map<string, Card>();
+    for (const c of removed) lookup.set(c.id, c);
+    const reordered = submitted.map((id) => lookup.get(id)!);
+    player.mainDeck.unshift(...reordered);
+    events.push({
+      type: "cards_picked",
+      playerId: action.playerId,
+      cardIds: [...submitted],
+      source: "main_deck",
+    });
+
+    // Pop this player from the queue. We're inside the post_policy_pick
+    // variant — narrowed via the check above — so the field is present.
+    const ds = draft.seedingState;
+    if (ds.step !== "post_policy_pick") return;
+    const queueDraft = ds.pendingPostPolicyPicks as unknown as string[];
+    const idx = queueDraft.indexOf(action.playerId);
+    queueDraft.splice(idx, 1); // guarded above; idx >= 0
+    draft.pickPrompt = undefined;
+
+    if (queueDraft.length > 0) {
+      ds.currentPlayerId = queueDraft[0];
+      openScholarReorderPrompt(draft, queueDraft[0], events);
+    }
+  });
+
+  // If the queue is now empty, transition to main.
+  const afterState = after.seedingState;
+  const queueEmpty = afterState.step !== "post_policy_pick"
+    || afterState.pendingPostPolicyPicks.length === 0;
+  if (queueEmpty) {
+    const cleared = produce(after, (draft) => {
+      // Collapse back to a step-only seedingState (drop the queue field) so the
+      // discriminated union narrows away from post_policy_pick before
+      // finalizeSeeding constructs MainGameState.
+      draft.seedingState = {
+        step: "policy_selection",
+        currentPlayerId: draft.seedingState.currentPlayerId,
+        middleArea: draft.seedingState.middleArea,
+        stealTurnIndex: draft.seedingState.stealTurnIndex,
+        keepSubmitted: draft.seedingState.keepSubmitted,
+      };
+    });
+    return finalizeSeeding(cleared, events);
+  }
+  return { state: after, events };
+}
+
+/** Build MainGameState + run first-player start-of-turn. Called when seeding completes. */
+function finalizeSeeding(
+  state: SeedingGameState,
+  events: GameEvent[],
+): ApplyResult {
+  // Invariant: any pickPrompt must be resolved before main-phase begins.
+  // The Scholar reorder flow clears its prompt explicitly; surfacing this
+  // as a throw makes it impossible for a future seeding-time prompt to
+  // silently leak into MainGameState.
+  if (state.pickPrompt) {
+    throw new Error(
+      `finalizeSeeding invariant: pickPrompt must be cleared before transitioning to main ` +
+      `(picker="${state.pickPrompt.playerId}", kind="${state.pickPrompt.kind}")`,
+    );
+  }
   const mainState: MainGameState = {
-    config: final.config,
+    config: state.config,
     phase: "main",
     turn: {
-      activePlayerId: final.players[0].id,
+      activePlayerId: state.players[0].id,
       round: 1,
       actionPointsRemaining: getConfigNumber(
-        final,
+        state,
         "action_points_per_turn",
         3,
       ),
     },
-    players: final.players,
-    grid: final.grid,
-    market: final.market,
-    rngState: final.rngState,
-    seed: final.seed,
-    actionLog: final.actionLog,
+    players: state.players,
+    grid: state.grid,
+    market: state.market,
+    rngState: state.rngState,
+    seed: state.seed,
+    actionLog: state.actionLog,
   };
 
   events.push({ type: "phase_changed", from: "seeding", to: "main" });
   events.push({
     type: "turn_started",
-    playerId: final.players[0].id,
+    playerId: state.players[0].id,
     round: 1,
   });
 

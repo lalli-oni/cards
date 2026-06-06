@@ -4,6 +4,7 @@ export type {
   EmitFn,
   EffectDefinition,
   QueryListener,
+  RevealsProvider,
   StatModifierListener,
   CostModifierListener,
   ProtectionListener,
@@ -31,4 +32,6 @@ export {
   PASSIVE_EVENT_EFFECTS,
   TRAP_EFFECTS,
   ITEM_EFFECTS,
+  UNIT_EFFECTS,
+  POLICY_ACTIONS,
 } from "./effects";

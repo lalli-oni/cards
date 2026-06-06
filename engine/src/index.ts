@@ -62,6 +62,7 @@ export type {
   PickPrompt,
   PolicyCard,
   Rarity,
+  Reveals,
   SeedingGameState,
   Session,
   Trap,
@@ -75,7 +76,7 @@ export { getActivePlayerId } from "./types";
 export { getValidActions } from "./valid-actions";
 export { getVisibleState } from "./visible-state";
 // Listeners
-export type { EffectListener, EffectSource, EmitFn } from "./listeners";
+export type { EffectListener, EffectSource, EmitFn, RevealsProvider } from "./listeners";
 export { emit, rebuildListeners } from "./listeners";
 export {
   LOCATION_EFFECTS,
@@ -83,6 +84,8 @@ export {
   PASSIVE_EVENT_EFFECTS,
   TRAP_EFFECTS,
   ITEM_EFFECTS,
+  UNIT_EFFECTS,
+  POLICY_ACTIONS,
 } from "./listeners";
 // Win condition
 export { findSoleLeader, getScores, shouldEndGame, toEndedState } from "./win-condition";

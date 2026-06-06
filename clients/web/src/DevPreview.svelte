@@ -128,7 +128,7 @@
     prospectDeckSize: 5, discardPileSize: 2,
     hq: [p2Units[2]],
     activePolicies: p2Policies,
-    activeTraps: [{ targetId: locations[1]?.id }],
+    activeTraps: [{ targetId: locations[1]?.id, cardId: "preview-trap-1" }],
   };
 
   const turn: TurnState = { activePlayerId: p1, actionPointsRemaining: 2, round: 3 };
@@ -142,6 +142,7 @@
     self: selfState, teammates: [], opponents: [opponentView],
     grid, market: marketCards,
     turnOrder: [p1, p2], middleArea: [],
+    reveals: { revealedTrapIds: [] },
   };
 
   const mockActions = [

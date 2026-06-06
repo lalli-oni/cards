@@ -2,7 +2,8 @@ import { describe, expect, it, beforeEach } from "bun:test";
 import { produce } from "immer";
 import type { Draft } from "immer";
 import { applyAction } from "../apply-action";
-import type { GameEvent, MainGameState } from "../types";
+import { getValidActions } from "../valid-actions";
+import type { Action, GameEvent, MainGameState } from "../types";
 import { emit } from "../listeners/emit";
 import { rebuildListeners } from "../listeners/rebuild";
 import { getModifiedStat, getModifiedCost, isUnitProtected, getModifiedAPCost } from "../listeners/query";
@@ -15,6 +16,7 @@ import {
   makePolicy,
   makePassiveEvent,
   makeTrapEvent,
+  makeInstantEvent,
   resetIds,
 } from "./helpers";
 
@@ -1014,5 +1016,154 @@ describe("AP modifier queries", () => {
     });
     const { queries: q2 } = rebuildListeners(stateWithMove);
     expect(getModifiedAPCost(stateWithMove, q2, moveAction, 1)).toBe(1);
+  });
+
+  it("Mary Shelley: first play_event 0 AP, second play_event normal", () => {
+    const state = gameWith((d, p) => {
+      d.players[p.activeIdx].hq.push(
+        makeUnit({ ownerId: p.active, definitionId: "mary-shelley" }),
+      );
+    });
+    const { active } = getPlayers(state);
+    const { queries } = rebuildListeners(state);
+    const playEventAction = { type: "play_event" as const, playerId: active, cardId: "e1" };
+
+    // First event — 0 AP
+    expect(getModifiedAPCost(state, queries, playEventAction, 1)).toBe(0);
+
+    // After a play_event in the log — normal AP
+    const stateWithEvent = produce(state, (d) => {
+      d.actionLog.push({ type: "play_event", playerId: active, cardId: "e1" } as any);
+    });
+    const { queries: q2 } = rebuildListeners(stateWithEvent);
+    expect(getModifiedAPCost(stateWithEvent, q2, playEventAction, 1)).toBe(1);
+  });
+
+  it("Mary Shelley: only affects own player's events", () => {
+    const state = gameWith((d, p) => {
+      d.players[p.activeIdx].hq.push(
+        makeUnit({ ownerId: p.active, definitionId: "mary-shelley" }),
+      );
+    });
+    const { other } = getPlayers(state);
+    const { queries } = rebuildListeners(state);
+    const opponentPlayEvent = { type: "play_event" as const, playerId: other, cardId: "e1" };
+    expect(getModifiedAPCost(state, queries, opponentPlayEvent, 1)).toBe(1);
+  });
+
+  it("Spymaster Infiltrate: activating the policy reveals an opponent's hand and spends 1 AP", () => {
+    const initial = gameWith((d, p) => {
+      d.players[p.activeIdx].activePolicies.push(
+        makePolicy({ ownerId: p.active, definitionId: "spymaster" }),
+      );
+      // Put some cards in the opponent's hand to be revealed.
+      d.players[p.otherIdx].hand.push(
+        makeInstantEvent({ ownerId: p.other }),
+        makeInstantEvent({ ownerId: p.other }),
+      );
+    });
+    const { active } = getPlayers(initial);
+    const apBefore = initial.turn.actionPointsRemaining;
+    const spymaster = initial.players.find((p) => p.id === active)!.activePolicies[0];
+
+    const { state, events } = applyAction(initial, {
+      type: "activate",
+      playerId: active,
+      cardId: spymaster.id,
+      actionName: "Infiltrate",
+    });
+    const after = state as MainGameState;
+
+    expect(after.turn.actionPointsRemaining).toBe(apBefore - 1);
+    const revealed = events.find((e) => e.type === "cards_revealed");
+    expect(revealed).toBeDefined();
+    expect((revealed as any).playerId).toBe(active);
+    expect((revealed as any).cardIds.length).toBe(2);
+  });
+
+  it("Mary Shelley on the grid: first play_event still 0 AP (grid factory branch)", () => {
+    const state = gameWith((d, p) => {
+      d.grid[0][0].units.push(
+        makeUnit({ ownerId: p.active, definitionId: "mary-shelley" }),
+      );
+    });
+    const { active } = getPlayers(state);
+    const { queries } = rebuildListeners(state);
+    const playEventAction = { type: "play_event" as const, playerId: active, cardId: "e1" };
+    expect(getModifiedAPCost(state, queries, playEventAction, 1)).toBe(0);
+  });
+
+  it("Spymaster Infiltrate: not surfaced as a valid action when AP is insufficient", () => {
+    const state = gameWith((d, p) => {
+      d.players[p.activeIdx].activePolicies.push(
+        makePolicy({ ownerId: p.active, definitionId: "spymaster" }),
+      );
+      d.turn.actionPointsRemaining = 0;
+    });
+    const { active } = getPlayers(state);
+    const validActions = getValidActions(state, active);
+    const infiltrateActions = validActions.filter(
+      (a: Action) => a.type === "activate" && a.actionName === "Infiltrate",
+    );
+    expect(infiltrateActions).toHaveLength(0);
+  });
+
+  it("Mary Shelley: getValidActions surfaces play_event at AP=0 (first event of turn)", () => {
+    const state = gameWith((d, p) => {
+      d.players[p.activeIdx].hq.push(
+        makeUnit({ ownerId: p.active, definitionId: "mary-shelley" }),
+      );
+      d.players[p.activeIdx].hand.push(
+        makeInstantEvent({ ownerId: p.active, cost: "0" }),
+      );
+      d.turn.actionPointsRemaining = 0;
+    });
+    const { active } = getPlayers(state);
+    const validActions = getValidActions(state, active);
+    const playEvent = validActions.filter((a: Action) => a.type === "play_event");
+    expect(playEvent.length).toBeGreaterThan(0);
+  });
+
+  it("Spymaster Infiltrate: empty opponent hand emits cards_revealed with empty cardIds", () => {
+    const initial = gameWith((d, p) => {
+      d.players[p.activeIdx].activePolicies.push(
+        makePolicy({ ownerId: p.active, definitionId: "spymaster" }),
+      );
+      // opponent hand intentionally empty
+    });
+    const { active } = getPlayers(initial);
+    const spymaster = initial.players.find((p) => p.id === active)!.activePolicies[0];
+    const { events } = applyAction(initial, {
+      type: "activate",
+      playerId: active,
+      cardId: spymaster.id,
+      actionName: "Infiltrate",
+    });
+    const revealed = events.find((e) => e.type === "cards_revealed");
+    expect(revealed).toBeDefined();
+    expect((revealed as any).cardIds).toEqual([]);
+    expect((revealed as any).source).toBe("opponent_hand");
+  });
+
+  it("Mary Shelley: applyAction(play_event) spends 0 AP for first event, 1 AP for second", () => {
+    const initial = gameWith((d, p) => {
+      d.players[p.activeIdx].hq.push(
+        makeUnit({ ownerId: p.active, definitionId: "mary-shelley" }),
+      );
+      d.players[p.activeIdx].hand.push(
+        makeInstantEvent({ ownerId: p.active, cost: "0" }),
+        makeInstantEvent({ ownerId: p.active, cost: "0" }),
+      );
+    });
+    const { active } = getPlayers(initial);
+    const apBefore = initial.turn.actionPointsRemaining;
+
+    const e1 = initial.players.find((p) => p.id === active)!.hand[0].id;
+    const after1 = applyAction(initial, { type: "play_event", playerId: active, cardId: e1 }).state as MainGameState;
+    expect(after1.turn.actionPointsRemaining).toBe(apBefore); // 0 AP for first event
+
+    const e2 = after1.players.find((p) => p.id === active)!.hand[0].id;
+    const after2 = applyAction(after1, { type: "play_event", playerId: active, cardId: e2 }).state as MainGameState;
+    expect(after2.turn.actionPointsRemaining).toBe(apBefore - 1); // 1 AP for second event
   });
 });

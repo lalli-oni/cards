@@ -57,6 +57,7 @@ describe("reveal > pick — player choice required", () => {
     const ns = next as MainGameState;
 
     expect(ns.pickPrompt).toEqual({
+      kind: "deck_pick",
       playerId: ACTIVE,
       options: [top1.id, top2.id, top3.id],
       count: 1,
@@ -95,7 +96,8 @@ describe("reveal > pick — player choice required", () => {
     });
 
     const vs = getVisibleState(paused, ACTIVE);
-    expect(vs.pickPrompt?.count).toBe(1);
+    expect(vs.pickPrompt?.kind).toBe("deck_pick");
+    expect(vs.pickPrompt?.kind === "deck_pick" && vs.pickPrompt.count).toBe(1);
     expect(vs.pickPrompt?.options).toHaveLength(3);
   });
 

@@ -72,8 +72,10 @@ export function getVisibleState(
     seedingStep:
       state.phase === "seeding" ? state.seedingState.step : undefined,
     // pickPrompt is private to the picker — peek() options must not leak to opponents.
+    // Surfaces in both main and seeding phases so passives like Scholar's
+    // top-5 reorder can prompt during seeding.
     pickPrompt:
-      state.phase === "main" && state.pickPrompt?.playerId === playerId
+      state.phase !== "ended" && state.pickPrompt?.playerId === playerId
         ? state.pickPrompt
         : undefined,
     winner: state.phase === "ended" ? state.winner : undefined,

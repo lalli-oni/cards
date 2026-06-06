@@ -604,4 +604,100 @@ describe("seeding phase", () => {
       expect(playerAfter.prospectDeck.length).toBe(prospectBefore + 1);
     });
   });
+
+  describe("Scholar post-policy reorder", () => {
+    function scholarSeed(seed = "scholar-test"): SeedingGameState {
+      // 40-card decks ensure a populated main deck after seeding completes.
+      return createSeedingGame({
+        deckSize: 40,
+        policyCount: 3,
+        seed,
+        config: { ...DEFAULT_CONFIG, grid_padding: 2 },
+      });
+    }
+
+    /** Play until reaching the policy_selection step; then force Scholar into each player's policyPool. */
+    function reachPolicySelectWithScholar(state: SeedingGameState): SeedingGameState {
+      let s: GameState = state;
+      let safety = 0;
+      while (s.phase === "seeding" && s.seedingState.step !== "policy_selection") {
+        if (++safety > 500) throw new Error("stuck advancing to policy_selection");
+        const activeId = getActivePlayerId(s);
+        const actions = getValidActions(s, activeId);
+        if (actions.length === 0) throw new Error(`no actions at ${s.seedingState.step}`);
+        s = apply(s as SeedingGameState, fillAction(s, actions[0]) as SeedingAction);
+      }
+      if (s.phase !== "seeding") throw new Error("expected seeding");
+      // Replace each player's policyPool's first two entries with Scholar + a sibling so
+      // policy_select reliably assigns Scholar to everyone.
+      return produce(s as SeedingGameState, (draft) => {
+        for (const player of draft.players) {
+          const scholar = { ...player.policyPool[0], definitionId: "scholar" };
+          const sibling = { ...player.policyPool[1], definitionId: "test-policy" };
+          player.policyPool = [scholar, sibling, ...player.policyPool.slice(2)];
+        }
+      });
+    }
+
+    it("opens a scholar_reorder pickPrompt after policy_select when Scholar is assigned", () => {
+      const seeded = reachPolicySelectWithScholar(scholarSeed("scholar-1"));
+      const next = apply(seeded, { type: "policy_select", playerId: seeded.seedingState.currentPlayerId });
+      expect(next.phase).toBe("seeding");
+      const seedingNext = next as SeedingGameState;
+      expect(seedingNext.seedingState.step).toBe("post_policy_pick");
+      expect(seedingNext.pickPrompt).toBeDefined();
+      expect(seedingNext.pickPrompt!.purpose).toBe("scholar_reorder");
+      expect(seedingNext.pickPrompt!.ordered).toBe(true);
+      // Top-5 ids (or fewer if deck shorter) match owner's main deck top.
+      const ownerId = seedingNext.pickPrompt!.playerId;
+      const owner = getPlayer(seedingNext, ownerId);
+      const topIds = owner.mainDeck.slice(0, seedingNext.pickPrompt!.options.length).map((c) => c.id);
+      expect([...seedingNext.pickPrompt!.options]).toEqual(topIds);
+    });
+
+    it("reorders the main deck according to the submitted permutation and transitions to main when queue empties", () => {
+      const seeded = reachPolicySelectWithScholar(scholarSeed("scholar-2"));
+      let s: GameState = apply(seeded, { type: "policy_select", playerId: seeded.seedingState.currentPlayerId });
+
+      // Resolve each player's reorder. Reverse the options each time so we can
+      // verify the order took effect.
+      while (s.phase === "seeding") {
+        if (s.seedingState.step !== "post_policy_pick") {
+          throw new Error(`unexpected step "${s.seedingState.step}"`);
+        }
+        const prompt = s.pickPrompt!;
+        const reversed = [...prompt.options].reverse() as [string, ...string[]];
+        const ownerId = prompt.playerId;
+        const beforeMainDeck = getPlayer(s, ownerId).mainDeck.map((c) => c.id);
+        s = apply(s as SeedingGameState, {
+          type: "resolve_pick",
+          playerId: ownerId,
+          pickedCardIds: reversed,
+        });
+        // Verify top N now matches the reversed order.
+        const owner = getPlayer(s, ownerId);
+        expect(owner.mainDeck.slice(0, reversed.length).map((c) => c.id)).toEqual(
+          [...reversed],
+        );
+        // Same set of cards, just reordered — total length unchanged.
+        expect(owner.mainDeck.length).toBe(beforeMainDeck.length);
+      }
+      expect(s.phase).toBe("main");
+      expect("pickPrompt" in s && s.pickPrompt).toBeFalsy();
+    });
+
+    it("transitions straight to main when no player has Scholar", () => {
+      // Reach policy_select without forcing Scholar.
+      let s: GameState = scholarSeed("no-scholar");
+      let safety = 0;
+      while (s.phase === "seeding" && s.seedingState.step !== "policy_selection") {
+        if (++safety > 500) throw new Error("stuck");
+        const activeId = getActivePlayerId(s);
+        const actions = getValidActions(s, activeId);
+        s = apply(s as SeedingGameState, fillAction(s, actions[0]) as SeedingAction);
+      }
+      s = apply(s as SeedingGameState, { type: "policy_select", playerId: getActivePlayerId(s) });
+      expect(s.phase).toBe("main");
+    });
+  });
 });

@@ -198,7 +198,9 @@ export type SeedingStep =
   | "seed_keep"
   | "seed_steal"
   | "seed_place_location"
-  | "policy_selection";
+  | "policy_selection"
+  /** Post-policy reorder pass for cards like Scholar that reorder owner's main deck. */
+  | "post_policy_pick";
 
 export interface SeedingState {
   step: SeedingStep;
@@ -207,6 +209,12 @@ export interface SeedingState {
   middleArea: Card[];
   /** Index into players array for whose turn it is to steal. */
   stealTurnIndex: number;
+  /**
+   * Queue of player ids waiting for a post-policy prompt (e.g. Scholar reorder).
+   * Populated by handlePolicySelection; drained by resolve_pick during the
+   * `post_policy_pick` step. Main-phase transition happens when this empties.
+   */
+  pendingPostPolicyPicks?: string[];
   /** Players who have submitted seed_keep this round. Reset at step entry. */
   keepSubmitted: string[];
 }
@@ -231,6 +239,12 @@ interface GameStateBase {
   rngState: readonly number[];
   seed: string;
   actionLog: Action[];
+  /**
+   * Set when an effect or passive needs player input. Cleared by `resolve_pick`.
+   * Lives on the base so seeding-time prompts (e.g. Scholar's reorder) can use
+   * the same surface as main-phase `pick` verbs.
+   */
+  pickPrompt?: PickPrompt;
 }
 
 export interface SeedingGameState extends GameStateBase {
@@ -263,13 +277,23 @@ export interface PickPrompt {
    */
   count: number;
   source: PickSource;
+  /**
+   * When true, the picker must select all `options` and the submission order
+   * defines the outcome (e.g. Scholar's top-5 reorder). When false (default),
+   * the picker selects a subset of size `count` and order does not matter.
+   */
+  ordered?: boolean;
+  /**
+   * Distinguishes resolution semantics. "deck_pick" (default) is the existing
+   * pick-from-revealed-cards flow used by the DSL `pick` verb. Other kinds
+   * trigger card-specific resolution (e.g. Scholar's reorder).
+   */
+  purpose?: "deck_pick" | "scholar_reorder";
 }
 
 export interface MainGameState extends GameStateBase {
   phase: "main";
   turn: TurnState;
-  /** Set mid-effect when a `pick` verb needs player input. Cleared by `resolve_pick`. */
-  pickPrompt?: PickPrompt;
 }
 
 export interface EndedGameState extends GameStateBase {
@@ -324,7 +348,8 @@ export type SeedingAction =
       col: number;
       rotation?: number;
     }
-  | { type: "policy_select"; playerId: string };
+  | { type: "policy_select"; playerId: string }
+  | { type: "resolve_pick"; playerId: string; pickedCardIds: [string, ...string[]] };
 
 export type MainAction =
   | { type: "deploy"; playerId: string; cardId: string }

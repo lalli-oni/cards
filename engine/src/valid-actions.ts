@@ -110,6 +110,13 @@ function getSeedingValidActions(
 
     case "policy_selection":
       return [{ type: "policy_select", playerId }];
+
+    case "post_policy_pick": {
+      if (state.pickPrompt && state.pickPrompt.playerId === playerId) {
+        return getResolvePickActions(state.pickPrompt, playerId) as SeedingAction[];
+      }
+      return [];
+    }
   }
 }
 

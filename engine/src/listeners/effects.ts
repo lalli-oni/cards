@@ -9,6 +9,7 @@ import type {
   StatModifierListener,
 } from "./types";
 import type {
+  ActionDef,
   GameEvent,
   ItemCard,
   LocationCard,
@@ -53,6 +54,12 @@ export type TrapEffectFactory = (
 
 export type ItemEffectFactory = (
   item: ItemCard,
+  ownerId: string,
+  position?: { row: number; col: number },
+) => EffectDefinition;
+
+export type UnitEffectFactory = (
+  unit: UnitCard,
   ownerId: string,
   position?: { row: number; col: number },
 ) => EffectDefinition;
@@ -497,6 +504,37 @@ export const ITEM_EFFECTS: Record<string, ItemEffectFactory> = {
       },
     }],
     queries: [],
+  }),
+};
+
+// ---------------------------------------------------------------------------
+// Policy actions — activatable actions surfaced on active policies.
+// Keyed by policy definitionId. The action shape mirrors UnitCard.actions.
+// CSV-driven extraction of policy actions is tracked in #68; until then,
+// actions live here so handleActivate can dispatch them by definitionId.
+// ---------------------------------------------------------------------------
+
+export const POLICY_ACTIONS: Record<string, ActionDef[]> = {
+  "spymaster": [
+    { name: "Infiltrate", apCost: 1, effect: "reveal(opponent + hand)" },
+  ],
+};
+
+// ---------------------------------------------------------------------------
+// Unit effects — passives that fire while a unit is in play (HQ or grid).
+// ---------------------------------------------------------------------------
+
+export const UNIT_EFFECTS: Record<string, UnitEffectFactory> = {
+  "mary-shelley": (unit, ownerId) => ({
+    listeners: [],
+    queries: [{
+      source: { type: "unit", cardId: unit.id, definitionId: "mary-shelley", ownerId },
+      query: "ap",
+      modify: (state, ctx) => {
+        if (ctx.playerId !== ownerId || ctx.action.type !== "play_event") return 0;
+        return countActionsThisTurn(state, ownerId, (a) => a.type === "play_event") === 0 ? -99 : 0;
+      },
+    } satisfies APModifierListener],
   }),
 };
 

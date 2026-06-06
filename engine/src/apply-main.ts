@@ -27,6 +27,7 @@ import { getModifiedStat, getModifiedCost, getModifiedAPCost } from "./listeners
 import type { EmitFn, QueryListener } from "./listeners/types";
 import { killUnit, dropEquippedItems } from "./unit-helpers";
 import type {
+  ActionDef,
   ActivePassiveEvent,
   ApplyResult,
   GameEvent,
@@ -35,6 +36,7 @@ import type {
   MainGameState,
   UnitCard,
 } from "./types";
+import { POLICY_ACTIONS } from "./listeners/effects";
 import { getActivePlayerId } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -460,7 +462,11 @@ function handlePlayEvent(
 
   const cost = parseCost(card.cost);
   spendGold(draft, player, cost, "play_event", events);
-  spendAP(draft, 1);
+  const apCost = getModifiedAPCost(
+    draft as MainGameState, queries,
+    { type: "play_event", playerId, cardId, targetId }, 1,
+  );
+  spendAP(draft, apCost);
 
   player.hand.splice(cardIdx, 1);
 
@@ -854,12 +860,25 @@ function handleActivate(
   // isHqSafeVerb gate); positional verbs no-op cleanly when actingUnitId
   // resolves to no grid position (see executor's getActingPosition).
   const located = findUnitPosition(draft.players, draft.grid, cardId);
-  if (!located) throw new Error(`Card "${cardId}" not found on grid or HQ`);
-  const card = located.unit as Draft<UnitCard>;
-  if (!card.actions) throw new Error(`Card "${cardId}" has no actions`);
-  if (card.ownerId !== playerId) throw new Error(`Card "${cardId}" not owned by "${playerId}"`);
+  let actionDef: ActionDef | undefined;
+  let actingUnitId: string | undefined = cardId;
 
-  const actionDef = card.actions.find((a) => a.name === actionName);
+  if (located) {
+    const card = located.unit as Draft<UnitCard>;
+    if (!card.actions) throw new Error(`Card "${cardId}" has no actions`);
+    if (card.ownerId !== playerId) throw new Error(`Card "${cardId}" not owned by "${playerId}"`);
+    actionDef = card.actions.find((a) => a.name === actionName);
+  } else {
+    // Not a unit — try active policies. Policy actions live in POLICY_ACTIONS
+    // keyed by definitionId (CSV-driven extraction is tracked in #68).
+    const owner = draft.players.find((p) => p.id === playerId);
+    const policy = owner?.activePolicies.find((p) => p.id === cardId);
+    if (!policy) throw new Error(`Card "${cardId}" not found on grid, HQ, or active policies`);
+    const policyActions = POLICY_ACTIONS[policy.definitionId] ?? [];
+    actionDef = policyActions.find((a) => a.name === actionName);
+    actingUnitId = undefined;
+  }
+
   if (!actionDef) throw new Error(`Action "${actionName}" not found on card "${cardId}"`);
 
   spendAP(draft, actionDef.apCost);
@@ -868,7 +887,7 @@ function handleActivate(
   const result = executeEffect(actionDef.effect, {
     draft,
     playerId,
-    actingUnitId: cardId,
+    actingUnitId,
     targetId,
     targetCell,
     emit,

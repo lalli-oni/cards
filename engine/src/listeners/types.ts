@@ -5,7 +5,7 @@ export type { StatName };
 
 /** Where the effect originates — enough to identify the source card. */
 export interface EffectSource {
-  type: "location" | "policy" | "passive_event" | "trap" | "item";
+  type: "location" | "policy" | "passive_event" | "trap" | "item" | "unit";
   cardId: string;
   definitionId: string;
   ownerId: string;

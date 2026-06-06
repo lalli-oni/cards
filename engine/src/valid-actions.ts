@@ -13,6 +13,7 @@ import {
 } from "./grid-helpers";
 import { getConfigNumber, getPlayerById } from "./state-helpers";
 import { rebuildListeners } from "./listeners/rebuild";
+import { POLICY_ACTIONS } from "./listeners/effects";
 import { getModifiedCost, getModifiedAPCost } from "./listeners/query";
 import type {
   Action,
@@ -374,6 +375,28 @@ function getMainValidActions(
             type: "activate",
             playerId,
             cardId: unit.id,
+            actionName: actionDef.name,
+            ...t,
+          });
+        }
+      }
+    }
+  }
+
+  // activate — policy actions (HQ-origin: no grid position)
+  const ownerPlayer = state.players.find((p) => p.id === playerId);
+  if (ownerPlayer) {
+    const hqOrigin: BoardPosition = { type: "hq", playerId };
+    for (const policy of ownerPlayer.activePolicies) {
+      const policyActions = POLICY_ACTIONS[policy.definitionId] ?? [];
+      for (const actionDef of policyActions) {
+        if (ap < actionDef.apCost) continue;
+        const targets = inferActivateTargets(state, policy.id, actionDef.effect, hqOrigin, playerId);
+        for (const t of targets) {
+          actions.push({
+            type: "activate",
+            playerId,
+            cardId: policy.id,
             actionName: actionDef.name,
             ...t,
           });

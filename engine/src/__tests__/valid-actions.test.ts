@@ -1,9 +1,10 @@
 import { describe, expect, it } from "bun:test";
 import { produce } from "immer";
-import type { EndedGameState } from "../types";
+import type { EndedGameState, MainGameState } from "../types";
 import { getActivePlayerId } from "../types";
-import { getValidActions } from "../valid-actions";
-import { createSeedingGame, createTestGame } from "./helpers";
+import { getValidActions, inferActivateTargets } from "../valid-actions";
+import type { BoardPosition } from "../position-helpers";
+import { createSeedingGame, createTestGame, makeUnit } from "./helpers";
 
 describe("getValidActions", () => {
   describe("main phase", () => {
@@ -86,5 +87,83 @@ describe("getValidActions", () => {
       expect(actions).toHaveLength(1);
       expect(actions[0].type).toBe("seed_keep");
     });
+  });
+});
+
+describe("inferActivateTargets — HQ origin", () => {
+  function setup(opts: { effect: string; deckTopUp?: number } = { effect: "gold[1]" }) {
+    const base = createTestGame();
+    const activeId = base.turn.activePlayerId;
+    const unit = makeUnit({
+      ownerId: activeId,
+      actions: [{ name: "act", apCost: 1, effect: opts.effect }],
+    });
+    const state = produce(base, (d) => {
+      d.players.find((p) => p.id === activeId)!.hq.push(unit);
+      if (opts.deckTopUp) {
+        const top = d.players.find((p) => p.id === activeId)!;
+        for (let i = 0; i < opts.deckTopUp; i++) {
+          top.mainDeck.push(makeUnit({ ownerId: activeId, name: `Top${i}` }));
+        }
+      }
+    });
+    const hq: BoardPosition = { type: "hq", playerId: activeId };
+    return { state: state as MainGameState, unit, activeId, hq };
+  }
+
+  it("allows gold[1] from HQ", () => {
+    const { state, unit, activeId, hq } = setup({ effect: "gold[1]" });
+    expect(inferActivateTargets(state, unit.id, "gold[1]", hq, activeId)).toEqual([{}]);
+  });
+
+  it("allows vp[1] from HQ", () => {
+    const { state, unit, activeId, hq } = setup({ effect: "vp[1]" });
+    expect(inferActivateTargets(state, unit.id, "vp[1]", hq, activeId)).toEqual([{}]);
+  });
+
+  it("allows buy(item)[0] from HQ", () => {
+    const { state, unit, activeId, hq } = setup({ effect: "buy(item)[0]" });
+    expect(inferActivateTargets(state, unit.id, "buy(item)[0]", hq, activeId)).toEqual([{}]);
+  });
+
+  it("allows peek(deck)[3] > pick[1] when deck has cards", () => {
+    const { state, unit, activeId, hq } = setup({
+      effect: "peek(deck)[3] > pick[1]",
+      deckTopUp: 3,
+    });
+    expect(
+      inferActivateTargets(state, unit.id, "peek(deck)[3] > pick[1]", hq, activeId),
+    ).toEqual([{}]);
+  });
+
+  it("rejects peek(deck)[3] > pick[1] when deck is empty (precondition gate)", () => {
+    const { state, unit, activeId, hq } = setup({ effect: "peek(deck)[3] > pick[1]" });
+    expect(
+      inferActivateTargets(state, unit.id, "peek(deck)[3] > pick[1]", hq, activeId),
+    ).toEqual([]);
+  });
+
+  it("rejects kill(self) from HQ", () => {
+    const { state, unit, activeId, hq } = setup({ effect: "kill(self)" });
+    expect(inferActivateTargets(state, unit.id, "kill(self)", hq, activeId)).toEqual([]);
+  });
+
+  it("rejects move(self) from HQ", () => {
+    const { state, unit, activeId, hq } = setup({ effect: "move(self)" });
+    expect(inferActivateTargets(state, unit.id, "move(self)", hq, activeId)).toEqual([]);
+  });
+
+  it("rejects compound vp[1] + kill(self) from HQ", () => {
+    const { state, unit, activeId, hq } = setup({ effect: "vp[1] + kill(self)" });
+    expect(
+      inferActivateTargets(state, unit.id, "vp[1] + kill(self)", hq, activeId),
+    ).toEqual([]);
+  });
+
+  it("rejects compound move(self) + gold[1] from HQ", () => {
+    const { state, unit, activeId, hq } = setup({ effect: "move(self) + gold[1]" });
+    expect(
+      inferActivateTargets(state, unit.id, "move(self) + gold[1]", hq, activeId),
+    ).toEqual([]);
   });
 });

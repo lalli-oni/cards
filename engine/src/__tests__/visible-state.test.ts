@@ -5,6 +5,9 @@ import { getVisibleState } from "../visible-state";
 import {
   createSeedingGame,
   createTestGame,
+  makeInstantEvent,
+  makeItem,
+  makeLocation,
   makeTrapEvent,
   makeUnit,
   resetIds,
@@ -158,6 +161,112 @@ describe("getVisibleState", () => {
       const vis = getVisibleState(endedState, "p1");
       expect(vis.phase).toBe("ended");
       expect(vis.currentPlayerId).toBe(base.turn.activePlayerId);
+    });
+  });
+
+  describe("reveals — Alexandria Harbor", () => {
+    it("exposes top of own main deck to the owner", () => {
+      const state = produce(createTestGame(), (d) => {
+        const p1 = d.players.find((p) => p.id === "p1")!;
+        p1.mainDeck.unshift(makeInstantEvent({ ownerId: "p1" }));
+        d.grid[0][0].location = makeLocation({
+          ownerId: "p1",
+          definitionId: "alexandria-harbor",
+        });
+      });
+      const vis = getVisibleState(state, "p1");
+      const p1Deck = state.players.find((p) => p.id === "p1")!.mainDeck;
+      expect(vis.reveals.mainDeckTop).toBeDefined();
+      expect(vis.reveals.mainDeckTop!.id).toBe(p1Deck[0].id);
+    });
+
+    it("does not expose top of deck to non-owners", () => {
+      const state = produce(createTestGame(), (d) => {
+        const p1 = d.players.find((p) => p.id === "p1")!;
+        p1.mainDeck.unshift(makeInstantEvent({ ownerId: "p1" }));
+        d.grid[0][0].location = makeLocation({
+          ownerId: "p1",
+          definitionId: "alexandria-harbor",
+        });
+      });
+      const vis = getVisibleState(state, "p2");
+      expect(vis.reveals.mainDeckTop).toBeUndefined();
+    });
+
+    it("does not expose when deck is empty", () => {
+      const state = produce(createTestGame(), (d) => {
+        d.grid[0][0].location = makeLocation({
+          ownerId: "p1",
+          definitionId: "alexandria-harbor",
+        });
+      });
+      const vis = getVisibleState(state, "p1");
+      expect(vis.reveals.mainDeckTop).toBeUndefined();
+    });
+  });
+
+  describe("reveals — Spy Glass", () => {
+    it("un-redacts opponent traps at the equipped unit's location", () => {
+      const state = produce(createTestGame(), (d) => {
+        const loc = makeLocation({ ownerId: "p1" });
+        d.grid[0][0].location = loc;
+        const unit = makeUnit({ ownerId: "p1" });
+        d.grid[0][0].units.push(unit);
+        d.grid[0][0].items.push(
+          makeItem({ ownerId: "p1", definitionId: "spy-glass", equippedTo: unit.id }),
+        );
+        const p2 = d.players.find((p) => p.id === "p2")!;
+        p2.activeTraps.push({
+          card: makeTrapEvent({ ownerId: "p2", trigger: "test" }),
+          targetId: loc.id,
+        });
+      });
+      const vis = getVisibleState(state, "p1");
+      const opp = vis.opponents.find((o) => o.id === "p2")!;
+      expect(opp.activeTraps).toHaveLength(1);
+      expect(opp.activeTraps[0].card).toBeDefined();
+    });
+
+    it("keeps opponent traps redacted when Spy Glass is not at the trap's location", () => {
+      const state = produce(createTestGame(), (d) => {
+        const targetLoc = makeLocation({ ownerId: "p1" });
+        const otherLoc = makeLocation({ ownerId: "p1" });
+        d.grid[0][0].location = targetLoc;
+        d.grid[0][1].location = otherLoc;
+        const unit = makeUnit({ ownerId: "p1" });
+        d.grid[0][1].units.push(unit);
+        d.grid[0][1].items.push(
+          makeItem({ ownerId: "p1", definitionId: "spy-glass", equippedTo: unit.id }),
+        );
+        const p2 = d.players.find((p) => p.id === "p2")!;
+        p2.activeTraps.push({
+          card: makeTrapEvent({ ownerId: "p2", trigger: "test" }),
+          targetId: targetLoc.id,
+        });
+      });
+      const vis = getVisibleState(state, "p1");
+      const opp = vis.opponents.find((o) => o.id === "p2")!;
+      expect(opp.activeTraps[0].card).toBeUndefined();
+    });
+
+    it("does not surface trap reveal rights to the wrong viewer", () => {
+      const state = produce(createTestGame(), (d) => {
+        const loc = makeLocation({ ownerId: "p1" });
+        d.grid[0][0].location = loc;
+        const unit = makeUnit({ ownerId: "p1" });
+        d.grid[0][0].units.push(unit);
+        d.grid[0][0].items.push(
+          makeItem({ ownerId: "p1", definitionId: "spy-glass", equippedTo: unit.id }),
+        );
+        const p2 = d.players.find((p) => p.id === "p2")!;
+        p2.activeTraps.push({
+          card: makeTrapEvent({ ownerId: "p2", trigger: "test" }),
+          targetId: loc.id,
+        });
+      });
+      // Spy Glass belongs to p1 — viewing as p2 should not grant trap reveals.
+      const visP2 = getVisibleState(state, "p2");
+      expect(visP2.reveals.revealedTrapIds).toHaveLength(0);
     });
   });
 });

@@ -173,9 +173,13 @@ export interface Trap {
   targetId?: string;
 }
 
-/** Redacted trap view for opponents — card contents hidden. */
+/** Redacted trap view for opponents — card contents hidden unless revealed (e.g. by Spy Glass). */
 export interface TrapView {
   targetId?: string;
+  /** Card-instance id of the trap (always present so revealers can look it up). */
+  cardId: string;
+  /** Trap card contents — only populated when the viewer has reveal rights for this trap. */
+  card?: TrapEventCard;
 }
 
 export type Grid = GridCell[][];
@@ -529,6 +533,19 @@ export type GameEvent =
 // Visibility
 // ---------------------------------------------------------------------------
 
+/**
+ * Conditional information surfaced to a specific viewer by active card
+ * passives — e.g. Alexandria Harbor lets its owner see the top of their
+ * main deck; Spy Glass un-redacts specific opponent trap cards. Computed
+ * fresh from active listeners each time the visible state is built.
+ */
+export interface Reveals {
+  /** Top card of viewer's own main deck (Alexandria Harbor and similar). */
+  mainDeckTop?: Card;
+  /** Opponent trap card-instance ids the viewer is allowed to see un-redacted. */
+  revealedTrapIds: string[];
+}
+
 /** Filtered game state for a specific player. Hidden info is omitted. */
 export interface VisibleState {
   config: GameConfig;
@@ -555,6 +572,8 @@ export interface VisibleState {
   pickPrompt?: PickPrompt;
   winner?: string;
   scores?: Record<string, number>;
+  /** Conditional reveals granted by active passives for this viewer. */
+  reveals: Reveals;
 }
 
 export interface OpponentView {

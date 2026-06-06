@@ -1,5 +1,5 @@
 import type { Draft } from "immer";
-import type { Card, GameEvent, MainAction, MainGameState, StatName, UnitCard } from "../types";
+import type { Card, GameEvent, MainAction, MainGameState, Reveals, StatName, UnitCard } from "../types";
 
 export type { StatName };
 
@@ -111,8 +111,19 @@ export type QueryListener =
 // Combined effect definition
 // ---------------------------------------------------------------------------
 
-/** Result of an effect factory — both event listeners and query listeners. */
+/**
+ * Returns this card's contribution to what `viewerId` is allowed to see.
+ * Called fresh per visible-state build; should be side-effect free.
+ */
+export type RevealsProvider = (
+  state: MainGameState,
+  viewerId: string,
+) => Partial<Reveals>;
+
+/** Result of an effect factory — listeners, query listeners, and reveals. */
 export interface EffectDefinition {
   listeners: EffectListener[];
   queries: QueryListener[];
+  /** Optional: contributes to VisibleState.reveals when called per viewer. */
+  reveals?: RevealsProvider;
 }

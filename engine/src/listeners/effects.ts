@@ -207,6 +207,17 @@ export const LOCATION_EFFECTS: Record<string, LocationEffectFactory> = {
         && ctx.unit.cunning >= 7,
     } satisfies ProtectionListener],
   }),
+
+  "alexandria-harbor": (_loc, ownerId) => ({
+    listeners: [],
+    queries: [],
+    reveals: (state, viewerId) => {
+      if (viewerId !== ownerId) return {};
+      const player = state.players.find((p) => p.id === viewerId);
+      const top = player?.mainDeck[0];
+      return top ? { mainDeckTop: top } : {};
+    },
+  }),
 };
 
 export const POLICY_EFFECTS: Record<string, PolicyEffectFactory> = {
@@ -406,6 +417,28 @@ export const ITEM_EFFECTS: Record<string, ItemEffectFactory> = {
       modify: (_state, ctx) =>
         ctx.stat === "cunning" && item.equippedTo === ctx.unit.id ? 2 : 0,
     } satisfies StatModifierListener],
+  }),
+
+  "spy-glass": (item, ownerId, position) => ({
+    listeners: [],
+    queries: [],
+    reveals: (state, viewerId) => {
+      // Only the Spy Glass owner gets reveal rights. Equipped + on grid required:
+      // rebuild calls this factory with `position` only when the item is at a
+      // grid cell; HQ-stored Spy Glasses don't fire.
+      if (viewerId !== ownerId || !item.equippedTo || !position) return {};
+      const cell = state.grid[position.row]?.[position.col];
+      if (!cell?.location) return {};
+      const locationId = cell.location.id;
+      const revealedTrapIds: string[] = [];
+      for (const player of state.players) {
+        if (player.id === viewerId) continue;
+        for (const trap of player.activeTraps) {
+          if (trap.targetId === locationId) revealedTrapIds.push(trap.card.id);
+        }
+      }
+      return { revealedTrapIds };
+    },
   }),
 
   "war-banner": (item, ownerId, position) => ({

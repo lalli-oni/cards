@@ -96,7 +96,14 @@ export function buildMainSetup(
   for (const p of players) {
     const playerLocs = shuffleCards(instantiateCards(locations, p.id, counter));
     const playerOther = shuffleCards(instantiateCards(other, p.id, counter));
-    const playerPolicies = instantiateCards(policies, p.id, counter) as PolicyCard[];
+    // Shuffle the policy pool with the seed-driven rng (mirrors the full
+    // seeding flow in engine/src/apply-seeding.ts) and assign 2 — matching
+    // the count assigned during policy_selection. Without the shuffle every
+    // skip-seeded game gave both players the first policy in library order
+    // (deterministic Militarist start).
+    const playerPolicies = shuffleCards(
+      instantiateCards(policies, p.id, counter) as PolicyCard[],
+    );
 
     const hand = playerOther.splice(0, handSize);
     // Split remaining cards: half to main deck, half to market deck
@@ -109,7 +116,7 @@ export function buildMainSetup(
       mainDeck,
       prospectDeck: playerLocs,
       marketDeck,
-      activePolicies: playerPolicies.length > 0 ? [playerPolicies[0]] : [],
+      activePolicies: playerPolicies.slice(0, 2),
     };
   }
 

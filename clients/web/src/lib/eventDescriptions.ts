@@ -67,7 +67,7 @@ export function describeEvent(event: GameEvent, r?: NameResolvers): string {
     case "trap_set":
       return `${p(event.playerId, r)} set a trap${event.targetId ? ` on ${c(event.targetId, r)}` : ""}`;
     case "trap_triggered":
-      return `${c(event.cardId, r)} triggered${event.targetId ? ` on ${c(event.targetId, r)}` : ""}`;
+      return `${event.cardName} triggered${event.targetId ? ` on ${c(event.targetId, r)}` : ""}`;
     case "item_equipped":
       return `${p(event.playerId, r)} equipped ${c(event.itemId, r)} on ${c(event.unitId, r)}`;
     case "item_dropped":

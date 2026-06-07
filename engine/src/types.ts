@@ -566,6 +566,10 @@ export type GameEvent =
       type: "trap_triggered";
       playerId: string;
       cardId: string;
+      /** Carried on the event so the renderer doesn't need to resolve a card
+       *  that has just been discarded (and is not in the viewer's visible
+       *  state when the trap belongs to an opponent). */
+      cardName: string;
       targetId?: string;
     }
   | { type: "item_equipped"; playerId: string; itemId: string; unitId: string }

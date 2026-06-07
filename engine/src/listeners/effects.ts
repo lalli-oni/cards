@@ -661,6 +661,7 @@ function makeEntryTrapListeners(
       type: "trap_triggered",
       playerId: ownerId,
       cardId: trap.card.id,
+      cardName: trap.card.name,
       targetId: trap.targetId,
     });
     resolve(draft, cell, unit, dest.row, dest.col, emit);

@@ -395,6 +395,37 @@ describe("trap listeners", () => {
     expect(events.some((e) => e.type === "trap_triggered")).toBe(true);
   });
 
+  it("emits trap_triggered BEFORE the trap's effect events (log reads trigger → effect)", () => {
+    const state = gameWith((d, p) => {
+      const trap = makeTrapEvent({
+        ownerId: p.other,
+        definitionId: "ambush",
+        trigger: "enemy_unit_enters_location",
+      });
+      const unit = makeUnit({ ownerId: p.active, strength: 8 });
+      d.grid[0][0].location = makeLocation({ ownerId: p.active });
+      d.players[p.activeIdx].hq.push(unit);
+      d.players[p.otherIdx].activeTraps.push({ card: trap });
+    });
+
+    const { active, activeIdx } = getPlayers(state);
+    const u = state.players[activeIdx].hq[0];
+
+    const { events } = applyAction(state, {
+      type: "enter",
+      playerId: active,
+      unitId: u.id,
+      row: 0,
+      col: 0,
+    });
+
+    const triggeredIdx = events.findIndex((e) => e.type === "trap_triggered");
+    const injuredIdx = events.findIndex((e) => e.type === "unit_injured");
+    expect(triggeredIdx).toBeGreaterThanOrEqual(0);
+    expect(injuredIdx).toBeGreaterThanOrEqual(0);
+    expect(triggeredIdx).toBeLessThan(injuredIdx);
+  });
+
   it("highway-robbery: steals 2 gold from entering enemy unit's owner", () => {
     const state = gameWith((d, p) => {
       const trap = makeTrapEvent({

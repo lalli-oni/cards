@@ -597,23 +597,13 @@ function getDestination(event: GameEvent): { row: number; col: number; unitId: s
   return null;
 }
 
-/** Discard a trap after it fires: remove from activeTraps, push to discard, emit trap_triggered. */
-function discardTrap(
-  draft: Draft<MainGameState>,
-  trap: Trap,
-  emit: EmitFn,
-): void {
+/** Discard a trap after it fires: remove from activeTraps, push to discard. */
+function discardTrap(draft: Draft<MainGameState>, trap: Trap): void {
   for (const player of draft.players) {
     const idx = player.activeTraps.findIndex((t) => t.card.id === trap.card.id);
     if (idx !== -1) {
       player.activeTraps.splice(idx, 1);
       player.discardPile.push(trap.card);
-      emit({
-        type: "trap_triggered",
-        playerId: player.id,
-        cardId: trap.card.id,
-        targetId: trap.targetId,
-      });
       break;
     }
   }
@@ -666,8 +656,15 @@ function makeEntryTrapListeners(
     const unit = cell.units.find((u: Draft<UnitCard>) => u.id === dest.unitId);
     if (!unit) return;
 
+    // Announce before resolving so the log reads trigger → effect.
+    emit({
+      type: "trap_triggered",
+      playerId: ownerId,
+      cardId: trap.card.id,
+      targetId: trap.targetId,
+    });
     resolve(draft, cell, unit, dest.row, dest.col, emit);
-    discardTrap(draft, trap, emit);
+    discardTrap(draft, trap);
   };
 
   return [

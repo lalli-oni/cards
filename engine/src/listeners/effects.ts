@@ -323,6 +323,16 @@ export const POLICY_EFFECTS: Record<string, PolicyEffectFactory> = {
   }),
 };
 
+/**
+ * Passives whose factory reads `pe.targetId` and must be played against a
+ * specific location. Co-located with PASSIVE_EVENT_EFFECTS so adding a new
+ * targeting passive flags both sides (factory + enumeration) in one place.
+ * Consumed by valid-actions.ts `needsLocationTarget`.
+ */
+export const PASSIVE_EVENTS_NEEDING_LOCATION_TARGET: ReadonlySet<string> = new Set([
+  "plague",
+]);
+
 export const PASSIVE_EVENT_EFFECTS: Record<string, PassiveEventEffectFactory> = {
   "plague": (pe, ownerId) => ({
     listeners: [],

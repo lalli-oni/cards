@@ -74,6 +74,18 @@ interface CardBase {
 
 export type StatName = "strength" | "cunning" | "charisma";
 
+/**
+ * An activatable action defined on a card.
+ *
+ * For unit and item cards, `effect` is a DSL string parsed by the executor
+ * (e.g. `peek(opponent + hand)`). The library build script validates it
+ * through `parseDSL`.
+ *
+ * For policy cards, `effect` is human-readable prose intended for UI display
+ * (e.g. "Look at one opponent's hand."). The executable DSL is stored in
+ * `engine/src/listeners/effects.ts:POLICY_ACTIONS`, keyed by the policy's
+ * `definitionId`. The build script skips DSL validation for policy actions.
+ */
 export interface ActionDef {
   name: string;
   apCost: number;
@@ -153,6 +165,8 @@ export type EventCard = InstantEventCard | PassiveEventCard | TrapEventCard;
 export interface PolicyCard extends CardBase {
   type: "policy";
   effect: string;
+  /** UI-only action descriptions — `ActionDef.effect` is human-readable here. */
+  actions?: ActionDef[];
 }
 
 export type Card = UnitCard | LocationCard | ItemCard | EventCard | PolicyCard;

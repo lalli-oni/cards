@@ -1,7 +1,11 @@
 <script lang="ts">
   import type { Action } from "cards-engine";
   import { groupActions, describeAction } from "../lib/actionGroups";
-  import { selectAction, resolveCardName } from "../lib/gameStore.svelte";
+  import {
+    resolveActionTooltip,
+    resolveCardName,
+    selectAction,
+  } from "../lib/gameStore.svelte";
 
   interface Props {
     actions: Action[];
@@ -49,6 +53,7 @@
       <div>
         <button
           onclick={() => handleGroupClick(group.type, group.actions)}
+          title={group.actions.length === 1 ? resolveActionTooltip(group.actions[0]) : undefined}
           class="w-full rounded px-3 py-1.5 text-left text-sm transition-colors
             {expandedGroup === group.type
             ? 'bg-highlight-bg text-highlight'
@@ -67,6 +72,7 @@
             {#each group.actions as action}
               <button
                 onclick={() => handleActionClick(action)}
+                title={resolveActionTooltip(action)}
                 class="w-full rounded px-3 py-1 text-left text-xs text-text-secondary bg-surface-raised/50 hover:bg-surface-hover"
               >
                 {describeAction(action, resolveCardName)}

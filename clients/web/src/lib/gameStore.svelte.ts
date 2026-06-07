@@ -2,6 +2,8 @@ import {
   GameController,
   getVisibleState as engineGetVisibleState,
   type Action,
+  type ActionDef,
+  type Card,
   type GameEvent,
   type GameState,
   type PlayerDescriptor,
@@ -112,6 +114,42 @@ let _cardNameMap = $derived.by(() => {
 
 export function resolveCardName(id: string): string {
   return _cardNameMap.get(id) ?? id;
+}
+
+/**
+ * Tooltip text for an `activate` action — looks up the source card and its
+ * named action. For policies, `action.effect` is human-readable prose. For
+ * units/items, the action `effect` is DSL, so we fall back to the card's
+ * `text` field which carries the player-facing description.
+ */
+export function resolveActionTooltip(action: Action): string | undefined {
+  if (action.type !== "activate") return undefined;
+  const vs = _visibleState;
+  if (!vs) return undefined;
+  const zones: Card[][] = [
+    vs.self.hq as Card[],
+    vs.self.activePolicies as Card[],
+    ...vs.grid.flatMap((row) =>
+      row.flatMap((cell): Card[][] => [
+        cell.units as Card[],
+        cell.items as Card[],
+        cell.location ? [cell.location as Card] : [],
+      ]),
+    ),
+  ];
+  for (const zone of zones) {
+    for (const card of zone) {
+      if (card.id !== action.cardId) continue;
+      const actions: ActionDef[] | undefined =
+        "actions" in card ? card.actions : undefined;
+      const def = actions?.find((a) => a.name === action.actionName);
+      // Policies: action.effect is human-readable prose. Units/items: card.text
+      // is the player-facing description (action.effect is DSL).
+      if (card.type === "policy") return def?.effect ?? card.text ?? undefined;
+      return card.text ?? undefined;
+    }
+  }
+  return undefined;
 }
 export function resolvePlayerName(id: string): string {
   const p = players.find((pl) => pl.id === id);

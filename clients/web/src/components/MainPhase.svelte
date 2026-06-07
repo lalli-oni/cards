@@ -50,6 +50,13 @@
   }
 
   function actionMatchesCell(a: Action, row: number, col: number): boolean {
+    // Location-targeting event cards (Highway Robbery, Ambush, Assassination
+    // Attempt, Plague — see engine valid-actions.ts needsLocationTarget) carry
+    // the target location's instance id rather than row/col, so match by
+    // looking up the location on the visible grid (issue #124).
+    if (a.type === "play_event" && a.targetId) {
+      return vs.grid[row]?.[col]?.location?.id === a.targetId;
+    }
     return (
       "row" in a &&
       "col" in a &&
@@ -70,19 +77,21 @@
     return actions;
   });
 
-  // Only highlight target cells when something is selected
-  const highlightedCells = $derived(
-    hasSelection
-      ? new Set(
-          filteredActions
-            .filter((a) => "row" in a && "col" in a)
-            .map(
-              (a) =>
-                `${(a as { row: number }).row},${(a as { col: number }).col}`,
-            ),
-        )
-      : new Set<string>(),
-  );
+  // Only highlight target cells when something is selected. Iterates the grid
+  // and asks actionMatchesCell so play_event actions (which target by location
+  // instance id rather than row/col) light up the right cell.
+  const highlightedCells = $derived.by<Set<string>>(() => {
+    if (!hasSelection) return new Set<string>();
+    const result = new Set<string>();
+    for (let r = 0; r < vs.grid.length; r++) {
+      for (let c = 0; c < vs.grid[r].length; c++) {
+        if (filteredActions.some((a) => actionMatchesCell(a, r, c))) {
+          result.add(`${r},${c}`);
+        }
+      }
+    }
+    return result;
+  });
 
   // HQ highlights as deploy target when a deployable hand card is selected
   const hqDeployAction: Action | undefined = $derived(

@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from "bun:test";
 import { produce } from "immer";
 import { applyAction } from "../apply-action";
+import { rebuildListeners } from "../listeners/rebuild";
+import { getModifiedStat } from "../listeners/query";
 import type { MainGameState, UnitCard } from "../types";
 import { getValidActions } from "../valid-actions";
 import {
@@ -500,6 +502,111 @@ describe("play_event", () => {
     expect(p.activeTraps[0].card.id).toBe(event.id);
     expect(p.activeTraps[0].targetId).toBe("some-target");
     expect(events.some((e) => e.type === "trap_set")).toBe(true);
+  });
+
+  // Full chain (enumerate → apply) for the location-targeting cards. Guards
+  // against a regression where the enumeration emits the wrong field name and
+  // handlePlayEvent silently drops it.
+
+  it("Highway Robbery: enumerated play_event stores targetId on the trap", () => {
+    const targetLoc = makeLocation({ ownerId: ACTIVE });
+    const otherLoc = makeLocation({ ownerId: ACTIVE });
+    const trap = makeTrapEvent({
+      ownerId: ACTIVE,
+      definitionId: "highway-robbery",
+      trigger: "enemy_unit_enters_location",
+      cost: "0",
+    });
+    const state = gameWith((d) => {
+      d.grid[0][1].location = targetLoc;
+      d.grid[0][3].location = otherLoc;
+      d.players[ACTIVE_IDX].hand.push(trap);
+    });
+
+    const valid = getValidActions(state, ACTIVE);
+    const targetAction = valid.find(
+      (a): a is Extract<typeof a, { type: "play_event" }> =>
+        a.type === "play_event" && a.cardId === trap.id && a.targetId === targetLoc.id,
+    );
+    expect(targetAction).toBeDefined();
+
+    const { state: next } = applyAction(state, targetAction!);
+    const ns = next as MainGameState;
+    expect(ns.players[ACTIVE_IDX].activeTraps).toHaveLength(1);
+    expect(ns.players[ACTIVE_IDX].activeTraps[0].targetId).toBe(targetLoc.id);
+  });
+
+  it("Plague: enumerated play_event stores targetId on the passive and stat query resolves", () => {
+    const targetLoc = makeLocation({ ownerId: ACTIVE });
+    const plague = makePassiveEvent({
+      ownerId: ACTIVE,
+      definitionId: "plague",
+      cost: "0",
+      duration: 99,
+    });
+    const state = gameWith((d) => {
+      d.grid[1][1].location = targetLoc;
+      d.grid[2][2].location = makeLocation({ ownerId: ACTIVE });
+      d.players[ACTIVE_IDX].hand.push(plague);
+    });
+
+    const valid = getValidActions(state, ACTIVE);
+    const targetAction = valid.find(
+      (a): a is Extract<typeof a, { type: "play_event" }> =>
+        a.type === "play_event" && a.cardId === plague.id && a.targetId === targetLoc.id,
+    );
+    expect(targetAction).toBeDefined();
+
+    const { state: next } = applyAction(state, targetAction!);
+    const ns = next as MainGameState;
+    expect(ns.players[ACTIVE_IDX].passiveEvents).toHaveLength(1);
+    expect(ns.players[ACTIVE_IDX].passiveEvents[0].targetId).toBe(targetLoc.id);
+
+    const { queries } = rebuildListeners(ns);
+    const unit = makeUnit({ ownerId: ACTIVE, strength: 5 });
+    expect(getModifiedStat(ns, queries, unit, "strength", { row: 1, col: 1 })).toBe(3);
+  });
+
+  it("rejects play_event without targetId when the card needs a location target", () => {
+    const trap = makeTrapEvent({
+      ownerId: ACTIVE,
+      definitionId: "highway-robbery",
+      trigger: "enemy_unit_enters_location",
+      cost: "0",
+    });
+    const state = gameWith((d) => {
+      d.grid[0][1].location = makeLocation({ ownerId: ACTIVE });
+      d.players[ACTIVE_IDX].hand.push(trap);
+    });
+
+    expect(() =>
+      applyAction(state, {
+        type: "play_event",
+        playerId: ACTIVE,
+        cardId: trap.id,
+      }),
+    ).toThrow("requires a location targetId");
+  });
+
+  it("rejects play_event without targetId for Plague (passive needing target)", () => {
+    const plague = makePassiveEvent({
+      ownerId: ACTIVE,
+      definitionId: "plague",
+      cost: "0",
+      duration: 99,
+    });
+    const state = gameWith((d) => {
+      d.grid[1][1].location = makeLocation({ ownerId: ACTIVE });
+      d.players[ACTIVE_IDX].hand.push(plague);
+    });
+
+    expect(() =>
+      applyAction(state, {
+        type: "play_event",
+        playerId: ACTIVE,
+        cardId: plague.id,
+      }),
+    ).toThrow("requires a location targetId");
   });
 });
 

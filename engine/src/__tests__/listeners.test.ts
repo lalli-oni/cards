@@ -1152,6 +1152,32 @@ describe("AP modifier queries", () => {
     expect((peeked as any).source).toBe("opponent_hand");
   });
 
+  it("Mary Shelley + Highway Robbery: per-cell enumeration all surface at AP=0", () => {
+    const state = gameWith((d, p) => {
+      d.players[p.activeIdx].hq.push(
+        makeUnit({ ownerId: p.active, definitionId: "mary-shelley" }),
+      );
+      d.players[p.activeIdx].hand.push(
+        makeTrapEvent({
+          ownerId: p.active,
+          definitionId: "highway-robbery",
+          trigger: "enemy_unit_enters_location",
+          cost: "0",
+        }),
+      );
+      d.grid[0][0].location = makeLocation({ ownerId: p.active });
+      d.grid[1][1].location = makeLocation({ ownerId: p.active });
+      d.grid[2][2].location = makeLocation({ ownerId: p.active });
+      d.turn.actionPointsRemaining = 0;
+    });
+    const { active } = getPlayers(state);
+    const playEvent = getValidActions(state, active).filter(
+      (a: Action) => a.type === "play_event",
+    );
+    expect(playEvent).toHaveLength(3);
+    expect(playEvent.every((a) => "targetId" in a && a.targetId)).toBe(true);
+  });
+
   it("Mary Shelley: applyAction(play_event) spends 0 AP for first event, 1 AP for second", () => {
     const initial = gameWith((d, p) => {
       d.players[p.activeIdx].hq.push(

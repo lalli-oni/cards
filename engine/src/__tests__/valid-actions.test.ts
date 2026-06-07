@@ -184,11 +184,6 @@ describe("inferActivateTargets — HQ origin", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// play_event enumeration — events with location targets emit one candidate
-// per legal cell so the player has to pick a target (issue #124).
-// ---------------------------------------------------------------------------
-
 describe("play_event enumeration", () => {
   function activeIdxOf(state: MainGameState): number {
     return state.players.findIndex((p) => p.id === state.turn.activePlayerId);
@@ -228,8 +223,7 @@ describe("play_event enumeration", () => {
 
       expect(candidates).toHaveLength(2);
       expect(targetIds).toEqual([loc1.id, loc2.id].sort());
-      // Untargeted candidate must not appear — the validator would otherwise
-      // let the player skip the cell prompt entirely.
+      // Without this the player could play the trap with no target selected.
       expect(candidates.every((a) => a.targetId !== undefined)).toBe(true);
     });
   }
@@ -275,12 +269,13 @@ describe("play_event enumeration", () => {
     expect(playEventActions(state).filter((a) => a.cardId === trap.id)).toHaveLength(0);
   });
 
-  it("non-location-targeting event: still emits a single untargeted candidate", () => {
+  // definitionId NOT in PASSIVE_EVENTS_NEEDING_LOCATION_TARGET — sanity that
+  // the non-targeting branch still emits one untargeted candidate.
+  it("passive not in the location-target registry: single untargeted candidate", () => {
     const base = createTestGame();
     const activeId = base.turn.activePlayerId;
     const passive = makePassiveEvent({
       ownerId: activeId,
-      // Not in the location-target registry — should keep the legacy single-candidate shape.
       definitionId: "arms-race",
       cost: "0",
       duration: 2,

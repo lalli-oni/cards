@@ -303,18 +303,32 @@ export type PickPrompt =
   | (PickPromptBase & { kind: "scholar_reorder" });
 
 /**
+ * Origin of a `ViewPrompt`. Extend the union when new private-view sources are
+ * added (e.g. `opponent_deck`) so consumers stay exhaustive.
+ */
+export type ViewSource = "opponent_hand";
+
+/**
  * Set when a `peek(opponent + hand)` effect runs. Pauses the active player
  * until they submit `dismiss_view`. Stores full `Card[]` (not ids) because
  * `getVisibleState` redacts opponent hands to `handSize` — the viewer has no
  * other way to resolve ids back into card data on the client. Filtered on
  * `VisibleState.viewPrompt` so only the viewer sees the contents.
+ *
+ * Today the selector picks the first non-active player deterministically;
+ * multi-opponent target selection (matching the card text "target opponent's
+ * hand") is not yet implemented.
  */
 export interface ViewPrompt {
   /** Who is viewing (the active player who triggered the effect). */
   playerId: string;
-  /** Snapshot of the opponent's hand at peek time. */
+  /**
+   * Opponent hand contents captured when the peek fired. Shallow-cloned at
+   * peek time — under immer's structural sharing, mutations after peek do not
+   * propagate, so this acts as a snapshot in practice.
+   */
   cards: Card[];
-  source: "opponent_hand";
+  source: ViewSource;
   /** Whose hand is shown (for UI labelling). */
   sourcePlayerId: string;
 }
@@ -324,8 +338,11 @@ export interface MainGameState extends GameStateBase {
   turn: TurnState;
   /**
    * Set by `peek(opponent + hand)` to surface opponent hand contents to the
-   * active player. Cleared by `dismiss_view`. Main-phase only — Galileo and
-   * Spymaster's Infiltrate are the current producers.
+   * active player. Cleared by `dismiss_view`. Main-phase only.
+   *
+   * Invariant: at most one of `pickPrompt` / `viewPrompt` is set at a time
+   * (enforced by the executor's early-pause guard in `effect-dsl/executor.ts`
+   * and asserted at the top of `applyMainAction`).
    */
   viewPrompt?: ViewPrompt;
 }
@@ -582,7 +599,7 @@ export type GameEvent =
     }
   | { type: "card_discarded"; playerId: string; cardId: string; reason: string }
   | { type: "unit_buffed"; unitId: string; stat: StatName; delta: number; source: string }
-  | { type: "cards_peeked"; playerId: string; cardIds: string[]; source: PickSource | "opponent_hand" }
+  | { type: "cards_peeked"; playerId: string; cardIds: string[]; source: PickSource | ViewSource }
   | { type: "cards_picked"; playerId: string; cardIds: string[]; source: PickSource }
   | { type: "unit_controlled"; unitId: string; controllerId: string; previousOwnerId: string; duration: number }
   | { type: "contest_resolved"; stat: StatName; attackerId: string; defenderId: string; attackerPower: number; defenderPower: number; winnerId: string }

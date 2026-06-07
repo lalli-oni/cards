@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { getVisibleState, selectAction } from "../lib/gameStore.svelte";
+  import { getError, getVisibleState, selectAction } from "../lib/gameStore.svelte";
   import CardView from "./CardView.svelte";
   import Modal from "./Modal.svelte";
 
@@ -18,6 +18,15 @@
   $effect(() => {
     void prompt?.cards.length;
     submitted = false;
+  });
+
+  // If the engine surfaces an error while we're mid-submit, unlock the
+  // button so the user can retry. Mirrors PickPromptOverlay's recovery
+  // pattern — guards against any error path (engine reject, controller
+  // failure, save error) leaving the button stuck on "Dismissing…".
+  const error = $derived(getError());
+  $effect(() => {
+    if (error && submitted) submitted = false;
   });
 
   function dismiss(): void {

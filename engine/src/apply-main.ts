@@ -995,6 +995,19 @@ export function applyMainAction(
   const events: GameEvent[] = [];
   let roundIncremented = false;
 
+  // Invariant: pickPrompt and viewPrompt are mutually exclusive. The
+  // executor's suspend guard in `effect-dsl/executor.ts` ensures producers
+  // never co-set them, but assert here so a future producer that bypasses the
+  // executor (e.g. a listener mutating state directly) fails loud instead of
+  // deadlocking the dispatcher.
+  if (state.pickPrompt && state.viewPrompt) {
+    throw new Error(
+      `applyMainAction invariant: both pickPrompt and viewPrompt are set ` +
+        `(picker="${state.pickPrompt.playerId}", viewer="${state.viewPrompt.playerId}") — ` +
+        `at most one prompt may be pending at a time`,
+    );
+  }
+
   if (state.pickPrompt && action.type !== "resolve_pick") {
     throw new Error(
       `Action "${action.type}" by "${action.playerId}" rejected: ` +

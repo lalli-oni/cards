@@ -79,8 +79,8 @@ export function getVisibleState(
         ? state.pickPrompt
         : undefined,
     // viewPrompt is private to the viewer — opponent hand contents must not
-    // leak through this surface. Main-phase only (no seeding-time peek of
-    // opponent hand exists).
+    // leak through this surface. The `phase === "main"` guard is required
+    // for type narrowing (viewPrompt only exists on MainGameState).
     viewPrompt:
       state.phase === "main" && state.viewPrompt?.playerId === playerId
         ? state.viewPrompt

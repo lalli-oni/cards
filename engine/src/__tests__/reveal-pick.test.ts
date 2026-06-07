@@ -404,6 +404,36 @@ describe("DSL validator: positive counts", () => {
   });
 });
 
+describe("DSL validator: peek(opponent + hand)", () => {
+  it("accepts the standalone form (no count, no chain)", () => {
+    expect(() => parse("peek(opponent + hand)")).not.toThrow();
+  });
+
+  it("rejects an explicit count — the full hand is always revealed", () => {
+    expect(() => parse("peek(opponent + hand)[3]")).toThrow(
+      /does not accept a count/,
+    );
+  });
+
+  it("rejects a chained pick — viewPrompt suspends; the pick would silently drop", () => {
+    expect(() => parse("peek(opponent + hand) > pick[1]")).toThrow(
+      DSLValidationError,
+    );
+  });
+
+  it("rejects a trailing step in the same chain", () => {
+    expect(() => parse("peek(opponent + hand) > draw[1]")).toThrow(
+      /must be the terminal primitive/,
+    );
+  });
+
+  it("rejects a later chain joined by `+`", () => {
+    expect(() => parse("peek(opponent + hand) + draw[1]")).toThrow(
+      /must be the terminal primitive/,
+    );
+  });
+});
+
 describe("getValidActions precondition: peek(deck) with empty deck", () => {
   it("filters out the activate action when the deck is empty", () => {
     // Build a scenario where Ada is on the grid but the deck is empty.

@@ -3,8 +3,8 @@ import { produce } from "immer";
 import { applyAction } from "../apply-action";
 import { getValidActions } from "../valid-actions";
 import { getVisibleState } from "../visible-state";
-import type { MainGameState, UnitCard } from "../types";
-import { createTestGame, makeUnit, resetIds } from "./helpers";
+import type { MainAction, MainGameState, UnitCard } from "../types";
+import { createTestGame, makePolicy, makeUnit, resetIds } from "./helpers";
 
 beforeEach(() => resetIds());
 
@@ -135,19 +135,32 @@ describe("peek(opponent + hand) — view prompt", () => {
     expect(actions).toEqual([{ type: "dismiss_view", playerId: ACTIVE }]);
   });
 
-  it("rejects normal actions while viewPrompt is set", () => {
-    const { state, observer } = setupObserveScenario();
-    const { state: paused } = applyAction(state, {
-      type: "activate",
-      playerId: ACTIVE,
-      cardId: observer.id,
-      actionName: "observe",
-    });
+  // Parameterized lockout — guards against a narrowing of the dispatcher
+  // gate (e.g. accidentally matching only "pass") silently letting other
+  // actions slip through.
+  const lockedOutActions: { label: string; action: () => MainAction }[] = [
+    { label: "pass", action: () => ({ type: "pass", playerId: ACTIVE }) },
+    {
+      label: "deploy",
+      action: () => ({ type: "deploy", playerId: ACTIVE, cardId: "anything" }),
+    },
+    { label: "draw", action: () => ({ type: "draw", playerId: ACTIVE }) },
+  ];
+  for (const { label, action } of lockedOutActions) {
+    it(`rejects ${label} while viewPrompt is set`, () => {
+      const { state, observer } = setupObserveScenario();
+      const { state: paused } = applyAction(state, {
+        type: "activate",
+        playerId: ACTIVE,
+        cardId: observer.id,
+        actionName: "observe",
+      });
 
-    expect(() =>
-      applyAction(paused, { type: "pass", playerId: ACTIVE }),
-    ).toThrow("pending view must be dismissed first");
-  });
+      expect(() => applyAction(paused, action())).toThrow(
+        "pending view must be dismissed first",
+      );
+    });
+  }
 
   it("rejects dismiss_view when there is no pending view", () => {
     const state = createTestGame();
@@ -156,7 +169,7 @@ describe("peek(opponent + hand) — view prompt", () => {
     ).toThrow("no pending view");
   });
 
-  it("rejects dismiss_view from a player who isn't the pending viewer", () => {
+  it("rejects dismiss_view from a non-active player (outer active-player check)", () => {
     const { state, observer } = setupObserveScenario();
     const { state: paused } = applyAction(state, {
       type: "activate",
@@ -165,9 +178,35 @@ describe("peek(opponent + hand) — view prompt", () => {
       actionName: "observe",
     });
 
+    // Outer applyAction check fires first: the non-active player is rejected
+    // before handleDismissView sees the call.
     expect(() =>
       applyAction(paused, { type: "dismiss_view", playerId: OPPONENT }),
-    ).toThrow(/player "p1" rejected|pending view is for/);
+    ).toThrow(/it is player "p2"'s turn/);
+  });
+
+  it("rejects dismiss_view when the active player isn't the pending viewer (synthetic state)", () => {
+    // Synthetic: viewPrompt belongs to OPPONENT, but ACTIVE is the active
+    // player. The outer active-player check passes (the dismisser IS the
+    // active player), exposing handleDismissView's own ownership throw.
+    const observer = makeObserver();
+    const oppCard = makeUnit({ ownerId: OPPONENT, name: "OppCard" });
+    const base = gameWith((d) => {
+      d.grid[0][0].units.push(observer);
+      d.players[OPPONENT_IDX].hand.push(oppCard);
+    });
+    const tampered = produce(base, (d) => {
+      d.viewPrompt = {
+        playerId: OPPONENT,
+        cards: [oppCard],
+        source: "opponent_hand",
+        sourcePlayerId: ACTIVE,
+      };
+    });
+
+    expect(() =>
+      applyAction(tampered, { type: "dismiss_view", playerId: ACTIVE }),
+    ).toThrow(/pending view is for "p1", not "p2"/);
   });
 
   it("dismiss_view clears viewPrompt and lets normal play resume", () => {
@@ -215,25 +254,17 @@ describe("peek(opponent + hand) — view prompt", () => {
 
 describe("Spymaster Infiltrate — view prompt via policy action", () => {
   it("Infiltrate sets viewPrompt with opponent's hand", () => {
+    const spymaster = makePolicy({ ownerId: ACTIVE, definitionId: "spymaster" });
     const oppCard = makeUnit({ ownerId: OPPONENT, name: "OppCard" });
     const state = gameWith((d) => {
-      d.players[ACTIVE_IDX].activePolicies.push({
-        id: "spymaster-inst",
-        definitionId: "spymaster",
-        type: "policy",
-        name: "Spymaster",
-        cost: "0",
-        rarity: "epic",
-        effect: "",
-        ownerId: ACTIVE,
-      });
+      d.players[ACTIVE_IDX].activePolicies.push(spymaster);
       d.players[OPPONENT_IDX].hand.push(oppCard);
     });
 
     const { state: next } = applyAction(state, {
       type: "activate",
       playerId: ACTIVE,
-      cardId: "spymaster-inst",
+      cardId: spymaster.id,
       actionName: "Infiltrate",
     });
     const ns = next as MainGameState;

@@ -21,4 +21,4 @@ design/exports/
 
 # Claude Code per-worktree scaffolding (start-task / new-workspace / open-tab)
 .worktree/
-.vscode/*.code-workspace
+**/.vscode/*.code-workspace

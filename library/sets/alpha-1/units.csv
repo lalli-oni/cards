@@ -12,7 +12,7 @@ joan-of-arc,Joan of Arc,alpha-1,epic,5,7,4,8,Warrior;Spiritual,,rally:1:buff.str
 marco-polo,Marco Polo,alpha-1,uncommon,3,4,5,8,Diplomat;Merchant,,trade-route:1:move(self) + gold[1],Move Marco Polo to an adjacent location and gain 1 gold.,Twenty-four years of road and wonder.
 alexander-the-great,Alexander the Great,alpha-1,legendary,8,9,7,8,Warrior;Politician,,march:1:move(self) + contest.strength(enemy),Move to adjacent location and initiate a strength contest against target unit there.,He wept for there were no more worlds to conquer.
 nefertiti,Nefertiti,alpha-1,uncommon,3,4,5,8,Politician;Spiritual,,inspire:1:buff.charisma(all + friendly)[2]~turn,All friendly units at this location get +2 charisma until end of turn.,Beauty was the least of her powers.
-galileo-galilei,Galileo Galilei,alpha-1,uncommon,3,3,8,4,Scientist,,observe:1:reveal(opponent + hand),Look at target opponent's hand.,And yet it moves.
+galileo-galilei,Galileo Galilei,alpha-1,uncommon,3,3,8,4,Scientist,,observe:1:peek(opponent + hand),Look at target opponent's hand.,And yet it moves.
 hannibal-barca,Hannibal Barca,alpha-1,epic,6,8,8,5,Warrior,,flank:2:contest.strength(enemy)[3],Strength contest against target unit at same location with +3 bonus.,He brought elephants across mountains.
 harriet-tubman,Harriet Tubman,alpha-1,uncommon,2,5,7,7,Politician,,underground:1:move(friendly)~ignore_blocked,Move target friendly unit to an adjacent location ignoring one blocked edge.,She never lost a passenger.
 ibn-battuta,Ibn Battuta,alpha-1,common,2,3,7,6,Diplomat;Scientist,,wander:1:move(self) + gold[1],Move Ibn Battuta to an adjacent location and gain 1 gold.,Seventy-five thousand miles before the age of jet.

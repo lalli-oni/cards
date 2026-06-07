@@ -10,7 +10,6 @@ export const VERBS = [
   "peek",
   "pick",
   "buy",
-  "reveal",
   "kill",
   "injure",
   "buff",
@@ -33,7 +32,6 @@ const HQ_SAFE: ReadonlySet<Verb> = new Set([
   "peek",
   "pick",
   "buy",
-  "reveal",
 ]);
 
 /** True if the verb operates purely on player state (no grid context needed). */

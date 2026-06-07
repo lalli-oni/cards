@@ -550,7 +550,7 @@ export const ITEM_EFFECTS: Record<string, ItemEffectFactory> = {
 
 export const POLICY_ACTIONS: Record<string, ActionDef[]> = {
   "spymaster": [
-    { name: "Infiltrate", apCost: 1, effect: "reveal(opponent + hand)" },
+    { name: "Infiltrate", apCost: 1, effect: "peek(opponent + hand)" },
   ],
 };
 

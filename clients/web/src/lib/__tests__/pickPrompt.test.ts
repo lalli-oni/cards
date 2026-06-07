@@ -20,7 +20,7 @@ function makeUnit(id: string): UnitCard {
 }
 
 function makePrompt(options: [string, ...string[]], count = 1): PickPrompt {
-  return { playerId: "p1", options, count, source: "main_deck" };
+  return { kind: "deck_pick", playerId: "p1", options, count, source: "main_deck" };
 }
 
 describe("resolvePickOptions", () => {

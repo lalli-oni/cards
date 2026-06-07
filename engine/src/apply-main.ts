@@ -968,6 +968,22 @@ function handleResolvePick(
   draft.pickPrompt = undefined;
 }
 
+function handleDismissView(
+  draft: Draft<MainGameState>,
+  playerId: string,
+): void {
+  const prompt = draft.viewPrompt;
+  if (!prompt) {
+    throw new Error(`dismiss_view rejected: no pending view (by player "${playerId}")`);
+  }
+  if (prompt.playerId !== playerId) {
+    throw new Error(
+      `dismiss_view rejected: pending view is for "${prompt.playerId}", not "${playerId}"`,
+    );
+  }
+  draft.viewPrompt = undefined;
+}
+
 // ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
@@ -985,6 +1001,15 @@ export function applyMainAction(
         `pending pick must be resolved first ` +
         `(picker="${state.pickPrompt.playerId}", kind="${state.pickPrompt.kind}", ` +
         `options=[${state.pickPrompt.options.join(",")}])`,
+    );
+  }
+
+  if (state.viewPrompt && action.type !== "dismiss_view") {
+    throw new Error(
+      `Action "${action.type}" by "${action.playerId}" rejected: ` +
+        `pending view must be dismissed first ` +
+        `(viewer="${state.viewPrompt.playerId}", source="${state.viewPrompt.source}", ` +
+        `sourcePlayerId="${state.viewPrompt.sourcePlayerId}")`,
     );
   }
 
@@ -1055,6 +1080,10 @@ export function applyMainAction(
 
       case "resolve_pick":
         handleResolvePick(draft, action.playerId, action.pickedCardIds, emit);
+        break;
+
+      case "dismiss_view":
+        handleDismissView(draft, action.playerId);
         break;
 
       default: {

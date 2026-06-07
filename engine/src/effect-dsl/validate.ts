@@ -10,8 +10,10 @@ export class DSLValidationError extends Error {
 // Static rules for `peek` and `pick`:
 //
 //   peek:
-//     - count >= 1 (zero or negative makes no sense; the executor stores []
-//       which then no-ops on pick).
+//     - For `peek(deck)`: count >= 1 (zero or negative makes no sense; the
+//       executor stores [] which then no-ops on pick).
+//     - For `peek(opponent + hand)`: no count required — the whole hand is
+//       shown via `viewPrompt`; there is no chained `pick` consumer.
 //
 //   pick:
 //     - count >= 1 (default 1 if omitted).
@@ -30,11 +32,15 @@ export function validateEffectChain(ast: Expression): void {
     effect.forEach((step, stepIdx) => {
       if (step.primitive.verb === "peek") {
         sawProducer = true;
-        const value = step.primitive.value ?? 0;
-        if (value < 1) {
-          throw new DSLValidationError(
-            `'peek' requires a positive count (got ${value})`,
-          );
+        const tokens = step.primitive.target?.tokens.map((t) => t.name) ?? [];
+        const isOpponentHand = tokens.includes("opponent") && tokens.includes("hand");
+        if (!isOpponentHand) {
+          const value = step.primitive.value ?? 0;
+          if (value < 1) {
+            throw new DSLValidationError(
+              `'peek' requires a positive count (got ${value})`,
+            );
+          }
         }
       }
       if (step.primitive.verb !== "pick") return;

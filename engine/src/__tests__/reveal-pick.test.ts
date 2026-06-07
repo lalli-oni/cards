@@ -66,7 +66,6 @@ describe("reveal > pick — player choice required", () => {
     expect(ns.players[ACTIVE_IDX].hand).toHaveLength(0);
     expect(ns.players[ACTIVE_IDX].mainDeck).toHaveLength(3);
     expect(events.some((e) => e.type === "cards_peeked")).toBe(true);
-    expect(events.some((e) => e.type === "cards_revealed")).toBe(false);
     expect(events.some((e) => e.type === "cards_picked")).toBe(false);
   });
 

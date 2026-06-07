@@ -122,8 +122,6 @@ export function describeEvent(event: GameEvent, r?: NameResolvers): string {
       return `${p(event.playerId, r)} discarded ${c(event.cardId, r)} (${event.reason})`;
     case "unit_buffed":
       return `${c(event.unitId, r)} got ${event.delta > 0 ? "+" : ""}${event.delta} ${event.stat}`;
-    case "cards_revealed":
-      return `${p(event.playerId, r)} revealed ${event.cardIds.length} card(s)`;
     case "cards_peeked":
       return `${p(event.playerId, r)} peeked at ${event.cardIds.length} card(s)`;
     case "cards_picked":

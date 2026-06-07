@@ -74,6 +74,18 @@ interface CardBase {
 
 export type StatName = "strength" | "cunning" | "charisma";
 
+/**
+ * An activatable action defined on a card.
+ *
+ * For unit and item cards, `effect` is a DSL string parsed by the executor
+ * (e.g. `peek(opponent + hand)`). The library build script validates it
+ * through `parseDSL`.
+ *
+ * For policy cards, `effect` is human-readable prose intended for UI display
+ * (e.g. "Look at one opponent's hand."). The executable DSL is stored in
+ * `engine/src/listeners/effects.ts:POLICY_ACTIONS`, keyed by the policy's
+ * `definitionId`. The build script skips DSL validation for policy actions.
+ */
 export interface ActionDef {
   name: string;
   apCost: number;
@@ -153,6 +165,8 @@ export type EventCard = InstantEventCard | PassiveEventCard | TrapEventCard;
 export interface PolicyCard extends CardBase {
   type: "policy";
   effect: string;
+  /** UI-only action descriptions — `ActionDef.effect` is human-readable here. */
+  actions?: ActionDef[];
 }
 
 export type Card = UnitCard | LocationCard | ItemCard | EventCard | PolicyCard;
@@ -302,9 +316,49 @@ export type PickPrompt =
   | (PickPromptBase & { kind: "deck_pick"; count: number })
   | (PickPromptBase & { kind: "scholar_reorder" });
 
+/**
+ * Origin of a `ViewPrompt`. Extend the union when new private-view sources are
+ * added (e.g. `opponent_deck`) so consumers stay exhaustive.
+ */
+export type ViewSource = "opponent_hand";
+
+/**
+ * Set when a `peek(opponent + hand)` effect runs. Pauses the active player
+ * until they submit `dismiss_view`. Stores full `Card[]` (not ids) because
+ * `getVisibleState` redacts opponent hands to `handSize` — the viewer has no
+ * other way to resolve ids back into card data on the client. Filtered on
+ * `VisibleState.viewPrompt` so only the viewer sees the contents.
+ *
+ * Today the selector picks the first non-active player deterministically;
+ * multi-opponent target selection (matching the card text "target opponent's
+ * hand") is not yet implemented.
+ */
+export interface ViewPrompt {
+  /** Who is viewing (the active player who triggered the effect). */
+  playerId: string;
+  /**
+   * Opponent hand contents captured when the peek fired. Shallow-cloned at
+   * peek time — under immer's structural sharing, mutations after peek do not
+   * propagate, so this acts as a snapshot in practice.
+   */
+  cards: Card[];
+  source: ViewSource;
+  /** Whose hand is shown (for UI labelling). */
+  sourcePlayerId: string;
+}
+
 export interface MainGameState extends GameStateBase {
   phase: "main";
   turn: TurnState;
+  /**
+   * Set by `peek(opponent + hand)` to surface opponent hand contents to the
+   * active player. Cleared by `dismiss_view`. Main-phase only.
+   *
+   * Invariant: at most one of `pickPrompt` / `viewPrompt` is set at a time
+   * (enforced by the executor's early-pause guard in `effect-dsl/executor.ts`
+   * and asserted at the top of `applyMainAction`).
+   */
+  viewPrompt?: ViewPrompt;
 }
 
 export interface EndedGameState extends GameStateBase {
@@ -314,6 +368,8 @@ export interface EndedGameState extends GameStateBase {
   scores: Record<string, number>;
   /** Ended games never carry a pending pick — make that compile-time. */
   pickPrompt?: never;
+  /** Ended games never carry a pending view either. */
+  viewPrompt?: never;
 }
 
 export type GameState = SeedingGameState | MainGameState | EndedGameState;
@@ -416,7 +472,19 @@ export type MainAction =
     }
   | { type: "attempt_mission"; playerId: string; row: number; col: number }
   | { type: "pass"; playerId: string }
-  | ResolvePickAction;
+  | ResolvePickAction
+  | DismissViewAction;
+
+/**
+ * Submitted by the viewer to dismiss a pending `viewPrompt`. The view is
+ * read-only (no outcome to feed downstream), so the engine just clears the
+ * prompt and resumes normal play. AP is not refunded (already spent on the
+ * activating action).
+ */
+export interface DismissViewAction {
+  type: "dismiss_view";
+  playerId: string;
+}
 
 export type Action = SeedingAction | MainAction;
 
@@ -545,8 +613,7 @@ export type GameEvent =
     }
   | { type: "card_discarded"; playerId: string; cardId: string; reason: string }
   | { type: "unit_buffed"; unitId: string; stat: StatName; delta: number; source: string }
-  | { type: "cards_revealed"; playerId: string; cardIds: string[]; source: "opponent_hand" }
-  | { type: "cards_peeked"; playerId: string; cardIds: string[]; source: PickSource }
+  | { type: "cards_peeked"; playerId: string; cardIds: string[]; source: PickSource | ViewSource }
   | { type: "cards_picked"; playerId: string; cardIds: string[]; source: PickSource }
   | { type: "unit_controlled"; unitId: string; controllerId: string; previousOwnerId: string; duration: number }
   | { type: "contest_resolved"; stat: StatName; attackerId: string; defenderId: string; attackerPower: number; defenderPower: number; winnerId: string }
@@ -629,6 +696,8 @@ export interface VisibleState {
   seedingStep?: SeedingStep;
   /** Set during main or seeding phase when this viewer is the picker. */
   pickPrompt?: PickPrompt;
+  /** Set during main phase when this viewer is the active player on a `peek(opponent + hand)`. */
+  viewPrompt?: ViewPrompt;
   winner?: string;
   scores?: Record<string, number>;
   /** Conditional reveals granted by active passives for this viewer. */

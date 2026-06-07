@@ -33,6 +33,7 @@ export {
 // Types
 export type {
   Action,
+  ActionDef,
   ActionForState,
   Card,
   CardType,

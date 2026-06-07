@@ -10,7 +10,6 @@ const EXPECTED: Record<Verb, boolean> = {
   peek: true,
   pick: true,
   buy: true,
-  reveal: true,
   kill: false,
   injure: false,
   buff: false,

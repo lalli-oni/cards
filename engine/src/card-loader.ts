@@ -324,6 +324,7 @@ export function instantiateCard(
         ...base,
         type: "policy",
         effect: def.effect,
+        actions: def.actions ?? undefined,
       } satisfies PolicyCard;
   }
 }

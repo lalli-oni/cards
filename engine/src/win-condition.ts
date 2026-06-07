@@ -55,5 +55,12 @@ export function toEndedState(
   events.push({ type: "phase_changed", from: "main", to: "ended" });
   events.push({ type: "game_ended", winner, scores });
 
-  return { ...state, phase: "ended" as const, winner, scores };
+  return {
+    ...state,
+    phase: "ended" as const,
+    winner,
+    scores,
+    pickPrompt: undefined,
+    viewPrompt: undefined,
+  };
 }

@@ -66,7 +66,6 @@ describe("reveal > pick — player choice required", () => {
     expect(ns.players[ACTIVE_IDX].hand).toHaveLength(0);
     expect(ns.players[ACTIVE_IDX].mainDeck).toHaveLength(3);
     expect(events.some((e) => e.type === "cards_peeked")).toBe(true);
-    expect(events.some((e) => e.type === "cards_revealed")).toBe(false);
     expect(events.some((e) => e.type === "cards_picked")).toBe(false);
   });
 
@@ -402,6 +401,36 @@ describe("DSL validator: positive counts", () => {
 
   it("rejects pick[0]", () => {
     expect(() => parse("peek(deck)[3] > pick[0]")).toThrow(DSLValidationError);
+  });
+});
+
+describe("DSL validator: peek(opponent + hand)", () => {
+  it("accepts the standalone form (no count, no chain)", () => {
+    expect(() => parse("peek(opponent + hand)")).not.toThrow();
+  });
+
+  it("rejects an explicit count — the full hand is always revealed", () => {
+    expect(() => parse("peek(opponent + hand)[3]")).toThrow(
+      /does not accept a count/,
+    );
+  });
+
+  it("rejects a chained pick — viewPrompt suspends; the pick would silently drop", () => {
+    expect(() => parse("peek(opponent + hand) > pick[1]")).toThrow(
+      DSLValidationError,
+    );
+  });
+
+  it("rejects a trailing step in the same chain", () => {
+    expect(() => parse("peek(opponent + hand) > draw[1]")).toThrow(
+      /must be the terminal primitive/,
+    );
+  });
+
+  it("rejects a later chain joined by `+`", () => {
+    expect(() => parse("peek(opponent + hand) + draw[1]")).toThrow(
+      /must be the terminal primitive/,
+    );
   });
 });
 

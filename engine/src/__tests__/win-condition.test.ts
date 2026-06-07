@@ -3,7 +3,7 @@ import { produce } from "immer";
 import { applyAction } from "../apply-action";
 import type { MainGameState, EndedGameState, MainAction } from "../types";
 import { getActivePlayerId } from "../types";
-import { findSoleLeader, getScores, shouldEndGame } from "../win-condition";
+import { findSoleLeader, getScores, shouldEndGame, toEndedState } from "../win-condition";
 import { createTestGame, DEFAULT_CONFIG, resetIds } from "./helpers";
 
 beforeEach(() => resetIds());
@@ -97,6 +97,44 @@ describe("shouldEndGame", () => {
       d.players[0].vp = 10;
     });
     expect(shouldEndGame(withVp)).toBe(true);
+  });
+});
+
+// ---- toEndedState: prompt clearing ----
+
+describe("toEndedState", () => {
+  it("clears a populated viewPrompt when transitioning to ended", () => {
+    const base = createTestGame();
+    const opponentId = base.players.find(
+      (p) => p.id !== base.turn.activePlayerId,
+    )!.id;
+    const withPrompt = produce(base, (d) => {
+      d.viewPrompt = {
+        playerId: d.turn.activePlayerId,
+        cards: [],
+        source: "opponent_hand",
+        sourcePlayerId: opponentId,
+      };
+    });
+
+    const ended = toEndedState(withPrompt, base.turn.activePlayerId, []);
+    expect(ended.viewPrompt).toBeUndefined();
+  });
+
+  it("clears a populated pickPrompt when transitioning to ended", () => {
+    const base = createTestGame();
+    const withPrompt = produce(base, (d) => {
+      d.pickPrompt = {
+        kind: "deck_pick",
+        playerId: d.turn.activePlayerId,
+        options: ["card-1"],
+        count: 1,
+        source: "main_deck",
+      };
+    });
+
+    const ended = toEndedState(withPrompt, base.turn.activePlayerId, []);
+    expect(ended.pickPrompt).toBeUndefined();
   });
 });
 

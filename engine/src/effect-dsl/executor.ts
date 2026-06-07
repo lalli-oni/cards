@@ -58,19 +58,23 @@ export function executeEffect(
 
 function executeExpression(expr: Expression, ctx: ExecutionContext): void {
   for (const effect of expr) {
-    if (ctx.draft.pickPrompt) return;
     executeEffectChain(effect, ctx);
   }
 }
 
 function executeEffectChain(effect: Effect, ctx: ExecutionContext): void {
   for (const step of effect) {
-    if (ctx.draft.pickPrompt) return;
     executeStep(step, ctx);
   }
 }
 
 function executeStep(step: Step, ctx: ExecutionContext): void {
+  // Single suspend guard: once any verb has set pickPrompt or viewPrompt,
+  // every subsequent step (including contest consequence steps which call
+  // executeStep recursively) no-ops. Placing the guard here — rather than at
+  // the outer loops — covers every call site uniformly.
+  if (ctx.draft.pickPrompt || ctx.draft.viewPrompt) return;
+
   const p = step.primitive;
 
   if (p.verb === "contest") {
@@ -101,8 +105,6 @@ function executePrimitive(p: Primitive, ctx: ExecutionContext): void {
       return execBuff(p, ctx);
     case "move":
       return execMove(p, ctx);
-    case "reveal":
-      return execReveal(p, ctx);
     case "peek":
       return execPeek(p, ctx);
     case "pick":
@@ -304,22 +306,40 @@ function execMove(p: Primitive, ctx: ExecutionContext): void {
   }
 }
 
-function execReveal(p: Primitive, ctx: ExecutionContext): void {
+// Private peek. Two selectors today:
+//   `peek(deck)[N]` — top N of own deck, stored in `_peekedCards` for a chained `pick`.
+//   `peek(opponent + hand)` — full hand of the first non-active player (multi-
+//     opponent target selection not yet implemented; see #94 / task notes on
+//     #111), parked on `viewPrompt` (private to the active player) until they
+//     submit `dismiss_view`.
+// Both emit `cards_peeked` for engine record-keeping (replay, listeners, debug).
+// Privacy filtering of the event log is tracked separately (#105).
+function execPeek(p: Primitive, ctx: ExecutionContext): void {
   const tokenNames = p.target?.tokens.map((t) => t.name) ?? [];
 
   if (tokenNames.includes("opponent") && tokenNames.includes("hand")) {
     const opponent = ctx.draft.players.find((pl) => pl.id !== ctx.playerId);
-    if (!opponent) return;
-    const cardIds = opponent.hand.map((c) => c.id);
-    ctx.emit({ type: "cards_revealed", playerId: ctx.playerId, cardIds, source: "opponent_hand" });
+    if (!opponent) {
+      throw new Error(
+        `peek(opponent + hand): no opponent found for player "${ctx.playerId}"`,
+      );
+    }
+    const cards = [...opponent.hand];
+    ctx.draft.viewPrompt = {
+      playerId: ctx.playerId,
+      cards: cards as Card[],
+      source: "opponent_hand",
+      sourcePlayerId: opponent.id,
+    };
+    ctx.emit({
+      type: "cards_peeked",
+      playerId: ctx.playerId,
+      cardIds: cards.map((c) => c.id),
+      source: "opponent_hand",
+    });
+    return;
   }
-}
 
-// Private peek: look at top N of own deck, store for a chained `pick`.
-// Emits `cards_peeked` for engine record-keeping (replay, listeners, debug).
-// Privacy filtering of the event log is tracked separately.
-function execPeek(p: Primitive, ctx: ExecutionContext): void {
-  const tokenNames = p.target?.tokens.map((t) => t.name) ?? [];
   if (!tokenNames.includes("deck")) return;
 
   const count = p.value ?? 0;

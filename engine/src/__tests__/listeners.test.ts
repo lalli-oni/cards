@@ -1051,18 +1051,18 @@ describe("AP modifier queries", () => {
     expect(getModifiedAPCost(state, queries, opponentPlayEvent, 1)).toBe(1);
   });
 
-  it("Spymaster Infiltrate: activating the policy reveals an opponent's hand and spends 1 AP", () => {
+  it("Spymaster Infiltrate: activating the policy peeks an opponent's hand, sets viewPrompt, and spends 1 AP", () => {
     const initial = gameWith((d, p) => {
       d.players[p.activeIdx].activePolicies.push(
         makePolicy({ ownerId: p.active, definitionId: "spymaster" }),
       );
-      // Put some cards in the opponent's hand to be revealed.
+      // Put some cards in the opponent's hand to be peeked.
       d.players[p.otherIdx].hand.push(
         makeInstantEvent({ ownerId: p.other }),
         makeInstantEvent({ ownerId: p.other }),
       );
     });
-    const { active } = getPlayers(initial);
+    const { active, other } = getPlayers(initial);
     const apBefore = initial.turn.actionPointsRemaining;
     const spymaster = initial.players.find((p) => p.id === active)!.activePolicies[0];
 
@@ -1075,10 +1075,15 @@ describe("AP modifier queries", () => {
     const after = state as MainGameState;
 
     expect(after.turn.actionPointsRemaining).toBe(apBefore - 1);
-    const revealed = events.find((e) => e.type === "cards_revealed");
-    expect(revealed).toBeDefined();
-    expect((revealed as any).playerId).toBe(active);
-    expect((revealed as any).cardIds.length).toBe(2);
+    expect(after.viewPrompt?.playerId).toBe(active);
+    expect(after.viewPrompt?.source).toBe("opponent_hand");
+    expect(after.viewPrompt?.sourcePlayerId).toBe(other);
+    expect(after.viewPrompt?.cards.length).toBe(2);
+    const peeked = events.find((e) => e.type === "cards_peeked");
+    expect(peeked).toBeDefined();
+    expect((peeked as any).playerId).toBe(active);
+    expect((peeked as any).cardIds.length).toBe(2);
+    expect((peeked as any).source).toBe("opponent_hand");
   });
 
   it("Mary Shelley on the grid: first play_event still 0 AP (grid factory branch)", () => {
@@ -1124,7 +1129,7 @@ describe("AP modifier queries", () => {
     expect(playEvent.length).toBeGreaterThan(0);
   });
 
-  it("Spymaster Infiltrate: empty opponent hand emits cards_revealed with empty cardIds", () => {
+  it("Spymaster Infiltrate: empty opponent hand still emits cards_peeked and sets an empty viewPrompt", () => {
     const initial = gameWith((d, p) => {
       d.players[p.activeIdx].activePolicies.push(
         makePolicy({ ownerId: p.active, definitionId: "spymaster" }),
@@ -1133,16 +1138,18 @@ describe("AP modifier queries", () => {
     });
     const { active } = getPlayers(initial);
     const spymaster = initial.players.find((p) => p.id === active)!.activePolicies[0];
-    const { events } = applyAction(initial, {
+    const { state, events } = applyAction(initial, {
       type: "activate",
       playerId: active,
       cardId: spymaster.id,
       actionName: "Infiltrate",
     });
-    const revealed = events.find((e) => e.type === "cards_revealed");
-    expect(revealed).toBeDefined();
-    expect((revealed as any).cardIds).toEqual([]);
-    expect((revealed as any).source).toBe("opponent_hand");
+    const after = state as MainGameState;
+    expect(after.viewPrompt?.cards).toEqual([]);
+    const peeked = events.find((e) => e.type === "cards_peeked");
+    expect(peeked).toBeDefined();
+    expect((peeked as any).cardIds).toEqual([]);
+    expect((peeked as any).source).toBe("opponent_hand");
   });
 
   it("Mary Shelley: applyAction(play_event) spends 0 AP for first event, 1 AP for second", () => {

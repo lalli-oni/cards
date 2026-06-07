@@ -129,8 +129,7 @@ Core primitives the engine implements. New cards compose these — no per-card c
 | `draw` | count | Draw cards from your deck. `draw[2]`. Implicit `[1]`. |
 | `buy` | cost override | Buy a card from market. `buy(item)[0]` = buy item for free. `buy[-1]` = 1 gold discount on anything. |
 | `move` | distance | Move a unit. `move(self)[2]` = 2 spaces. Implicit `[1]`. |
-| `reveal` | — | Publicly reveal cards (visible to all players). `reveal(opponent + hand)` |
-| `peek` | count | Privately look at the top N of your own deck. Feeds into `pick`. `peek(deck)[3]` |
+| `peek` | varies | Privately view cards. See [peek selectors](#peek-selectors) below. |
 | `pick` | count | Player picks N from previously peeked cards (used after `>` pipe from `peek`). `peek(deck)[3] > pick[1]` |
 | `buff.STAT` | amount | Temporary stat increase. Requires `~duration`. `buff.strength(all + friendly)[2]~turn` |
 | `contest.STAT` | bonus | Stat contest using named stat. Value = attacker bonus. `contest.strength[3]` = +3 bonus. |
@@ -140,6 +139,17 @@ Core primitives the engine implements. New cards compose these — no per-card c
 | `raze` | — | Remove a location from the grid. `raze(location)` |
 | `to` | — | Move result to a zone (used after `>` pipe). `raze(location) > to(hq)` |
 | `remove` | — | Remove card from play. `remove(location)` |
+
+### peek selectors
+
+- `peek(deck)[N]` — privately reveal the top N of your own deck to yourself.
+  Feeds `_peekedCards` into a chained `pick`. `N >= 1`. Example: Ada Lovelace —
+  `analyze:1:peek(deck)[3] > pick[1]`.
+- `peek(opponent + hand)` — show one opponent's full hand to the active player
+  only (via `viewPrompt`, dismissed by the player). No count; must be the
+  terminal step. Today the engine deterministically picks the first non-active
+  player — multi-opponent target selection is tracked for when multi-player
+  support lands. Example: Galileo Galilei — `observe:1:peek(opponent + hand)`.
 
 ### Targets
 
@@ -239,7 +249,7 @@ Complete action definitions (`name:ap_cost:effect`):
 | Harriet Tubman | `underground:1:move(friendly)~ignore_blocked` |
 | Alexander the Great | `march:1:move(self) + contest.strength(enemy)` |
 | Ada Lovelace | `analyze:1:peek(deck)[3] > pick[1]` |
-| Galileo Galilei | `observe:1:reveal(opponent + hand)` |
+| Galileo Galilei | `observe:1:peek(opponent + hand)` |
 | Nikola Tesla | `invent:2:buy(item)[0]` |
 | Genghis Khan | `conquer:3:raze(location) > to(hq)` |
 | Ramesses II | `monument:2:vp[1] + kill(self)` |

@@ -968,6 +968,22 @@ function handleResolvePick(
   draft.pickPrompt = undefined;
 }
 
+function handleDismissView(
+  draft: Draft<MainGameState>,
+  playerId: string,
+): void {
+  const prompt = draft.viewPrompt;
+  if (!prompt) {
+    throw new Error(`dismiss_view rejected: no pending view (by player "${playerId}")`);
+  }
+  if (prompt.playerId !== playerId) {
+    throw new Error(
+      `dismiss_view rejected: pending view is for "${prompt.playerId}", not "${playerId}"`,
+    );
+  }
+  draft.viewPrompt = undefined;
+}
+
 // ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
@@ -979,12 +995,34 @@ export function applyMainAction(
   const events: GameEvent[] = [];
   let roundIncremented = false;
 
+  // Invariant: pickPrompt and viewPrompt are mutually exclusive. The
+  // executor's suspend guard in `effect-dsl/executor.ts` ensures producers
+  // never co-set them, but assert here so a future producer that bypasses the
+  // executor (e.g. a listener mutating state directly) fails loud instead of
+  // deadlocking the dispatcher.
+  if (state.pickPrompt && state.viewPrompt) {
+    throw new Error(
+      `applyMainAction invariant: both pickPrompt and viewPrompt are set ` +
+        `(picker="${state.pickPrompt.playerId}", viewer="${state.viewPrompt.playerId}") — ` +
+        `at most one prompt may be pending at a time`,
+    );
+  }
+
   if (state.pickPrompt && action.type !== "resolve_pick") {
     throw new Error(
       `Action "${action.type}" by "${action.playerId}" rejected: ` +
         `pending pick must be resolved first ` +
         `(picker="${state.pickPrompt.playerId}", kind="${state.pickPrompt.kind}", ` +
         `options=[${state.pickPrompt.options.join(",")}])`,
+    );
+  }
+
+  if (state.viewPrompt && action.type !== "dismiss_view") {
+    throw new Error(
+      `Action "${action.type}" by "${action.playerId}" rejected: ` +
+        `pending view must be dismissed first ` +
+        `(viewer="${state.viewPrompt.playerId}", source="${state.viewPrompt.source}", ` +
+        `sourcePlayerId="${state.viewPrompt.sourcePlayerId}")`,
     );
   }
 
@@ -1055,6 +1093,10 @@ export function applyMainAction(
 
       case "resolve_pick":
         handleResolvePick(draft, action.playerId, action.pickedCardIds, emit);
+        break;
+
+      case "dismiss_view":
+        handleDismissView(draft, action.playerId);
         break;
 
       default: {

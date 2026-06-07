@@ -131,6 +131,9 @@ function getMainValidActions(
   if (state.pickPrompt && state.pickPrompt.playerId === playerId) {
     return getResolvePickActions(state.pickPrompt, playerId);
   }
+  if (state.viewPrompt && state.viewPrompt.playerId === playerId) {
+    return [{ type: "dismiss_view", playerId }];
+  }
 
   const actions: MainAction[] = [];
   const player = getPlayerById(state, playerId);

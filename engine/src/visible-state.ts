@@ -78,6 +78,13 @@ export function getVisibleState(
       state.phase !== "ended" && state.pickPrompt?.playerId === playerId
         ? state.pickPrompt
         : undefined,
+    // viewPrompt is private to the viewer — opponent hand contents must not
+    // leak through this surface. The `phase === "main"` guard is required
+    // for type narrowing (viewPrompt only exists on MainGameState).
+    viewPrompt:
+      state.phase === "main" && state.viewPrompt?.playerId === playerId
+        ? state.viewPrompt
+        : undefined,
     winner: state.phase === "ended" ? state.winner : undefined,
     scores: state.phase === "ended" ? state.scores : undefined,
     reveals,

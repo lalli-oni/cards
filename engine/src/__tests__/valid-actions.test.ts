@@ -34,6 +34,8 @@ describe("getValidActions", () => {
         ...base,
         phase: "ended",
         scores: {},
+        pickPrompt: undefined,
+        viewPrompt: undefined,
       };
       const actions = getValidActions(
         endedState,
@@ -62,7 +64,13 @@ describe("getValidActions", () => {
 
     it("throws for ended phase", () => {
       const base = createTestGame();
-      const endedState: EndedGameState = { ...base, phase: "ended", scores: {} };
+      const endedState: EndedGameState = {
+        ...base,
+        phase: "ended",
+        scores: {},
+        pickPrompt: undefined,
+        viewPrompt: undefined,
+      };
       expect(() => getActivePlayerId(endedState)).toThrow(
         "No active player in ended phase",
       );

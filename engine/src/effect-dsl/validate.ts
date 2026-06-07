@@ -10,8 +10,12 @@ export class DSLValidationError extends Error {
 // Static rules for `peek` and `pick`:
 //
 //   peek:
-//     - count >= 1 (zero or negative makes no sense; the executor stores []
-//       which then no-ops on pick).
+//     - For `peek(deck)`: count >= 1 (zero or negative makes no sense; the
+//       executor stores [] which then no-ops on pick).
+//     - For `peek(opponent + hand)`: count must NOT be supplied — the whole
+//       hand is revealed. Must be the terminal step of the last effect chain
+//       (suspends execution via `viewPrompt`; anything after it would be
+//       silently dropped when execution resumes after `dismiss_view`).
 //
 //   pick:
 //     - count >= 1 (default 1 if omitted).
@@ -30,11 +34,29 @@ export function validateEffectChain(ast: Expression): void {
     effect.forEach((step, stepIdx) => {
       if (step.primitive.verb === "peek") {
         sawProducer = true;
-        const value = step.primitive.value ?? 0;
-        if (value < 1) {
-          throw new DSLValidationError(
-            `'peek' requires a positive count (got ${value})`,
-          );
+        const tokens = step.primitive.target?.tokens.map((t) => t.name) ?? [];
+        const isOpponentHand = tokens.includes("opponent") && tokens.includes("hand");
+        if (isOpponentHand) {
+          if (step.primitive.value !== undefined) {
+            throw new DSLValidationError(
+              `'peek(opponent + hand)' does not accept a count (got [${step.primitive.value}]) — the full hand is revealed`,
+            );
+          }
+          const isLastStep = stepIdx === effect.length - 1;
+          const isLastEffect = effectIdx === ast.length - 1;
+          if (!isLastStep || !isLastEffect) {
+            throw new DSLValidationError(
+              `'peek(opponent + hand)' must be the terminal primitive of the last effect chain in an expression ` +
+                `(chain #${effectIdx} of ${ast.length - 1}, step ${stepIdx} of ${effect.length - 1})`,
+            );
+          }
+        } else {
+          const value = step.primitive.value ?? 0;
+          if (value < 1) {
+            throw new DSLValidationError(
+              `'peek' requires a positive count (got ${value})`,
+            );
+          }
         }
       }
       if (step.primitive.verb !== "pick") return;

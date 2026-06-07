@@ -147,6 +147,12 @@ function transformCard(type: CardType, raw: Record<string, string>): Record<stri
 
     case "policies":
       base.effect = raw.effect;
+      // Policy actions: the third colon-separated field is human-readable
+      // prose for UI display (e.g. "Look at one opponent's hand."), not a
+      // DSL string. The executable DSL is wired in
+      // engine/src/listeners/effects.ts:POLICY_ACTIONS. Validation skips
+      // DSL parsing for these — see the `validate` function.
+      base.actions = splitList(raw.actions || "").map(parseAction).filter(Boolean);
       break;
   }
 
@@ -172,9 +178,10 @@ function validate(type: CardType, card: Record<string, unknown>): ValidationErro
     errors.push({ card: id, field: "subtype", message: `invalid subtype: ${card.subtype}` });
   }
 
-  // DSL effect validation
+  // DSL effect validation — skipped for policies (action.effect is
+  // human-readable prose; executable DSL lives in POLICY_ACTIONS).
   const actions = card.actions as { name: string; apCost: number; effect: string }[] | undefined;
-  if (actions) {
+  if (actions && type !== "policies") {
     for (const action of actions) {
       try {
         parseDSL(action.effect);

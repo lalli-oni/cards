@@ -17,6 +17,7 @@ import { POLICY_ACTIONS } from "./listeners/effects";
 import { getModifiedCost, getModifiedAPCost } from "./listeners/query";
 import type {
   Action,
+  EventCard,
   GameState,
   MainAction,
   MainGameState,
@@ -123,6 +124,33 @@ function getSeedingValidActions(
 // ---------------------------------------------------------------------------
 // Main phase
 // ---------------------------------------------------------------------------
+
+/**
+ * Which event cards must be played against a specific location on the grid.
+ * When true, `getMainValidActions` emits one `play_event` candidate per legal
+ * cell (each carrying `targetId`) instead of a single untargeted candidate —
+ * the player has to pick a target. The handler in `apply-main.ts` stores the
+ * `targetId` on the trap/passive, and the listener in `listeners/effects.ts`
+ * uses it to filter firing (see issue #124).
+ *
+ * Trap detection is data-driven via the trigger field. Passive detection is a
+ * small registry because the targeting requirement is implicit in the
+ * effect-factory implementation (e.g. Plague reads `pe.targetId`). When a new
+ * passive with this shape is added, extend the registry below.
+ */
+const PASSIVE_EVENTS_NEEDING_LOCATION_TARGET: ReadonlySet<string> = new Set([
+  "plague",
+]);
+
+function needsLocationTarget(card: EventCard): boolean {
+  if (card.subtype === "trap") {
+    return card.trigger === "enemy_unit_enters_location";
+  }
+  if (card.subtype === "passive") {
+    return PASSIVE_EVENTS_NEEDING_LOCATION_TARGET.has(card.definitionId);
+  }
+  return false;
+}
 
 function getMainValidActions(
   state: MainGameState,
@@ -248,14 +276,35 @@ function getMainValidActions(
 
   // play_event — events in hand that player can afford. AP cost goes through
   // getModifiedAPCost so passives like Mary Shelley (first event free) surface
-  // at AP=0; checking gold cost separately.
+  // at AP=0; checking gold cost separately. Events that bind to a location
+  // (see needsLocationTarget) emit one candidate per legal target cell so the
+  // player has to pick a target — otherwise the trap/passive would resolve
+  // against an arbitrary cell (issue #124).
   for (const card of player.hand) {
     if (card.type !== "event") continue;
     const cost = tryParseCost(card.cost);
     if (cost === null || player.gold < cost) continue;
-    const candidate: MainAction = { type: "play_event", playerId, cardId: card.id };
-    const apCost = getModifiedAPCost(state, queries, candidate, 1);
-    if (ap >= apCost) actions.push(candidate);
+
+    if (needsLocationTarget(card)) {
+      for (let r = 0; r < gridRows; r++) {
+        for (let c = 0; c < gridCols; c++) {
+          const loc = state.grid[r][c].location;
+          if (!loc) continue;
+          const candidate: MainAction = {
+            type: "play_event",
+            playerId,
+            cardId: card.id,
+            targetId: loc.id,
+          };
+          const apCost = getModifiedAPCost(state, queries, candidate, 1);
+          if (ap >= apCost) actions.push(candidate);
+        }
+      }
+    } else {
+      const candidate: MainAction = { type: "play_event", playerId, cardId: card.id };
+      const apCost = getModifiedAPCost(state, queries, candidate, 1);
+      if (ap >= apCost) actions.push(candidate);
+    }
   }
 
   // equip — items to co-located units, across all positions (1 AP)

@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Action, Card, VisibleState } from "cards-engine";
+  import { actionMatchesCell as matchesCell } from "../lib/actionMatchesCell";
   import { selectAction } from "../lib/gameStore.svelte";
   import PlayerHud from "./PlayerHud.svelte";
   import GridBoard from "./GridBoard.svelte";
@@ -50,19 +51,7 @@
   }
 
   function actionMatchesCell(a: Action, row: number, col: number): boolean {
-    // Location-targeting event cards (Highway Robbery, Ambush, Assassination
-    // Attempt, Plague — see engine valid-actions.ts needsLocationTarget) carry
-    // the target location's instance id rather than row/col, so match by
-    // looking up the location on the visible grid (issue #124).
-    if (a.type === "play_event" && a.targetId) {
-      return vs.grid[row]?.[col]?.location?.id === a.targetId;
-    }
-    return (
-      "row" in a &&
-      "col" in a &&
-      (a as { row: number }).row === row &&
-      (a as { col: number }).col === col
-    );
+    return matchesCell(a, vs.grid, row, col);
   }
 
   const filteredActions = $derived.by(() => {
@@ -77,9 +66,8 @@
     return actions;
   });
 
-  // Only highlight target cells when something is selected. Iterates the grid
-  // and asks actionMatchesCell so play_event actions (which target by location
-  // instance id rather than row/col) light up the right cell.
+  // Iterate cells rather than map actions: targetId-based play_event actions
+  // can't yield (row, col) directly.
   const highlightedCells = $derived.by<Set<string>>(() => {
     if (!hasSelection) return new Set<string>();
     const result = new Set<string>();

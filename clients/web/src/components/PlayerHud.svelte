@@ -85,6 +85,7 @@
       <StatusEffectsBar
         policies={opponent.activePolicies}
         traps={opponent.activeTraps}
+        passiveEvents={opponent.passiveEvents}
         isSelf={false}
         {vs}
       />

@@ -724,6 +724,8 @@ export interface OpponentView {
   activePolicies: PolicyCard[];
   /** Traps are visible (face-down) but card contents are hidden. */
   activeTraps: TrapView[];
+  /** Public — both players can see what passive events are in play. */
+  passiveEvents: ActivePassiveEvent[];
 }
 
 // ---------------------------------------------------------------------------

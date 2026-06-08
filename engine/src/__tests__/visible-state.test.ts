@@ -9,6 +9,7 @@ import {
   makeInstantEvent,
   makeItem,
   makeLocation,
+  makePassiveEvent,
   makeTrapEvent,
   makeUnit,
   resetIds,
@@ -107,6 +108,22 @@ describe("getVisibleState", () => {
       expect(trap.targetId).toBe("target-123");
       expect(trap.cardId).toBe(p2.activeTraps[0].card.id);
       expect(trap.card).toBeUndefined();
+    });
+
+    it("exposes opponent passive events (public effects like Plague / Arms Race)", () => {
+      const state = produce(createTestGame(), (draft) => {
+        const p2 = draft.players.find((p) => p.id === "p2")!;
+        p2.passiveEvents.push({
+          ...makePassiveEvent({ ownerId: "p2", definitionId: "plague", duration: 2 }),
+          remainingDuration: 2,
+          targetId: "loc-xyz",
+        });
+      });
+      const vis = getVisibleState(state, "p1");
+      expect(vis.opponents[0].passiveEvents).toHaveLength(1);
+      expect(vis.opponents[0].passiveEvents[0].definitionId).toBe("plague");
+      expect(vis.opponents[0].passiveEvents[0].targetId).toBe("loc-xyz");
+      expect(vis.opponents[0].passiveEvents[0].remainingDuration).toBe(2);
     });
   });
 

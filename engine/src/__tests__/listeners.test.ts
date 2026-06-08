@@ -395,11 +395,12 @@ describe("trap listeners", () => {
     expect(events.some((e) => e.type === "trap_triggered")).toBe(true);
   });
 
-  it("emits trap_triggered BEFORE the trap's effect events (log reads trigger → effect)", () => {
+  it("emits trap_triggered before the trap's effect events (log reads trigger → effect)", () => {
     const state = gameWith((d, p) => {
       const trap = makeTrapEvent({
         ownerId: p.other,
         definitionId: "ambush",
+        name: "Ambush",
         trigger: "enemy_unit_enters_location",
       });
       const unit = makeUnit({ ownerId: p.active, strength: 8 });
@@ -420,10 +421,63 @@ describe("trap listeners", () => {
     });
 
     const triggeredIdx = events.findIndex((e) => e.type === "trap_triggered");
-    const injuredIdx = events.findIndex((e) => e.type === "unit_injured");
+    const injuredIdx = events.findIndex(
+      (e) => e.type === "unit_injured" && (e as { unitId: string }).unitId === u.id,
+    );
     expect(triggeredIdx).toBeGreaterThanOrEqual(0);
     expect(injuredIdx).toBeGreaterThanOrEqual(0);
     expect(triggeredIdx).toBeLessThan(injuredIdx);
+
+    // cardName is carried inline so the renderer doesn't fall back to a
+    // resolver that can't find a discarded trap in the opponent's view.
+    const triggered = events[triggeredIdx] as Extract<
+      GameEvent,
+      { type: "trap_triggered" }
+    >;
+    expect(triggered.cardName).toBe("Ambush");
+  });
+
+  it("trap_triggered precedes all effect events for multi-effect traps (Highway Robbery)", () => {
+    const state = gameWith((d, p) => {
+      const trap = makeTrapEvent({
+        ownerId: p.other,
+        definitionId: "highway-robbery",
+        name: "Highway Robbery",
+        trigger: "enemy_unit_enters_location",
+      });
+      const unit = makeUnit({ ownerId: p.active, strength: 8 });
+      d.grid[0][0].location = makeLocation({ ownerId: p.active });
+      d.players[p.activeIdx].hq.push(unit);
+      d.players[p.otherIdx].activeTraps.push({ card: trap });
+      d.players[p.activeIdx].gold = 5;
+      d.players[p.otherIdx].gold = 0;
+    });
+
+    const { active, activeIdx } = getPlayers(state);
+    const u = state.players[activeIdx].hq[0];
+
+    const { events } = applyAction(state, {
+      type: "enter",
+      playerId: active,
+      unitId: u.id,
+      row: 0,
+      col: 0,
+    });
+
+    const triggeredIdx = events.findIndex((e) => e.type === "trap_triggered");
+    const goldIdxs = events
+      .map((e, i) =>
+        e.type === "gold_changed" && (e as { reason?: string }).reason === "highway-robbery"
+          ? i
+          : -1,
+      )
+      .filter((i) => i >= 0);
+
+    expect(triggeredIdx).toBeGreaterThanOrEqual(0);
+    expect(goldIdxs).toHaveLength(2);
+    for (const idx of goldIdxs) {
+      expect(triggeredIdx).toBeLessThan(idx);
+    }
   });
 
   it("highway-robbery: steals 2 gold from entering enemy unit's owner", () => {

@@ -292,6 +292,17 @@ describe("loadCardDefinitions with real library", () => {
       expect(def.name).toBeTruthy();
     }
   });
+
+  // Pins individual CSV values that are otherwise only verified via test
+  // helpers using explicit duration overrides (so a CSV regression would
+  // not fail any of the integration suites).
+  test("Plague passive has duration 2 in the loaded library", () => {
+    const defs = loadCardDefinitions(join(LIBRARY_BUILD, "alpha-1.json"));
+    const plague = defs.find((d) => d.id === "plague");
+    expect(plague).toBeDefined();
+    expect(plague?.subtype).toBe("passive");
+    expect((plague as { duration?: number }).duration).toBe(2);
+  });
 });
 
 // ---------------------------------------------------------------------------

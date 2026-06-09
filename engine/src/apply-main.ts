@@ -234,12 +234,8 @@ function handleBuy(
   const cost = getModifiedCost(draft as MainGameState, queries, card, playerId, "buy", costIndex);
   spendGold(draft, player, cost, "buy", events);
 
-  // Remove from market and add to hand. Market cards retain the ownerId from
-  // whichever player's market deck supplied them, so transfer ownership to
-  // the buyer here — otherwise the bought card stays tagged as enemy-owned
-  // through deploy/enter and the buyer can't use it.
+  // Remove from market and add to hand
   draft.market.splice(slotIndex, 1);
-  card.ownerId = playerId;
   player.hand.push(card);
   emit({ type: "card_bought", playerId, cardId, cost });
 

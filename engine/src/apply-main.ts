@@ -25,6 +25,7 @@ import { executeEffect } from "./effect-dsl/executor";
 import { rebuildListeners } from "./listeners/rebuild";
 import { getModifiedStat, getModifiedCost, getModifiedAPCost } from "./listeners/query";
 import type { EmitFn, QueryListener } from "./listeners/types";
+import { needsLocationTarget } from "./valid-actions";
 import { killUnit, dropEquippedItems } from "./unit-helpers";
 import type {
   ActionDef,
@@ -458,6 +459,11 @@ function handlePlayEvent(
   const card = player.hand[cardIdx];
   if (card.type !== "event") {
     throw new Error(`Card "${cardId}" is not an event (type: ${card.type})`);
+  }
+  if (needsLocationTarget(card) && targetId == null) {
+    throw new Error(
+      `Card "${cardId}" (${card.definitionId}) requires a location targetId`,
+    );
   }
 
   const cost = parseCost(card.cost);

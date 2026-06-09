@@ -566,6 +566,9 @@ export type GameEvent =
       type: "trap_triggered";
       playerId: string;
       cardId: string;
+      /** Carried inline because the trap card moves out of OpponentView once
+       *  discarded — the renderer can't resolve it from id alone. */
+      cardName: string;
       targetId?: string;
     }
   | { type: "item_equipped"; playerId: string; itemId: string; unitId: string }
@@ -720,6 +723,8 @@ export interface OpponentView {
   activePolicies: PolicyCard[];
   /** Traps are visible (face-down) but card contents are hidden. */
   activeTraps: TrapView[];
+  /** Public — both players can see what passive events are in play. */
+  passiveEvents: ActivePassiveEvent[];
 }
 
 // ---------------------------------------------------------------------------

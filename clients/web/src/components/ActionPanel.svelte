@@ -4,6 +4,7 @@
   import {
     resolveActionTooltip,
     resolveCardName,
+    resolveCellName,
     selectAction,
   } from "../lib/gameStore.svelte";
 
@@ -60,7 +61,7 @@
             : 'bg-surface-raised text-text-secondary hover:bg-surface-hover'}"
         >
           {#if group.actions.length === 1}
-            {describeAction(group.actions[0], resolveCardName)}
+            {describeAction(group.actions[0], resolveCardName, resolveCellName)}
           {:else}
             {group.label}
             <span class="text-text-muted">({group.actions.length})</span>
@@ -75,7 +76,7 @@
                 title={resolveActionTooltip(action)}
                 class="w-full rounded px-3 py-1 text-left text-xs text-text-secondary bg-surface-raised/50 hover:bg-surface-hover"
               >
-                {describeAction(action, resolveCardName)}
+                {describeAction(action, resolveCardName, resolveCellName)}
               </button>
             {/each}
           </div>

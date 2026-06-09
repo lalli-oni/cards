@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Action, Card, VisibleState } from "cards-engine";
+  import { actionMatchesCell as matchesCell } from "../lib/actionMatchesCell";
   import { selectAction } from "../lib/gameStore.svelte";
   import PlayerHud from "./PlayerHud.svelte";
   import GridBoard from "./GridBoard.svelte";
@@ -50,12 +51,7 @@
   }
 
   function actionMatchesCell(a: Action, row: number, col: number): boolean {
-    return (
-      "row" in a &&
-      "col" in a &&
-      (a as { row: number }).row === row &&
-      (a as { col: number }).col === col
-    );
+    return matchesCell(a, vs.grid, row, col);
   }
 
   const filteredActions = $derived.by(() => {
@@ -70,19 +66,20 @@
     return actions;
   });
 
-  // Only highlight target cells when something is selected
-  const highlightedCells = $derived(
-    hasSelection
-      ? new Set(
-          filteredActions
-            .filter((a) => "row" in a && "col" in a)
-            .map(
-              (a) =>
-                `${(a as { row: number }).row},${(a as { col: number }).col}`,
-            ),
-        )
-      : new Set<string>(),
-  );
+  // Iterate cells rather than map actions: targetId-based play_event actions
+  // can't yield (row, col) directly.
+  const highlightedCells = $derived.by<Set<string>>(() => {
+    if (!hasSelection) return new Set<string>();
+    const result = new Set<string>();
+    for (let r = 0; r < vs.grid.length; r++) {
+      for (let c = 0; c < vs.grid[r].length; c++) {
+        if (filteredActions.some((a) => actionMatchesCell(a, r, c))) {
+          result.add(`${r},${c}`);
+        }
+      }
+    }
+    return result;
+  });
 
   // HQ highlights as deploy target when a deployable hand card is selected
   const hqDeployAction: Action | undefined = $derived(

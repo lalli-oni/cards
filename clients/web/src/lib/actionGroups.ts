@@ -47,12 +47,24 @@ export function groupActions(actions: Action[]): ActionGroup[] {
 }
 
 type NameResolver = (id: string) => string;
+type CellNameResolver = (row: number, col: number) => string | undefined;
 
 function idOrName(id: string, n?: NameResolver): string {
   return n?.(id) ?? id;
 }
 
-export function describeAction(action: Action, n?: NameResolver): string {
+/** Render row/col as "Location Name (row,col)" when a cell-name resolver is supplied
+ *  and the cell has a location, otherwise just "(row,col)". */
+function cellLabel(row: number, col: number, c?: CellNameResolver): string {
+  const name = c?.(row, col);
+  return name ? `${name} (${row},${col})` : `(${row},${col})`;
+}
+
+export function describeAction(
+  action: Action,
+  n?: NameResolver,
+  c?: CellNameResolver,
+): string {
   switch (action.type) {
     case "pass":
       return "Pass";
@@ -63,11 +75,11 @@ export function describeAction(action: Action, n?: NameResolver): string {
     case "buy":
       return `Buy ${idOrName(action.cardId, n)}`;
     case "enter":
-      return `Enter ${idOrName(action.unitId, n)} at (${action.row},${action.col})`;
+      return `Enter ${idOrName(action.unitId, n)} at ${cellLabel(action.row, action.col, c)}`;
     case "move":
-      return `Move ${idOrName(action.unitId, n)} to (${action.row},${action.col})`;
+      return `Move ${idOrName(action.unitId, n)} to ${cellLabel(action.row, action.col, c)}`;
     case "attack":
-      return `Attack (${action.row},${action.col}) with ${action.unitIds.map((id) => idOrName(id, n)).join(", ")}`;
+      return `Attack ${cellLabel(action.row, action.col, c)} with ${action.unitIds.map((id) => idOrName(id, n)).join(", ")}`;
     case "play_event":
       return `Play ${idOrName(action.cardId, n)}${action.targetId ? ` on ${idOrName(action.targetId, n)}` : ""}`;
     case "equip":
@@ -75,9 +87,9 @@ export function describeAction(action: Action, n?: NameResolver): string {
     case "destroy":
       return `Destroy ${idOrName(action.cardId, n)}`;
     case "raze":
-      return `Raze at (${action.row},${action.col})`;
+      return `Raze ${cellLabel(action.row, action.col, c)}`;
     case "attempt_mission":
-      return `Attempt mission at (${action.row},${action.col})`;
+      return `Attempt mission at ${cellLabel(action.row, action.col, c)}`;
     case "activate":
       return `Activate ${idOrName(action.cardId, n)}: ${action.actionName}`;
     case "seed_draw":
@@ -87,7 +99,7 @@ export function describeAction(action: Action, n?: NameResolver): string {
     case "seed_steal":
       return `Steal ${idOrName(action.cardId, n)}`;
     case "seed_place_location":
-      return `Place location at (${action.row},${action.col})`;
+      return `Place location at ${cellLabel(action.row, action.col, c)}`;
     case "policy_select":
       return "Confirm policy";
     default:

@@ -36,7 +36,7 @@
         {@const selfTrap = trap as Trap}
         <span
           class="rounded bg-trap-bg px-1.5 py-0.5 text-trap"
-          title={`${selfTrap.card.name}\nTrigger: ${selfTrap.card.trigger}${trap.targetId ? "\nTarget: " + (findCardName(vs, trap.targetId) ?? trap.targetId) : ""}`}
+          title={`${selfTrap.card.name}\nTrigger: ${selfTrap.card.trigger}${trap.targetId ? "\nTarget: " + (findCardName(vs, trap.targetId) ?? trap.targetId) : ""}${selfTrap.card.text ? "\n" + selfTrap.card.text : ""}`}
         >
           {selfTrap.card.name.slice(0, 10)}{resolveTarget(trap.targetId)}
         </span>

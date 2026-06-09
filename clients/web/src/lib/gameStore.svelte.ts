@@ -116,6 +116,12 @@ export function resolveCardName(id: string): string {
   return _cardNameMap.get(id) ?? id;
 }
 
+/** Name of the location at (row, col), or undefined if the cell is empty / off-grid. */
+export function resolveCellName(row: number, col: number): string | undefined {
+  const cell = _visibleState?.grid[row]?.[col];
+  return cell?.location?.name;
+}
+
 /**
  * Tooltip text for an `activate` action — looks up the source card and its
  * named action. For policies, `action.effect` is human-readable prose. For
@@ -123,6 +129,9 @@ export function resolveCardName(id: string): string {
  * `text` field which carries the player-facing description.
  */
 export function resolveActionTooltip(action: Action): string | undefined {
+  if (action.type === "destroy") {
+    return "Permanently removes the card from the game (not the discard pile).";
+  }
   if (action.type !== "activate") return undefined;
   const vs = _visibleState;
   if (!vs) return undefined;

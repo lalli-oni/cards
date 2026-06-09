@@ -13,10 +13,11 @@ import {
 } from "./grid-helpers";
 import { getConfigNumber, getPlayerById } from "./state-helpers";
 import { rebuildListeners } from "./listeners/rebuild";
-import { POLICY_ACTIONS } from "./listeners/effects";
+import { PASSIVE_EVENTS_NEEDING_LOCATION_TARGET, POLICY_ACTIONS } from "./listeners/effects";
 import { getModifiedCost, getModifiedAPCost } from "./listeners/query";
 import type {
   Action,
+  EventCard,
   GameState,
   MainAction,
   MainGameState,
@@ -123,6 +124,16 @@ function getSeedingValidActions(
 // ---------------------------------------------------------------------------
 // Main phase
 // ---------------------------------------------------------------------------
+
+export function needsLocationTarget(card: EventCard): boolean {
+  if (card.subtype === "trap") {
+    return card.trigger === "enemy_unit_enters_location";
+  }
+  if (card.subtype === "passive") {
+    return PASSIVE_EVENTS_NEEDING_LOCATION_TARGET.has(card.definitionId);
+  }
+  return false;
+}
 
 function getMainValidActions(
   state: MainGameState,
@@ -253,9 +264,27 @@ function getMainValidActions(
     if (card.type !== "event") continue;
     const cost = tryParseCost(card.cost);
     if (cost === null || player.gold < cost) continue;
-    const candidate: MainAction = { type: "play_event", playerId, cardId: card.id };
-    const apCost = getModifiedAPCost(state, queries, candidate, 1);
-    if (ap >= apCost) actions.push(candidate);
+
+    if (needsLocationTarget(card)) {
+      for (let r = 0; r < gridRows; r++) {
+        for (let c = 0; c < gridCols; c++) {
+          const loc = state.grid[r][c].location;
+          if (!loc) continue;
+          const candidate: MainAction = {
+            type: "play_event",
+            playerId,
+            cardId: card.id,
+            targetId: loc.id,
+          };
+          const apCost = getModifiedAPCost(state, queries, candidate, 1);
+          if (ap >= apCost) actions.push(candidate);
+        }
+      }
+    } else {
+      const candidate: MainAction = { type: "play_event", playerId, cardId: card.id };
+      const apCost = getModifiedAPCost(state, queries, candidate, 1);
+      if (ap >= apCost) actions.push(candidate);
+    }
   }
 
   // equip — items to co-located units, across all positions (1 AP)

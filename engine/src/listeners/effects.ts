@@ -323,6 +323,16 @@ export const POLICY_EFFECTS: Record<string, PolicyEffectFactory> = {
   }),
 };
 
+/**
+ * Passives whose factory reads `pe.targetId` and must be played against a
+ * specific location. Co-located with PASSIVE_EVENT_EFFECTS so adding a new
+ * targeting passive flags both sides (factory + enumeration) in one place.
+ * Consumed by valid-actions.ts `needsLocationTarget`.
+ */
+export const PASSIVE_EVENTS_NEEDING_LOCATION_TARGET: ReadonlySet<string> = new Set([
+  "plague",
+]);
+
 export const PASSIVE_EVENT_EFFECTS: Record<string, PassiveEventEffectFactory> = {
   "plague": (pe, ownerId) => ({
     listeners: [],
@@ -587,23 +597,13 @@ function getDestination(event: GameEvent): { row: number; col: number; unitId: s
   return null;
 }
 
-/** Discard a trap after it fires: remove from activeTraps, push to discard, emit trap_triggered. */
-function discardTrap(
-  draft: Draft<MainGameState>,
-  trap: Trap,
-  emit: EmitFn,
-): void {
+/** Discard a trap after it fires: remove from activeTraps, push to discard. */
+function discardTrap(draft: Draft<MainGameState>, trap: Trap): void {
   for (const player of draft.players) {
     const idx = player.activeTraps.findIndex((t) => t.card.id === trap.card.id);
     if (idx !== -1) {
       player.activeTraps.splice(idx, 1);
       player.discardPile.push(trap.card);
-      emit({
-        type: "trap_triggered",
-        playerId: player.id,
-        cardId: trap.card.id,
-        targetId: trap.targetId,
-      });
       break;
     }
   }
@@ -656,8 +656,16 @@ function makeEntryTrapListeners(
     const unit = cell.units.find((u: Draft<UnitCard>) => u.id === dest.unitId);
     if (!unit) return;
 
+    // Announce before resolving so the log reads trigger → effect.
+    emit({
+      type: "trap_triggered",
+      playerId: ownerId,
+      cardId: trap.card.id,
+      cardName: trap.card.name,
+      targetId: trap.targetId,
+    });
     resolve(draft, cell, unit, dest.row, dest.col, emit);
-    discardTrap(draft, trap, emit);
+    discardTrap(draft, trap);
   };
 
   return [

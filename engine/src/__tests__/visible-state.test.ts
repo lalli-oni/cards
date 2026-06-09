@@ -9,6 +9,7 @@ import {
   makeInstantEvent,
   makeItem,
   makeLocation,
+  makePassiveEvent,
   makeTrapEvent,
   makeUnit,
   resetIds,
@@ -107,6 +108,62 @@ describe("getVisibleState", () => {
       expect(trap.targetId).toBe("target-123");
       expect(trap.cardId).toBe(p2.activeTraps[0].card.id);
       expect(trap.card).toBeUndefined();
+    });
+
+    it("exposes opponent passive events (public effects like Plague / Arms Race)", () => {
+      const state = produce(createTestGame(), (draft) => {
+        const p2 = draft.players.find((p) => p.id === "p2")!;
+        p2.passiveEvents.push({
+          ...makePassiveEvent({ ownerId: "p2", definitionId: "plague", duration: 2 }),
+          remainingDuration: 2,
+          targetId: "loc-xyz",
+        });
+      });
+      const vis = getVisibleState(state, "p1");
+      const sourceP2 = state.players.find((p) => p.id === "p2")!;
+      expect(vis.opponents[0].passiveEvents).toHaveLength(1);
+      // Full pass-through: every field exposed, nothing redacted.
+      expect(vis.opponents[0].passiveEvents[0]).toEqual(sourceP2.passiveEvents[0]);
+    });
+
+    it("opponent passive-event pass-through is uniform (Arms Race, not Plague-gated)", () => {
+      const state = produce(createTestGame(), (draft) => {
+        const p2 = draft.players.find((p) => p.id === "p2")!;
+        p2.passiveEvents.push({
+          ...makePassiveEvent({ ownerId: "p2", definitionId: "arms-race", duration: 2 }),
+          remainingDuration: 2,
+        });
+      });
+      const vis = getVisibleState(state, "p1");
+      const sourceP2 = state.players.find((p) => p.id === "p2")!;
+      expect(vis.opponents[0].passiveEvents[0]).toEqual(sourceP2.passiveEvents[0]);
+    });
+
+    it("combined opponent state: trap is redacted while passive event is fully visible", () => {
+      const state = produce(createTestGame(), (draft) => {
+        const p2 = draft.players.find((p) => p.id === "p2")!;
+        p2.activeTraps.push({
+          card: makeTrapEvent({ ownerId: "p2", trigger: "enemy_unit_enters_location" }),
+          targetId: "loc-trap-target",
+        });
+        p2.passiveEvents.push({
+          ...makePassiveEvent({ ownerId: "p2", definitionId: "plague", duration: 2 }),
+          remainingDuration: 2,
+          targetId: "loc-plague-target",
+        });
+      });
+      const vis = getVisibleState(state, "p1");
+      const opp = vis.opponents[0];
+
+      // Trap: face-down — contents hidden, just target visible.
+      expect(opp.activeTraps).toHaveLength(1);
+      expect(opp.activeTraps[0].card).toBeUndefined();
+      expect(opp.activeTraps[0].targetId).toBe("loc-trap-target");
+
+      // Passive: face-up — full pass-through.
+      expect(opp.passiveEvents).toHaveLength(1);
+      expect(opp.passiveEvents[0].definitionId).toBe("plague");
+      expect(opp.passiveEvents[0].targetId).toBe("loc-plague-target");
     });
   });
 

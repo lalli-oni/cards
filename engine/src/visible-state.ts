@@ -109,6 +109,7 @@ function toOpponentView(player: PlayerState, revealedTrapIds: string[]): Opponen
     // Traps are face-down: show that they exist and their target, but redact
     // card contents unless the viewer has explicit reveal rights for this trap.
     activeTraps: player.activeTraps.map((t) => redactTrap(t, revealedTrapIds)),
+    passiveEvents: player.passiveEvents,
   };
 }
 

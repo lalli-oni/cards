@@ -1,10 +1,18 @@
 import { describe, expect, it } from "bun:test";
 import { produce } from "immer";
-import type { EndedGameState, MainGameState } from "../types";
+import type { Action, EndedGameState, MainGameState } from "../types";
 import { getActivePlayerId } from "../types";
 import { getValidActions, inferActivateTargets } from "../valid-actions";
 import type { BoardPosition } from "../position-helpers";
-import { createSeedingGame, createTestGame, makeUnit } from "./helpers";
+import {
+  createSeedingGame,
+  createTestGame,
+  makeInstantEvent,
+  makeLocation,
+  makePassiveEvent,
+  makeTrapEvent,
+  makeUnit,
+} from "./helpers";
 
 describe("getValidActions", () => {
   describe("main phase", () => {
@@ -173,5 +181,131 @@ describe("inferActivateTargets — HQ origin", () => {
     expect(
       inferActivateTargets(state, unit.id, "move(self) + gold[1]", hq, activeId),
     ).toEqual([]);
+  });
+});
+
+describe("play_event enumeration", () => {
+  function activeIdxOf(state: MainGameState): number {
+    return state.players.findIndex((p) => p.id === state.turn.activePlayerId);
+  }
+
+  function playEventActions(state: MainGameState): Extract<Action, { type: "play_event" }>[] {
+    return getValidActions(state, state.turn.activePlayerId)
+      .filter((a): a is Extract<Action, { type: "play_event" }> => a.type === "play_event");
+  }
+
+  const LOCATION_TARGETING_TRAPS = [
+    { definitionId: "highway-robbery", label: "Highway Robbery" },
+    { definitionId: "ambush", label: "Ambush" },
+    { definitionId: "assassination-attempt", label: "Assassination Attempt" },
+  ] as const;
+
+  for (const { definitionId, label } of LOCATION_TARGETING_TRAPS) {
+    it(`${label}: emits one candidate per location-bearing cell with matching targetId`, () => {
+      const base = createTestGame();
+      const activeId = base.turn.activePlayerId;
+      const loc1 = makeLocation({ ownerId: activeId });
+      const loc2 = makeLocation({ ownerId: activeId });
+      const trap = makeTrapEvent({
+        ownerId: activeId,
+        definitionId,
+        trigger: "enemy_unit_enters_location",
+        cost: "0",
+      });
+      const state = produce(base, (d) => {
+        d.grid[0][0].location = loc1;
+        d.grid[1][2].location = loc2;
+        d.players[activeIdxOf(base)].hand.push(trap);
+      });
+
+      const candidates = playEventActions(state).filter((a) => a.cardId === trap.id);
+      const targetIds = candidates.map((a) => a.targetId).sort();
+
+      expect(candidates).toHaveLength(2);
+      expect(targetIds).toEqual([loc1.id, loc2.id].sort());
+      // Without this the player could play the trap with no target selected.
+      expect(candidates.every((a) => a.targetId !== undefined)).toBe(true);
+    });
+  }
+
+  it("Plague (passive): emits one candidate per location-bearing cell with matching targetId", () => {
+    const base = createTestGame();
+    const activeId = base.turn.activePlayerId;
+    const loc1 = makeLocation({ ownerId: activeId });
+    const loc2 = makeLocation({ ownerId: activeId });
+    const plague = makePassiveEvent({
+      ownerId: activeId,
+      definitionId: "plague",
+      cost: "0",
+      duration: 99,
+    });
+    const state = produce(base, (d) => {
+      d.grid[0][0].location = loc1;
+      d.grid[2][2].location = loc2;
+      d.players[activeIdxOf(base)].hand.push(plague);
+    });
+
+    const candidates = playEventActions(state).filter((a) => a.cardId === plague.id);
+    const targetIds = candidates.map((a) => a.targetId).sort();
+
+    expect(candidates).toHaveLength(2);
+    expect(targetIds).toEqual([loc1.id, loc2.id].sort());
+    expect(candidates.every((a) => a.targetId !== undefined)).toBe(true);
+  });
+
+  it("location-targeting trap: zero candidates when the grid has no locations", () => {
+    const base = createTestGame();
+    const activeId = base.turn.activePlayerId;
+    const trap = makeTrapEvent({
+      ownerId: activeId,
+      definitionId: "highway-robbery",
+      trigger: "enemy_unit_enters_location",
+      cost: "0",
+    });
+    const state = produce(base, (d) => {
+      d.players[activeIdxOf(base)].hand.push(trap);
+    });
+
+    expect(playEventActions(state).filter((a) => a.cardId === trap.id)).toHaveLength(0);
+  });
+
+  // definitionId NOT in PASSIVE_EVENTS_NEEDING_LOCATION_TARGET — sanity that
+  // the non-targeting branch still emits one untargeted candidate.
+  it("passive not in the location-target registry: single untargeted candidate", () => {
+    const base = createTestGame();
+    const activeId = base.turn.activePlayerId;
+    const passive = makePassiveEvent({
+      ownerId: activeId,
+      definitionId: "arms-race",
+      cost: "0",
+      duration: 2,
+    });
+    const state = produce(base, (d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: activeId });
+      d.grid[1][1].location = makeLocation({ ownerId: activeId });
+      d.players[activeIdxOf(base)].hand.push(passive);
+    });
+
+    const candidates = playEventActions(state).filter((a) => a.cardId === passive.id);
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].targetId).toBeUndefined();
+  });
+
+  it("instant event with no location targeting: single untargeted candidate", () => {
+    const base = createTestGame();
+    const activeId = base.turn.activePlayerId;
+    const instant = makeInstantEvent({
+      ownerId: activeId,
+      definitionId: "harvest-festival",
+      cost: "0",
+    });
+    const state = produce(base, (d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: activeId });
+      d.players[activeIdxOf(base)].hand.push(instant);
+    });
+
+    const candidates = playEventActions(state).filter((a) => a.cardId === instant.id);
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].targetId).toBeUndefined();
   });
 });

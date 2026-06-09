@@ -101,6 +101,14 @@ export function describeEvent(event: GameEvent, r?: NameResolvers): string {
       return `${p(event.playerId, r)} shuffled ${event.deck} deck`;
     case "card_destroyed":
       return `${p(event.playerId, r)} destroyed ${c(event.cardId, r)}`;
+    case "card_activated": {
+      const target = event.targetId
+        ? ` on ${c(event.targetId, r)}`
+        : event.targetCell
+          ? ` at ${cell(event.targetCell.row, event.targetCell.col, r)}`
+          : "";
+      return `${p(event.playerId, r)} used ${event.cardName} (${event.actionName})${target}`;
+    }
     case "combat_started":
       return `Combat at ${cell(event.row, event.col, r)}: ${p(event.attackerId, r)} vs ${p(event.defenderId, r)}`;
     case "combat_resolved":

@@ -596,6 +596,17 @@ export type GameEvent =
   | { type: "deck_shuffled"; playerId: string; deck: DeckName }
   | { type: "card_destroyed"; playerId: string; cardId: string }
   | {
+      type: "card_activated";
+      playerId: string;
+      cardId: string;
+      /** Carried inline because the card can leave visible state mid-action
+       *  (e.g. Ramesses' `monument: kill(self)`). Mirrors `trap_triggered`. */
+      cardName: string;
+      actionName: string;
+      targetId?: string;
+      targetCell?: { row: number; col: number };
+    }
+  | {
       type: "combat_started";
       row: number;
       col: number;

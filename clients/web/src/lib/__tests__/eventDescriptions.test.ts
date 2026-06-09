@@ -103,4 +103,78 @@ describe("describeEvent", () => {
       expect(out).toContain("(0,0)");
     });
   });
+
+  describe("card_activated", () => {
+    it("renders cardName directly without consulting the card resolver", () => {
+      const cardResolver = mock((id: string) => `SHOULD_NOT_BE_CALLED_FOR_${id}`);
+      const event: GameEvent = {
+        type: "card_activated",
+        playerId: "p1",
+        cardId: "inst-7",
+        cardName: "Nefertiti",
+        actionName: "inspire",
+      };
+
+      const out = describeEvent(event, {
+        card: cardResolver,
+        player: (id) => id,
+      });
+
+      expect(out).toContain("Nefertiti");
+      expect(out).toContain("inspire");
+      expect(out).not.toContain("inst-7");
+      expect(cardResolver).not.toHaveBeenCalledWith("inst-7");
+    });
+
+    it("renders bare form when no target is provided", () => {
+      const event: GameEvent = {
+        type: "card_activated",
+        playerId: "p1",
+        cardId: "inst-7",
+        cardName: "Mansa Musa",
+        actionName: "pilgrimage",
+      };
+
+      const out = describeEvent(event);
+
+      expect(out).toBe("p1 used Mansa Musa (pilgrimage)");
+    });
+
+    it("appends ' on {target}' when targetId is set", () => {
+      const event: GameEvent = {
+        type: "card_activated",
+        playerId: "p1",
+        cardId: "inst-7",
+        cardName: "Galileo",
+        actionName: "observe",
+        targetId: "opp-1",
+      };
+
+      const out = describeEvent(event, {
+        card: (id) => (id === "opp-1" ? "Opponent's Hand" : id),
+      });
+
+      expect(out).toContain("Galileo");
+      expect(out).toContain("on Opponent's Hand");
+    });
+
+    it("appends ' at {cell}' when targetCell is set", () => {
+      const event: GameEvent = {
+        type: "card_activated",
+        playerId: "p1",
+        cardId: "inst-7",
+        cardName: "Genghis Khan",
+        actionName: "conquer",
+        targetCell: { row: 2, col: 3 },
+      };
+
+      const out = describeEvent(event, {
+        cell: (row, col) =>
+          row === 2 && col === 3 ? "Steppe" : undefined,
+      });
+
+      expect(out).toContain("Genghis Khan");
+      expect(out).toContain("at Steppe (2,3)");
+    });
+  });
 });

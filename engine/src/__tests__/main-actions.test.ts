@@ -189,6 +189,76 @@ describe("buy", () => {
     });
     expect((next as MainGameState).players[ACTIVE_IDX].gold).toBe(3);
   });
+
+  it("transfers ownership of the bought card to the buyer", () => {
+    // The market is shared but cards retain the ownerId from whoever's
+    // market deck placed them. Without ownership transfer on buy, a player
+    // who buys a card originally drawn from the opponent's market deck
+    // ends up with an enemy-owned unit they can't use.
+    const marketCard = makeUnit({ ownerId: OTHER, cost: "1" });
+    const state = gameWith((d) => {
+      d.market.push(marketCard);
+      d.players[ACTIVE_IDX].gold = 5;
+    });
+
+    const { state: next } = applyAction(state, {
+      type: "buy",
+      playerId: ACTIVE,
+      cardId: marketCard.id,
+    });
+    const ns = next as MainGameState;
+    const bought = ns.players[ACTIVE_IDX].hand.find((c) => c.id === marketCard.id);
+    expect(bought).toBeDefined();
+    expect(bought?.ownerId).toBe(ACTIVE);
+  });
+
+  it("ownership transfer survives deploy + enter (Spartacus regression)", () => {
+    const marketCard = makeUnit({
+      ownerId: OTHER,
+      definitionId: "spartacus",
+      name: "Spartacus",
+      cost: "1",
+      strength: 7,
+    });
+    const state = gameWith((d) => {
+      d.market.push(marketCard);
+      d.players[ACTIVE_IDX].gold = 5;
+      d.grid[0][0].location = {
+        id: "loc-test",
+        definitionId: "test-loc",
+        type: "location",
+        name: "Test Location",
+        cost: "0",
+        rarity: "common",
+        ownerId: ACTIVE,
+        edges: { n: true, e: true, s: true, w: true },
+      };
+    });
+
+    const afterBuy = applyAction(state, {
+      type: "buy",
+      playerId: ACTIVE,
+      cardId: marketCard.id,
+    }).state as MainGameState;
+
+    const afterDeploy = applyAction(afterBuy, {
+      type: "deploy",
+      playerId: ACTIVE,
+      cardId: marketCard.id,
+    }).state as MainGameState;
+
+    const afterEnter = applyAction(afterDeploy, {
+      type: "enter",
+      playerId: ACTIVE,
+      unitId: marketCard.id,
+      row: 0,
+      col: 0,
+    }).state as MainGameState;
+
+    const onGrid = afterEnter.grid[0][0].units.find((u) => u.id === marketCard.id);
+    expect(onGrid).toBeDefined();
+    expect(onGrid?.ownerId).toBe(ACTIVE);
+  });
 });
 
 // ---------------------------------------------------------------------------

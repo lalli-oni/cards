@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { getEventLog, getVisibleState, resolveCardName, resolvePlayerName } from "../lib/gameStore.svelte";
+  import { getEventLog, getVisibleState, resolveCardName, resolveCellName, resolvePlayerName } from "../lib/gameStore.svelte";
   import { describeEvent, categorizeEvent, type NameResolvers } from "../lib/eventDescriptions";
 
-  const nameResolvers: NameResolvers = { card: resolveCardName, player: resolvePlayerName };
+  const nameResolvers: NameResolvers = { card: resolveCardName, player: resolvePlayerName, cell: resolveCellName };
 
   let collapsed = $state(false);
   let showPlayer = $state(true);

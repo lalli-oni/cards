@@ -34,6 +34,7 @@ export function categorizeEvent(
 export interface NameResolvers {
   card?: (id: string) => string;
   player?: (id: string) => string;
+  cell?: (row: number, col: number) => string | undefined;
 }
 
 function c(id: string, r?: NameResolvers): string {
@@ -42,6 +43,12 @@ function c(id: string, r?: NameResolvers): string {
 
 function p(id: string, r?: NameResolvers): string {
   return r?.player?.(id) ?? id;
+}
+
+/** "Location Name (row,col)" when the cell has a known location, else "(row,col)". */
+function cell(row: number, col: number, r?: NameResolvers): string {
+  const name = r?.cell?.(row, col);
+  return name ? `${name} (${row},${col})` : `(${row},${col})`;
 }
 
 export function describeEvent(event: GameEvent, r?: NameResolvers): string {
@@ -53,9 +60,9 @@ export function describeEvent(event: GameEvent, r?: NameResolvers): string {
     case "card_drawn":
       return `${p(event.playerId, r)} drew ${event.count} card(s)`;
     case "unit_entered":
-      return `${p(event.playerId, r)} entered ${c(event.unitId, r)} at (${event.row},${event.col})`;
+      return `${p(event.playerId, r)} entered ${c(event.unitId, r)} at ${cell(event.row, event.col, r)}`;
     case "unit_moved":
-      return `${p(event.playerId, r)} moved ${c(event.unitId, r)} to (${event.toRow},${event.toCol})`;
+      return `${p(event.playerId, r)} moved ${c(event.unitId, r)} to ${cell(event.toRow, event.toCol, r)}`;
     case "unit_injured":
       return `${c(event.unitId, r)} (${p(event.ownerId, r)}) was injured`;
     case "unit_killed":
@@ -71,15 +78,15 @@ export function describeEvent(event: GameEvent, r?: NameResolvers): string {
     case "item_equipped":
       return `${p(event.playerId, r)} equipped ${c(event.itemId, r)} on ${c(event.unitId, r)}`;
     case "item_dropped":
-      return `${c(event.itemId, r)} dropped at (${event.row},${event.col})`;
+      return `${c(event.itemId, r)} dropped at ${cell(event.row, event.col, r)}`;
     case "location_placed":
-      return `${c(event.cardId, r)} placed at (${event.row},${event.col})`;
+      return `${c(event.cardId, r)} placed at ${cell(event.row, event.col, r)}`;
     case "location_razed":
-      return `${c(event.cardId, r)} razed at (${event.row},${event.col})`;
+      return `${c(event.cardId, r)} razed at ${cell(event.row, event.col, r)}`;
     case "mission_completed":
       return `${p(event.playerId, r)} completed mission at ${c(event.locationId, r)} for ${event.vp} VP`;
     case "mission_attempt_failed":
-      return `${p(event.playerId, r)} failed mission attempt at (${event.row},${event.col})`;
+      return `${p(event.playerId, r)} failed mission attempt at ${cell(event.row, event.col, r)}`;
     case "gold_changed":
       return `${p(event.playerId, r)} ${event.amount >= 0 ? "+" : ""}${event.amount}g (${event.reason})`;
     case "turn_started":
@@ -95,9 +102,9 @@ export function describeEvent(event: GameEvent, r?: NameResolvers): string {
     case "card_destroyed":
       return `${p(event.playerId, r)} destroyed ${c(event.cardId, r)}`;
     case "combat_started":
-      return `Combat at (${event.row},${event.col}): ${p(event.attackerId, r)} vs ${p(event.defenderId, r)}`;
+      return `Combat at ${cell(event.row, event.col, r)}: ${p(event.attackerId, r)} vs ${p(event.defenderId, r)}`;
     case "combat_resolved":
-      return `Combat resolved at (${event.row},${event.col}): ${event.winnerId ? `winner ${p(event.winnerId, r)}` : "draw"}`;
+      return `Combat resolved at ${cell(event.row, event.col, r)}: ${event.winnerId ? `winner ${p(event.winnerId, r)}` : "draw"}`;
     case "market_replenished":
       return `Market replenished: ${c(event.cardId, r)}`;
     case "passive_expired":

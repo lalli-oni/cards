@@ -56,4 +56,51 @@ describe("describeEvent", () => {
       expect(out).toBe("Untargeted Trap triggered");
     });
   });
+
+  describe("cell rendering", () => {
+    it("renders 'Location Name (row,col)' when the cell resolver returns a name", () => {
+      const event: GameEvent = {
+        type: "unit_entered",
+        playerId: "p1",
+        unitId: "u1",
+        row: 2,
+        col: 1,
+      };
+
+      const out = describeEvent(event, {
+        cell: (row, col) => (row === 2 && col === 1 ? "The Colosseum" : undefined),
+      });
+
+      expect(out).toContain("The Colosseum (2,1)");
+    });
+
+    it("falls back to bare (row,col) when no cell resolver is provided", () => {
+      const event: GameEvent = {
+        type: "unit_entered",
+        playerId: "p1",
+        unitId: "u1",
+        row: 2,
+        col: 1,
+      };
+
+      const out = describeEvent(event);
+
+      expect(out).toContain("(2,1)");
+      expect(out).not.toContain("The Colosseum");
+    });
+
+    it("falls back to bare (row,col) when the cell resolver returns undefined", () => {
+      const event: GameEvent = {
+        type: "combat_started",
+        row: 0,
+        col: 0,
+        attackerId: "p1",
+        defenderId: "p2",
+      };
+
+      const out = describeEvent(event, { cell: () => undefined });
+
+      expect(out).toContain("(0,0)");
+    });
+  });
 });

@@ -319,6 +319,23 @@ describe("card_activated event — error paths", () => {
     expect(state.players[ACTIVE_IDX].hq.find((c) => c.id === mansa.id)).toBeDefined();
   });
 
+  it("rejects activate with a targetCell outside grid bounds", () => {
+    const mansa = hqUnit("Mansa Musa", "gold[5]");
+    const state = gameWith((d) => {
+      d.players[ACTIVE_IDX].hq.push(mansa);
+    });
+
+    expect(() =>
+      applyAction(state, {
+        type: "activate",
+        playerId: ACTIVE,
+        cardId: mansa.id,
+        actionName: "act",
+        targetCell: { row: 99, col: 99 },
+      }),
+    ).toThrow(/outside grid bounds/);
+  });
+
   it("rejects activate with both targetId and targetCell set", () => {
     const mansa = hqUnit("Mansa Musa", "gold[5]");
     const state = gameWith((d) => {

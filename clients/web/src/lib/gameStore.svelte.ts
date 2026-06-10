@@ -116,10 +116,10 @@ export function resolveCardName(id: string): string {
   return _cardNameMap.get(id) ?? id;
 }
 
-/** Name of the location at (row, col), or undefined if the cell is empty / off-grid. */
-export function resolveCellName(row: number, col: number): string | undefined {
+/** Name of the location at (row, col), or null if the cell has no location. */
+export function resolveCellName(row: number, col: number): string | null {
   const cell = _visibleState?.grid[row]?.[col];
-  return cell?.location?.name;
+  return cell?.location?.name ?? null;
 }
 
 /**

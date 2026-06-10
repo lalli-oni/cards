@@ -34,7 +34,11 @@ export function categorizeEvent(
 export interface NameResolvers {
   card?: (id: string) => string;
   player?: (id: string) => string;
-  cell?: (row: number, col: number) => string | undefined;
+  /** Return the location name at (row, col), or `null` if the cell is
+   *  in-grid but unnamed (no location placed). Engine-side bounds checks
+   *  guarantee off-grid coordinates never reach the renderer, so the
+   *  null/missing case strictly means "unnamed", not "unknown". */
+  cell?: (row: number, col: number) => string | null;
 }
 
 function c(id: string, r?: NameResolvers): string {

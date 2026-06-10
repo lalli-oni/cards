@@ -899,6 +899,18 @@ function handleActivate(
       `Activate accepts at most one of targetId/targetCell (card "${cardId}", action "${actionName}")`,
     );
   }
+  if (targetCell !== undefined) {
+    const gridRows = draft.grid.length;
+    const gridCols = draft.grid[0].length;
+    if (
+      targetCell.row < 0 || targetCell.row >= gridRows ||
+      targetCell.col < 0 || targetCell.col >= gridCols
+    ) {
+      throw new Error(
+        `Activate targetCell (${targetCell.row},${targetCell.col}) is outside grid bounds ${gridRows}x${gridCols}`,
+      );
+    }
+  }
   const target =
     targetId !== undefined
       ? ({ kind: "card", id: targetId } as const)

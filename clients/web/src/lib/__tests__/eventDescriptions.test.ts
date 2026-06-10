@@ -68,7 +68,7 @@ describe("describeEvent", () => {
       };
 
       const out = describeEvent(event, {
-        cell: (row, col) => (row === 2 && col === 1 ? "The Colosseum" : undefined),
+        cell: (row, col) => (row === 2 && col === 1 ? "The Colosseum" : null),
       });
 
       expect(out).toContain("The Colosseum (2,1)");
@@ -89,7 +89,7 @@ describe("describeEvent", () => {
       expect(out).not.toContain("The Colosseum");
     });
 
-    it("falls back to bare (row,col) when the cell resolver returns undefined", () => {
+    it("falls back to bare (row,col) when the cell resolver returns null (in-grid but unnamed)", () => {
       const event: GameEvent = {
         type: "combat_started",
         row: 0,
@@ -98,7 +98,7 @@ describe("describeEvent", () => {
         defenderId: "p2",
       };
 
-      const out = describeEvent(event, { cell: () => undefined });
+      const out = describeEvent(event, { cell: () => null });
 
       expect(out).toContain("(0,0)");
     });
@@ -170,7 +170,7 @@ describe("describeEvent", () => {
 
       const out = describeEvent(event, {
         cell: (row, col) =>
-          row === 2 && col === 3 ? "Steppe" : undefined,
+          row === 2 && col === 3 ? "Steppe" : null,
       });
 
       expect(out).toContain("Genghis Khan");

@@ -34,7 +34,11 @@ export function categorizeEvent(
 export interface NameResolvers {
   card?: (id: string) => string;
   player?: (id: string) => string;
-  cell?: (row: number, col: number) => string | undefined;
+  /** Return the location name at (row, col), or `null` if the cell is
+   *  in-grid but unnamed (no location placed). Engine-side bounds checks
+   *  guarantee off-grid coordinates never reach the renderer, so the
+   *  null/missing case strictly means "unnamed", not "unknown". */
+  cell?: (row: number, col: number) => string | null;
 }
 
 function c(id: string, r?: NameResolvers): string {
@@ -101,6 +105,14 @@ export function describeEvent(event: GameEvent, r?: NameResolvers): string {
       return `${p(event.playerId, r)} shuffled ${event.deck} deck`;
     case "card_destroyed":
       return `${p(event.playerId, r)} destroyed ${c(event.cardId, r)}`;
+    case "card_activated": {
+      const targetClause = event.target
+        ? event.target.kind === "card"
+          ? ` on ${c(event.target.id, r)}`
+          : ` at ${cell(event.target.row, event.target.col, r)}`
+        : "";
+      return `${p(event.playerId, r)} used ${event.cardName} (${event.actionName})${targetClause}`;
+    }
     case "combat_started":
       return `Combat at ${cell(event.row, event.col, r)}: ${p(event.attackerId, r)} vs ${p(event.defenderId, r)}`;
     case "combat_resolved":

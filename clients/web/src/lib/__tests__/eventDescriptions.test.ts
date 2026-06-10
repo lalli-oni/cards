@@ -1,6 +1,6 @@
 import { describe, expect, it, mock } from "bun:test";
 import type { GameEvent } from "cards-engine";
-import { describeEvent } from "../eventDescriptions";
+import { categorizeEvent, describeEvent } from "../eventDescriptions";
 
 describe("describeEvent", () => {
   describe("trap_triggered", () => {
@@ -68,7 +68,7 @@ describe("describeEvent", () => {
       };
 
       const out = describeEvent(event, {
-        cell: (row, col) => (row === 2 && col === 1 ? "The Colosseum" : undefined),
+        cell: (row, col) => (row === 2 && col === 1 ? "The Colosseum" : null),
       });
 
       expect(out).toContain("The Colosseum (2,1)");
@@ -89,7 +89,7 @@ describe("describeEvent", () => {
       expect(out).not.toContain("The Colosseum");
     });
 
-    it("falls back to bare (row,col) when the cell resolver returns undefined", () => {
+    it("falls back to bare (row,col) when the cell resolver returns null (in-grid but unnamed)", () => {
       const event: GameEvent = {
         type: "combat_started",
         row: 0,
@@ -98,9 +98,109 @@ describe("describeEvent", () => {
         defenderId: "p2",
       };
 
-      const out = describeEvent(event, { cell: () => undefined });
+      const out = describeEvent(event, { cell: () => null });
 
       expect(out).toContain("(0,0)");
+    });
+  });
+
+  describe("card_activated", () => {
+    it("renders cardName directly without consulting the card resolver", () => {
+      const cardResolver = mock((id: string) => `SHOULD_NOT_BE_CALLED_FOR_${id}`);
+      const event: GameEvent = {
+        type: "card_activated",
+        playerId: "p1",
+        cardId: "inst-7",
+        cardName: "Nefertiti",
+        actionName: "inspire",
+      };
+
+      const out = describeEvent(event, {
+        card: cardResolver,
+        player: (id) => id,
+      });
+
+      expect(out).toContain("Nefertiti");
+      expect(out).toContain("inspire");
+      expect(out).not.toContain("inst-7");
+      expect(cardResolver).not.toHaveBeenCalledWith("inst-7");
+    });
+
+    it("renders bare form when no target is provided", () => {
+      const event: GameEvent = {
+        type: "card_activated",
+        playerId: "p1",
+        cardId: "inst-7",
+        cardName: "Mansa Musa",
+        actionName: "pilgrimage",
+      };
+
+      const out = describeEvent(event);
+
+      expect(out).toBe("p1 used Mansa Musa (pilgrimage)");
+    });
+
+    it("appends ' on {target}' when a card target is set", () => {
+      const event: GameEvent = {
+        type: "card_activated",
+        playerId: "p1",
+        cardId: "inst-7",
+        cardName: "Galileo",
+        actionName: "observe",
+        target: { kind: "card", id: "opp-1" },
+      };
+
+      const out = describeEvent(event, {
+        card: (id) => (id === "opp-1" ? "Opponent's Hand" : id),
+      });
+
+      expect(out).toContain("Galileo");
+      expect(out).toContain("on Opponent's Hand");
+    });
+
+    it("appends ' at {cell}' when a cell target is set", () => {
+      const event: GameEvent = {
+        type: "card_activated",
+        playerId: "p1",
+        cardId: "inst-7",
+        cardName: "Genghis Khan",
+        actionName: "conquer",
+        target: { kind: "cell", row: 2, col: 3 },
+      };
+
+      const out = describeEvent(event, {
+        cell: (row, col) =>
+          row === 2 && col === 3 ? "Steppe" : null,
+      });
+
+      expect(out).toContain("Genghis Khan");
+      expect(out).toContain("at Steppe (2,3)");
+    });
+  });
+
+  describe("categorizeEvent", () => {
+    it("returns 'player' when card_activated's playerId matches selfPlayerId", () => {
+      const event: GameEvent = {
+        type: "card_activated",
+        playerId: "p1",
+        cardId: "inst-7",
+        cardName: "Ada",
+        actionName: "analyze",
+      };
+
+      expect(categorizeEvent(event, "p1")).toBe("player");
+    });
+
+    it("returns 'opponent' when card_activated's playerId differs from selfPlayerId", () => {
+      const event: GameEvent = {
+        type: "card_activated",
+        playerId: "p1",
+        cardId: "inst-7",
+        cardName: "Ada",
+        actionName: "analyze",
+      };
+
+      expect(categorizeEvent(event, "p2")).toBe("opponent");
     });
   });
 });

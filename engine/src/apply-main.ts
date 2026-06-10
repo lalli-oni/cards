@@ -868,6 +868,7 @@ function handleActivate(
   const located = findUnitPosition(draft.players, draft.grid, cardId);
   let actionDef: ActionDef | undefined;
   let actingUnitId: string | undefined = cardId;
+  let cardName: string;
 
   if (located) {
     const card = located.unit as Draft<UnitCard>;
@@ -875,6 +876,7 @@ function handleActivate(
     if (card.ownerId !== playerId) throw new Error(`Card "${cardId}" not owned by "${playerId}"`);
     actionDef = card.actions.find((a) => a.name === actionName);
     if (!actionDef) throw new Error(`Action "${actionName}" not found on unit "${cardId}"`);
+    cardName = card.name;
   } else {
     // Not a unit — try active policies.
     const owner = draft.players.find((p) => p.id === playerId);
@@ -889,7 +891,41 @@ function handleActivate(
     actionDef = policyActions.find((a) => a.name === actionName);
     if (!actionDef) throw new Error(`Action "${actionName}" not found on policy "${cardId}"`);
     actingUnitId = undefined;
+    cardName = policy.name;
   }
+
+  if (targetId !== undefined && targetCell !== undefined) {
+    throw new Error(
+      `Activate accepts at most one of targetId/targetCell (card "${cardId}", action "${actionName}")`,
+    );
+  }
+  if (targetCell !== undefined) {
+    const gridRows = draft.grid.length;
+    const gridCols = draft.grid[0].length;
+    if (
+      targetCell.row < 0 || targetCell.row >= gridRows ||
+      targetCell.col < 0 || targetCell.col >= gridCols
+    ) {
+      throw new Error(
+        `Activate targetCell (${targetCell.row},${targetCell.col}) is outside grid bounds ${gridRows}x${gridCols}`,
+      );
+    }
+  }
+  const target =
+    targetId !== undefined
+      ? ({ kind: "card", id: targetId } as const)
+      : targetCell !== undefined
+        ? ({ kind: "cell", row: targetCell.row, col: targetCell.col } as const)
+        : undefined;
+
+  emit({
+    type: "card_activated",
+    playerId,
+    cardId,
+    cardName,
+    actionName,
+    target,
+  });
 
   spendAP(draft, actionDef.apCost);
 

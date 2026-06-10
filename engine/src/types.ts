@@ -599,12 +599,17 @@ export type GameEvent =
       type: "card_activated";
       playerId: string;
       cardId: string;
-      /** Carried inline because the card can leave visible state mid-action
-       *  (e.g. Ramesses' `monument: kill(self)`). Mirrors `trap_triggered`. */
+      /** Carried inline because the card may be destroyed during its own
+       *  action (e.g. Ramesses' `monument: kill(self)`), after which the
+       *  renderer can't resolve `cardId`. Mirrors `trap_triggered`. */
       cardName: string;
       actionName: string;
-      targetId?: string;
-      targetCell?: { row: number; col: number };
+      /** Tagged so that "no target", "card target", and "cell target" are
+       *  the only representable states — `{ targetId, targetCell }` together
+       *  would be ambiguous and is no longer expressible. */
+      target?:
+        | { kind: "card"; id: string }
+        | { kind: "cell"; row: number; col: number };
     }
   | {
       type: "combat_started";

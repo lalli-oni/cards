@@ -102,12 +102,12 @@ export function describeEvent(event: GameEvent, r?: NameResolvers): string {
     case "card_destroyed":
       return `${p(event.playerId, r)} destroyed ${c(event.cardId, r)}`;
     case "card_activated": {
-      const target = event.targetId
-        ? ` on ${c(event.targetId, r)}`
-        : event.targetCell
-          ? ` at ${cell(event.targetCell.row, event.targetCell.col, r)}`
-          : "";
-      return `${p(event.playerId, r)} used ${event.cardName} (${event.actionName})${target}`;
+      const targetClause = event.target
+        ? event.target.kind === "card"
+          ? ` on ${c(event.target.id, r)}`
+          : ` at ${cell(event.target.row, event.target.col, r)}`
+        : "";
+      return `${p(event.playerId, r)} used ${event.cardName} (${event.actionName})${targetClause}`;
     }
     case "combat_started":
       return `Combat at ${cell(event.row, event.col, r)}: ${p(event.attackerId, r)} vs ${p(event.defenderId, r)}`;

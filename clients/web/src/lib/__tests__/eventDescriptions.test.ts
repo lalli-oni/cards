@@ -1,6 +1,6 @@
 import { describe, expect, it, mock } from "bun:test";
 import type { GameEvent } from "cards-engine";
-import { describeEvent } from "../eventDescriptions";
+import { categorizeEvent, describeEvent } from "../eventDescriptions";
 
 describe("describeEvent", () => {
   describe("trap_triggered", () => {
@@ -140,14 +140,14 @@ describe("describeEvent", () => {
       expect(out).toBe("p1 used Mansa Musa (pilgrimage)");
     });
 
-    it("appends ' on {target}' when targetId is set", () => {
+    it("appends ' on {target}' when a card target is set", () => {
       const event: GameEvent = {
         type: "card_activated",
         playerId: "p1",
         cardId: "inst-7",
         cardName: "Galileo",
         actionName: "observe",
-        targetId: "opp-1",
+        target: { kind: "card", id: "opp-1" },
       };
 
       const out = describeEvent(event, {
@@ -158,14 +158,14 @@ describe("describeEvent", () => {
       expect(out).toContain("on Opponent's Hand");
     });
 
-    it("appends ' at {cell}' when targetCell is set", () => {
+    it("appends ' at {cell}' when a cell target is set", () => {
       const event: GameEvent = {
         type: "card_activated",
         playerId: "p1",
         cardId: "inst-7",
         cardName: "Genghis Khan",
         actionName: "conquer",
-        targetCell: { row: 2, col: 3 },
+        target: { kind: "cell", row: 2, col: 3 },
       };
 
       const out = describeEvent(event, {
@@ -175,6 +175,32 @@ describe("describeEvent", () => {
 
       expect(out).toContain("Genghis Khan");
       expect(out).toContain("at Steppe (2,3)");
+    });
+  });
+
+  describe("categorizeEvent", () => {
+    it("returns 'player' when card_activated's playerId matches selfPlayerId", () => {
+      const event: GameEvent = {
+        type: "card_activated",
+        playerId: "p1",
+        cardId: "inst-7",
+        cardName: "Ada",
+        actionName: "analyze",
+      };
+
+      expect(categorizeEvent(event, "p1")).toBe("player");
+    });
+
+    it("returns 'opponent' when card_activated's playerId differs from selfPlayerId", () => {
+      const event: GameEvent = {
+        type: "card_activated",
+        playerId: "p1",
+        cardId: "inst-7",
+        cardName: "Ada",
+        actionName: "analyze",
+      };
+
+      expect(categorizeEvent(event, "p2")).toBe("opponent");
     });
   });
 });

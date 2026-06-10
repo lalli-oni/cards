@@ -894,14 +894,25 @@ function handleActivate(
     cardName = policy.name;
   }
 
+  if (targetId !== undefined && targetCell !== undefined) {
+    throw new Error(
+      `Activate accepts at most one of targetId/targetCell (card "${cardId}", action "${actionName}")`,
+    );
+  }
+  const target =
+    targetId !== undefined
+      ? ({ kind: "card", id: targetId } as const)
+      : targetCell !== undefined
+        ? ({ kind: "cell", row: targetCell.row, col: targetCell.col } as const)
+        : undefined;
+
   emit({
     type: "card_activated",
     playerId,
     cardId,
     cardName,
     actionName,
-    targetId,
-    targetCell,
+    target,
   });
 
   spendAP(draft, actionDef.apCost);

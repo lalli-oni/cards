@@ -147,7 +147,9 @@ function runEndOfTurn(
         if (unit.controlOverride) {
           unit.controlOverride.remainingDuration -= 1;
           if (unit.controlOverride.remainingDuration <= 0) {
-            unit.ownerId = unit.controlOverride.previousOwnerId;
+            // Restore the pre-cast controller. ownerId is mutated here at
+            // parity (Step 1 of #91). Step 4 switches this to controllerId.
+            unit.ownerId = unit.controlOverride.previousControllerId;
             unit.controlOverride = undefined;
           }
         }

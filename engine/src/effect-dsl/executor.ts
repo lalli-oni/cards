@@ -420,16 +420,18 @@ function execControl(p: Primitive, ctx: ExecutionContext): void {
 
   for (const unit of targets) {
     unit.controlOverride = {
-      previousOwnerId: unit.ownerId,
+      previousControllerId: unit.controllerId,
       remainingDuration: duration,
     };
-    const prevOwner = unit.ownerId;
+    const prevController = unit.controllerId;
+    // Writer still mutates ownerId at parity (controllerId === ownerId until
+    // Step 4 of #91 finishes). Step 4 switches this to controllerId.
     unit.ownerId = ctx.playerId;
     ctx.emit({
       type: "unit_controlled",
       unitId: unit.id,
       controllerId: ctx.playerId,
-      previousOwnerId: prevOwner,
+      previousControllerId: prevController,
       duration,
     });
   }

@@ -69,7 +69,10 @@ interface CardBase {
   rarity: Rarity;
   text?: string;
   keywords?: string[];
+  /** Seeding/creation origin. Immutable after the card is instantiated. */
   ownerId: string;
+  /** Current in-game controller. Mutates on buy, seed-steal, and control effects. */
+  controllerId: string;
 }
 
 export type StatName = "strength" | "cunning" | "charisma";

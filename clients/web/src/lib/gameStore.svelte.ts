@@ -1,5 +1,6 @@
 import {
   GameController,
+  getVisibleEvent,
   getVisibleState as engineGetVisibleState,
   type Action,
   type ActionDef,
@@ -63,8 +64,15 @@ export function getVisibleState() {
 export function getValidActions() {
   return _validActions;
 }
-export function getEventLog() {
-  return _eventLog;
+export function getEventLog(): GameEvent[] {
+  // Raw events stay in `_eventLog` (god-view). Project to the current viewer
+  // here so per-viewer-private fields (e.g. `card_drawn.cardId`) are stripped
+  // for non-owners. On device-pass the viewer changes, this re-derives, and
+  // historical entries are re-projected from the new viewer's POV — no leak
+  // of the previous player's drawn-card identities.
+  const viewerId = _visibleState?.playerId;
+  if (!viewerId) return _eventLog;
+  return _eventLog.map((e) => getVisibleEvent(e, viewerId));
 }
 export function getCurrentPlayerName() {
   return _currentPlayerName;

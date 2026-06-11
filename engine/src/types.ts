@@ -540,8 +540,26 @@ export type SetupInput =
 
 export type GameEvent =
   | { type: "card_deployed"; playerId: string; cardId: string }
-  | { type: "card_bought"; playerId: string; cardId: string; cost: number }
-  | { type: "card_drawn"; playerId: string; count: number }
+  | {
+      type: "card_bought";
+      playerId: string;
+      cardId: string;
+      /** Carried inline because the bought card moves into the buyer's hand,
+       *  which is redacted in OpponentView — the renderer can't resolve
+       *  `cardId` from another viewer's perspective. Mirrors `trap_triggered`. */
+      cardName: string;
+      cost: number;
+    }
+  | {
+      type: "card_drawn";
+      playerId: string;
+      count: number;
+      /** Identity of the drawn card. Present in the god-view stream emitted
+       *  by the engine; `getVisibleEvent` strips it for viewers other than
+       *  the drawer so own-deck-top knowledge does not leak. Absence at the
+       *  renderer therefore means "this draw belongs to someone else". */
+      cardId?: string;
+    }
   | {
       type: "unit_entered";
       playerId: string;

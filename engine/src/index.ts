@@ -75,7 +75,7 @@ export type {
 } from "./types";
 export { getActivePlayerId } from "./types";
 export { getValidActions } from "./valid-actions";
-export { getVisibleState } from "./visible-state";
+export { getVisibleState, getVisibleEvent, getVisibleEvents } from "./visible-state";
 // Listeners
 export type { EffectListener, EffectSource, EmitFn, RevealsProvider } from "./listeners";
 export { emit, rebuildListeners } from "./listeners";

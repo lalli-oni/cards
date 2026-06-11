@@ -127,7 +127,11 @@ describe("buy", () => {
     expect(p.hand.some((c) => c.id === marketCard.id)).toBe(true);
     expect(p.gold).toBe(6);
     expect(ns.turn.actionPointsRemaining).toBe(3); // 0 AP cost
-    expect(events.some((e) => e.type === "card_bought")).toBe(true);
+    const buyEvent = events.find((e) => e.type === "card_bought");
+    expect(buyEvent).toBeDefined();
+    // cardName is carried inline so the renderer can show "P bought X for Yg"
+    // even after the card lands in the buyer's (redacted) hand.
+    expect(buyEvent && "cardName" in buyEvent && buyEvent.cardName).toBe(marketCard.name);
   });
 
   it("replenishes market slot from active player's market deck", () => {
@@ -213,7 +217,11 @@ describe("draw", () => {
     expect(p.hand[0].id).toBe(card.id);
     expect(p.mainDeck).toHaveLength(0);
     expect(ns.turn.actionPointsRemaining).toBe(2);
-    expect(events.some((e) => e.type === "card_drawn")).toBe(true);
+    const drawEvent = events.find((e) => e.type === "card_drawn");
+    expect(drawEvent).toBeDefined();
+    // God view: engine always emits cardId. Per-viewer scrubbing happens
+    // downstream in `getVisibleEvent` — see visible-state.test.ts.
+    expect(drawEvent && "cardId" in drawEvent && drawEvent.cardId).toBe(card.id);
   });
 
   it("shuffles discard into main deck when empty", () => {

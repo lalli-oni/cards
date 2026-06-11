@@ -467,7 +467,7 @@ function execBuy(p: Primitive, ctx: ExecutionContext): void {
     player.gold -= Math.min(costOverride, player.gold);
   }
   player.hand.push(card);
-  ctx.emit({ type: "card_bought", playerId: ctx.playerId, cardId: card.id, cost: costOverride });
+  ctx.emit({ type: "card_bought", playerId: ctx.playerId, cardId: card.id, cardName: card.name, cost: costOverride });
 }
 
 function execRaze(p: Primitive, ctx: ExecutionContext): void {

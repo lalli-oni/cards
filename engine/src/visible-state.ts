@@ -1,4 +1,5 @@
 import type {
+  GameEvent,
   GameState,
   MainGameState,
   OpponentView,
@@ -207,4 +208,36 @@ function computeReveals(state: MainGameState, viewerId: string): Reveals {
 
   result.revealedTrapIds = Array.from(trapIds);
   return result;
+}
+
+/**
+ * Project a single event into what a specific viewer is allowed to see.
+ *
+ * The engine emits events with full identity information ("god view"). This
+ * helper is the privacy boundary: it strips fields that would leak hidden
+ * information to a viewer who shouldn't have it. Callers that want the
+ * god-view stream (replays, balance analysis, test runners) just skip this
+ * helper.
+ *
+ * Today only `card_drawn` carries a viewer-specific field — the drawer sees
+ * their own `cardId`, opponents see the action without the identity. The
+ * shape is extensible: future event types with hidden fields add a case
+ * here. Public events (turn_started, card_bought, combat_*, etc.) pass
+ * through unchanged regardless of viewer.
+ */
+export function getVisibleEvent(event: GameEvent, viewerId: string): GameEvent {
+  switch (event.type) {
+    case "card_drawn":
+      if (event.playerId === viewerId) return event;
+      // Strip cardId so the renderer falls back to the generic
+      // "Player N drew X card(s)" branch.
+      return { type: "card_drawn", playerId: event.playerId, count: event.count };
+    default:
+      return event;
+  }
+}
+
+/** Map a stream of events through `getVisibleEvent` for the given viewer. */
+export function getVisibleEvents(events: GameEvent[], viewerId: string): GameEvent[] {
+  return events.map((e) => getVisibleEvent(e, viewerId));
 }

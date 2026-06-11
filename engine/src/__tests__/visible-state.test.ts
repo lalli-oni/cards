@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { produce } from "immer";
-import type { EndedGameState, MainGameState } from "../types";
-import { getVisibleState } from "../visible-state";
+import type { EndedGameState, GameEvent, MainGameState } from "../types";
+import { getVisibleEvent, getVisibleEvents, getVisibleState } from "../visible-state";
 import { UNIT_EFFECTS } from "../listeners/effects";
 import {
   createSeedingGame,
@@ -463,3 +463,70 @@ function withTrap(
     });
   });
 }
+
+// ---------------------------------------------------------------------------
+// getVisibleEvent — per-viewer event scrubbing
+// ---------------------------------------------------------------------------
+
+describe("getVisibleEvent", () => {
+  it("preserves cardId on card_drawn when the viewer is the drawer", () => {
+    const event: GameEvent = {
+      type: "card_drawn",
+      playerId: "p1",
+      count: 1,
+      cardId: "inst-42",
+    };
+    const result = getVisibleEvent(event, "p1");
+    expect(result).toEqual(event);
+  });
+
+  it("strips cardId from card_drawn when the viewer is not the drawer", () => {
+    const event: GameEvent = {
+      type: "card_drawn",
+      playerId: "p1",
+      count: 1,
+      cardId: "inst-42",
+    };
+    const result = getVisibleEvent(event, "p2");
+    expect(result).toEqual({ type: "card_drawn", playerId: "p1", count: 1 });
+    // Cross-check: cardId must not survive the scrub via any code path —
+    // a future refactor that spreads the original event would silently leak.
+    expect("cardId" in result).toBe(false);
+    // Defensive: original input must not be mutated.
+    expect(event.cardId).toBe("inst-42");
+  });
+
+  it("is a no-op for card_bought (public event with cardName)", () => {
+    const event: GameEvent = {
+      type: "card_bought",
+      playerId: "p1",
+      cardId: "inst-77",
+      cardName: "Investment Banking",
+      cost: 4,
+    };
+    expect(getVisibleEvent(event, "p1")).toBe(event);
+    expect(getVisibleEvent(event, "p2")).toBe(event);
+  });
+
+  it("is a no-op for unrelated event types regardless of viewer", () => {
+    const event: GameEvent = { type: "turn_started", playerId: "p1", round: 3 };
+    expect(getVisibleEvent(event, "p1")).toBe(event);
+    expect(getVisibleEvent(event, "p2")).toBe(event);
+  });
+});
+
+describe("getVisibleEvents", () => {
+  it("projects each event through the per-viewer scrub", () => {
+    const events: GameEvent[] = [
+      { type: "turn_started", playerId: "p1", round: 3 },
+      { type: "card_drawn", playerId: "p1", count: 1, cardId: "inst-42" },
+      { type: "card_drawn", playerId: "p2", count: 1, cardId: "inst-99" },
+    ];
+    const fromP2 = getVisibleEvents(events, "p2");
+    expect(fromP2).toEqual([
+      { type: "turn_started", playerId: "p1", round: 3 },
+      { type: "card_drawn", playerId: "p1", count: 1 }, // p1's draw — cardId stripped
+      { type: "card_drawn", playerId: "p2", count: 1, cardId: "inst-99" }, // p2's own draw
+    ]);
+  });
+});

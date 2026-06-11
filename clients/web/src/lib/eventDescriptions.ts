@@ -60,9 +60,18 @@ export function describeEvent(event: GameEvent, r?: NameResolvers): string {
     case "card_deployed":
       return `${p(event.playerId, r)} deployed ${c(event.cardId, r)}`;
     case "card_bought":
-      return `${p(event.playerId, r)} bought ${c(event.cardId, r)} for ${event.cost}g`;
+      // `cardName` is carried inline because the bought card lands in the
+      // buyer's hand, which is redacted from other viewers — the card
+      // resolver can't resolve `cardId` post-buy.
+      return `${p(event.playerId, r)} bought ${event.cardName} for ${event.cost}g`;
     case "card_drawn":
-      return `${p(event.playerId, r)} drew ${event.count} card(s)`;
+      // Post-scrub, `cardId` presence IS the drawer-vs-opponent signal:
+      // the engine emits it on every draw; `getVisibleEvent` strips it for
+      // non-drawers. Drawer sees "You drew X"; everyone else sees the
+      // generic count.
+      return event.cardId
+        ? `You drew ${c(event.cardId, r)}`
+        : `${p(event.playerId, r)} drew ${event.count} card(s)`;
     case "unit_entered":
       return `${p(event.playerId, r)} entered ${c(event.unitId, r)} at ${cell(event.row, event.col, r)}`;
     case "unit_moved":

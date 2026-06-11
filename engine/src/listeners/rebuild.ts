@@ -37,7 +37,7 @@ export function rebuildListeners(state: MainGameState): RebuildResult {
       if (cell.location) {
         const factory = LOCATION_EFFECTS[cell.location.definitionId];
         if (factory) {
-          const result = factory(cell.location, cell.location.ownerId, r, c);
+          const result = factory(cell.location, cell.location.controllerId, r, c);
           listeners.push(...result.listeners);
           queries.push(...result.queries);
         }
@@ -47,7 +47,7 @@ export function rebuildListeners(state: MainGameState): RebuildResult {
       for (const item of cell.items) {
         const factory = ITEM_EFFECTS[item.definitionId];
         if (factory) {
-          const result = factory(item, item.ownerId, { row: r, col: c });
+          const result = factory(item, item.controllerId, { row: r, col: c });
           listeners.push(...result.listeners);
           queries.push(...result.queries);
         }
@@ -57,7 +57,7 @@ export function rebuildListeners(state: MainGameState): RebuildResult {
       for (const unit of cell.units) {
         const factory = UNIT_EFFECTS[unit.definitionId];
         if (factory) {
-          const result = factory(unit, unit.ownerId, { row: r, col: c });
+          const result = factory(unit, unit.controllerId, { row: r, col: c });
           listeners.push(...result.listeners);
           queries.push(...result.queries);
         }
@@ -65,12 +65,15 @@ export function rebuildListeners(state: MainGameState): RebuildResult {
     }
   }
 
-  // Per-player: policies, passive events, traps, HQ items
+  // Per-player: policies, passive events, traps, HQ items.
+  // The per-player arrays hold cards whose controllerId equals player.id by
+  // construction, so reading controllerId is just symmetry with the grid loop
+  // above — it also future-proofs against any HQ-borrowing mechanic.
   for (const player of state.players) {
     for (const policy of player.activePolicies) {
       const factory = POLICY_EFFECTS[policy.definitionId];
       if (factory) {
-        const result = factory(policy, player.id);
+        const result = factory(policy, policy.controllerId);
         listeners.push(...result.listeners);
         queries.push(...result.queries);
       }
@@ -79,7 +82,7 @@ export function rebuildListeners(state: MainGameState): RebuildResult {
     for (const pe of player.passiveEvents) {
       const factory = PASSIVE_EVENT_EFFECTS[pe.definitionId];
       if (factory) {
-        const result = factory(pe, player.id);
+        const result = factory(pe, pe.controllerId);
         listeners.push(...result.listeners);
         queries.push(...result.queries);
       }
@@ -88,7 +91,7 @@ export function rebuildListeners(state: MainGameState): RebuildResult {
     for (const trap of player.activeTraps) {
       const factory = TRAP_EFFECTS[trap.card.definitionId];
       if (factory) {
-        const result = factory(trap, player.id);
+        const result = factory(trap, trap.card.controllerId);
         listeners.push(...result.listeners);
         queries.push(...result.queries);
       }
@@ -99,14 +102,14 @@ export function rebuildListeners(state: MainGameState): RebuildResult {
       if (card.type === "item") {
         const factory = ITEM_EFFECTS[card.definitionId];
         if (factory) {
-          const result = factory(card, player.id);
+          const result = factory(card, card.controllerId);
           listeners.push(...result.listeners);
           queries.push(...result.queries);
         }
       } else if (card.type === "unit") {
         const factory = UNIT_EFFECTS[card.definitionId];
         if (factory) {
-          const result = factory(card, player.id);
+          const result = factory(card, card.controllerId);
           listeners.push(...result.listeners);
           queries.push(...result.queries);
         }

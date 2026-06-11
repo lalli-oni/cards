@@ -166,17 +166,17 @@ function computeReveals(state: MainGameState, viewerId: string): Reveals {
 
       if (cell.location) {
         const factory = LOCATION_EFFECTS[cell.location.definitionId];
-        if (factory) apply(factory(cell.location, cell.location.ownerId, r, c).reveals);
+        if (factory) apply(factory(cell.location, cell.location.controllerId, r, c).reveals);
       }
 
       for (const item of cell.items) {
         const factory = ITEM_EFFECTS[item.definitionId];
-        if (factory) apply(factory(item, item.ownerId, { row: r, col: c }).reveals);
+        if (factory) apply(factory(item, item.controllerId, { row: r, col: c }).reveals);
       }
 
       for (const unit of cell.units) {
         const factory = UNIT_EFFECTS[unit.definitionId];
-        if (factory) apply(factory(unit, unit.ownerId, { row: r, col: c }).reveals);
+        if (factory) apply(factory(unit, unit.controllerId, { row: r, col: c }).reveals);
       }
     }
   }

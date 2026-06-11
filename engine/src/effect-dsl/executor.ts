@@ -178,11 +178,11 @@ function resolveUnitTargets(
     units = [...(ctx.draft.grid[row][col].units as Draft<UnitCard>[])];
   }
 
-  // Filter by ownership
+  // Filter by current controller (who actually plays the unit right now).
   if (hasEnemy) {
-    units = units.filter((u) => u.ownerId !== ctx.playerId);
+    units = units.filter((u) => u.controllerId !== ctx.playerId);
   } else if (hasFriendly) {
-    units = units.filter((u) => u.ownerId === ctx.playerId);
+    units = units.filter((u) => u.controllerId === ctx.playerId);
     // Exclude self from single-target friendly (unless "all" is specified)
     if (!hasAll && ctx.actingUnitId) {
       units = units.filter((u) => u.id !== ctx.actingUnitId);
@@ -296,7 +296,7 @@ function execMove(p: Primitive, ctx: ExecutionContext): void {
 
     ctx.emit({
       type: "unit_moved",
-      playerId: unit.ownerId,
+      playerId: unit.controllerId,
       unitId: unit.id,
       fromRow: pos.row,
       fromCol: pos.col,

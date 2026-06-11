@@ -3,7 +3,7 @@ import type { EmitFn } from "./listeners/types";
 import type { ItemCard, MainGameState, UnitCard } from "./types";
 import { getPlayerById } from "./state-helpers";
 
-/** Kill a unit: remove from grid cell, drop items, send to owner's discard. */
+/** Kill a unit: remove from grid cell, drop items, send to controller's discard. */
 export function killUnit(
   draft: Draft<MainGameState>,
   cell: Draft<{ units: UnitCard[]; items: ItemCard[] }>,
@@ -17,8 +17,10 @@ export function killUnit(
   if (idx !== -1) {
     cell.units.splice(idx, 1);
   }
-  const owner = getPlayerById(draft, unit.ownerId);
-  owner.discardPile.push(unit);
+  // Decision 4 on #91: killed cards route to the current controller's pile.
+  // For bought/stolen units this is the buyer/thief, not the original drafter.
+  const controller = getPlayerById(draft, unit.controllerId);
+  controller.discardPile.push(unit);
   emit({ type: "unit_killed", unitId: unit.id, ownerId: unit.ownerId });
 }
 

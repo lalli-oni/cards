@@ -336,7 +336,7 @@ function handleMove(
   }
 
   const unit = pos.unit;
-  if (unit.ownerId !== playerId) {
+  if (unit.controllerId !== playerId) {
     throw new Error(`Unit "${unitId}" is not owned by player "${playerId}"`);
   }
 
@@ -588,12 +588,12 @@ function handleRaze(
   }
 
   const unit = cell.units[unitIdx];
-  if (unit.ownerId !== playerId) {
+  if (unit.controllerId !== playerId) {
     throw new Error(`Unit "${unitId}" is not owned by player "${playerId}"`);
   }
 
   // No enemy units allowed
-  const hasEnemyUnits = cell.units.some((u) => u.ownerId !== playerId);
+  const hasEnemyUnits = cell.units.some((u) => u.controllerId !== playerId);
   if (hasEnemyUnits) {
     throw new Error(`Cannot raze — enemy units present at (${row},${col})`);
   }
@@ -603,16 +603,17 @@ function handleRaze(
 
   const razedLocationId = cell.location.id;
 
-  // Discard all units at location to their owners' discard piles
+  // Discard razed cards to whichever player currently controls them. For a
+  // friendly raze this collapses to the razer; for a bought/stolen unit that
+  // was at the location, the controller (not the original owner) collects it.
   for (const u of cell.units) {
-    const owner = getPlayerById(draft, u.ownerId);
+    const owner = getPlayerById(draft, u.controllerId);
     owner.discardPile.push(u);
   }
   cell.units = [];
 
-  // Discard all items at location
   for (const item of cell.items) {
-    const owner = getPlayerById(draft, item.ownerId);
+    const owner = getPlayerById(draft, item.controllerId);
     owner.discardPile.push(item);
   }
   cell.items = [];
@@ -656,19 +657,19 @@ function handleAttack(
     if (!unit) {
       throw new Error(`Unit "${uid}" not found at cell (${row},${col})`);
     }
-    if (unit.ownerId !== playerId) {
+    if (unit.controllerId !== playerId) {
       throw new Error(`Unit "${uid}" is not owned by player "${playerId}"`);
     }
     attackers.push(unit);
   }
 
   // Find defender(s) — all enemy units at location
-  const defenders = cell.units.filter((u) => u.ownerId !== playerId);
+  const defenders = cell.units.filter((u) => u.controllerId !== playerId);
   if (defenders.length === 0) {
     throw new Error(`No enemy units at cell (${row},${col}) to attack`);
   }
 
-  const defenderId = defenders[0].ownerId;
+  const defenderId = defenders[0].controllerId;
   spendAP(draft, 1);
 
   emit({ type: "combat_started", row, col, attackerId: playerId, defenderId });
@@ -794,7 +795,7 @@ function handleAttemptMission(
     throw new Error(`Location at (${row},${col}) has no mission`);
   }
 
-  const friendlyUnits = cell.units.filter((u) => u.ownerId === playerId);
+  const friendlyUnits = cell.units.filter((u) => u.controllerId === playerId);
   if (friendlyUnits.length === 0) {
     throw new Error(`No friendly units at (${row},${col})`);
   }
@@ -875,7 +876,7 @@ function handleActivate(
   if (located) {
     const card = located.unit as Draft<UnitCard>;
     if (!card.actions) throw new Error(`Card "${cardId}" has no actions`);
-    if (card.ownerId !== playerId) throw new Error(`Card "${cardId}" not owned by "${playerId}"`);
+    if (card.controllerId !== playerId) throw new Error(`Card "${cardId}" not owned by "${playerId}"`);
     actionDef = card.actions.find((a) => a.name === actionName);
     if (!actionDef) throw new Error(`Action "${actionName}" not found on unit "${cardId}"`);
     cardName = card.name;

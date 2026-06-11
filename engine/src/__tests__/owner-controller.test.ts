@@ -313,7 +313,7 @@ describe("kill and discard destination", () => {
 // ---------------------------------------------------------------------------
 
 describe("passive event listeners follow controllerId", () => {
-  it("golden-age bought by opponent fires on the buyer's turn", () => {
+  it("golden-age bought by opponent fires on the buyer's turn, not the seller's", () => {
     // Construct a state where golden-age has been "bought" by ACTIVE:
     // ownerId remains OTHER (the seller), controllerId is ACTIVE.
     const goldenAge = makePassiveEvent({
@@ -327,22 +327,24 @@ describe("passive event listeners follow controllerId", () => {
         ...goldenAge,
         remainingDuration: 99,
       });
-      d.players[ACTIVE_IDX].gold = 0;
-      d.players[OTHER_IDX].gold = 0;
     });
 
-    // Start of ACTIVE's turn fires `turn_started` and golden-age's listener
-    // should credit ACTIVE (the controller), not OTHER (the original owner).
-    // We end the current turn to trigger start-of-next-turn for OTHER, then
-    // end again to come back to ACTIVE and observe the credit.
-    const { state: t1 } = applyAction(state, { type: "pass", playerId: ACTIVE });
-    const { state: t2 } = applyAction(t1 as MainGameState, { type: "pass", playerId: OTHER });
-    const ns = t2 as MainGameState;
+    // Walk through a full round so each player's turn_started fires once.
+    // Assert on emitted gold_changed events whose `reason === "golden-age"`,
+    // which isolates the listener from runStartOfTurn's `turn_income` event.
+    const { events: passEvents1 } = applyAction(state, { type: "pass", playerId: ACTIVE });
+    const t1 = applyAction(state, { type: "pass", playerId: ACTIVE }).state;
+    const { events: passEvents2 } = applyAction(t1 as MainGameState, { type: "pass", playerId: OTHER });
+    const allEvents = [...passEvents1, ...passEvents2];
 
-    expect(ns.players[ACTIVE_IDX].gold)
-      .toBeGreaterThanOrEqual(1);
-    // OTHER should not have received golden-age's bonus on their own turn,
-    // since ACTIVE controls the passive.
-    expect(ns.players[OTHER_IDX].gold).toBe(0);
+    const goldenAgeFor = (pid: string): number =>
+      allEvents.filter(
+        (e) => e.type === "gold_changed"
+          && "reason" in e && e.reason === "golden-age"
+          && "playerId" in e && e.playerId === pid,
+      ).length;
+
+    expect(goldenAgeFor(ACTIVE), "controller receives the bonus").toBeGreaterThanOrEqual(1);
+    expect(goldenAgeFor(OTHER), "original owner does not receive the bonus").toBe(0);
   });
 });

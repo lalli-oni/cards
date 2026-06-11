@@ -161,7 +161,7 @@ describe("buy", () => {
       d.players[ACTIVE_IDX].marketDeck.push(eventCard, nonEventCard);
     });
 
-    const { state: next } = applyAction(state, {
+    const { state: next, events } = applyAction(state, {
       type: "buy",
       playerId: ACTIVE,
       cardId: marketCard.id,
@@ -172,6 +172,8 @@ describe("buy", () => {
     expect(p.hand.some((c) => c.id === marketCard.id)).toBe(true);
     expect(p.hand.some((c) => c.id === eventCard.id)).toBe(true);
     expect(ns.market[0].id).toBe(nonEventCard.id);
+    const drawEvent = events.find((e) => e.type === "card_drawn");
+    expect(drawEvent && "cardId" in drawEvent && drawEvent.cardId).toBe(eventCard.id);
   });
 
   it("supports alternative costs via costIndex", () => {

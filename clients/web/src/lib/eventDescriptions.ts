@@ -65,10 +65,9 @@ export function describeEvent(event: GameEvent, r?: NameResolvers): string {
       // resolver can't resolve `cardId` post-buy.
       return `${p(event.playerId, r)} bought ${event.cardName} for ${event.cost}g`;
     case "card_drawn":
-      // Post-scrub, `cardId` presence IS the drawer-vs-opponent signal:
-      // the engine emits it on every draw; `getVisibleEvent` strips it for
-      // non-drawers. Drawer sees "You drew X"; everyone else sees the
-      // generic count.
+      // Post-scrub `cardId` presence is the drawer signal — don't switch
+      // to a `playerId === self` check, which would misbehave against the
+      // god-view stream.
       return event.cardId
         ? `You drew ${c(event.cardId, r)}`
         : `${p(event.playerId, r)} drew ${event.count} card(s)`;

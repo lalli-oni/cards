@@ -175,9 +175,13 @@ export function resolvePlayerName(id: string): string {
 export function getError() {
   return _error;
 }
-/** Events from the previous turn — shown on the pass-device overlay. */
+/** Events from the previous turn — shown on the pass-device overlay.
+ *  Projected for the current viewer so the incoming player doesn't see
+ *  the previous player's private fields (e.g. `card_drawn.cardId`). */
 export function getLastTurnEvents(): GameEvent[] {
-  return _eventLog.slice(_prevTurnStartIndex, _lastTurnStartIndex);
+  const slice = _eventLog.slice(_prevTurnStartIndex, _lastTurnStartIndex);
+  const viewerId = _visibleState?.playerId;
+  return viewerId ? slice.map((e) => getVisibleEvent(e, viewerId)) : slice;
 }
 export function clearError() {
   _error = null;

@@ -1,5 +1,5 @@
 import { describe, expect, it, mock } from "bun:test";
-import type { GameEvent } from "cards-engine";
+import { getVisibleEvent, type GameEvent } from "cards-engine";
 import { categorizeEvent, describeEvent } from "../eventDescriptions";
 
 describe("describeEvent", () => {
@@ -236,6 +236,36 @@ describe("describeEvent", () => {
       });
 
       expect(out).toBe("Alice drew 1 card(s)");
+    });
+  });
+
+  describe("card_drawn — full god-view → scrub → render contract", () => {
+    // Integration-style: starting from the god-view event the engine emits,
+    // run it through `getVisibleEvent` (the store's projection), then through
+    // `describeEvent`. This pins the device-pass UX contract end-to-end —
+    // the store wires `_visibleState.playerId` as the viewer; this test
+    // pins what each viewer's projection should render. The store-level
+    // re-derivation on viewer change is integration-tested via playtest
+    // (no `gameStore.test.ts` — consistent with existing convention).
+    const godViewEvent: GameEvent = {
+      type: "card_drawn",
+      playerId: "p1",
+      count: 1,
+      cardId: "inst-42",
+    };
+    const resolvers = {
+      card: (id: string) => (id === "inst-42" ? "Cleopatra" : id),
+      player: (id: string) => (id === "p1" ? "Alice" : id),
+    };
+
+    it("drawer-viewer sees 'You drew {name}'", () => {
+      const projected = getVisibleEvent(godViewEvent, "p1");
+      expect(describeEvent(projected, resolvers)).toBe("You drew Cleopatra");
+    });
+
+    it("opponent-viewer sees 'Alice drew 1 card(s)' — no leak of cardId, no misattribution", () => {
+      const projected = getVisibleEvent(godViewEvent, "p2");
+      expect(describeEvent(projected, resolvers)).toBe("Alice drew 1 card(s)");
     });
   });
 

@@ -71,7 +71,7 @@ describe("HQ activate — non-positional verbs", () => {
       validActions.some((a) => a.type === "activate" && a.cardId === tesla.id),
     ).toBe(true);
 
-    const { state: next } = applyAction(state, {
+    const { state: next, events } = applyAction(state, {
       type: "activate",
       playerId: ACTIVE,
       cardId: tesla.id,
@@ -80,6 +80,8 @@ describe("HQ activate — non-positional verbs", () => {
     const ns = next as MainGameState;
     expect(ns.players[ACTIVE_IDX].hand.some((c) => c.id === marketItem.id)).toBe(true);
     expect(ns.market.some((c) => c.id === marketItem.id)).toBe(false);
+    const buyEvent = events.find((e) => e.type === "card_bought");
+    expect(buyEvent && "cardName" in buyEvent && buyEvent.cardName).toBe(marketItem.name);
   });
 
   it("HQ Mansa Musa offers pilgrimage (+5 gold)", () => {

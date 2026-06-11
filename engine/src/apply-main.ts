@@ -237,7 +237,7 @@ function handleBuy(
   // Remove from market and add to hand
   draft.market.splice(slotIndex, 1);
   player.hand.push(card);
-  emit({ type: "card_bought", playerId, cardId, cost });
+  emit({ type: "card_bought", playerId, cardId, cardName: card.name, cost });
 
   // Replenish market slot from active player's market deck
   const replacement = drawMarketCard(draft, player, events);

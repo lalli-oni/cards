@@ -34,7 +34,7 @@ export function drawOneCard(
 
   const card = player.mainDeck.shift()!;
   player.hand.push(card);
-  events.push({ type: "card_drawn", playerId: player.id, count: 1 });
+  events.push({ type: "card_drawn", playerId: player.id, count: 1, cardId: card.id });
   return card;
 }
 
@@ -53,7 +53,7 @@ export function drawMarketCard(
     const card = player.marketDeck.shift()!;
     if (card.type === "event") {
       player.hand.push(card);
-      events.push({ type: "card_drawn", playerId: player.id, count: 1 });
+      events.push({ type: "card_drawn", playerId: player.id, count: 1, cardId: card.id });
     } else {
       return card;
     }

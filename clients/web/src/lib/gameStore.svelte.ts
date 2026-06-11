@@ -1,5 +1,6 @@
 import {
   GameController,
+  getVisibleEvent,
   getVisibleState as engineGetVisibleState,
   type Action,
   type ActionDef,
@@ -35,6 +36,12 @@ let _gamePhase = $state<"seeding" | "main" | "ended" | null>(null);
 let _error = $state<string | null>(null);
 let _prevTurnStartIndex = $state(0);
 let _lastTurnStartIndex = $state(0);
+// Pending viewer for the pass-device overlay. Set in onBeforeTurn (when the
+// new player's id is known) and cleared in onTurnStart (after _visibleState
+// catches up to the new player's view). The overlay's recap must project
+// for this id, not _visibleState.playerId, which still holds the OUTGOING
+// player's view during the overlay screen.
+let _incomingPlayerId = $state<string | null>(null);
 
 export interface CombatOutcome {
   type: "injured" | "killed";
@@ -63,8 +70,15 @@ export function getVisibleState() {
 export function getValidActions() {
   return _validActions;
 }
-export function getEventLog() {
-  return _eventLog;
+export function getEventLog(): GameEvent[] {
+  // Raw events stay in `_eventLog` (god-view). Project to the current viewer
+  // here so per-viewer-private fields (e.g. `card_drawn.cardId`) are stripped
+  // for non-owners. On device-pass the viewer changes, this re-derives, and
+  // historical entries are re-projected from the new viewer's POV — no leak
+  // of the previous player's drawn-card identities.
+  const viewerId = _visibleState?.playerId;
+  if (!viewerId) return _eventLog;
+  return _eventLog.map((e) => getVisibleEvent(e, viewerId));
 }
 export function getCurrentPlayerName() {
   return _currentPlayerName;
@@ -167,9 +181,15 @@ export function resolvePlayerName(id: string): string {
 export function getError() {
   return _error;
 }
-/** Events from the previous turn — shown on the pass-device overlay. */
+/** Events from the previous turn — shown on the pass-device overlay.
+ *  Projected for the INCOMING player (who is about to read the recap),
+ *  not `_visibleState.playerId` which still holds the outgoing player's
+ *  view at overlay time. Falls back to `_visibleState.playerId` outside
+ *  the pass-device flow. */
 export function getLastTurnEvents(): GameEvent[] {
-  return _eventLog.slice(_prevTurnStartIndex, _lastTurnStartIndex);
+  const slice = _eventLog.slice(_prevTurnStartIndex, _lastTurnStartIndex);
+  const viewerId = _incomingPlayerId ?? _visibleState?.playerId;
+  return viewerId ? slice.map((e) => getVisibleEvent(e, viewerId)) : slice;
 }
 export function clearError() {
   _error = null;
@@ -215,6 +235,7 @@ function onBeforeTurn(playerId: string): Promise<void> {
   _combatResult = null; // Clear stale combat results on player change
   const player = players.find((p) => p.id === playerId);
   _currentPlayerName = player?.name ?? playerId;
+  _incomingPlayerId = playerId;
   _screen = "passDevice";
   return new Promise<void>((resolve, reject) => {
     resolvePassDevice = resolve;
@@ -229,6 +250,7 @@ function onTurnStart(visibleState: VisibleState, validActions: Action[]): void {
   _currentPlayerName =
     players.find((p) => p.id === visibleState.currentPlayerId)?.name ??
     visibleState.currentPlayerId;
+  _incomingPlayerId = null;
   _screen = "playing";
 }
 

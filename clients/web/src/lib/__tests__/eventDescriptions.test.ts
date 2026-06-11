@@ -1,5 +1,5 @@
 import { describe, expect, it, mock } from "bun:test";
-import type { GameEvent } from "cards-engine";
+import { getVisibleEvent, type GameEvent } from "cards-engine";
 import { categorizeEvent, describeEvent } from "../eventDescriptions";
 
 describe("describeEvent", () => {
@@ -201,6 +201,95 @@ describe("describeEvent", () => {
       };
 
       expect(categorizeEvent(event, "p2")).toBe("opponent");
+    });
+  });
+
+  describe("card_drawn", () => {
+    it("renders 'You drew {name}' when cardId is present (drawer view)", () => {
+      const event: GameEvent = {
+        type: "card_drawn",
+        playerId: "p1",
+        count: 1,
+        cardId: "inst-42",
+      };
+
+      const out = describeEvent(event, {
+        card: (id) => (id === "inst-42" ? "Cleopatra" : id),
+        player: (id) => id,
+      });
+
+      expect(out).toBe("You drew Cleopatra");
+    });
+
+    it("renders 'P drew N card(s)' when cardId is absent (opponent view, post-scrub)", () => {
+      // The engine emits cardId; `getVisibleEvent` strips it for non-drawer
+      // viewers. Renderer must treat the absence as the opponent-view signal.
+      const event: GameEvent = {
+        type: "card_drawn",
+        playerId: "p1",
+        count: 1,
+      };
+
+      const out = describeEvent(event, {
+        card: (id) => id,
+        player: (id) => (id === "p1" ? "Alice" : id),
+      });
+
+      expect(out).toBe("Alice drew 1 card(s)");
+    });
+  });
+
+  describe("card_drawn — full god-view → scrub → render contract", () => {
+    // Integration-style: starting from the god-view event the engine emits,
+    // run it through `getVisibleEvent` (the store's projection), then through
+    // `describeEvent`. This pins the device-pass UX contract end-to-end —
+    // the store wires `_visibleState.playerId` as the viewer; this test
+    // pins what each viewer's projection should render. The store-level
+    // re-derivation on viewer change is integration-tested via playtest
+    // (no `gameStore.test.ts` — consistent with existing convention).
+    const godViewEvent: GameEvent = {
+      type: "card_drawn",
+      playerId: "p1",
+      count: 1,
+      cardId: "inst-42",
+    };
+    const resolvers = {
+      card: (id: string) => (id === "inst-42" ? "Cleopatra" : id),
+      player: (id: string) => (id === "p1" ? "Alice" : id),
+    };
+
+    it("drawer-viewer sees 'You drew {name}'", () => {
+      const projected = getVisibleEvent(godViewEvent, "p1");
+      expect(describeEvent(projected, resolvers)).toBe("You drew Cleopatra");
+    });
+
+    it("opponent-viewer sees 'Alice drew 1 card(s)' — no leak of cardId, no misattribution", () => {
+      const projected = getVisibleEvent(godViewEvent, "p2");
+      expect(describeEvent(projected, resolvers)).toBe("Alice drew 1 card(s)");
+    });
+  });
+
+  describe("card_bought", () => {
+    it("renders cardName directly without consulting the card resolver", () => {
+      const cardResolver = mock((id: string) => `SHOULD_NOT_BE_CALLED_FOR_${id}`);
+      const event: GameEvent = {
+        type: "card_bought",
+        playerId: "p2",
+        cardId: "inst-77",
+        cardName: "Investment Banking",
+        cost: 4,
+      };
+
+      const out = describeEvent(event, {
+        card: cardResolver,
+        player: (id) => (id === "p2" ? "Bob" : id),
+      });
+
+      expect(out).toBe("Bob bought Investment Banking for 4g");
+      // Mirrors trap_triggered: cardId is unresolvable post-buy because the
+      // card is now in the buyer's redacted hand. cardName must come off the
+      // event, not the resolver.
+      expect(cardResolver).not.toHaveBeenCalledWith("inst-77");
     });
   });
 });

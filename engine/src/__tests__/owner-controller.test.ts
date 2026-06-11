@@ -53,6 +53,7 @@ function runEffect(
   state: MainGameState,
   effectStr: string,
   asPlayerId: string,
+  opts?: { targetId?: string },
 ): { state: MainGameState; events: GameEvent[] } {
   const events: GameEvent[] = [];
   const { queries } = rebuildListeners(state);
@@ -65,6 +66,7 @@ function runEffect(
       events,
       queries,
       rng,
+      targetId: opts?.targetId,
     };
     const result = executeEffect(effectStr, ctx);
     draft.rngState = (result.rng.getState?.() ?? draft.rngState) as number[];
@@ -233,7 +235,9 @@ describe("execControl and controllerId", () => {
       d.grid[0][0].units.push(enemy, myUnit);
     });
 
-    const { state: next } = runEffect(state, "control(enemy)~turn", ACTIVE);
+    const { state: next } = runEffect(state, "control(enemy)~turn", ACTIVE, {
+      targetId: enemy.id,
+    });
     const ns = next;
     const controlled = ns.grid[0][0].units.find((u) => u.id === enemy.id)!;
 
@@ -260,7 +264,9 @@ describe("execControl and controllerId", () => {
     });
 
     // OTHER (drafter) casts control on the stolen unit for one turn.
-    const { state: afterCast } = runEffect(state, "control(all)~turn", OTHER);
+    const { state: afterCast } = runEffect(state, "control(enemy)~turn", OTHER, {
+      targetId: stolenUnit.id,
+    });
     let unitAfterCast = afterCast.grid[0][0].units.find((u) => u.id === stolenUnit.id)!;
     expect(unitAfterCast.controllerId).toBe(OTHER);
     expect(unitAfterCast.controlOverride?.previousControllerId).toBe(ACTIVE);

@@ -143,13 +143,14 @@ function runEndOfTurn(
             }
           }
         }
-        // Control override
+        // Control override — revert to the controller that held the unit
+        // just before this cast. For a stolen-then-controlled unit this is
+        // the thief, not the original drafter; for a nested control it is
+        // the outer caster.
         if (unit.controlOverride) {
           unit.controlOverride.remainingDuration -= 1;
           if (unit.controlOverride.remainingDuration <= 0) {
-            // Restore the pre-cast controller. ownerId is mutated here at
-            // parity (Step 1 of #91). Step 4 switches this to controllerId.
-            unit.ownerId = unit.controlOverride.previousControllerId;
+            unit.controllerId = unit.controlOverride.previousControllerId;
             unit.controlOverride = undefined;
           }
         }
@@ -236,8 +237,11 @@ function handleBuy(
   const cost = getModifiedCost(draft as MainGameState, queries, card, playerId, "buy", costIndex);
   spendGold(draft, player, cost, "buy", events);
 
-  // Remove from market and add to hand
+  // Remove from market and add to hand. The buyer becomes the controller —
+  // ownerId stays (market cards seed with "neutral") so end-of-game return
+  // mechanics retain the original provenance.
   draft.market.splice(slotIndex, 1);
+  card.controllerId = playerId;
   player.hand.push(card);
   emit({ type: "card_bought", playerId, cardId, cardName: card.name, cost });
 
@@ -770,7 +774,7 @@ function resolveCombatPair(
     loser.unit.injured = true;
     // Drop equipped items at location
     dropEquippedItems(cell, loser.unit, row, col, emit);
-    emit({ type: "unit_injured", unitId: loser.unit.id, ownerId: loser.unit.ownerId });
+    emit({ type: "unit_injured", unitId: loser.unit.id, controllerId: loser.unit.controllerId });
   }
 }
 

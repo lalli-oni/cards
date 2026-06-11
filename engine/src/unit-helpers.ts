@@ -21,7 +21,7 @@ export function killUnit(
   // For bought/stolen units this is the buyer/thief, not the original drafter.
   const controller = getPlayerById(draft, unit.controllerId);
   controller.discardPile.push(unit);
-  emit({ type: "unit_killed", unitId: unit.id, ownerId: unit.ownerId });
+  emit({ type: "unit_killed", unitId: unit.id, controllerId: unit.controllerId });
 }
 
 /** Injure a unit: set injured flag, drop equipped items. */
@@ -34,7 +34,7 @@ export function injureUnit(
 ): void {
   unit.injured = true;
   dropEquippedItems(cell, unit, row, col, emit);
-  emit({ type: "unit_injured", unitId: unit.id, ownerId: unit.ownerId });
+  emit({ type: "unit_injured", unitId: unit.id, controllerId: unit.controllerId });
 }
 
 /** Drop all items equipped to a unit at the unit's location. */

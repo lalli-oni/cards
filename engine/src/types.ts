@@ -583,8 +583,8 @@ export type GameEvent =
       toRow: number;
       toCol: number;
     }
-  | { type: "unit_injured"; unitId: string; ownerId: string }
-  | { type: "unit_killed"; unitId: string; ownerId: string }
+  | { type: "unit_injured"; unitId: string; controllerId: string }
+  | { type: "unit_killed"; unitId: string; controllerId: string }
   | { type: "event_played"; playerId: string; cardId: string }
   | { type: "trap_set"; playerId: string; cardId: string; targetId?: string }
   | {

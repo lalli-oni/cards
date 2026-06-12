@@ -11,6 +11,7 @@ function makeLocation(id: string): LocationCard {
     cost: "0",
     rarity: "common",
     ownerId: "p1",
+    controllerId: "p1",
     edges: { n: true, e: true, s: true, w: true },
   };
 }

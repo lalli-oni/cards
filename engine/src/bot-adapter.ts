@@ -128,7 +128,7 @@ function scoreCellForMovement(
   }
 
   // Prefer cells with friendly units (cluster for mission requirements)
-  const friendlyCount = cell.units.filter((u) => u.ownerId === playerId).length;
+  const friendlyCount = cell.units.filter((u) => u.controllerId === playerId).length;
   score += friendlyCount * 2;
 
   // Slight preference for any location (even non-mission)

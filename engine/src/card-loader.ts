@@ -257,6 +257,7 @@ export function instantiateCard(
     text: def.text ?? undefined,
     keywords: def.keywords.length > 0 ? def.keywords : undefined,
     ownerId,
+    controllerId: ownerId,
   };
 
   switch (def.type) {

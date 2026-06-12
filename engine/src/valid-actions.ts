@@ -222,7 +222,7 @@ function getMainValidActions(
   for (let r = 0; r < gridRows; r++) {
     for (let c = 0; c < gridCols; c++) {
       for (const unit of state.grid[r][c].units) {
-        if (unit.ownerId !== playerId) continue;
+        if (unit.controllerId !== playerId) continue;
         const baseMoveCost = unit.injured
           ? 1 + getConfigNumber(state, "injury_move_penalty", 1)
           : 1;
@@ -300,12 +300,12 @@ function getMainValidActions(
 
     for (const pos of positions) {
       // HQ: all items/units belong to the player by definition.
-      // Grid: filter by ownerId since multiple players share cells.
+      // Grid: filter by controllerId since multiple players share cells.
       const ownerFilter = pos.type === "hq";
       const items = getItemsAtPosition(state.players, state.grid, pos)
-        .filter((i) => ownerFilter || i.ownerId === playerId);
+        .filter((i) => ownerFilter || i.controllerId === playerId);
       const units = getUnitsAtPosition(state.players, state.grid, pos)
-        .filter((u) => ownerFilter || u.ownerId === playerId);
+        .filter((u) => ownerFilter || u.controllerId === playerId);
       for (const item of items) {
         for (const unit of units) {
           // Skip if already equipped on this unit
@@ -323,10 +323,10 @@ function getMainValidActions(
       for (let c = 0; c < gridCols; c++) {
         const cell = state.grid[r][c];
         if (!cell.location) continue;
-        const hasEnemy = cell.units.some((u) => u.ownerId !== playerId);
+        const hasEnemy = cell.units.some((u) => u.controllerId !== playerId);
         if (hasEnemy) continue;
         for (const unit of cell.units) {
-          if (unit.ownerId === playerId) {
+          if (unit.controllerId === playerId) {
             actions.push({ type: "raze", playerId, unitId: unit.id, row: r, col: c });
           }
         }
@@ -339,8 +339,8 @@ function getMainValidActions(
     for (let r = 0; r < gridRows; r++) {
       for (let c = 0; c < gridCols; c++) {
         const cell = state.grid[r][c];
-        const myUnits = cell.units.filter((u) => u.ownerId === playerId);
-        const enemyUnits = cell.units.filter((u) => u.ownerId !== playerId);
+        const myUnits = cell.units.filter((u) => u.controllerId === playerId);
+        const enemyUnits = cell.units.filter((u) => u.controllerId !== playerId);
         if (myUnits.length > 0 && enemyUnits.length > 0) {
           // Offer attacking with all owned units at that cell
           actions.push({
@@ -361,7 +361,7 @@ function getMainValidActions(
       for (let c = 0; c < gridCols; c++) {
         const cell = state.grid[r][c];
         if (!cell.location?.requirements || !cell.location?.rewards) continue;
-        const friendlyUnits = cell.units.filter((u) => u.ownerId === playerId);
+        const friendlyUnits = cell.units.filter((u) => u.controllerId === playerId);
         if (friendlyUnits.length === 0) continue;
         let requirements: ReturnType<typeof parseRequirements>;
         try {
@@ -394,11 +394,11 @@ function getMainValidActions(
     })),
   ];
   for (const pos of activatePositions) {
-    // HQ: units belong to the player by definition. Grid: filter by ownerId
+    // HQ: units belong to the player by definition. Grid: filter by controllerId
     // since multiple players share cells.
     const ownerFilter = pos.type === "hq";
     const units = getUnitsAtPosition(state.players, state.grid, pos)
-      .filter((u) => ownerFilter || u.ownerId === playerId);
+      .filter((u) => ownerFilter || u.controllerId === playerId);
     for (const unit of units) {
       if (!unit.actions) continue;
       for (const actionDef of unit.actions) {
@@ -691,14 +691,14 @@ function getUnitsInRange(
       const c = col + dc;
       if (r < 0 || r >= state.grid.length || c < 0 || c >= state.grid[0].length) continue;
       for (const u of state.grid[r][c].units) {
-        if (filter === "enemy" && u.ownerId !== playerId) units.push({ id: u.id });
-        if (filter === "friendly" && u.ownerId === playerId) units.push({ id: u.id });
+        if (filter === "enemy" && u.controllerId !== playerId) units.push({ id: u.id });
+        if (filter === "friendly" && u.controllerId === playerId) units.push({ id: u.id });
       }
     }
   } else {
     for (const u of state.grid[row][col].units) {
-      if (filter === "enemy" && u.ownerId !== playerId) units.push({ id: u.id });
-      if (filter === "friendly" && u.ownerId === playerId) units.push({ id: u.id });
+      if (filter === "enemy" && u.controllerId !== playerId) units.push({ id: u.id });
+      if (filter === "friendly" && u.controllerId === playerId) units.push({ id: u.id });
     }
   }
   return units;

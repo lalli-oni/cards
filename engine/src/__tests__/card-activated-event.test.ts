@@ -236,6 +236,7 @@ describe("card_activated event — error paths", () => {
   it("rejects activate of a card the player does not own", () => {
     const oppUnit = hqUnit("Opponent Unit", "gold[5]");
     oppUnit.ownerId = OPPONENT;
+    oppUnit.controllerId = OPPONENT;
     const state = gameWith((d) => {
       // Place it where findUnitPosition can locate it — opponent's HQ
       d.players[OPPONENT_IDX].hq.push(oppUnit);

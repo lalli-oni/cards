@@ -69,9 +69,9 @@
       if (cell.location.passive) lines.push(`Passive: ${cell.location.passive}`);
     }
     for (const u of cell.units) {
-      const owner = u.ownerId === selfPlayerId ? "yours" : "opponent";
+      const side = u.controllerId === selfPlayerId ? "yours" : "opponent";
       const attrs = u.attributes.length > 0 ? ` [${u.attributes.join(", ")}]` : "";
-      lines.push(`⚔️ ${u.name}${attrs} — S:${u.strength} C:${u.cunning} Ch:${u.charisma}${u.injured ? " INJURED" : ""} (${owner})`);
+      lines.push(`⚔️ ${u.name}${attrs} — S:${u.strength} C:${u.cunning} Ch:${u.charisma}${u.injured ? " INJURED" : ""} (${side})`);
     }
     for (const i of cell.items) {
       lines.push(`🛡️ ${i.name}${i.equippedTo ? " (equipped)" : " (loose)"}`);
@@ -124,8 +124,8 @@
   {/if}
 
   {#each cell.units as unit}
-    {@const ownerClass = unit.ownerId === selfPlayerId ? 'text-self' : 'text-opponent'}
-    <div class="w-full text-left {ownerClass}">
+    {@const sideClass = unit.controllerId === selfPlayerId ? 'text-self' : 'text-opponent'}
+    <div class="w-full text-left {sideClass}">
       <div class="flex flex-wrap items-center gap-x-1">
         {#if onUnitClick}
           <span

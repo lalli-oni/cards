@@ -22,6 +22,7 @@ function unit(attrs: string[], overrides?: Partial<UnitCard>): UnitCard {
     attributes: attrs,
     injured: false,
     ownerId: "p1",
+    controllerId: "p1",
     ...overrides,
   };
 }

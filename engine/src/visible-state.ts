@@ -166,42 +166,45 @@ function computeReveals(state: MainGameState, viewerId: string): Reveals {
 
       if (cell.location) {
         const factory = LOCATION_EFFECTS[cell.location.definitionId];
-        if (factory) apply(factory(cell.location, cell.location.ownerId, r, c).reveals);
+        if (factory) apply(factory(cell.location, cell.location.controllerId, r, c).reveals);
       }
 
       for (const item of cell.items) {
         const factory = ITEM_EFFECTS[item.definitionId];
-        if (factory) apply(factory(item, item.ownerId, { row: r, col: c }).reveals);
+        if (factory) apply(factory(item, item.controllerId, { row: r, col: c }).reveals);
       }
 
       for (const unit of cell.units) {
         const factory = UNIT_EFFECTS[unit.definitionId];
-        if (factory) apply(factory(unit, unit.ownerId, { row: r, col: c }).reveals);
+        if (factory) apply(factory(unit, unit.controllerId, { row: r, col: c }).reveals);
       }
     }
   }
 
-  // Per-player: policies, passive events, traps, HQ items + units
+  // Per-player: policies, passive events, traps, HQ items + units.
+  // Mirrors rebuildListeners' per-player loop — pass card.controllerId
+  // rather than player.id so reveals stay aligned with listener attribution
+  // if a future HQ-borrowing mechanic ever lands.
   for (const player of state.players) {
     for (const policy of player.activePolicies) {
       const factory = POLICY_EFFECTS[policy.definitionId];
-      if (factory) apply(factory(policy, player.id).reveals);
+      if (factory) apply(factory(policy, policy.controllerId).reveals);
     }
     for (const pe of player.passiveEvents) {
       const factory = PASSIVE_EVENT_EFFECTS[pe.definitionId];
-      if (factory) apply(factory(pe, player.id).reveals);
+      if (factory) apply(factory(pe, pe.controllerId).reveals);
     }
     for (const trap of player.activeTraps) {
       const factory = TRAP_EFFECTS[trap.card.definitionId];
-      if (factory) apply(factory(trap, player.id).reveals);
+      if (factory) apply(factory(trap, trap.card.controllerId).reveals);
     }
     for (const card of player.hq) {
       if (card.type === "item") {
         const factory = ITEM_EFFECTS[card.definitionId];
-        if (factory) apply(factory(card, player.id).reveals);
+        if (factory) apply(factory(card, card.controllerId).reveals);
       } else if (card.type === "unit") {
         const factory = UNIT_EFFECTS[card.definitionId];
-        if (factory) apply(factory(card, player.id).reveals);
+        if (factory) apply(factory(card, card.controllerId).reveals);
       }
     }
   }

@@ -262,9 +262,19 @@ Actions: Units can have various actions that players can activate.
     is healed automatically (injury removed). Units with the Heal
     ability (e.g. doctors, nurses) can heal an injured unit at the same
     location for 1 AP.
-- **Killed**: The unit is moved to its owner's discard pile. Any
-  equipped items are dropped at the unit's last location (any player's
-  unit there may pick them up via Equip).
+- **Killed**: The unit is moved to its **current controller's** discard
+  pile — the buyer or thief for a card that has changed hands, or
+  simply the original owner for a card that has not. Equipped items are
+  dropped at the unit's last location (any player's unit there may pick
+  them up via Equip).
+  - Units under temporary **Control** follow a different path: see
+    Controlled > Leaving the board. The control rule takes precedence
+    over this entry to keep control effects strictly temporary.
+    [design: Engine implementation of the control exception is tracked
+    separately and is **work in progress** — see issue #143. Until that
+    lands, the engine routes Control'd-killed units the same as other
+    killed units (controller's discard), so card designs that depend
+    on the rule should be checked against the engine behavior.]
 - **Controlled**: A unit under another player's control. Card effects
   can grant a player temporary control of an enemy unit for a stated
   duration. Duration tracking follows the same token pattern as
@@ -529,3 +539,46 @@ differs per card.
 #### Starting Resources
 - 10 gold
 - 1 gold income per turn
+
+### Spoils of War (Optional Variant) [var:spoils_of_war:off]
+
+In this variant, decisively defeating an opponent in combat lets the
+victor take a single card permanently from the defeated player's
+collection.
+
+**Trigger:** After resolving an Attack action against an opponent at a
+location, if **all of that opponent's units at the location are killed**
+during the combat (retreating units do not count, and an injured but
+living unit does not count), the attacker may immediately exercise
+Spoils of War against that defeated opponent.
+
+**Resolution:**
+
+1. Shuffle the defeated player's main deck.
+2. Reveal the top [var:spoils_draw:2] cards face-up.
+3. The attacker chooses [var:spoils_take:1] of them to take into their
+   hand.
+4. The remaining card returns face-down to the top of the defeated
+   player's main deck.
+
+**Permanent transfer:** Unlike the in-game control transfers from
+buying, seeding theft, or Control effects (which only move
+[[controller]]), a card taken via Spoils of War transfers both
+**ownership** and **control** to the attacker. End-of-game return
+mechanics (when implemented) treat the taken card as the attacker's.
+
+**Empty deck handling:** If the defeated player's main deck has fewer
+than [var:spoils_draw:2] cards, shuffle their discard pile into the main
+deck before drawing. If the combined total is still 0, no card is taken;
+if 1, the attacker takes that single card without choice.
+
+**Multi-opponent combat:** When an Attack resolves against multiple
+opponents at the same location (see Combat), the trigger and resolution
+are evaluated **per opponent**. The attacker may collect Spoils from
+each opponent whose units were fully cleared.
+
+[design: Spoils of War is the rare permanent-steal mechanic that #91
+was designed to enable but explicitly kept out of seeding theft.
+Anchoring it to a clear-the-location victory frames it as a tactical
+achievement rather than an early-game disruption — players cannot
+engineer it without committing real combat resources.]

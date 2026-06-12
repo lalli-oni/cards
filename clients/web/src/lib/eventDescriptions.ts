@@ -23,11 +23,11 @@ export function categorizeEvent(
   // Standard playerId field
   if ("playerId" in event && event.playerId === selfPlayerId) return "player";
   if ("playerId" in event) return "opponent";
-  // Combat events use attackerId/ownerId instead of playerId
+  // Combat events use attackerId/controllerId instead of playerId
   if ("attackerId" in event && event.attackerId === selfPlayerId) return "player";
   if ("attackerId" in event) return "opponent";
-  if ("ownerId" in event && event.ownerId === selfPlayerId) return "player";
-  if ("ownerId" in event) return "opponent";
+  if ("controllerId" in event && event.controllerId === selfPlayerId) return "player";
+  if ("controllerId" in event) return "opponent";
   return "system";
 }
 
@@ -76,9 +76,9 @@ export function describeEvent(event: GameEvent, r?: NameResolvers): string {
     case "unit_moved":
       return `${p(event.playerId, r)} moved ${c(event.unitId, r)} to ${cell(event.toRow, event.toCol, r)}`;
     case "unit_injured":
-      return `${c(event.unitId, r)} (${p(event.ownerId, r)}) was injured`;
+      return `${c(event.unitId, r)} (${p(event.controllerId, r)}) was injured`;
     case "unit_killed":
-      return `${c(event.unitId, r)} (${p(event.ownerId, r)}) was killed`;
+      return `${c(event.unitId, r)} (${p(event.controllerId, r)}) was killed`;
     case "unit_healed":
       return `${p(event.playerId, r)} healed ${c(event.unitId, r)}`;
     case "event_played":

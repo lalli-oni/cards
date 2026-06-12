@@ -263,14 +263,13 @@ Actions: Units can have various actions that players can activate.
     ability (e.g. doctors, nurses) can heal an injured unit at the same
     location for 1 AP.
 - **Killed**: The unit is moved to its **current controller's** discard
-  pile. For most cards this is the same as the original owner; for a
-  card that was bought from the market or stolen during seeding, it is
-  the buyer or thief. Any equipped items are dropped at the unit's last
-  location (any player's unit there may pick them up via Equip).
-  - **Exception**: A unit under temporary **Control** by another player
-    that would be killed instead returns to its **owner's HQ** alive
-    (see Controlled > Leaving the board). Control ends immediately. The
-    unit does not enter any discard pile.
+  pile — the buyer or thief for a card that has changed hands, or
+  simply the original owner for a card that has not. Equipped items are
+  dropped at the unit's last location (any player's unit there may pick
+  them up via Equip).
+  - Units under temporary **Control** follow a different path: see
+    Controlled > Leaving the board. The control rule takes precedence
+    over this entry to keep control effects strictly temporary.
 - **Controlled**: A unit under another player's control. Card effects
   can grant a player temporary control of an enemy unit for a stated
   duration. Duration tracking follows the same token pattern as

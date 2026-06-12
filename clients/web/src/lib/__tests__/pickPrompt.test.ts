@@ -16,6 +16,7 @@ function makeUnit(id: string): UnitCard {
     attributes: [],
     injured: false,
     ownerId: "p1",
+    controllerId: "p1",
   };
 }
 

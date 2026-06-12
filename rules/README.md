@@ -270,6 +270,11 @@ Actions: Units can have various actions that players can activate.
   - Units under temporary **Control** follow a different path: see
     Controlled > Leaving the board. The control rule takes precedence
     over this entry to keep control effects strictly temporary.
+    [design: Engine implementation of the control exception is tracked
+    separately and is **work in progress** — see issue #143. Until that
+    lands, the engine routes Control'd-killed units the same as other
+    killed units (controller's discard), so card designs that depend
+    on the rule should be checked against the engine behavior.]
 - **Controlled**: A unit under another player's control. Card effects
   can grant a player temporary control of an enemy unit for a stated
   duration. Duration tracking follows the same token pattern as

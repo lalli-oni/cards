@@ -283,8 +283,8 @@ function onEvent(events: GameEvent[], state: GameState): void {
     }
     const outcomes: CombatOutcome[] = [];
     for (const e of events) {
-      if (e.type === "unit_injured") outcomes.push({ type: "injured", unitName: resolveCardName(e.unitId), ownerName: resolvePlayerName(e.ownerId) });
-      if (e.type === "unit_killed") outcomes.push({ type: "killed", unitName: resolveCardName(e.unitId), ownerName: resolvePlayerName(e.ownerId) });
+      if (e.type === "unit_injured") outcomes.push({ type: "injured", unitName: resolveCardName(e.unitId), ownerName: resolvePlayerName(e.controllerId) });
+      if (e.type === "unit_killed") outcomes.push({ type: "killed", unitName: resolveCardName(e.unitId), ownerName: resolvePlayerName(e.controllerId) });
     }
     const cell = _visibleState?.grid[combatStart.row]?.[combatStart.col];
     _combatResult = {

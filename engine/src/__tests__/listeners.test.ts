@@ -61,7 +61,7 @@ describe("emit", () => {
     const { active } = getPlayers(state);
     const events: GameEvent[] = [];
     const listeners: EffectListener[] = [{
-      source: { type: "policy", cardId: "test", definitionId: "test", ownerId: active },
+      source: { type: "policy", cardId: "test", definitionId: "test", controllerId: active },
       on: "turn_started",
       apply: (draft, _event, emitFn) => {
         const player = draft.players.find((p) => p.id === active)!;
@@ -87,14 +87,14 @@ describe("emit", () => {
 
     const listeners: EffectListener[] = [
       {
-        source: { type: "policy", cardId: "a", definitionId: "first", ownerId: active },
+        source: { type: "policy", cardId: "a", definitionId: "first", controllerId: active },
         on: "turn_started",
         apply: (_draft, _event, emitFn) => {
           emitFn({ type: "unit_healed", playerId: active, unitId: "fake" });
         },
       },
       {
-        source: { type: "policy", cardId: "b", definitionId: "second", ownerId: active },
+        source: { type: "policy", cardId: "b", definitionId: "second", controllerId: active },
         on: "unit_healed",
         apply: () => { chainedCalled = true; },
       },
@@ -116,7 +116,7 @@ describe("emit", () => {
     const events: GameEvent[] = [];
     let called = false;
     const listeners: EffectListener[] = [{
-      source: { type: "policy", cardId: "test", definitionId: "test", ownerId: active },
+      source: { type: "policy", cardId: "test", definitionId: "test", controllerId: active },
       on: "combat_resolved",
       apply: () => { called = true; },
     }];

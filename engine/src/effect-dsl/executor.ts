@@ -466,6 +466,11 @@ function execBuy(p: Primitive, ctx: ExecutionContext): void {
   if (costOverride > 0) {
     player.gold -= Math.min(costOverride, player.gold);
   }
+  // Mirror handleBuy: the DSL caster becomes the controller. Without this
+  // write, cards bought via Nikola Tesla's `invent` (and any future buy()
+  // verb) carry the seller's controllerId and break listener/valid-action
+  // attribution.
+  card.controllerId = ctx.playerId;
   player.hand.push(card);
   ctx.emit({ type: "card_bought", playerId: ctx.playerId, cardId: card.id, cardName: card.name, cost: costOverride });
 }

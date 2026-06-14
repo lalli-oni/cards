@@ -1,13 +1,13 @@
 <script lang="ts">
   import {
-    getCombatResult,
-    dismissCombat,
-    type CombatResult,
+    getContestResult,
+    dismissContest,
+    type ContestResult,
     type PairSideView,
   } from "../lib/gameStore.svelte";
   import Modal from "./Modal.svelte";
 
-  const result: CombatResult | null = $derived(getCombatResult());
+  const result: ContestResult | null = $derived(getContestResult());
 
   function signed(delta: number): string {
     return delta >= 0 ? `+${delta}` : `${delta}`;
@@ -110,7 +110,7 @@
     </div>
 
     <button
-      onclick={dismissCombat}
+      onclick={dismissContest}
       class="w-full rounded bg-amber-600 py-2 font-semibold text-white hover:bg-amber-500"
     >
       Continue

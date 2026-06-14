@@ -14,9 +14,9 @@ import { setAutoFreeze } from "cards-engine";
 import { HotseatAdapter } from "./HotseatAdapter";
 import { DEFAULT_CONFIG, buildSeedingSetup, buildMainSetup } from "./gameSetup";
 import { autoSave, listSessions, loadSession, saveSession } from "./persistence";
-import { buildPairDetail, type PairDetail } from "./combatResult";
+import { buildPairDetail, type PairDetail } from "./contestResult";
 
-export type { PairDetail, PairSideView } from "./combatResult";
+export type { PairDetail, PairSideView } from "./contestResult";
 
 // Immer auto-freezes produce() output. Svelte 5's $state uses deep proxies.
 // Frozen objects passed into $state (and proxied objects passed back to immer)
@@ -46,24 +46,24 @@ let _lastTurnStartIndex = $state(0);
 // player's view during the overlay screen.
 let _incomingPlayerId = $state<string | null>(null);
 
-export interface CombatOutcome {
+export interface ContestOutcome {
   type: "injured" | "killed";
   unitName: string;
   ownerName: string;
 }
 
-export interface CombatResult {
+export interface ContestResult {
   row: number;
   col: number;
   locationName: string;
   attackerName: string;
   defenderName: string;
   pairs: PairDetail[];
-  outcomes: CombatOutcome[];
+  outcomes: ContestOutcome[];
   winnerName: string | null;
 }
 
-let _combatResult = $state<CombatResult | null>(null);
+let _contestResult = $state<ContestResult | null>(null);
 
 export function getScreen() {
   return _screen;
@@ -93,11 +93,11 @@ export function getSavedSessions() {
 export function getGamePhase() {
   return _gamePhase;
 }
-export function getCombatResult() {
-  return _combatResult;
+export function getContestResult() {
+  return _contestResult;
 }
-export function dismissCombat() {
-  _combatResult = null;
+export function dismissContest() {
+  _contestResult = null;
 }
 // Derived card name lookup — rebuilt when visible state changes.
 // Covers grid, hand, HQ, policies, decks, discard, removed, market,
@@ -236,7 +236,7 @@ function onBeforeTurn(playerId: string): Promise<void> {
     return Promise.resolve();
   }
   lastActivePlayerId = playerId;
-  _combatResult = null; // Clear stale combat results on player change
+  _contestResult = null; // Clear stale combat results on player change
   const player = players.find((p) => p.id === playerId);
   _currentPlayerName = player?.name ?? playerId;
   _incomingPlayerId = playerId;
@@ -285,7 +285,7 @@ function onEvent(events: GameEvent[], state: GameState): void {
     if (!combatEnd) {
       _error = "Combat resolution incomplete (missing combat_resolved event). Some outcomes may be missing from the dialog.";
     }
-    const outcomes: CombatOutcome[] = [];
+    const outcomes: ContestOutcome[] = [];
     const pairs: PairDetail[] = [];
     for (const e of events) {
       if (e.type === "unit_injured") {
@@ -297,7 +297,7 @@ function onEvent(events: GameEvent[], state: GameState): void {
       }
     }
     const cell = _visibleState?.grid[combatStart.row]?.[combatStart.col];
-    _combatResult = {
+    _contestResult = {
       row: combatStart.row,
       col: combatStart.col,
       locationName: cell?.location?.name ?? `(${combatStart.row},${combatStart.col})`,
@@ -390,7 +390,7 @@ export function startNewGame(
   _gamePhase = skipSeeding ? "main" : "seeding";
   _prevTurnStartIndex = 0;
   _lastTurnStartIndex = 0;
-  _combatResult = null;
+  _contestResult = null;
   lastActivePlayerId = null;
   autoSaveFailCount = 0;
 
@@ -443,7 +443,7 @@ export async function loadGame(key: string): Promise<void> {
   _error = null;
   _prevTurnStartIndex = 0;
   _lastTurnStartIndex = 0;
-  _combatResult = null;
+  _contestResult = null;
   lastActivePlayerId = null;
   autoSaveFailCount = 0;
 
@@ -542,7 +542,7 @@ export function returnToMenu(): void {
   _eventLog = [];
   _prevTurnStartIndex = 0;
   _lastTurnStartIndex = 0;
-  _combatResult = null;
+  _contestResult = null;
   _gamePhase = null;
   _currentPlayerName = "";
   _error = null;

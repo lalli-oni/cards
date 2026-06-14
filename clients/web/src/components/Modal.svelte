@@ -3,7 +3,7 @@
 
   // Centered-card modal over a darkened backdrop. Intentionally NOT
   // dismissable via Escape or click-outside — current callers
-  // (PickPromptOverlay, CombatResultPopup) require explicit interaction
+  // (PickPromptOverlay, ContestResultPopup) require explicit interaction
   // via their inner buttons. If a future modal needs dismissability, add
   // a `dismissable` prop here rather than introducing a parallel
   // primitive. ARIA dialog attributes set so assistive tech announces

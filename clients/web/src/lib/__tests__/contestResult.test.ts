@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { buildPairDetail, type CombatPairResolved } from "../combatResult";
+import { buildPairDetail, type CombatPairResolved } from "../contestResult";
 
 const RESOLVERS = {
   card: (id: string) => `card:${id}`,

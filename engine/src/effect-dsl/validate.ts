@@ -59,6 +59,17 @@ export function validateEffectChain(ast: Expression): void {
           }
         }
       }
+      if (step.primitive.verb === "contest") {
+        // `contest.<stat>` does NOT accept a `[N]` bonus literal. Use a
+        // `buff.<stat>(self)[N]~turn + contest.<stat>(...)` chain instead so
+        // the +N appears in the contest's per-side modifier breakdown
+        // alongside listener-sourced buffs. See #148.
+        if (step.primitive.value !== undefined) {
+          throw new DSLValidationError(
+            `'contest.${step.primitive.subVerb ?? "?"}' does not accept a [N] bonus (got [${step.primitive.value}]) — use 'buff.<stat>(self)[N]~turn + contest.<stat>(...)' instead`,
+          );
+        }
+      }
       if (step.primitive.verb !== "pick") return;
 
       const pickCount = step.primitive.value ?? 1;

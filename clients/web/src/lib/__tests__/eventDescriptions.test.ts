@@ -202,6 +202,33 @@ describe("describeEvent", () => {
 
       expect(categorizeEvent(event, "p2")).toBe("opponent");
     });
+
+    it("routes combat_pair_resolved by attackerPlayerId — guards against the silent System-bucket regression", () => {
+      const event: GameEvent = {
+        type: "combat_pair_resolved",
+        row: 0, col: 0,
+        attackerPlayerId: "p1", defenderPlayerId: "p2",
+        attacker: { unitId: "a", baseStrength: 5, modifiers: [], roll: 4, power: 9, injuredBefore: false },
+        defender: { unitId: "b", baseStrength: 5, modifiers: [], roll: 4, power: 9, injuredBefore: false },
+        outcome: "tie",
+      };
+      expect(categorizeEvent(event, "p1")).toBe("player");
+      expect(categorizeEvent(event, "p2")).toBe("opponent");
+    });
+
+    it("routes contest_resolved by casterPlayerId — its attackerId is a UNIT id, not a player id", () => {
+      const event: GameEvent = {
+        type: "contest_resolved",
+        stat: "charisma",
+        casterPlayerId: "p1",
+        attackerId: "unit-A", defenderId: "unit-B",
+        attacker: { unitId: "unit-A", baseStat: 9, modifiers: [], roll: 4, power: 13 },
+        defender: { unitId: "unit-B", baseStat: 4, modifiers: [], roll: 3, power: 7 },
+        winnerId: "unit-A",
+      };
+      expect(categorizeEvent(event, "p1")).toBe("player");
+      expect(categorizeEvent(event, "p2")).toBe("opponent");
+    });
   });
 
   describe("card_drawn", () => {
@@ -290,6 +317,96 @@ describe("describeEvent", () => {
       // card is now in the buyer's redacted hand. cardName must come off the
       // event, not the resolver.
       expect(cardResolver).not.toHaveBeenCalledWith("inst-77");
+    });
+  });
+
+  describe("combat_pair_resolved", () => {
+    it("renders base + modifier sources + roll = power per side, with outcome", () => {
+      const event: GameEvent = {
+        type: "combat_pair_resolved",
+        row: 0,
+        col: 0,
+        attackerPlayerId: "p1",
+        defenderPlayerId: "p2",
+        attacker: {
+          unitId: "atk-1",
+          baseStrength: 5,
+          modifiers: [
+            { source: { type: "passive_event", cardId: "ar-1", definitionId: "arms-race" }, delta: 2 },
+          ],
+          roll: 4,
+          power: 11,
+          injuredBefore: false,
+        },
+        defender: {
+          unitId: "def-1",
+          baseStrength: 5,
+          modifiers: [
+            { source: { type: "passive_event", cardId: "pl-1", definitionId: "plague" }, delta: -2 },
+          ],
+          roll: 3,
+          power: 6,
+          injuredBefore: false,
+        },
+        outcome: "injure_defender",
+      };
+
+      const out = describeEvent(event, {
+        card: (id) => (id === "atk-1" ? "Mansa Musa" : id === "def-1" ? "Genghis Khan" : id),
+      });
+
+      expect(out).toContain("Mansa Musa: 5 + 2 arms-race + 4🎲 = 11");
+      expect(out).toContain("Genghis Khan: 5 − 2 plague + 3🎲 = 6");
+      expect(out).toContain("Genghis Khan injured");
+    });
+
+    it("renders 'tie' outcome without a winner clause", () => {
+      const event: GameEvent = {
+        type: "combat_pair_resolved",
+        row: 0, col: 0,
+        attackerPlayerId: "p1", defenderPlayerId: "p2",
+        attacker: { unitId: "a", baseStrength: 5, modifiers: [], roll: 4, power: 9, injuredBefore: false },
+        defender: { unitId: "b", baseStrength: 5, modifiers: [], roll: 4, power: 9, injuredBefore: false },
+        outcome: "tie",
+      };
+      const out = describeEvent(event);
+      expect(out).toContain("tie");
+    });
+  });
+
+  describe("contest_resolved (enriched)", () => {
+    it("renders per-side breakdown when the new payload is present", () => {
+      const event: GameEvent = {
+        type: "contest_resolved",
+        stat: "charisma",
+        casterPlayerId: "p1",
+        attackerId: "cleo",
+        defenderId: "enemy",
+        attacker: {
+          unitId: "cleo",
+          baseStat: 9,
+          modifiers: [],
+          roll: 4,
+          power: 13,
+        },
+        defender: {
+          unitId: "enemy",
+          baseStat: 4,
+          modifiers: [],
+          roll: 3,
+          power: 7,
+        },
+        winnerId: "cleo",
+      };
+
+      const out = describeEvent(event, {
+        card: (id) => (id === "cleo" ? "Cleopatra" : id === "enemy" ? "Foe" : id),
+      });
+
+      expect(out).toContain("charisma contest");
+      expect(out).toContain("Cleopatra: 9 + 4🎲 = 13");
+      expect(out).toContain("Foe: 4 + 3🎲 = 7");
+      expect(out).toContain("Cleopatra wins");
     });
   });
 });

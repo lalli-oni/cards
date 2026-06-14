@@ -23,7 +23,7 @@ import {
 import { emit as emitEvent } from "./listeners/emit";
 import { executeEffect } from "./effect-dsl/executor";
 import { rebuildListeners } from "./listeners/rebuild";
-import { getModifiedStat, getModifiedCost, getModifiedAPCost } from "./listeners/query";
+import { getModifiedStatWithSources, getModifiedCost, getModifiedAPCost } from "./listeners/query";
 import type { EmitFn, QueryListener } from "./listeners/types";
 import { needsLocationTarget } from "./valid-actions";
 import { killUnit, dropEquippedItems } from "./unit-helpers";
@@ -31,9 +31,13 @@ import type {
   ActionDef,
   ActivePassiveEvent,
   ApplyResult,
+  CombatPairOutcome,
+  CombatSide,
   GameEvent,
   ItemCard,
   MainAction,
+  ModifierEntry,
+  ModifierSource,
   MainGameState,
   UnitCard,
 } from "./types";
@@ -490,6 +494,12 @@ function handlePlayEvent(
           draft, playerId, emit,
           events, queries,
           rng,
+          targetId,
+          actingCardSource: {
+            type: "event",
+            cardId: card.id,
+            definitionId: card.definitionId,
+          },
         });
         draft.rngState = extractRngState(result.rng) as number[];
       }
@@ -688,29 +698,20 @@ function handleAttack(
 
     if (livingAttackers.length === 0 || livingDefenders.length === 0) break;
 
-    // Roll for each unit
-    const atkRolls: { unit: Draft<UnitCard>; power: number }[] = [];
+    const injuryPenalty = getConfigNumber(draft, "injury_stat_penalty", 1);
+
+    const atkRolls: CombatantRoll[] = [];
     for (const u of livingAttackers) {
       const [roll, nextRng] = uniformIntDistribution(1, 6, rng);
       rng = nextRng;
-      const modifiedStr = getModifiedStat(
-        draft as MainGameState, queries, u as UnitCard, "strength",
-        { row, col }, { role: "attacker", row, col },
-      );
-      const strength = u.injured ? Math.max(0, modifiedStr - getConfigNumber(draft, "injury_stat_penalty", 1)) : modifiedStr;
-      atkRolls.push({ unit: u, power: strength + roll });
+      atkRolls.push(buildCombatantRoll(draft, queries, u, "attacker", row, col, roll, injuryPenalty));
     }
 
-    const defRolls: { unit: Draft<UnitCard>; power: number }[] = [];
+    const defRolls: CombatantRoll[] = [];
     for (const u of livingDefenders) {
       const [roll, nextRng] = uniformIntDistribution(1, 6, rng);
       rng = nextRng;
-      const modifiedStr = getModifiedStat(
-        draft as MainGameState, queries, u as UnitCard, "strength",
-        { row, col }, { role: "defender", row, col },
-      );
-      const strength = u.injured ? Math.max(0, modifiedStr - getConfigNumber(draft, "injury_stat_penalty", 1)) : modifiedStr;
-      defRolls.push({ unit: u, power: strength + roll });
+      defRolls.push(buildCombatantRoll(draft, queries, u, "defender", row, col, roll, injuryPenalty));
     }
 
     // Sort by power descending, pair highest vs highest
@@ -749,24 +750,146 @@ function isDeadOrRemoved(
   return !cell.units.some((u) => u.id === unit.id);
 }
 
+interface CombatantRoll {
+  unit: Draft<UnitCard>;
+  baseStrength: number;
+  modifiers: ModifierEntry[];
+  roll: number;
+  power: number;
+  injuredBefore: boolean;
+}
+
+function buildCombatantRoll(
+  draft: Draft<MainGameState>,
+  queries: QueryListener[],
+  unit: Draft<UnitCard>,
+  role: "attacker" | "defender",
+  row: number,
+  col: number,
+  roll: number,
+  injuryPenalty: number,
+): CombatantRoll {
+  const breakdown = getModifiedStatWithSources(
+    draft as MainGameState,
+    queries,
+    unit as UnitCard,
+    "strength",
+    { row, col },
+    { role, row, col },
+  );
+  const injuredBefore = unit.injured;
+  const modifiers: ModifierEntry[] = [...breakdown.modifiers];
+  if (injuredBefore && injuryPenalty !== 0) {
+    // Synthesize a `definitionId: "injured"` source so the breakdown chip
+    // reads "injured" rather than the unit name. `cardId` stays as the
+    // unit instance for downstream tooltip resolution.
+    modifiers.push({
+      source: { type: "unit", cardId: unit.id, definitionId: "injured" },
+      delta: -injuryPenalty,
+    });
+  }
+  const sum = modifiers.reduce((acc, m) => acc + m.delta, 0);
+  const clampedFloor = breakdown.base + sum;
+  if (clampedFloor < 0) {
+    // Clamping `strength` to 0 means `base + Σmods + roll !== power`. Surface
+    // the clamp as a synthetic modifier so the displayed math reconciles.
+    modifiers.push({
+      source: { type: "unit", cardId: unit.id, definitionId: "clamped" },
+      delta: -clampedFloor,
+    });
+  }
+  const strength = Math.max(0, clampedFloor);
+  return {
+    unit,
+    baseStrength: breakdown.base,
+    modifiers,
+    roll,
+    power: strength + roll,
+    injuredBefore,
+  };
+}
+
+function toCombatSide(c: CombatantRoll): CombatSide {
+  return {
+    unitId: c.unit.id,
+    baseStrength: c.baseStrength,
+    modifiers: c.modifiers,
+    roll: c.roll,
+    power: c.power,
+    injuredBefore: c.injuredBefore,
+  };
+}
+
+/** Pure — derives the pair outcome from rolled powers + kill ratio. Exported
+ *  so the five-branch decision can be unit-tested without RNG plumbing. */
+export function deriveCombatOutcome(
+  atkPower: number,
+  defPower: number,
+  atkInjured: boolean,
+  defInjured: boolean,
+  killRatio: number,
+): CombatPairOutcome {
+  if (atkPower === defPower) return "tie";
+  const attackerWins = atkPower > defPower;
+  const winnerPower = attackerWins ? atkPower : defPower;
+  const loserPower = attackerWins ? defPower : atkPower;
+  const loserInjured = attackerWins ? defInjured : atkInjured;
+  const isKill = winnerPower >= killRatio * loserPower;
+  const loserKilled = isKill || loserInjured;
+  return attackerWins
+    ? (loserKilled ? "kill_defender" : "injure_defender")
+    : (loserKilled ? "kill_attacker" : "injure_attacker");
+}
+
 /** Resolve a single 1v1 combat pair. */
 function resolveCombatPair(
   draft: Draft<MainGameState>,
   cell: Draft<{ units: UnitCard[]; items: ItemCard[] }>,
-  atk: { unit: Draft<UnitCard>; power: number },
-  def: { unit: Draft<UnitCard>; power: number },
+  atk: CombatantRoll,
+  def: CombatantRoll,
   row: number,
   col: number,
   emit: EmitFn,
 ): void {
-  if (atk.power === def.power) return; // tie — nothing happens
-
-  const winner = atk.power > def.power ? atk : def;
-  const loser = atk.power > def.power ? def : atk;
+  const attackerSide = toCombatSide(atk);
+  const defenderSide = toCombatSide(def);
+  const attackerPlayerId = atk.unit.controllerId;
+  const defenderPlayerId = def.unit.controllerId;
   const killRatio = getConfigNumber(draft, "combat_kill_ratio", 2);
-  const isKill = winner.power >= killRatio * loser.power;
+  const outcome = deriveCombatOutcome(
+    atk.power,
+    def.power,
+    atk.unit.injured,
+    def.unit.injured,
+    killRatio,
+  );
 
-  if (isKill || loser.unit.injured) {
+  if (outcome === "tie") {
+    emit({
+      type: "combat_pair_resolved",
+      row, col,
+      attackerPlayerId, defenderPlayerId,
+      attacker: attackerSide,
+      defender: defenderSide,
+      outcome: "tie",
+    });
+    return; // tie — nothing happens
+  }
+
+  const attackerWins = atk.power > def.power;
+  const loser = attackerWins ? def : atk;
+  const loserKilled = outcome === "kill_attacker" || outcome === "kill_defender";
+
+  emit({
+    type: "combat_pair_resolved",
+    row, col,
+    attackerPlayerId, defenderPlayerId,
+    attacker: attackerSide,
+    defender: defenderSide,
+    outcome,
+  });
+
+  if (loserKilled) {
     // Kill: remove unit from grid, drop items, send to owner's discard
     killUnit(draft, cell, loser.unit, row, col, emit);
   } else {
@@ -876,6 +999,7 @@ function handleActivate(
   let actionDef: ActionDef | undefined;
   let actingUnitId: string | undefined = cardId;
   let cardName: string;
+  let actingCardSource: ModifierSource;
 
   if (located) {
     const card = located.unit as Draft<UnitCard>;
@@ -884,6 +1008,7 @@ function handleActivate(
     actionDef = card.actions.find((a) => a.name === actionName);
     if (!actionDef) throw new Error(`Action "${actionName}" not found on unit "${cardId}"`);
     cardName = card.name;
+    actingCardSource = { type: "unit", cardId: card.id, definitionId: card.definitionId };
   } else {
     // Not a unit — try active policies.
     const owner = draft.players.find((p) => p.id === playerId);
@@ -899,6 +1024,7 @@ function handleActivate(
     if (!actionDef) throw new Error(`Action "${actionName}" not found on policy "${cardId}"`);
     actingUnitId = undefined;
     cardName = policy.name;
+    actingCardSource = { type: "policy", cardId: policy.id, definitionId: policy.definitionId };
   }
 
   if (targetId !== undefined && targetCell !== undefined) {
@@ -941,6 +1067,7 @@ function handleActivate(
     draft,
     playerId,
     actingUnitId,
+    actingCardSource,
     targetId,
     targetCell,
     emit,

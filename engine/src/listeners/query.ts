@@ -1,4 +1,4 @@
-import type { Action, Card, MainAction, MainGameState, UnitCard } from "../types";
+import type { Action, Card, MainAction, MainGameState, ModifierEntry, ModifierSource, UnitCard } from "../types";
 import { parseCost } from "../cost-helpers";
 import type {
   APQueryContext,
@@ -11,9 +11,61 @@ import type {
   StatQueryContext,
 } from "./types";
 
+export interface ModifiedStatBreakdown {
+  base: number;
+  modifiers: ModifierEntry[];
+  /** max(0, base + Σdeltas). */
+  final: number;
+}
+
+/** Detach a `ModifierSource` from any backing immer draft. Required
+ *  whenever a source is read from a unit's `statModifiers` array (draft
+ *  members get revoked after `produce` finalizes); also safe to apply
+ *  defensively. */
+function cloneModifierSource(s: ModifierSource): ModifierSource {
+  return { type: s.type, cardId: s.cardId, definitionId: s.definitionId };
+}
+
+/** Pure — does not mutate `state` or `queries`. The only blessed
+ *  constructor for `ModifiedStatBreakdown`. */
+export function getModifiedStatWithSources(
+  state: MainGameState,
+  queries: QueryListener[],
+  unit: UnitCard,
+  stat: StatName,
+  position?: { row: number; col: number },
+  combat?: { role: "attacker" | "defender"; row: number; col: number },
+): ModifiedStatBreakdown {
+  const base = unit[stat];
+  const ctx: StatQueryContext = { unit, stat, position, combat };
+  const modifiers: ModifierEntry[] = [];
+
+  for (const q of queries) {
+    if (q.query !== "stat") continue;
+    const delta = q.modify(state, ctx);
+    if (delta === 0) continue;
+    // q.source comes from `rebuildListeners` factory output — not a
+    // draft — but cloning is cheap and keeps the invariant uniform.
+    modifiers.push({ source: cloneModifierSource(q.source), delta });
+  }
+
+  for (const mod of unit.statModifiers ?? []) {
+    if (mod.stat !== stat) continue;
+    if (mod.delta === 0) continue;
+    // mod IS a draft member; cloning is load-bearing — without it the
+    // source proxy gets revoked when `produce` returns and any later
+    // read throws "Proxy has already been revoked".
+    modifiers.push({ source: cloneModifierSource(mod.source), delta: mod.delta });
+  }
+
+  const sum = modifiers.reduce((acc, m) => acc + m.delta, 0);
+  return { base, modifiers, final: Math.max(0, base + sum) };
+}
+
 /**
  * Get a unit's effective stat value after all modifiers.
- * Pure function — no state mutation.
+ * Thin wrapper around `getModifiedStatWithSources` for call sites that
+ * only need the final number.
  */
 export function getModifiedStat(
   state: MainGameState,
@@ -23,21 +75,7 @@ export function getModifiedStat(
   position?: { row: number; col: number },
   combat?: { role: "attacker" | "defender"; row: number; col: number },
 ): number {
-  const base = unit[stat];
-  const ctx: StatQueryContext = { unit, stat, position, combat };
-
-  let delta = 0;
-  for (const q of queries) {
-    if (q.query !== "stat") continue;
-    delta += q.modify(state, ctx);
-  }
-
-  // Include temporary stat modifiers from effects (buff verb)
-  for (const mod of unit.statModifiers ?? []) {
-    if (mod.stat === stat) delta += mod.delta;
-  }
-
-  return Math.max(0, base + delta);
+  return getModifiedStatWithSources(state, queries, unit, stat, position, combat).final;
 }
 
 /**

@@ -20,6 +20,7 @@ export type { ControllerOptions } from "./controller";
 // Controller
 export { GameController } from "./controller";
 export { createGame } from "./create-game";
+export { deriveCombatOutcome } from "./apply-main";
 // Pre-built game setup
 export type { PrebuiltGameInput, PrebuiltPlayerInput } from "./prebuilt";
 export { buildPrebuiltSetup } from "./prebuilt";
@@ -37,6 +38,9 @@ export type {
   ActionForState,
   Card,
   CardType,
+  CombatPairOutcome,
+  CombatSide,
+  ContestSide,
   SetupInput,
   DeckName,
   EndedGameState,
@@ -54,6 +58,9 @@ export type {
   LocationEdges,
   MainAction,
   MainGameState,
+  ModifierEntry,
+  ModifierSource,
+  ModifierSourceType,
   OpponentView,
   Phase,
   PlayerAdapter,
@@ -63,9 +70,11 @@ export type {
   PickPrompt,
   PolicyCard,
   Rarity,
+  ResolutionSide,
   Reveals,
   SeedingGameState,
   Session,
+  StatModifier,
   Trap,
   TrapEventCard,
   TrapView,

@@ -95,12 +95,73 @@ export interface ActionDef {
   effect: string;
 }
 
+/** Single source of truth for "what kind of card applied a modifier".
+ *  Reused by `ModifierSource` (event payloads) and `EffectSource`
+ *  (listener registrations). */
+export type ModifierSourceType =
+  | "location"
+  | "policy"
+  | "passive_event"
+  | "event"
+  | "trap"
+  | "item"
+  | "unit";
+
+/** `cardId` is the instance id (two copies of the same card on the grid
+ *  resolve distinctly); `definitionId` is the kebab-case identifier from
+ *  the card library (not a human-facing display name). */
+export interface ModifierSource {
+  readonly type: ModifierSourceType;
+  readonly cardId: string;
+  readonly definitionId: string;
+}
+
+/** Construction-time invariant: `delta !== 0`. The breakdown builders
+ *  filter zero-delta entries before push; manual constructors must too. */
+export interface ModifierEntry {
+  readonly source: ModifierSource;
+  readonly delta: number;
+}
+
+/** Fields shared by combat and DSL-contest per-side payloads. */
+export interface ResolutionSide {
+  unitId: string;
+  modifiers: ModifierEntry[];
+  roll: number;
+  /** base + Σmodifier deltas + roll. May not equal that sum when the
+   *  underlying stat clamps to 0 — the clamp surfaces as a synthetic
+   *  `definitionId: "clamped"` entry in `modifiers` so the displayed
+   *  math reconciles. */
+  power: number;
+}
+
+export interface CombatSide extends ResolutionSide {
+  baseStrength: number;
+  injuredBefore: boolean;
+}
+
+/** Mirrors `CombatSide` minus combat-specific fields. Contests do not
+ *  apply an injury penalty today, so `injuredBefore` is omitted by
+ *  design — a future debuff-aware contest can re-derive from the unit. */
+export interface ContestSide extends ResolutionSide {
+  baseStat: number;
+}
+
+/** Outcome of one combat pair. Exported so the client can reference the
+ *  same literal union instead of redeclaring it. */
+export type CombatPairOutcome =
+  | "kill_attacker"
+  | "kill_defender"
+  | "injure_attacker"
+  | "injure_defender"
+  | "tie";
+
 export interface StatModifier {
   stat: StatName;
   delta: number;
   /** Decremented at end of each turn. Removed when reaching 0. */
   remainingDuration: number;
-  source: string;
+  source: ModifierSource;
 }
 
 export interface ControlOverride {
@@ -650,17 +711,40 @@ export type GameEvent =
       winnerId: string | null;
     }
   | {
+      type: "combat_pair_resolved";
+      row: number;
+      col: number;
+      /** Player ids — categorizers route by these. Distinct from
+       *  `attacker.unitId` / `defender.unitId` (the unit instance ids). */
+      attackerPlayerId: string;
+      defenderPlayerId: string;
+      attacker: CombatSide;
+      defender: CombatSide;
+      outcome: CombatPairOutcome;
+    }
+  | {
       type: "market_replenished";
       playerId: string;
       cardId: string;
       slotIndex: number;
     }
   | { type: "card_discarded"; playerId: string; cardId: string; reason: string }
-  | { type: "unit_buffed"; unitId: string; stat: StatName; delta: number; source: string }
+  | { type: "unit_buffed"; unitId: string; stat: StatName; delta: number; source: ModifierSource }
   | { type: "cards_peeked"; playerId: string; cardIds: string[]; source: PickSource | ViewSource }
   | { type: "cards_picked"; playerId: string; cardIds: string[]; source: PickSource }
   | { type: "unit_controlled"; unitId: string; controllerId: string; previousControllerId: string; duration: number }
-  | { type: "contest_resolved"; stat: StatName; attackerId: string; defenderId: string; attackerPower: number; defenderPower: number; winnerId: string }
+  | {
+      type: "contest_resolved";
+      stat: StatName;
+      /** Player id who initiated the contest (the activator). Distinct
+       *  from `attackerId` (a unit instance id). */
+      casterPlayerId: string;
+      attackerId: string;
+      defenderId: string;
+      attacker: ContestSide;
+      defender: ContestSide;
+      winnerId: string;
+    }
   | { type: "passive_expired"; playerId: string; cardId: string }
   | { type: "unit_healed"; playerId: string; unitId: string }
   // Seeding phase events

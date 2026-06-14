@@ -14,6 +14,9 @@ import { setAutoFreeze } from "cards-engine";
 import { HotseatAdapter } from "./HotseatAdapter";
 import { DEFAULT_CONFIG, buildSeedingSetup, buildMainSetup } from "./gameSetup";
 import { autoSave, listSessions, loadSession, saveSession } from "./persistence";
+import { buildPairDetail, type PairDetail } from "./combatResult";
+
+export type { PairDetail, PairSideView } from "./combatResult";
 
 // Immer auto-freezes produce() output. Svelte 5's $state uses deep proxies.
 // Frozen objects passed into $state (and proxied objects passed back to immer)
@@ -55,6 +58,7 @@ export interface CombatResult {
   locationName: string;
   attackerName: string;
   defenderName: string;
+  pairs: PairDetail[];
   outcomes: CombatOutcome[];
   winnerName: string | null;
 }
@@ -279,12 +283,18 @@ function onEvent(events: GameEvent[], state: GameState): void {
   if (combatStart && combatStart.type === "combat_started") {
     const combatEnd = events.find((e) => e.type === "combat_resolved");
     if (!combatEnd) {
-      console.warn("combat_started without combat_resolved in same event batch");
+      _error = "Combat resolution incomplete (missing combat_resolved event). Some outcomes may be missing from the dialog.";
     }
     const outcomes: CombatOutcome[] = [];
+    const pairs: PairDetail[] = [];
     for (const e of events) {
-      if (e.type === "unit_injured") outcomes.push({ type: "injured", unitName: resolveCardName(e.unitId), ownerName: resolvePlayerName(e.controllerId) });
-      if (e.type === "unit_killed") outcomes.push({ type: "killed", unitName: resolveCardName(e.unitId), ownerName: resolvePlayerName(e.controllerId) });
+      if (e.type === "unit_injured") {
+        outcomes.push({ type: "injured", unitName: resolveCardName(e.unitId), ownerName: resolvePlayerName(e.controllerId) });
+      } else if (e.type === "unit_killed") {
+        outcomes.push({ type: "killed", unitName: resolveCardName(e.unitId), ownerName: resolvePlayerName(e.controllerId) });
+      } else if (e.type === "combat_pair_resolved") {
+        pairs.push(buildPairDetail(e, { card: resolveCardName, player: resolvePlayerName }));
+      }
     }
     const cell = _visibleState?.grid[combatStart.row]?.[combatStart.col];
     _combatResult = {
@@ -293,11 +303,20 @@ function onEvent(events: GameEvent[], state: GameState): void {
       locationName: cell?.location?.name ?? `(${combatStart.row},${combatStart.col})`,
       attackerName: resolvePlayerName(combatStart.attackerId),
       defenderName: resolvePlayerName(combatStart.defenderId),
+      pairs,
       outcomes,
       winnerName: combatEnd?.type === "combat_resolved" && combatEnd.winnerId
         ? resolvePlayerName(combatEnd.winnerId)
         : null,
     };
+  } else {
+    // Orphan-pair guard: any `combat_pair_resolved` without a matching
+    // `combat_started` in the same batch would silently disappear from
+    // the popup. Surface it.
+    const orphanPair = events.find((e) => e.type === "combat_pair_resolved");
+    if (orphanPair) {
+      _error = "Combat pair event arrived without combat_started — popup skipped.";
+    }
   }
 
   if (state.phase === "ended" && players.length > 0) {
@@ -456,12 +475,13 @@ export async function loadGame(key: string): Promise<void> {
 export function selectAction(action: Action): void {
   if (!resolveAction) {
     // No pending resolver — most likely a double-click or a click after
-    // returnToMenu cleared the slots. Drop the action loudly rather than
-    // silently. #110 tracks proper logError infrastructure.
+    // returnToMenu cleared the slots. Surface to the user instead of
+    // silently dropping.
     console.warn(
       "selectAction called with no pending resolver — action dropped",
       { actionType: action.type, actionPlayerId: action.playerId },
     );
+    _error = "Action dropped — please try again.";
     return;
   }
   const resolve = resolveAction;

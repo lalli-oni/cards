@@ -2,13 +2,13 @@ import type { Draft } from "immer";
 import { fromState, uniformIntDistribution, type RandomGenerator } from "../rng";
 import { parse } from "./parser";
 import type { Expression, Effect, Step, Primitive, Selector } from "./types";
-import type { Card, GameEvent, LocationCard, MainGameState, StatName, UnitCard } from "../types";
+import type { Card, GameEvent, LocationCard, MainGameState, ModifierEntry, ModifierSource, StatName, UnitCard } from "../types";
 import type { QueryListener, EmitFn } from "../listeners/types";
 import { getPlayerById } from "../state-helpers";
 import { drawOneCard } from "../deck-helpers";
 import { killUnit, injureUnit } from "../unit-helpers";
 import { findUnitOnGrid } from "../grid-helpers";
-import { getModifiedStat } from "../listeners/query";
+import { getModifiedStatWithSources } from "../listeners/query";
 
 // ---------------------------------------------------------------------------
 // Execution context
@@ -18,6 +18,10 @@ export interface ExecutionContext {
   draft: Draft<MainGameState>;
   playerId: string;
   actingUnitId?: string;
+  /** Source identity used when this effect-run applies stat modifiers, so
+   *  the resulting `StatModifier.source` points at the originating card
+   *  (the activator), not the target. */
+  actingCardSource: ModifierSource;
   targetId?: string;
   targetCell?: { row: number; col: number };
   emit: EmitFn;
@@ -258,13 +262,14 @@ function execBuff(p: Primitive, ctx: ExecutionContext): void {
 
   for (const unit of targets) {
     if (!unit.statModifiers) unit.statModifiers = [];
+    const source = ctx.actingCardSource;
     unit.statModifiers.push({
       stat,
       delta,
       remainingDuration: duration,
-      source: `buff-${stat}`,
+      source,
     });
-    ctx.emit({ type: "unit_buffed", unitId: unit.id, stat, delta, source: `buff-${stat}` });
+    ctx.emit({ type: "unit_buffed", unitId: unit.id, stat, delta, source });
   }
 }
 
@@ -522,25 +527,36 @@ function executeContest(step: Step, ctx: ExecutionContext): void {
   const targetPos = findUnitOnGrid(ctx.draft.grid, target.id);
   if (!targetPos) return;
 
-  // Get modified stats
-  const atkStat = getModifiedStat(
+  const atkBreakdown = getModifiedStatWithSources(
     ctx.draft as MainGameState, ctx.queries, attacker as UnitCard, stat,
     { row: actingPos.row, col: actingPos.col },
     { role: "attacker", row: actingPos.row, col: actingPos.col },
   );
-  const defStat = getModifiedStat(
+  const defBreakdown = getModifiedStatWithSources(
     ctx.draft as MainGameState, ctx.queries, target as UnitCard, stat,
     { row: targetPos.row, col: targetPos.col },
     { role: "defender", row: targetPos.row, col: targetPos.col },
   );
 
-  // Roll d6 for each
   const [atkRoll, rng1] = uniformIntDistribution(1, 6, ctx.rng);
   const [defRoll, rng2] = uniformIntDistribution(1, 6, rng1);
   ctx.rng = rng2;
 
-  const atkPower = atkStat + atkRoll + bonus;
-  const defPower = defStat + defRoll;
+  // The DSL `+N` literal on a contest verb is surfaced as a synthetic
+  // modifier so the rendered math reconciles. It bypasses the listener
+  // pipeline because it's a per-action effect modifier, not a stat
+  // modifier with a `ModifierSource` distinct from the acting card.
+  const atkModifiers: ModifierEntry[] = [...atkBreakdown.modifiers];
+  if (bonus !== 0) {
+    atkModifiers.push({
+      source: ctx.actingCardSource,
+      delta: bonus,
+    });
+  }
+  const atkSum = atkModifiers.reduce((acc, m) => acc + m.delta, 0);
+  const atkPower = Math.max(0, atkBreakdown.base + atkSum) + atkRoll;
+  const defSum = defBreakdown.modifiers.reduce((acc, m) => acc + m.delta, 0);
+  const defPower = Math.max(0, defBreakdown.base + defSum) + defRoll;
 
   // Ties go to defender
   const attackerWins = atkPower > defPower;
@@ -548,10 +564,23 @@ function executeContest(step: Step, ctx: ExecutionContext): void {
   ctx.emit({
     type: "contest_resolved",
     stat,
+    casterPlayerId: ctx.playerId,
     attackerId: attacker.id,
     defenderId: target.id,
-    attackerPower: atkPower,
-    defenderPower: defPower,
+    attacker: {
+      unitId: attacker.id,
+      baseStat: atkBreakdown.base,
+      modifiers: atkModifiers,
+      roll: atkRoll,
+      power: atkPower,
+    },
+    defender: {
+      unitId: target.id,
+      baseStat: defBreakdown.base,
+      modifiers: defBreakdown.modifiers,
+      roll: defRoll,
+      power: defPower,
+    },
     winnerId: attackerWins ? attacker.id : target.id,
   });
 

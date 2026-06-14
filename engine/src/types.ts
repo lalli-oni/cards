@@ -95,12 +95,47 @@ export interface ActionDef {
   effect: string;
 }
 
+/** Identifies the card responsible for a stat modifier. `cardId` is the
+ *  instance id (disambiguates two copies of the same definition on the
+ *  board); `definitionId` is the human label. */
+export interface ModifierSource {
+  type: "location" | "policy" | "passive_event" | "event" | "trap" | "item" | "unit";
+  cardId: string;
+  definitionId: string;
+}
+
+/** One contributor in a stat-modifier breakdown. */
+export interface ModifierEntry {
+  source: ModifierSource;
+  delta: number;
+}
+
+/** Per-side breakdown carried on `combat_pair_resolved` events. */
+export interface CombatSide {
+  unitId: string;
+  baseStrength: number;
+  modifiers: ModifierEntry[];
+  roll: number;
+  /** baseStrength + Σdeltas + roll, after the injury penalty. */
+  power: number;
+  injuredBefore: boolean;
+}
+
+/** Per-side breakdown carried on `contest_resolved` events. */
+export interface ContestSide {
+  unitId: string;
+  baseStat: number;
+  modifiers: ModifierEntry[];
+  roll: number;
+  power: number;
+}
+
 export interface StatModifier {
   stat: StatName;
   delta: number;
   /** Decremented at end of each turn. Removed when reaching 0. */
   remainingDuration: number;
-  source: string;
+  source: ModifierSource;
 }
 
 export interface ControlOverride {
@@ -650,17 +685,46 @@ export type GameEvent =
       winnerId: string | null;
     }
   | {
+      type: "combat_pair_resolved";
+      row: number;
+      col: number;
+      /** Player id of the attacking side — mirrors `combat_started.attackerId`
+       *  so categorizers can route the event to the right player group. */
+      attackerId: string;
+      defenderId: string;
+      attacker: CombatSide;
+      defender: CombatSide;
+      outcome:
+        | "kill_attacker"
+        | "kill_defender"
+        | "injure_attacker"
+        | "injure_defender"
+        | "tie";
+    }
+  | {
       type: "market_replenished";
       playerId: string;
       cardId: string;
       slotIndex: number;
     }
   | { type: "card_discarded"; playerId: string; cardId: string; reason: string }
-  | { type: "unit_buffed"; unitId: string; stat: StatName; delta: number; source: string }
+  | { type: "unit_buffed"; unitId: string; stat: StatName; delta: number; source: ModifierSource }
   | { type: "cards_peeked"; playerId: string; cardIds: string[]; source: PickSource | ViewSource }
   | { type: "cards_picked"; playerId: string; cardIds: string[]; source: PickSource }
   | { type: "unit_controlled"; unitId: string; controllerId: string; previousControllerId: string; duration: number }
-  | { type: "contest_resolved"; stat: StatName; attackerId: string; defenderId: string; attackerPower: number; defenderPower: number; winnerId: string }
+  | {
+      type: "contest_resolved";
+      stat: StatName;
+      attackerId: string;
+      defenderId: string;
+      /** Flat power totals — kept for backward compatibility with older
+       *  renderers. New per-side breakdown is in `attacker` / `defender`. */
+      attackerPower: number;
+      defenderPower: number;
+      attacker: ContestSide;
+      defender: ContestSide;
+      winnerId: string;
+    }
   | { type: "passive_expired"; playerId: string; cardId: string }
   | { type: "unit_healed"; playerId: string; unitId: string }
   // Seeding phase events

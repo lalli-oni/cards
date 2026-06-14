@@ -1,8 +1,17 @@
 <script lang="ts">
-  import { getCombatResult, dismissCombat, type CombatResult } from "../lib/gameStore.svelte";
+  import {
+    getCombatResult,
+    dismissCombat,
+    type CombatResult,
+    type PairSideView,
+  } from "../lib/gameStore.svelte";
   import Modal from "./Modal.svelte";
 
   const result: CombatResult | null = $derived(getCombatResult());
+
+  function signed(delta: number): string {
+    return delta >= 0 ? `+${delta}` : `${delta}`;
+  }
 </script>
 
 {#if result}
@@ -20,6 +29,49 @@
         {result.defenderName}
       </span>
     </div>
+
+    {#snippet sideBreakdown(side: PairSideView, isWinner: boolean)}
+      <div
+        class="flex-1 rounded p-2 text-xs {isWinner
+          ? 'bg-highlight/15 ring-1 ring-highlight'
+          : 'bg-surface-raised'}"
+      >
+        <div class="mb-1 font-semibold text-text-primary">
+          {side.unitName}
+          <span class="text-text-muted">({side.ownerName})</span>
+        </div>
+        <div class="flex flex-wrap items-center gap-1 text-text-secondary">
+          <span class="font-mono">{side.baseStrength}</span>
+          {#each side.modifiers as mod}
+            <span
+              class="rounded bg-surface px-1.5 py-0.5 font-mono {mod.delta > 0
+                ? 'text-success'
+                : 'text-error'}"
+              title="{mod.type}: {mod.definitionId}"
+            >
+              {signed(mod.delta)} {mod.definitionId}
+            </span>
+          {/each}
+          <span class="font-mono">+ {side.roll}🎲</span>
+          <span class="ml-auto font-mono font-semibold text-text-primary">= {side.power}</span>
+        </div>
+      </div>
+    {/snippet}
+
+    {#if result.pairs.length > 0}
+      <div class="mb-4 space-y-2">
+        {#each result.pairs as pair, i}
+          <div class="rounded border border-border bg-surface p-2">
+            <div class="mb-1 text-xs text-text-muted">Pair {i + 1}</div>
+            <div class="flex gap-2">
+              {@render sideBreakdown(pair.attacker, pair.winnerSide === "attacker")}
+              <span class="self-center text-text-faint">vs</span>
+              {@render sideBreakdown(pair.defender, pair.winnerSide === "defender")}
+            </div>
+          </div>
+        {/each}
+      </div>
+    {/if}
 
     {#if result.outcomes.length > 0}
       <div class="mb-4 space-y-1">

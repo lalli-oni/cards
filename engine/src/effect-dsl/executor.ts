@@ -2,13 +2,13 @@ import type { Draft } from "immer";
 import { fromState, uniformIntDistribution, type RandomGenerator } from "../rng";
 import { parse } from "./parser";
 import type { Expression, Effect, Step, Primitive, Selector } from "./types";
-import type { Card, GameEvent, LocationCard, MainGameState, StatName, UnitCard } from "../types";
+import type { Card, GameEvent, LocationCard, MainGameState, ModifierSource, StatName, UnitCard } from "../types";
 import type { QueryListener, EmitFn } from "../listeners/types";
 import { getPlayerById } from "../state-helpers";
 import { drawOneCard } from "../deck-helpers";
 import { killUnit, injureUnit } from "../unit-helpers";
 import { findUnitOnGrid } from "../grid-helpers";
-import { getModifiedStat } from "../listeners/query";
+import { getModifiedStatWithSources } from "../listeners/query";
 
 // ---------------------------------------------------------------------------
 // Execution context
@@ -18,6 +18,9 @@ export interface ExecutionContext {
   draft: Draft<MainGameState>;
   playerId: string;
   actingUnitId?: string;
+  /** Identity of the card whose effect is executing. Used as the `source`
+   *  for any stat modifiers (e.g. `buff` verb) applied during this run. */
+  actingCardSource?: ModifierSource;
   targetId?: string;
   targetCell?: { row: number; col: number };
   emit: EmitFn;
@@ -258,13 +261,18 @@ function execBuff(p: Primitive, ctx: ExecutionContext): void {
 
   for (const unit of targets) {
     if (!unit.statModifiers) unit.statModifiers = [];
+    const source: ModifierSource = ctx.actingCardSource ?? {
+      type: "unit",
+      cardId: unit.id,
+      definitionId: unit.definitionId,
+    };
     unit.statModifiers.push({
       stat,
       delta,
       remainingDuration: duration,
-      source: `buff-${stat}`,
+      source,
     });
-    ctx.emit({ type: "unit_buffed", unitId: unit.id, stat, delta, source: `buff-${stat}` });
+    ctx.emit({ type: "unit_buffed", unitId: unit.id, stat, delta, source });
   }
 }
 
@@ -522,13 +530,13 @@ function executeContest(step: Step, ctx: ExecutionContext): void {
   const targetPos = findUnitOnGrid(ctx.draft.grid, target.id);
   if (!targetPos) return;
 
-  // Get modified stats
-  const atkStat = getModifiedStat(
+  // Get modified stats with full source breakdown
+  const atkBreakdown = getModifiedStatWithSources(
     ctx.draft as MainGameState, ctx.queries, attacker as UnitCard, stat,
     { row: actingPos.row, col: actingPos.col },
     { role: "attacker", row: actingPos.row, col: actingPos.col },
   );
-  const defStat = getModifiedStat(
+  const defBreakdown = getModifiedStatWithSources(
     ctx.draft as MainGameState, ctx.queries, target as UnitCard, stat,
     { row: targetPos.row, col: targetPos.col },
     { role: "defender", row: targetPos.row, col: targetPos.col },
@@ -539,8 +547,11 @@ function executeContest(step: Step, ctx: ExecutionContext): void {
   const [defRoll, rng2] = uniformIntDistribution(1, 6, rng1);
   ctx.rng = rng2;
 
-  const atkPower = atkStat + atkRoll + bonus;
-  const defPower = defStat + defRoll;
+  // `bonus` is the DSL `+N` literal on the contest verb (e.g. Hannibal's
+  // `contest.strength(enemy)[3]`). NOT surfaced in modifiers — slated for
+  // removal under the alpha-1 set refinement sub-issue (#129 follow-up).
+  const atkPower = atkBreakdown.final + atkRoll + bonus;
+  const defPower = defBreakdown.final + defRoll;
 
   // Ties go to defender
   const attackerWins = atkPower > defPower;
@@ -552,6 +563,20 @@ function executeContest(step: Step, ctx: ExecutionContext): void {
     defenderId: target.id,
     attackerPower: atkPower,
     defenderPower: defPower,
+    attacker: {
+      unitId: attacker.id,
+      baseStat: atkBreakdown.base,
+      modifiers: atkBreakdown.modifiers,
+      roll: atkRoll,
+      power: atkPower,
+    },
+    defender: {
+      unitId: target.id,
+      baseStat: defBreakdown.base,
+      modifiers: defBreakdown.modifiers,
+      roll: defRoll,
+      power: defPower,
+    },
     winnerId: attackerWins ? attacker.id : target.id,
   });
 

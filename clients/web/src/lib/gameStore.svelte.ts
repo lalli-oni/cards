@@ -49,12 +49,39 @@ export interface CombatOutcome {
   ownerName: string;
 }
 
+export interface PairModifierView {
+  /** Display label — definitionId of the source card. */
+  definitionId: string;
+  /** Instance id — lets a future tooltip point at "which the-temple". */
+  cardId: string;
+  type: "location" | "policy" | "passive_event" | "event" | "trap" | "item" | "unit";
+  delta: number;
+}
+
+export interface PairSideView {
+  unitName: string;
+  ownerName: string;
+  baseStrength: number;
+  modifiers: PairModifierView[];
+  roll: number;
+  power: number;
+  injuredBefore: boolean;
+}
+
+export interface PairDetail {
+  attacker: PairSideView;
+  defender: PairSideView;
+  outcome: "kill_attacker" | "kill_defender" | "injure_attacker" | "injure_defender" | "tie";
+  winnerSide: "attacker" | "defender" | null;
+}
+
 export interface CombatResult {
   row: number;
   col: number;
   locationName: string;
   attackerName: string;
   defenderName: string;
+  pairs: PairDetail[];
   outcomes: CombatOutcome[];
   winnerName: string | null;
 }
@@ -261,6 +288,51 @@ function waitForAction(): Promise<Action> {
   });
 }
 
+function buildPairDetail(
+  ev: Extract<GameEvent, { type: "combat_pair_resolved" }>,
+  attackerPlayerId: string,
+  defenderPlayerId: string,
+): PairDetail {
+  const winnerSide: PairDetail["winnerSide"] =
+    ev.outcome === "tie"
+      ? null
+      : ev.outcome === "kill_defender" || ev.outcome === "injure_defender"
+        ? "attacker"
+        : "defender";
+  return {
+    attacker: {
+      unitName: resolveCardName(ev.attacker.unitId),
+      ownerName: resolvePlayerName(attackerPlayerId),
+      baseStrength: ev.attacker.baseStrength,
+      modifiers: ev.attacker.modifiers.map((m) => ({
+        definitionId: m.source.definitionId,
+        cardId: m.source.cardId,
+        type: m.source.type,
+        delta: m.delta,
+      })),
+      roll: ev.attacker.roll,
+      power: ev.attacker.power,
+      injuredBefore: ev.attacker.injuredBefore,
+    },
+    defender: {
+      unitName: resolveCardName(ev.defender.unitId),
+      ownerName: resolvePlayerName(defenderPlayerId),
+      baseStrength: ev.defender.baseStrength,
+      modifiers: ev.defender.modifiers.map((m) => ({
+        definitionId: m.source.definitionId,
+        cardId: m.source.cardId,
+        type: m.source.type,
+        delta: m.delta,
+      })),
+      roll: ev.defender.roll,
+      power: ev.defender.power,
+      injuredBefore: ev.defender.injuredBefore,
+    },
+    outcome: ev.outcome,
+    winnerSide,
+  };
+}
+
 function onEvent(events: GameEvent[], state: GameState): void {
   const baseIndex = _eventLog.length;
   _eventLog = [..._eventLog, ...events];
@@ -282,9 +354,15 @@ function onEvent(events: GameEvent[], state: GameState): void {
       console.warn("combat_started without combat_resolved in same event batch");
     }
     const outcomes: CombatOutcome[] = [];
+    const pairs: PairDetail[] = [];
     for (const e of events) {
-      if (e.type === "unit_injured") outcomes.push({ type: "injured", unitName: resolveCardName(e.unitId), ownerName: resolvePlayerName(e.controllerId) });
-      if (e.type === "unit_killed") outcomes.push({ type: "killed", unitName: resolveCardName(e.unitId), ownerName: resolvePlayerName(e.controllerId) });
+      if (e.type === "unit_injured") {
+        outcomes.push({ type: "injured", unitName: resolveCardName(e.unitId), ownerName: resolvePlayerName(e.controllerId) });
+      } else if (e.type === "unit_killed") {
+        outcomes.push({ type: "killed", unitName: resolveCardName(e.unitId), ownerName: resolvePlayerName(e.controllerId) });
+      } else if (e.type === "combat_pair_resolved") {
+        pairs.push(buildPairDetail(e, combatStart.attackerId, combatStart.defenderId));
+      }
     }
     const cell = _visibleState?.grid[combatStart.row]?.[combatStart.col];
     _combatResult = {
@@ -293,6 +371,7 @@ function onEvent(events: GameEvent[], state: GameState): void {
       locationName: cell?.location?.name ?? `(${combatStart.row},${combatStart.col})`,
       attackerName: resolvePlayerName(combatStart.attackerId),
       defenderName: resolvePlayerName(combatStart.defenderId),
+      pairs,
       outcomes,
       winnerName: combatEnd?.type === "combat_resolved" && combatEnd.winnerId
         ? resolvePlayerName(combatEnd.winnerId)

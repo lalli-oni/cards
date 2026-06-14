@@ -50,6 +50,7 @@ function runEffect(
     const ctx: ExecutionContext = {
       draft,
       playerId: active,
+      actingCardSource: { type: "unit", cardId: "test-actor", definitionId: "test-actor" },
       emit: (e) => { events.push(e); },
       events,
       queries,

@@ -1,4 +1,4 @@
-import type { Action, Card, MainAction, MainGameState, ModifierEntry, UnitCard } from "../types";
+import type { Action, Card, MainAction, MainGameState, ModifierEntry, ModifierSource, UnitCard } from "../types";
 import { parseCost } from "../cost-helpers";
 import type {
   APQueryContext,
@@ -11,20 +11,23 @@ import type {
   StatQueryContext,
 } from "./types";
 
-/** Full breakdown of a unit's modified stat — base + every contributing
- *  modifier (with source) + the clamped final value. */
 export interface ModifiedStatBreakdown {
   base: number;
   modifiers: ModifierEntry[];
-  /** max(0, base + Σdeltas) — same clamp as `getModifiedStat`. */
+  /** max(0, base + Σdeltas). */
   final: number;
 }
 
-/**
- * Like `getModifiedStat`, but returns the full breakdown — every non-zero
- * contributor with its source — so callers can surface combat math to
- * players. Pure function — no state mutation.
- */
+/** Detach a `ModifierSource` from any backing immer draft. Required
+ *  whenever a source is read from a unit's `statModifiers` array (draft
+ *  members get revoked after `produce` finalizes); also safe to apply
+ *  defensively. */
+function cloneModifierSource(s: ModifierSource): ModifierSource {
+  return { type: s.type, cardId: s.cardId, definitionId: s.definitionId };
+}
+
+/** Pure — does not mutate `state` or `queries`. The only blessed
+ *  constructor for `ModifiedStatBreakdown`. */
 export function getModifiedStatWithSources(
   state: MainGameState,
   queries: QueryListener[],
@@ -41,19 +44,18 @@ export function getModifiedStatWithSources(
     if (q.query !== "stat") continue;
     const delta = q.modify(state, ctx);
     if (delta === 0) continue;
-    const { type, cardId, definitionId } = q.source;
-    modifiers.push({ source: { type, cardId, definitionId }, delta });
+    // q.source comes from `rebuildListeners` factory output — not a
+    // draft — but cloning is cheap and keeps the invariant uniform.
+    modifiers.push({ source: cloneModifierSource(q.source), delta });
   }
 
-  // Include temporary stat modifiers from effects (buff verb).
-  // Clone source: under immer, `mod` is a draft proxy that gets revoked
-  // when `produce` finalizes — referenced sources read after that point
-  // would throw "Proxy has already been revoked".
   for (const mod of unit.statModifiers ?? []) {
     if (mod.stat !== stat) continue;
     if (mod.delta === 0) continue;
-    const { type, cardId, definitionId } = mod.source;
-    modifiers.push({ source: { type, cardId, definitionId }, delta: mod.delta });
+    // mod IS a draft member; cloning is load-bearing — without it the
+    // source proxy gets revoked when `produce` returns and any later
+    // read throws "Proxy has already been revoked".
+    modifiers.push({ source: cloneModifierSource(mod.source), delta: mod.delta });
   }
 
   const sum = modifiers.reduce((acc, m) => acc + m.delta, 0);

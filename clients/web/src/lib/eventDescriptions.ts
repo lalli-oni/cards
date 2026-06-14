@@ -23,7 +23,15 @@ export function categorizeEvent(
   // Standard playerId field
   if ("playerId" in event && event.playerId === selfPlayerId) return "player";
   if ("playerId" in event) return "opponent";
-  // Combat events use attackerId/controllerId instead of playerId
+  // `combat_pair_resolved` uses `attackerPlayerId` to distinguish from the
+  // unit-id `attacker.unitId`.
+  if ("attackerPlayerId" in event && event.attackerPlayerId === selfPlayerId) return "player";
+  if ("attackerPlayerId" in event) return "opponent";
+  // `contest_resolved` uses `casterPlayerId` (the activator). Its
+  // `attackerId` is a UNIT id, not a player id — must not be used here.
+  if ("casterPlayerId" in event && event.casterPlayerId === selfPlayerId) return "player";
+  if ("casterPlayerId" in event) return "opponent";
+  // `combat_started` / `combat_resolved` use `attackerId` as a player id.
   if ("attackerId" in event && event.attackerId === selfPlayerId) return "player";
   if ("attackerId" in event) return "opponent";
   if ("controllerId" in event && event.controllerId === selfPlayerId) return "player";
@@ -60,11 +68,7 @@ function formatModifier(m: ModifierEntry): string {
   return ` ${sign} ${Math.abs(m.delta)} ${m.source.definitionId}`;
 }
 
-/**
- * `Name: base ± mod1 source1 ± mod2 source2 + roll🎲 = power`
- * Used for combat pairs and DSL contest lines so the math is identical
- * across surfaces.
- */
+/** `Name: base ± mod1 source1 ± mod2 source2 + roll🎲 = power` */
 function formatSideBreakdown(
   unitId: string,
   base: number,
@@ -201,15 +205,9 @@ export function describeEvent(event: GameEvent, r?: NameResolvers): string {
     case "unit_controlled":
       return `${p(event.controllerId, r)} took control of ${c(event.unitId, r)}`;
     case "contest_resolved": {
-      // Prefer the per-side breakdown when present (new payload). Fall back
-      // to the flat-power line for any in-flight saved games written before
-      // the enriched payload landed.
-      if (event.attacker && event.defender) {
-        const left = formatContestSide(event.attacker, r);
-        const right = formatContestSide(event.defender, r);
-        return `${event.stat} contest: ${left} vs ${right} → ${c(event.winnerId, r)} wins`;
-      }
-      return `${event.stat} contest: ${c(event.attackerId, r)} (${event.attackerPower}) vs ${c(event.defenderId, r)} (${event.defenderPower}) — ${c(event.winnerId, r)} wins`;
+      const left = formatContestSide(event.attacker, r);
+      const right = formatContestSide(event.defender, r);
+      return `${event.stat} contest: ${left} vs ${right} → ${c(event.winnerId, r)} wins`;
     }
     default:
       return `Unknown event: ${(event as { type: string }).type}`;

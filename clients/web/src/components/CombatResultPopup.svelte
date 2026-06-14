@@ -47,9 +47,9 @@
               class="rounded bg-surface px-1.5 py-0.5 font-mono {mod.delta > 0
                 ? 'text-success'
                 : 'text-error'}"
-              title="{mod.type}: {mod.definitionId}"
+              title="{mod.source.type}: {mod.source.definitionId}"
             >
-              {signed(mod.delta)} {mod.definitionId}
+              {signed(mod.delta)} {mod.source.definitionId}
             </span>
           {/each}
           <span class="font-mono">+ {side.roll}🎲</span>

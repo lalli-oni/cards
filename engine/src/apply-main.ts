@@ -31,6 +31,7 @@ import type {
   ActionDef,
   ActivePassiveEvent,
   ApplyResult,
+  CombatPairOutcome,
   CombatSide,
   GameEvent,
   ItemCard,
@@ -493,6 +494,7 @@ function handlePlayEvent(
           draft, playerId, emit,
           events, queries,
           rng,
+          targetId,
           actingCardSource: {
             type: "event",
             cardId: card.id,
@@ -698,9 +700,6 @@ function handleAttack(
 
     const injuryPenalty = getConfigNumber(draft, "injury_stat_penalty", 1);
 
-    // Roll for each unit. Capture the full breakdown (base + modifiers +
-    // roll + injury penalty → power) so resolveCombatPair can emit
-    // `combat_pair_resolved`.
     const atkRolls: CombatantRoll[] = [];
     for (const u of livingAttackers) {
       const [roll, nextRng] = uniformIntDistribution(1, 6, rng);
@@ -756,8 +755,6 @@ interface CombatantRoll {
   baseStrength: number;
   modifiers: ModifierEntry[];
   roll: number;
-  /** baseStrength + Σdeltas + roll, clamped to non-negative after the
-   *  injury penalty if applicable. */
   power: number;
   injuredBefore: boolean;
 }
@@ -782,17 +779,26 @@ function buildCombatantRoll(
   );
   const injuredBefore = unit.injured;
   const modifiers: ModifierEntry[] = [...breakdown.modifiers];
-  if (injuredBefore && injuryPenalty > 0) {
-    // Surface the injury penalty as a self-source so the chip label reads
-    // "−1 injured" rather than "−1 <unit name>". `cardId` is still the
-    // unit's instance so a future tooltip can point at the wounded unit.
+  if (injuredBefore && injuryPenalty !== 0) {
+    // Synthesize a `definitionId: "injured"` source so the breakdown chip
+    // reads "injured" rather than the unit name. `cardId` stays as the
+    // unit instance for downstream tooltip resolution.
     modifiers.push({
       source: { type: "unit", cardId: unit.id, definitionId: "injured" },
       delta: -injuryPenalty,
     });
   }
   const sum = modifiers.reduce((acc, m) => acc + m.delta, 0);
-  const strength = Math.max(0, breakdown.base + sum);
+  const clampedFloor = breakdown.base + sum;
+  if (clampedFloor < 0) {
+    // Clamping `strength` to 0 means `base + Σmods + roll !== power`. Surface
+    // the clamp as a synthetic modifier so the displayed math reconciles.
+    modifiers.push({
+      source: { type: "unit", cardId: unit.id, definitionId: "clamped" },
+      delta: -clampedFloor,
+    });
+  }
+  const strength = Math.max(0, clampedFloor);
   return {
     unit,
     baseStrength: breakdown.base,
@@ -814,6 +820,27 @@ function toCombatSide(c: CombatantRoll): CombatSide {
   };
 }
 
+/** Pure — derives the pair outcome from rolled powers + kill ratio. Exported
+ *  so the five-branch decision can be unit-tested without RNG plumbing. */
+export function deriveCombatOutcome(
+  atkPower: number,
+  defPower: number,
+  atkInjured: boolean,
+  defInjured: boolean,
+  killRatio: number,
+): CombatPairOutcome {
+  if (atkPower === defPower) return "tie";
+  const attackerWins = atkPower > defPower;
+  const winnerPower = attackerWins ? atkPower : defPower;
+  const loserPower = attackerWins ? defPower : atkPower;
+  const loserInjured = attackerWins ? defInjured : atkInjured;
+  const isKill = winnerPower >= killRatio * loserPower;
+  const loserKilled = isKill || loserInjured;
+  return attackerWins
+    ? (loserKilled ? "kill_defender" : "injure_defender")
+    : (loserKilled ? "kill_attacker" : "injure_attacker");
+}
+
 /** Resolve a single 1v1 combat pair. */
 function resolveCombatPair(
   draft: Draft<MainGameState>,
@@ -826,14 +853,22 @@ function resolveCombatPair(
 ): void {
   const attackerSide = toCombatSide(atk);
   const defenderSide = toCombatSide(def);
-  const attackerId = atk.unit.controllerId;
-  const defenderId = def.unit.controllerId;
+  const attackerPlayerId = atk.unit.controllerId;
+  const defenderPlayerId = def.unit.controllerId;
+  const killRatio = getConfigNumber(draft, "combat_kill_ratio", 2);
+  const outcome = deriveCombatOutcome(
+    atk.power,
+    def.power,
+    atk.unit.injured,
+    def.unit.injured,
+    killRatio,
+  );
 
-  if (atk.power === def.power) {
+  if (outcome === "tie") {
     emit({
       type: "combat_pair_resolved",
       row, col,
-      attackerId, defenderId,
+      attackerPlayerId, defenderPlayerId,
       attacker: attackerSide,
       defender: defenderSide,
       outcome: "tie",
@@ -842,21 +877,13 @@ function resolveCombatPair(
   }
 
   const attackerWins = atk.power > def.power;
-  const winner = attackerWins ? atk : def;
   const loser = attackerWins ? def : atk;
-  const killRatio = getConfigNumber(draft, "combat_kill_ratio", 2);
-  const isKill = winner.power >= killRatio * loser.power;
-  const loserKilled = isKill || loser.unit.injured;
-
-  const outcome: "kill_attacker" | "kill_defender" | "injure_attacker" | "injure_defender" =
-    attackerWins
-      ? (loserKilled ? "kill_defender" : "injure_defender")
-      : (loserKilled ? "kill_attacker" : "injure_attacker");
+  const loserKilled = outcome === "kill_attacker" || outcome === "kill_defender";
 
   emit({
     type: "combat_pair_resolved",
     row, col,
-    attackerId, defenderId,
+    attackerPlayerId, defenderPlayerId,
     attacker: attackerSide,
     defender: defenderSide,
     outcome,

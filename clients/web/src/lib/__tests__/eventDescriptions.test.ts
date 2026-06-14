@@ -203,16 +203,28 @@ describe("describeEvent", () => {
       expect(categorizeEvent(event, "p2")).toBe("opponent");
     });
 
-    it("categorizes combat_pair_resolved by attackerId so it doesn't fall to 'system'", () => {
-      // Regression: without a top-level attackerId, the event log filter
-      // (System off by default) silently hid every per-pair breakdown.
+    it("routes combat_pair_resolved by attackerPlayerId — guards against the silent System-bucket regression", () => {
       const event: GameEvent = {
         type: "combat_pair_resolved",
         row: 0, col: 0,
-        attackerId: "p1", defenderId: "p2",
+        attackerPlayerId: "p1", defenderPlayerId: "p2",
         attacker: { unitId: "a", baseStrength: 5, modifiers: [], roll: 4, power: 9, injuredBefore: false },
         defender: { unitId: "b", baseStrength: 5, modifiers: [], roll: 4, power: 9, injuredBefore: false },
         outcome: "tie",
+      };
+      expect(categorizeEvent(event, "p1")).toBe("player");
+      expect(categorizeEvent(event, "p2")).toBe("opponent");
+    });
+
+    it("routes contest_resolved by casterPlayerId — its attackerId is a UNIT id, not a player id", () => {
+      const event: GameEvent = {
+        type: "contest_resolved",
+        stat: "charisma",
+        casterPlayerId: "p1",
+        attackerId: "unit-A", defenderId: "unit-B",
+        attacker: { unitId: "unit-A", baseStat: 9, modifiers: [], roll: 4, power: 13 },
+        defender: { unitId: "unit-B", baseStat: 4, modifiers: [], roll: 3, power: 7 },
+        winnerId: "unit-A",
       };
       expect(categorizeEvent(event, "p1")).toBe("player");
       expect(categorizeEvent(event, "p2")).toBe("opponent");
@@ -314,8 +326,8 @@ describe("describeEvent", () => {
         type: "combat_pair_resolved",
         row: 0,
         col: 0,
-        attackerId: "p1",
-        defenderId: "p2",
+        attackerPlayerId: "p1",
+        defenderPlayerId: "p2",
         attacker: {
           unitId: "atk-1",
           baseStrength: 5,
@@ -352,7 +364,7 @@ describe("describeEvent", () => {
       const event: GameEvent = {
         type: "combat_pair_resolved",
         row: 0, col: 0,
-        attackerId: "p1", defenderId: "p2",
+        attackerPlayerId: "p1", defenderPlayerId: "p2",
         attacker: { unitId: "a", baseStrength: 5, modifiers: [], roll: 4, power: 9, injuredBefore: false },
         defender: { unitId: "b", baseStrength: 5, modifiers: [], roll: 4, power: 9, injuredBefore: false },
         outcome: "tie",
@@ -367,10 +379,9 @@ describe("describeEvent", () => {
       const event: GameEvent = {
         type: "contest_resolved",
         stat: "charisma",
+        casterPlayerId: "p1",
         attackerId: "cleo",
         defenderId: "enemy",
-        attackerPower: 13,
-        defenderPower: 7,
         attacker: {
           unitId: "cleo",
           baseStat: 9,

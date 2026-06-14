@@ -14,6 +14,9 @@ import { setAutoFreeze } from "cards-engine";
 import { HotseatAdapter } from "./HotseatAdapter";
 import { DEFAULT_CONFIG, buildSeedingSetup, buildMainSetup } from "./gameSetup";
 import { autoSave, listSessions, loadSession, saveSession } from "./persistence";
+import { buildPairDetail, type PairDetail } from "./combatResult";
+
+export type { PairDetail, PairSideView } from "./combatResult";
 
 // Immer auto-freezes produce() output. Svelte 5's $state uses deep proxies.
 // Frozen objects passed into $state (and proxied objects passed back to immer)
@@ -47,32 +50,6 @@ export interface CombatOutcome {
   type: "injured" | "killed";
   unitName: string;
   ownerName: string;
-}
-
-export interface PairModifierView {
-  /** Display label — definitionId of the source card. */
-  definitionId: string;
-  /** Instance id — lets a future tooltip point at "which the-temple". */
-  cardId: string;
-  type: "location" | "policy" | "passive_event" | "event" | "trap" | "item" | "unit";
-  delta: number;
-}
-
-export interface PairSideView {
-  unitName: string;
-  ownerName: string;
-  baseStrength: number;
-  modifiers: PairModifierView[];
-  roll: number;
-  power: number;
-  injuredBefore: boolean;
-}
-
-export interface PairDetail {
-  attacker: PairSideView;
-  defender: PairSideView;
-  outcome: "kill_attacker" | "kill_defender" | "injure_attacker" | "injure_defender" | "tie";
-  winnerSide: "attacker" | "defender" | null;
 }
 
 export interface CombatResult {
@@ -288,51 +265,6 @@ function waitForAction(): Promise<Action> {
   });
 }
 
-function buildPairDetail(
-  ev: Extract<GameEvent, { type: "combat_pair_resolved" }>,
-  attackerPlayerId: string,
-  defenderPlayerId: string,
-): PairDetail {
-  const winnerSide: PairDetail["winnerSide"] =
-    ev.outcome === "tie"
-      ? null
-      : ev.outcome === "kill_defender" || ev.outcome === "injure_defender"
-        ? "attacker"
-        : "defender";
-  return {
-    attacker: {
-      unitName: resolveCardName(ev.attacker.unitId),
-      ownerName: resolvePlayerName(attackerPlayerId),
-      baseStrength: ev.attacker.baseStrength,
-      modifiers: ev.attacker.modifiers.map((m) => ({
-        definitionId: m.source.definitionId,
-        cardId: m.source.cardId,
-        type: m.source.type,
-        delta: m.delta,
-      })),
-      roll: ev.attacker.roll,
-      power: ev.attacker.power,
-      injuredBefore: ev.attacker.injuredBefore,
-    },
-    defender: {
-      unitName: resolveCardName(ev.defender.unitId),
-      ownerName: resolvePlayerName(defenderPlayerId),
-      baseStrength: ev.defender.baseStrength,
-      modifiers: ev.defender.modifiers.map((m) => ({
-        definitionId: m.source.definitionId,
-        cardId: m.source.cardId,
-        type: m.source.type,
-        delta: m.delta,
-      })),
-      roll: ev.defender.roll,
-      power: ev.defender.power,
-      injuredBefore: ev.defender.injuredBefore,
-    },
-    outcome: ev.outcome,
-    winnerSide,
-  };
-}
-
 function onEvent(events: GameEvent[], state: GameState): void {
   const baseIndex = _eventLog.length;
   _eventLog = [..._eventLog, ...events];
@@ -351,7 +283,7 @@ function onEvent(events: GameEvent[], state: GameState): void {
   if (combatStart && combatStart.type === "combat_started") {
     const combatEnd = events.find((e) => e.type === "combat_resolved");
     if (!combatEnd) {
-      console.warn("combat_started without combat_resolved in same event batch");
+      _error = "Combat resolution incomplete (missing combat_resolved event). Some outcomes may be missing from the dialog.";
     }
     const outcomes: CombatOutcome[] = [];
     const pairs: PairDetail[] = [];
@@ -361,7 +293,7 @@ function onEvent(events: GameEvent[], state: GameState): void {
       } else if (e.type === "unit_killed") {
         outcomes.push({ type: "killed", unitName: resolveCardName(e.unitId), ownerName: resolvePlayerName(e.controllerId) });
       } else if (e.type === "combat_pair_resolved") {
-        pairs.push(buildPairDetail(e, combatStart.attackerId, combatStart.defenderId));
+        pairs.push(buildPairDetail(e, { card: resolveCardName, player: resolvePlayerName }));
       }
     }
     const cell = _visibleState?.grid[combatStart.row]?.[combatStart.col];
@@ -377,6 +309,14 @@ function onEvent(events: GameEvent[], state: GameState): void {
         ? resolvePlayerName(combatEnd.winnerId)
         : null,
     };
+  } else {
+    // Orphan-pair guard: any `combat_pair_resolved` without a matching
+    // `combat_started` in the same batch would silently disappear from
+    // the popup. Surface it.
+    const orphanPair = events.find((e) => e.type === "combat_pair_resolved");
+    if (orphanPair) {
+      _error = "Combat pair event arrived without combat_started — popup skipped.";
+    }
   }
 
   if (state.phase === "ended" && players.length > 0) {
@@ -535,12 +475,13 @@ export async function loadGame(key: string): Promise<void> {
 export function selectAction(action: Action): void {
   if (!resolveAction) {
     // No pending resolver — most likely a double-click or a click after
-    // returnToMenu cleared the slots. Drop the action loudly rather than
-    // silently. #110 tracks proper logError infrastructure.
+    // returnToMenu cleared the slots. Surface to the user instead of
+    // silently dropping.
     console.warn(
       "selectAction called with no pending resolver — action dropped",
       { actionType: action.type, actionPlayerId: action.playerId },
     );
+    _error = "Action dropped — please try again.";
     return;
   }
   const resolve = resolveAction;

@@ -95,40 +95,66 @@ export interface ActionDef {
   effect: string;
 }
 
-/** Identifies the card responsible for a stat modifier. `cardId` is the
- *  instance id (disambiguates two copies of the same definition on the
- *  board); `definitionId` is the human label. */
+/** Single source of truth for "what kind of card applied a modifier".
+ *  Reused by `ModifierSource` (event payloads) and `EffectSource`
+ *  (listener registrations). */
+export type ModifierSourceType =
+  | "location"
+  | "policy"
+  | "passive_event"
+  | "event"
+  | "trap"
+  | "item"
+  | "unit";
+
+/** `cardId` is the instance id (two copies of the same card on the grid
+ *  resolve distinctly); `definitionId` is the kebab-case identifier from
+ *  the card library (not a human-facing display name). */
 export interface ModifierSource {
-  type: "location" | "policy" | "passive_event" | "event" | "trap" | "item" | "unit";
-  cardId: string;
-  definitionId: string;
+  readonly type: ModifierSourceType;
+  readonly cardId: string;
+  readonly definitionId: string;
 }
 
-/** One contributor in a stat-modifier breakdown. */
+/** Construction-time invariant: `delta !== 0`. The breakdown builders
+ *  filter zero-delta entries before push; manual constructors must too. */
 export interface ModifierEntry {
-  source: ModifierSource;
-  delta: number;
+  readonly source: ModifierSource;
+  readonly delta: number;
 }
 
-/** Per-side breakdown carried on `combat_pair_resolved` events. */
-export interface CombatSide {
+/** Fields shared by combat and DSL-contest per-side payloads. */
+export interface ResolutionSide {
   unitId: string;
-  baseStrength: number;
   modifiers: ModifierEntry[];
   roll: number;
-  /** baseStrength + Σdeltas + roll, after the injury penalty. */
+  /** base + Σmodifier deltas + roll. May not equal that sum when the
+   *  underlying stat clamps to 0 — the clamp surfaces as a synthetic
+   *  `definitionId: "clamped"` entry in `modifiers` so the displayed
+   *  math reconciles. */
   power: number;
+}
+
+export interface CombatSide extends ResolutionSide {
+  baseStrength: number;
   injuredBefore: boolean;
 }
 
-/** Per-side breakdown carried on `contest_resolved` events. */
-export interface ContestSide {
-  unitId: string;
+/** Mirrors `CombatSide` minus combat-specific fields. Contests do not
+ *  apply an injury penalty today, so `injuredBefore` is omitted by
+ *  design — a future debuff-aware contest can re-derive from the unit. */
+export interface ContestSide extends ResolutionSide {
   baseStat: number;
-  modifiers: ModifierEntry[];
-  roll: number;
-  power: number;
 }
+
+/** Outcome of one combat pair. Exported so the client can reference the
+ *  same literal union instead of redeclaring it. */
+export type CombatPairOutcome =
+  | "kill_attacker"
+  | "kill_defender"
+  | "injure_attacker"
+  | "injure_defender"
+  | "tie";
 
 export interface StatModifier {
   stat: StatName;
@@ -688,18 +714,13 @@ export type GameEvent =
       type: "combat_pair_resolved";
       row: number;
       col: number;
-      /** Player id of the attacking side — mirrors `combat_started.attackerId`
-       *  so categorizers can route the event to the right player group. */
-      attackerId: string;
-      defenderId: string;
+      /** Player ids — categorizers route by these. Distinct from
+       *  `attacker.unitId` / `defender.unitId` (the unit instance ids). */
+      attackerPlayerId: string;
+      defenderPlayerId: string;
       attacker: CombatSide;
       defender: CombatSide;
-      outcome:
-        | "kill_attacker"
-        | "kill_defender"
-        | "injure_attacker"
-        | "injure_defender"
-        | "tie";
+      outcome: CombatPairOutcome;
     }
   | {
       type: "market_replenished";
@@ -715,12 +736,11 @@ export type GameEvent =
   | {
       type: "contest_resolved";
       stat: StatName;
+      /** Player id who initiated the contest (the activator). Distinct
+       *  from `attackerId` (a unit instance id). */
+      casterPlayerId: string;
       attackerId: string;
       defenderId: string;
-      /** Flat power totals — kept for backward compatibility with older
-       *  renderers. New per-side breakdown is in `attacker` / `defender`. */
-      attackerPower: number;
-      defenderPower: number;
       attacker: ContestSide;
       defender: ContestSide;
       winnerId: string;

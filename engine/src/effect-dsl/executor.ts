@@ -2,7 +2,7 @@ import type { Draft } from "immer";
 import { fromState, uniformIntDistribution, type RandomGenerator } from "../rng";
 import { parse } from "./parser";
 import type { Expression, Effect, Step, Primitive, Selector } from "./types";
-import type { Card, GameEvent, LocationCard, MainGameState, ModifierEntry, ModifierSource, StatName, UnitCard } from "../types";
+import type { Card, GameEvent, LocationCard, MainGameState, ModifierSource, StatName, UnitCard } from "../types";
 import type { QueryListener, EmitFn } from "../listeners/types";
 import { getPlayerById } from "../state-helpers";
 import { drawOneCard } from "../deck-helpers";
@@ -512,7 +512,6 @@ function executeContest(step: Step, ctx: ExecutionContext): void {
   const stat = p.subVerb as StatName;
   if (!stat) throw new Error("contest verb requires a stat subVerb");
 
-  const bonus = p.value ?? 0;
   const targets = resolveUnitTargets(p.target, ctx);
   if (targets.length === 0) return;
 
@@ -542,18 +541,7 @@ function executeContest(step: Step, ctx: ExecutionContext): void {
   const [defRoll, rng2] = uniformIntDistribution(1, 6, rng1);
   ctx.rng = rng2;
 
-  // The DSL `+N` literal on a contest verb is surfaced as a synthetic
-  // modifier so the rendered math reconciles. It bypasses the listener
-  // pipeline because it's a per-action effect modifier, not a stat
-  // modifier with a `ModifierSource` distinct from the acting card.
-  const atkModifiers: ModifierEntry[] = [...atkBreakdown.modifiers];
-  if (bonus !== 0) {
-    atkModifiers.push({
-      source: ctx.actingCardSource,
-      delta: bonus,
-    });
-  }
-  const atkSum = atkModifiers.reduce((acc, m) => acc + m.delta, 0);
+  const atkSum = atkBreakdown.modifiers.reduce((acc, m) => acc + m.delta, 0);
   const atkPower = Math.max(0, atkBreakdown.base + atkSum) + atkRoll;
   const defSum = defBreakdown.modifiers.reduce((acc, m) => acc + m.delta, 0);
   const defPower = Math.max(0, defBreakdown.base + defSum) + defRoll;
@@ -570,7 +558,7 @@ function executeContest(step: Step, ctx: ExecutionContext): void {
     attacker: {
       unitId: attacker.id,
       baseStat: atkBreakdown.base,
-      modifiers: atkModifiers,
+      modifiers: atkBreakdown.modifiers,
       roll: atkRoll,
       power: atkPower,
     },

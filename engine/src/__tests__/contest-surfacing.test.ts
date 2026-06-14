@@ -582,42 +582,6 @@ describe("contest_resolved per-side breakdown", () => {
     });
   });
 
-  it("surfaces the DSL `[N]` bonus as a synthetic modifier so the math reconciles", () => {
-    // Hannibal Barca-style: `contest.strength(enemy)[3]`. Without the
-    // synthetic modifier, attacker.power would not equal
-    // base + Σmodifiers + roll — the breakdown would lie.
-    const hannibal = makeUnit({
-      ownerId: ACTIVE,
-      definitionId: "hannibal-test",
-      strength: 8,
-      actions: [{
-        name: "flank",
-        apCost: 1,
-        effect: "contest.strength(enemy)[3]",
-      }],
-    });
-    const enemy = makeUnit({ ownerId: OTHER, strength: 5 });
-    const state = gameWith((d) => {
-      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
-      d.grid[0][0].units.push(hannibal, enemy);
-    });
-
-    const { events } = applyAction(state, {
-      type: "activate",
-      playerId: ACTIVE,
-      cardId: hannibal.id,
-      actionName: "flank",
-    });
-
-    const contest = findContest(events);
-    expect(contest.attacker.modifiers).toHaveLength(1);
-    expect(contest.attacker.modifiers[0].delta).toBe(3);
-    expect(contest.attacker.modifiers[0].source.cardId).toBe(hannibal.id);
-    // The invariant — base + Σmodifiers + roll === power — must hold.
-    const sum = contest.attacker.modifiers.reduce((a, m) => a + m.delta, 0);
-    expect(contest.attacker.baseStat + sum + contest.attacker.roll).toBe(contest.attacker.power);
-  });
-
   it("surfaces a buff-verb modifier on the DSL contest payload too", () => {
     const buffer = makeUnit({ ownerId: ACTIVE, definitionId: "test-buffer" });
     const cleopatra = makeUnit({
@@ -656,6 +620,50 @@ describe("contest_resolved per-side breakdown", () => {
     expect(contest.attacker.modifiers).toHaveLength(1);
     expect(contest.attacker.modifiers[0].source.cardId).toBe(buffer.id);
     expect(contest.attacker.modifiers[0].delta).toBe(1);
+  });
+
+  it("surfaces buff-then-contest compound chain — Hannibal Barca pattern", () => {
+    // Replaces the path removed in #148 (the `[N]`-on-contest synthetic
+    // modifier). Verifies the compound chain executes in order: the buff
+    // lands first; the +3 then appears in the contest's per-side modifier
+    // breakdown sourced from the acting card itself. The math invariant
+    // `base + Σmodifiers + roll === power` must still hold from the
+    // breakdown alone.
+    const hannibal = makeUnit({
+      ownerId: ACTIVE,
+      definitionId: "hannibal-barca",
+      strength: 8,
+      actions: [{
+        name: "flank",
+        apCost: 2,
+        effect: "buff.strength(self)[3]~turn + contest.strength(enemy)",
+      }],
+    });
+    const enemy = makeUnit({ ownerId: OTHER, strength: 5 });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][0].units.push(hannibal, enemy);
+    });
+
+    const { events } = applyAction(state, {
+      type: "activate",
+      playerId: ACTIVE,
+      cardId: hannibal.id,
+      actionName: "flank",
+      targetId: enemy.id,
+    });
+
+    const contest = findContest(events);
+    expect(contest.stat).toBe("strength");
+    expect(contest.attacker.unitId).toBe(hannibal.id);
+    expect(contest.attacker.baseStat).toBe(8);
+    expect(contest.attacker.modifiers).toHaveLength(1);
+    expect(contest.attacker.modifiers[0].delta).toBe(3);
+    expect(contest.attacker.modifiers[0].source.cardId).toBe(hannibal.id);
+    // Math invariant: base + Σmods + roll === power, sourced only from the
+    // breakdown — no out-of-band bonus.
+    const atkSum = contest.attacker.modifiers.reduce((a, m) => a + m.delta, 0);
+    expect(contest.attacker.baseStat + atkSum + contest.attacker.roll).toBe(contest.attacker.power);
   });
 });
 

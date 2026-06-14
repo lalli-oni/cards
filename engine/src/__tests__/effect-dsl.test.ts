@@ -135,13 +135,18 @@ describe("Effect DSL parser", () => {
   });
 
   it("parses contest with ternary win:lose", () => {
-    const ast = parse("contest.strength(enemy)[3] > gold[3] : gold[-2]");
+    const ast = parse("contest.strength(enemy) > gold[3] : gold[-2]");
     const step = ast[0][0];
     expect(step.consequence).toBeDefined();
     expect(step.consequence!.winEffect[0].primitive.verb).toBe("gold");
     expect(step.consequence!.winEffect[0].primitive.value).toBe(3);
     expect(step.consequence!.loseEffect).toBeDefined();
     expect(step.consequence!.loseEffect![0].primitive.value).toBe(-2);
+  });
+
+  it("rejects [N] bonus on contest verb", () => {
+    expect(() => parse("contest.strength(enemy)[3]"))
+      .toThrow(/does not accept a \[N\] bonus/);
   });
 
   it("rejects invalid input", () => {

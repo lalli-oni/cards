@@ -47,11 +47,22 @@ let _lastTurnStartIndex = $state(0);
 // player's view during the overlay screen.
 let _incomingPlayerId = $state<string | null>(null);
 
-export interface ContestOutcome {
-  type: "injured" | "killed";
-  unitName: string;
-  ownerName: string;
-}
+export type ContestOutcome =
+  | { type: "injured"; unitName: string; ownerName: string }
+  | { type: "killed"; unitName: string; ownerName: string }
+  | {
+      type: "controlled";
+      /** The unit that switched controllers (e.g. the enemy unit Cleopatra
+       *  charmed). */
+      unitName: string;
+      /** The previous controller's name — the player losing the unit. */
+      ownerName: string;
+      /** The new controller's name — the player who won the contest. */
+      newControllerName: string;
+      /** Engine `duration` field on `unit_controlled` — turn-units today,
+       *  rendered as "for N turn(s)". */
+      durationTurns: number;
+    };
 
 export interface ContestResult {
   /** "combat" — multi-pair strength contest from the `attack` action.
@@ -377,6 +388,14 @@ function onEvent(events: GameEvent[], state: GameState): void {
           contestOutcomes.push({ type: "killed", unitName: resolveCardName(e.unitId), ownerName: resolvePlayerName(e.controllerId) });
         } else if (e.type === "unit_injured" && unitIds.has(e.unitId)) {
           contestOutcomes.push({ type: "injured", unitName: resolveCardName(e.unitId), ownerName: resolvePlayerName(e.controllerId) });
+        } else if (e.type === "unit_controlled" && unitIds.has(e.unitId)) {
+          contestOutcomes.push({
+            type: "controlled",
+            unitName: resolveCardName(e.unitId),
+            ownerName: resolvePlayerName(e.previousControllerId),
+            newControllerName: resolvePlayerName(e.controllerId),
+            durationTurns: e.duration,
+          });
         }
       }
 

@@ -75,6 +75,7 @@ export type {
   SeedingGameState,
   Session,
   StatModifier,
+  StatName,
   Trap,
   TrapEventCard,
   TrapView,

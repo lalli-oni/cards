@@ -8,6 +8,7 @@ import {
   type GameEvent,
   type GameState,
   type PlayerDescriptor,
+  type StatName,
   type VisibleState,
 } from "cards-engine";
 import { setAutoFreeze } from "cards-engine";
@@ -53,6 +54,13 @@ export interface ContestOutcome {
 }
 
 export interface ContestResult {
+  /** "combat" — multi-pair strength contest from the `attack` action.
+   *  "dsl" — single-pair contest from a `contest.<stat>` DSL effect (Hannibal's
+   *  flank, Cleopatra's diplomacy). Drives header text, pair caption visibility,
+   *  and (Phase 4+) which post-resolution events flow into `outcomes`. */
+  source: "combat" | "dsl";
+  /** Always "strength" for combat; matches the contest event's stat for dsl. */
+  stat: StatName;
   row: number;
   col: number;
   locationName: string;
@@ -298,6 +306,8 @@ function onEvent(events: GameEvent[], state: GameState): void {
     }
     const cell = _visibleState?.grid[combatStart.row]?.[combatStart.col];
     _contestResult = {
+      source: "combat",
+      stat: "strength",
       row: combatStart.row,
       col: combatStart.col,
       locationName: cell?.location?.name ?? `(${combatStart.row},${combatStart.col})`,

@@ -41,7 +41,7 @@
           <span class="text-text-muted">({side.ownerName})</span>
         </div>
         <div class="flex flex-wrap items-center gap-1 text-text-secondary">
-          <span class="font-mono">{side.baseStrength}</span>
+          <span class="font-mono">{side.baseStat}</span>
           {#each side.modifiers as mod}
             <span
               class="rounded bg-surface px-1.5 py-0.5 font-mono {mod.delta > 0

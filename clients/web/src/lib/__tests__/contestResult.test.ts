@@ -1,5 +1,10 @@
 import { describe, expect, it } from "bun:test";
-import { buildPairDetail, type CombatPairResolved } from "../contestResult";
+import {
+  buildPairDetail,
+  buildPairDetailFromContest,
+  type CombatPairResolved,
+  type ContestResolved,
+} from "../contestResult";
 
 const RESOLVERS = {
   card: (id: string) => `card:${id}`,
@@ -51,5 +56,45 @@ describe("buildPairDetail", () => {
     ];
     const detail = buildPairDetail(ev, RESOLVERS);
     expect(detail.attacker.modifiers).toEqual(ev.attacker.modifiers);
+  });
+
+  it("maps engine baseStrength to view baseStat", () => {
+    const detail = buildPairDetail(makeEvent("injure_defender"), RESOLVERS);
+    expect(detail.attacker.baseStat).toBe(5);
+    expect(detail.defender.baseStat).toBe(5);
+  });
+});
+
+describe("buildPairDetailFromContest", () => {
+  function makeContestEvent(winnerSide: "attacker" | "defender"): ContestResolved {
+    return {
+      type: "contest_resolved",
+      stat: "charisma",
+      casterPlayerId: "p1",
+      attackerId: "atk-unit",
+      defenderId: "def-unit",
+      attacker: { unitId: "atk-unit", baseStat: 9, modifiers: [], roll: 3, power: 12 },
+      defender: { unitId: "def-unit", baseStat: 4, modifiers: [], roll: 5, power: 9 },
+      winnerId: winnerSide === "attacker" ? "atk-unit" : "def-unit",
+    };
+  }
+
+  it("derives winnerSide from winnerId vs attackerId", () => {
+    expect(buildPairDetailFromContest(makeContestEvent("attacker"), RESOLVERS, "player:p2").winnerSide).toBe("attacker");
+    expect(buildPairDetailFromContest(makeContestEvent("defender"), RESOLVERS, "player:p2").winnerSide).toBe("defender");
+  });
+
+  it("uses casterPlayerId for attacker ownerName and the passed-in name for defender", () => {
+    const detail = buildPairDetailFromContest(makeContestEvent("attacker"), RESOLVERS, "Bob");
+    expect(detail.attacker.ownerName).toBe("player:p1");
+    expect(detail.defender.ownerName).toBe("Bob");
+  });
+
+  it("maps baseStat through unchanged and sets injuredBefore=false (contests don't carry it)", () => {
+    const detail = buildPairDetailFromContest(makeContestEvent("attacker"), RESOLVERS, "player:p2");
+    expect(detail.attacker.baseStat).toBe(9);
+    expect(detail.defender.baseStat).toBe(4);
+    expect(detail.attacker.injuredBefore).toBe(false);
+    expect(detail.defender.injuredBefore).toBe(false);
   });
 });

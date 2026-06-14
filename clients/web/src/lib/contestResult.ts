@@ -1,13 +1,18 @@
 import type {
-  CombatPairOutcome,
   GameEvent,
   ModifierEntry,
 } from "cards-engine";
 
+/** Renderer-friendly per-side view, shared by combat (multi-pair, strength
+ *  only) and DSL stat contests (single-pair, any stat). `baseStat` is the
+ *  unit's base strength/charisma/cunning before modifiers and roll.
+ *  `injuredBefore` is meaningful for combat (drives the injury-penalty
+ *  modifier in the breakdown); for DSL contests it's always false (contests
+ *  do not apply injury penalties today — see ContestSide doc in engine). */
 export interface PairSideView {
   unitName: string;
   ownerName: string;
-  baseStrength: number;
+  baseStat: number;
   modifiers: ModifierEntry[];
   roll: number;
   power: number;
@@ -17,19 +22,19 @@ export interface PairSideView {
 export interface PairDetail {
   attacker: PairSideView;
   defender: PairSideView;
-  outcome: CombatPairOutcome;
   winnerSide: "attacker" | "defender" | null;
 }
 
 export type CombatPairResolved = Extract<GameEvent, { type: "combat_pair_resolved" }>;
+export type ContestResolved = Extract<GameEvent, { type: "contest_resolved" }>;
 
 export interface NameResolvers {
   card: (id: string) => string;
   player: (id: string) => string;
 }
 
-/** Pure — derives a renderer-friendly pair detail from the engine event.
- *  Extracted so the outcome → winnerSide mapping is unit-testable. */
+/** Pure — derives a renderer-friendly pair detail from a combat_pair_resolved
+ *  event. Extracted so the outcome → winnerSide mapping is unit-testable. */
 export function buildPairDetail(
   ev: CombatPairResolved,
   resolvers: NameResolvers,
@@ -44,7 +49,7 @@ export function buildPairDetail(
     attacker: {
       unitName: resolvers.card(ev.attacker.unitId),
       ownerName: resolvers.player(ev.attackerPlayerId),
-      baseStrength: ev.attacker.baseStrength,
+      baseStat: ev.attacker.baseStrength,
       modifiers: ev.attacker.modifiers,
       roll: ev.attacker.roll,
       power: ev.attacker.power,
@@ -53,13 +58,51 @@ export function buildPairDetail(
     defender: {
       unitName: resolvers.card(ev.defender.unitId),
       ownerName: resolvers.player(ev.defenderPlayerId),
-      baseStrength: ev.defender.baseStrength,
+      baseStat: ev.defender.baseStrength,
       modifiers: ev.defender.modifiers,
       roll: ev.defender.roll,
       power: ev.defender.power,
       injuredBefore: ev.defender.injuredBefore,
     },
-    outcome: ev.outcome,
     winnerSide,
+  };
+}
+
+/** Pure — derives a renderer-friendly pair detail from a contest_resolved
+ *  event. Contests are 1v1, so the dialog renders a single pair. winnerSide
+ *  comes directly from the event's winnerId; ties go to the defender per
+ *  rules/stat-contests.md, which the engine already encodes (attacker wins
+ *  iff atkPower > defPower).
+ *
+ *  `defenderOwnerName` is passed in because contest_resolved doesn't carry
+ *  the defender's controller id (it carries `defenderId`, the unit id, plus
+ *  `casterPlayerId` for the attacker side only). The caller looks up the
+ *  defender unit's current controller from the grid and resolves the name.
+ *  Engine event symmetry with combat_pair_resolved is tracked in #153. */
+export function buildPairDetailFromContest(
+  ev: ContestResolved,
+  resolvers: NameResolvers,
+  defenderOwnerName: string,
+): PairDetail {
+  return {
+    attacker: {
+      unitName: resolvers.card(ev.attacker.unitId),
+      ownerName: resolvers.player(ev.casterPlayerId),
+      baseStat: ev.attacker.baseStat,
+      modifiers: ev.attacker.modifiers,
+      roll: ev.attacker.roll,
+      power: ev.attacker.power,
+      injuredBefore: false,
+    },
+    defender: {
+      unitName: resolvers.card(ev.defender.unitId),
+      ownerName: defenderOwnerName,
+      baseStat: ev.defender.baseStat,
+      modifiers: ev.defender.modifiers,
+      roll: ev.defender.roll,
+      power: ev.defender.power,
+      injuredBefore: false,
+    },
+    winnerSide: ev.winnerId === ev.attackerId ? "attacker" : "defender",
   };
 }

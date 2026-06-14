@@ -15,7 +15,7 @@ import { setAutoFreeze } from "cards-engine";
 import { HotseatAdapter } from "./HotseatAdapter";
 import { DEFAULT_CONFIG, buildSeedingSetup, buildMainSetup } from "./gameSetup";
 import { autoSave, listSessions, loadSession, saveSession } from "./persistence";
-import { buildPairDetail, type PairDetail } from "./contestResult";
+import { buildPairDetail, buildPairDetailFromContest, type PairDetail } from "./contestResult";
 
 export type { PairDetail, PairSideView } from "./contestResult";
 
@@ -146,6 +146,24 @@ export function resolveCardName(id: string): string {
 export function resolveCellName(row: number, col: number): string | null {
   const cell = _visibleState?.grid[row]?.[col];
   return cell?.location?.name ?? null;
+}
+
+/** Find a unit's current position by id. Used by the contest dialog to
+ *  resolve the activator's location + the defender's controller name from
+ *  the OLD visible state — contests don't move units. */
+function findUnitOnGrid(
+  grid: VisibleState["grid"],
+  unitId: string,
+): { row: number; col: number; cell: VisibleState["grid"][number][number] } | null {
+  for (let row = 0; row < grid.length; row++) {
+    for (let col = 0; col < grid[row].length; col++) {
+      const cell = grid[row][col];
+      if (cell.units.some((u) => u.id === unitId)) {
+        return { row, col, cell };
+      }
+    }
+  }
+  return null;
 }
 
 /**
@@ -326,6 +344,58 @@ function onEvent(events: GameEvent[], state: GameState): void {
     const orphanPair = events.find((e) => e.type === "combat_pair_resolved");
     if (orphanPair) {
       _error = "Combat pair event arrived without combat_started — popup skipped.";
+    }
+
+    // DSL stat-contest dialog (Hannibal's flank, Cleopatra's diplomacy, ...).
+    // Only fires when there's no combat in the batch — combat takes priority
+    // since attack-driven contests already render via the combat path. The
+    // contest event has casterPlayerId (attacker side) + defenderId (unit id);
+    // we look up the defender's controller from the OLD visible state because
+    // contests don't move units, so the position is unchanged.
+    const contestResolved = events.find((e) => e.type === "contest_resolved");
+    if (contestResolved && contestResolved.type === "contest_resolved") {
+      const contestIdx = events.indexOf(contestResolved);
+      const grid = _visibleState?.grid;
+      const attackerLoc = grid ? findUnitOnGrid(grid, contestResolved.attackerId) : null;
+      const defenderLoc = grid ? findUnitOnGrid(grid, contestResolved.defenderId) : null;
+      const defenderUnit = defenderLoc?.cell.units.find((u) => u.id === contestResolved.defenderId);
+      const defenderOwnerName = defenderUnit
+        ? resolvePlayerName(defenderUnit.controllerId)
+        : resolvePlayerName(contestResolved.defenderId);
+
+      const detail = buildPairDetailFromContest(
+        contestResolved,
+        { card: resolveCardName, player: resolvePlayerName },
+        defenderOwnerName,
+      );
+
+      const contestOutcomes: ContestOutcome[] = [];
+      const unitIds = new Set([contestResolved.attackerId, contestResolved.defenderId]);
+      for (let i = contestIdx + 1; i < events.length; i++) {
+        const e = events[i];
+        if (e.type === "unit_killed" && unitIds.has(e.unitId)) {
+          contestOutcomes.push({ type: "killed", unitName: resolveCardName(e.unitId), ownerName: resolvePlayerName(e.controllerId) });
+        } else if (e.type === "unit_injured" && unitIds.has(e.unitId)) {
+          contestOutcomes.push({ type: "injured", unitName: resolveCardName(e.unitId), ownerName: resolvePlayerName(e.controllerId) });
+        }
+      }
+
+      const cell = attackerLoc?.cell;
+      const winnerOwnerName = contestResolved.winnerId === contestResolved.attackerId
+        ? detail.attacker.ownerName
+        : detail.defender.ownerName;
+      _contestResult = {
+        source: "dsl",
+        stat: contestResolved.stat,
+        row: attackerLoc?.row ?? 0,
+        col: attackerLoc?.col ?? 0,
+        locationName: cell?.location?.name ?? `(${attackerLoc?.row ?? 0},${attackerLoc?.col ?? 0})`,
+        attackerName: detail.attacker.ownerName,
+        defenderName: detail.defender.ownerName,
+        pairs: [detail],
+        outcomes: contestOutcomes,
+        winnerName: winnerOwnerName,
+      };
     }
   }
 

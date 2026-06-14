@@ -132,7 +132,7 @@ Core primitives the engine implements. New cards compose these — no per-card c
 | `peek` | varies | Privately view cards. See [peek selectors](#peek-selectors) below. |
 | `pick` | count | Player picks N from previously peeked cards (used after `>` pipe from `peek`). `peek(deck)[3] > pick[1]` |
 | `buff.STAT` | amount | Temporary stat increase. Requires `~duration`. `buff.strength(all + friendly)[2]~turn` |
-| `contest.STAT` | bonus | Stat contest using named stat. Value = attacker bonus. `contest.strength[3]` = +3 bonus. |
+| `contest.STAT` | — | Stat contest using named stat. No bonus literal — use `buff.<stat>(self)[N]~turn + contest.<stat>(...)` to add a temporary attacker bonus (e.g. Hannibal Barca). |
 | `injure` | — | Injure target unit. `injure(enemy)` |
 | `kill` | — | Kill target unit. `kill(self)` |
 | `control` | — | Take control of target. Requires `~duration`. `control(target)~round` |

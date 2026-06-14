@@ -60,10 +60,12 @@ export function validateEffectChain(ast: Expression): void {
         }
       }
       if (step.primitive.verb === "contest") {
-        // `contest.<stat>` does NOT accept a `[N]` bonus literal. Use a
-        // `buff.<stat>(self)[N]~turn + contest.<stat>(...)` chain instead so
-        // the +N appears in the contest's per-side modifier breakdown
-        // alongside listener-sourced buffs. See #148.
+        // `contest.<stat>` does NOT accept a `[N]` bonus literal. The old
+        // surfacing patched it in as a synthetic modifier sourced from the
+        // acting card, which bypassed the listener pipeline's source
+        // attribution. Use a `buff.<stat>(self)[N]~turn + contest.<stat>(...)`
+        // chain instead so the +N appears in the contest's per-side
+        // modifier breakdown alongside listener-sourced buffs.
         if (step.primitive.value !== undefined) {
           throw new DSLValidationError(
             `'contest.${step.primitive.subVerb ?? "?"}' does not accept a [N] bonus (got [${step.primitive.value}]) — use 'buff.<stat>(self)[N]~turn + contest.<stat>(...)' instead`,

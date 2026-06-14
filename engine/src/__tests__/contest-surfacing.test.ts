@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { produce } from "immer";
 import { applyAction } from "../apply-action";
 import { deriveCombatOutcome } from "../apply-main";
+import { decideKillVsInjure } from "../unit-helpers";
 import { rebuildListeners } from "../listeners/rebuild";
 import { POLICY_ACTIONS } from "../listeners/effects";
 import { getModifiedStatWithSources } from "../listeners/query";
@@ -16,6 +17,7 @@ import {
   DEFAULT_CONFIG,
   createTestGame,
   makeInstantEvent,
+  makeItem,
   makeLocation,
   makePassiveEvent,
   makePolicy,
@@ -269,6 +271,29 @@ describe("deriveCombatOutcome", () => {
   it("kills the already-injured loser even below the kill ratio", () => {
     expect(deriveCombatOutcome(8, 5, false, true, 2)).toBe("kill_defender");
     expect(deriveCombatOutcome(5, 8, true, false, 2)).toBe("kill_attacker");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// decideKillVsInjure — pure predicate shared by combat and contests
+// ---------------------------------------------------------------------------
+
+describe("decideKillVsInjure", () => {
+  it("returns 'kill' when the loser was already injured", () => {
+    expect(decideKillVsInjure(true, 5, 5, 2)).toBe("kill");
+    expect(decideKillVsInjure(true, 6, 100, 2)).toBe("kill");
+  });
+  it("returns 'kill' when winner hits the kill ratio", () => {
+    expect(decideKillVsInjure(false, 10, 5, 2)).toBe("kill");
+    expect(decideKillVsInjure(false, 9, 3, 3)).toBe("kill");
+  });
+  it("returns 'injure' on a narrow win below the kill ratio", () => {
+    expect(decideKillVsInjure(false, 8, 5, 2)).toBe("injure");
+    expect(decideKillVsInjure(false, 6, 5, 2)).toBe("injure");
+  });
+  it("killRatio=1 makes any win lethal", () => {
+    expect(decideKillVsInjure(false, 6, 5, 1)).toBe("kill");
+    expect(decideKillVsInjure(false, 5, 5, 1)).toBe("kill");
   });
 });
 
@@ -664,6 +689,80 @@ describe("contest_resolved per-side breakdown", () => {
     // breakdown — no out-of-band bonus.
     const atkSum = contest.attacker.modifiers.reduce((a, m) => a + m.delta, 0);
     expect(contest.attacker.baseStat + atkSum + contest.attacker.roll).toBe(contest.attacker.power);
+  });
+
+  it("contest.strength default consequence honors combat_kill_ratio config override", () => {
+    // killRatio=100 means even strength 10 vs strength 1 (max atkPower 16,
+    // min defPower 2) cannot meet the kill threshold of 200 — the loser
+    // must always be merely injured, never killed.
+    const hannibal = makeUnit({
+      ownerId: ACTIVE,
+      definitionId: "hannibal-barca",
+      strength: 10,
+      actions: [{
+        name: "flank",
+        apCost: 2,
+        effect: "contest.strength(enemy)",
+      }],
+    });
+    const enemy = makeUnit({ ownerId: OTHER, strength: 1 });
+    const state = produce(
+      createTestGame({ config: { ...COMBAT_CONFIG, combat_kill_ratio: 100 } }),
+      (d) => {
+        d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+        d.grid[0][0].units.push(hannibal, enemy);
+      },
+    );
+
+    const { events } = applyAction(state, {
+      type: "activate",
+      playerId: ACTIVE,
+      cardId: hannibal.id,
+      actionName: "flank",
+      targetId: enemy.id,
+    });
+
+    expect(events.some((e) => e.type === "unit_injured")).toBe(true);
+    expect(events.some((e) => e.type === "unit_killed")).toBe(false);
+  });
+
+  it("contest.strength default consequence does NOT drop equipped items on injure", () => {
+    // Equipment-on-injure is combat-specific. A DSL contest that injures the
+    // loser must leave equipment in place.
+    const hannibal = makeUnit({
+      ownerId: ACTIVE,
+      definitionId: "hannibal-barca",
+      strength: 10,
+      actions: [{
+        name: "flank",
+        apCost: 2,
+        effect: "contest.strength(enemy)",
+      }],
+    });
+    const enemy = makeUnit({ ownerId: OTHER, strength: 1 });
+    const sword = makeItem({ ownerId: OTHER, equippedTo: enemy.id });
+    const state = produce(
+      createTestGame({ config: { ...COMBAT_CONFIG, combat_kill_ratio: 100 } }),
+      (d) => {
+        d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+        d.grid[0][0].units.push(hannibal, enemy);
+        d.grid[0][0].items.push(sword);
+      },
+    );
+
+    const { state: next, events } = applyAction(state, {
+      type: "activate",
+      playerId: ACTIVE,
+      cardId: hannibal.id,
+      actionName: "flank",
+      targetId: enemy.id,
+    });
+    const ns = next as MainGameState;
+
+    expect(events.some((e) => e.type === "unit_injured")).toBe(true);
+    expect(events.some((e) => e.type === "item_dropped")).toBe(false);
+    const item = ns.grid[0][0].items.find((i) => i.id === sword.id);
+    expect(item?.equippedTo).toBe(enemy.id);
   });
 });
 

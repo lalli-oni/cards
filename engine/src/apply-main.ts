@@ -26,7 +26,7 @@ import { rebuildListeners } from "./listeners/rebuild";
 import { getModifiedStatWithSources, getModifiedCost, getModifiedAPCost } from "./listeners/query";
 import type { EmitFn, QueryListener } from "./listeners/types";
 import { needsLocationTarget } from "./valid-actions";
-import { killUnit, dropEquippedItems } from "./unit-helpers";
+import { killUnit, injureUnit, dropEquippedItems } from "./unit-helpers";
 import type {
   ActionDef,
   ActivePassiveEvent,
@@ -893,11 +893,11 @@ function resolveCombatPair(
     // Kill: remove unit from grid, drop items, send to owner's discard
     killUnit(draft, cell, loser.unit, row, col, emit);
   } else {
-    // Injure
-    loser.unit.injured = true;
-    // Drop equipped items at location
+    // Combat-specific: drop equipped items before marking injured. Other
+    // injure sources (DSL injure, traps, contest default consequence) leave
+    // equipment in place — see injureUnit doc.
     dropEquippedItems(cell, loser.unit, row, col, emit);
-    emit({ type: "unit_injured", unitId: loser.unit.id, controllerId: loser.unit.controllerId });
+    injureUnit(loser.unit, emit);
   }
 }
 

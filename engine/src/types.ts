@@ -69,7 +69,10 @@ interface CardBase {
   rarity: Rarity;
   text?: string;
   keywords?: string[];
+  /** Seeding/creation origin. Immutable after the card is instantiated. */
   ownerId: string;
+  /** Current in-game controller. Mutates on buy, seed-steal, and control effects. */
+  controllerId: string;
 }
 
 export type StatName = "strength" | "cunning" | "charisma";
@@ -101,7 +104,11 @@ export interface StatModifier {
 }
 
 export interface ControlOverride {
-  previousOwnerId: string;
+  /** The controllerId in effect before this `control` cast was applied.
+   *  Restored when the override duration drains. Naming this "controller"
+   *  rather than "owner" lets the field hold the right semantics for
+   *  nested controls and stolen-then-controlled units. */
+  previousControllerId: string;
   remainingDuration: number;
 }
 
@@ -576,8 +583,8 @@ export type GameEvent =
       toRow: number;
       toCol: number;
     }
-  | { type: "unit_injured"; unitId: string; ownerId: string }
-  | { type: "unit_killed"; unitId: string; ownerId: string }
+  | { type: "unit_injured"; unitId: string; controllerId: string }
+  | { type: "unit_killed"; unitId: string; controllerId: string }
   | { type: "event_played"; playerId: string; cardId: string }
   | { type: "trap_set"; playerId: string; cardId: string; targetId?: string }
   | {
@@ -652,7 +659,7 @@ export type GameEvent =
   | { type: "unit_buffed"; unitId: string; stat: StatName; delta: number; source: string }
   | { type: "cards_peeked"; playerId: string; cardIds: string[]; source: PickSource | ViewSource }
   | { type: "cards_picked"; playerId: string; cardIds: string[]; source: PickSource }
-  | { type: "unit_controlled"; unitId: string; controllerId: string; previousOwnerId: string; duration: number }
+  | { type: "unit_controlled"; unitId: string; controllerId: string; previousControllerId: string; duration: number }
   | { type: "contest_resolved"; stat: StatName; attackerId: string; defenderId: string; attackerPower: number; defenderPower: number; winnerId: string }
   | { type: "passive_expired"; playerId: string; cardId: string }
   | { type: "unit_healed"; playerId: string; unitId: string }

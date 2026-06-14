@@ -8,7 +8,10 @@ export interface EffectSource {
   type: "location" | "policy" | "passive_event" | "trap" | "item" | "unit";
   cardId: string;
   definitionId: string;
-  ownerId: string;
+  /** Current controller of the source card. Bought / stolen cards report the
+   *  new player here, so "is this mine?" checks in listener conditions
+   *  follow the card's current side rather than its original drafter. */
+  controllerId: string;
   /** Grid position for location-bound effects. */
   position?: { row: number; col: number };
 }

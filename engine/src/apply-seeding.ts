@@ -275,6 +275,10 @@ function handleSeedSteal(
 
   const card = seeding.middleArea.splice(cardIdx, 1)[0];
   const player = getPlayerById(draft, playerId);
+  // Control-only transfer per decision 1 on #91 — the thief becomes the
+  // controller, ownerId preserves the original drafter for the permanent-
+  // steal variant and end-of-game return mechanic.
+  card.controllerId = playerId;
 
   let destination: "grid" | "prospect" | "market";
   if (card.type === "location" && !isFull(draft.grid)) {

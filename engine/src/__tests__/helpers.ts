@@ -48,6 +48,7 @@ export function makeUnit(
     charisma: 5,
     attributes: [],
     injured: false,
+    controllerId: overrides.ownerId,
     ...overrides,
   };
 }
@@ -63,6 +64,7 @@ export function makeLocation(
     cost: "0",
     rarity: "common",
     edges: { ...defaultEdges },
+    controllerId: overrides.ownerId,
     ...overrides,
   };
 }
@@ -77,6 +79,7 @@ export function makeItem(
     name: "Test Item",
     cost: "1",
     rarity: "common",
+    controllerId: overrides.ownerId,
     ...overrides,
   };
 }
@@ -92,6 +95,7 @@ export function makeInstantEvent(
     name: "Test Event",
     cost: "1",
     rarity: "common",
+    controllerId: overrides.ownerId,
     ...overrides,
   };
 }
@@ -108,6 +112,7 @@ export function makePassiveEvent(
     cost: "1",
     rarity: "common",
     duration: 1,
+    controllerId: overrides.ownerId,
     ...overrides,
   };
 }
@@ -123,6 +128,7 @@ export function makeTrapEvent(
     name: "Test Event",
     cost: "1",
     rarity: "common",
+    controllerId: overrides.ownerId,
     ...overrides,
   };
 }
@@ -138,6 +144,7 @@ export function makePolicy(
     cost: "0",
     rarity: "common",
     effect: "Test effect",
+    controllerId: overrides.ownerId,
     ...overrides,
   };
 }

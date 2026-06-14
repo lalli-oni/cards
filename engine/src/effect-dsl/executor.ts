@@ -178,11 +178,11 @@ function resolveUnitTargets(
     units = [...(ctx.draft.grid[row][col].units as Draft<UnitCard>[])];
   }
 
-  // Filter by ownership
+  // Filter by current controller (who actually plays the unit right now).
   if (hasEnemy) {
-    units = units.filter((u) => u.ownerId !== ctx.playerId);
+    units = units.filter((u) => u.controllerId !== ctx.playerId);
   } else if (hasFriendly) {
-    units = units.filter((u) => u.ownerId === ctx.playerId);
+    units = units.filter((u) => u.controllerId === ctx.playerId);
     // Exclude self from single-target friendly (unless "all" is specified)
     if (!hasAll && ctx.actingUnitId) {
       units = units.filter((u) => u.id !== ctx.actingUnitId);
@@ -296,7 +296,7 @@ function execMove(p: Primitive, ctx: ExecutionContext): void {
 
     ctx.emit({
       type: "unit_moved",
-      playerId: unit.ownerId,
+      playerId: unit.controllerId,
       unitId: unit.id,
       fromRow: pos.row,
       fromCol: pos.col,
@@ -419,17 +419,17 @@ function execControl(p: Primitive, ctx: ExecutionContext): void {
   const duration = p.modifiers.includes("turn") ? 1 : p.modifiers.includes("round") ? 2 : 1;
 
   for (const unit of targets) {
+    const prevController = unit.controllerId;
     unit.controlOverride = {
-      previousOwnerId: unit.ownerId,
+      previousControllerId: prevController,
       remainingDuration: duration,
     };
-    const prevOwner = unit.ownerId;
-    unit.ownerId = ctx.playerId;
+    unit.controllerId = ctx.playerId;
     ctx.emit({
       type: "unit_controlled",
       unitId: unit.id,
       controllerId: ctx.playerId,
-      previousOwnerId: prevOwner,
+      previousControllerId: prevController,
       duration,
     });
   }
@@ -466,6 +466,11 @@ function execBuy(p: Primitive, ctx: ExecutionContext): void {
   if (costOverride > 0) {
     player.gold -= Math.min(costOverride, player.gold);
   }
+  // Mirror handleBuy: the DSL caster becomes the controller. Without this
+  // write, cards bought via Nikola Tesla's `invent` (and any future buy()
+  // verb) carry the seller's controllerId and break listener/valid-action
+  // attribution.
+  card.controllerId = ctx.playerId;
   player.hand.push(card);
   ctx.emit({ type: "card_bought", playerId: ctx.playerId, cardId: card.id, cardName: card.name, cost: costOverride });
 }

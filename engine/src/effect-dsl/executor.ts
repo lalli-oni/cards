@@ -4,9 +4,9 @@ import { parse } from "./parser";
 import type { Expression, Effect, Step, Primitive, Selector } from "./types";
 import type { Card, GameEvent, LocationCard, MainGameState, ModifierSource, StatName, UnitCard } from "../types";
 import type { QueryListener, EmitFn } from "../listeners/types";
-import { getPlayerById } from "../state-helpers";
+import { getPlayerById, getConfigNumber } from "../state-helpers";
 import { drawOneCard } from "../deck-helpers";
-import { killUnit, injureUnit } from "../unit-helpers";
+import { killUnit, injureUnit, decideKillVsInjure } from "../unit-helpers";
 import { findUnitOnGrid } from "../grid-helpers";
 import { getModifiedStatWithSources } from "../listeners/query";
 
@@ -244,11 +244,11 @@ function execInjure(p: Primitive, ctx: ExecutionContext): void {
   for (const unit of targets) {
     const pos = findUnitOnGrid(ctx.draft.grid, unit.id);
     if (!pos) continue;
-    const cell = ctx.draft.grid[pos.row][pos.col];
     if (unit.injured) {
+      const cell = ctx.draft.grid[pos.row][pos.col];
       killUnit(ctx.draft, cell, unit, pos.row, pos.col, ctx.emit);
     } else {
-      injureUnit(cell, unit, pos.row, pos.col, ctx.emit);
+      injureUnit(unit, ctx.emit);
     }
   }
 }
@@ -513,18 +513,29 @@ function executeContest(step: Step, ctx: ExecutionContext): void {
   if (!stat) throw new Error("contest verb requires a stat subVerb");
 
   const targets = resolveUnitTargets(p.target, ctx);
-  if (targets.length === 0) return;
+  if (targets.length === 0) {
+    // No valid target — match the established `if (targets.length === 0) return;`
+    // convention used by execKill / execInjure / execMove. valid-actions filtering
+    // should prevent this at activate time today; if it ever fires, the AP-spent
+    // activation produces no popup. Surfacing this as a structured no-target event
+    // is tracked in #153 (broader contest unification).
+    return;
+  }
 
   const target = targets[0];
   ctx._lastTarget = target;
 
   if (!ctx.actingUnitId) throw new Error("contest requires an acting unit");
   const actingPos = findUnitOnGrid(ctx.draft.grid, ctx.actingUnitId);
-  if (!actingPos) return;
+  if (!actingPos) {
+    throw new Error(`contest: acting unit ${ctx.actingUnitId} is not on the grid (should be impossible — valid-actions guards activation)`);
+  }
   const attacker = actingPos.unit as Draft<UnitCard>;
 
   const targetPos = findUnitOnGrid(ctx.draft.grid, target.id);
-  if (!targetPos) return;
+  if (!targetPos) {
+    throw new Error(`contest: target unit ${target.id} is not on the grid (should be impossible — resolveUnitTargets walked the grid moments ago)`);
+  }
 
   const atkBreakdown = getModifiedStatWithSources(
     ctx.draft as MainGameState, ctx.queries, attacker as UnitCard, stat,
@@ -587,16 +598,19 @@ function executeContest(step: Step, ctx: ExecutionContext): void {
     if (stat === "strength") {
       const loser = attackerWins ? target : attacker;
       const loserPos = findUnitOnGrid(ctx.draft.grid, loser.id);
-      if (!loserPos) return;
-      const cell = ctx.draft.grid[loserPos.row][loserPos.col];
-      const killRatio = 2;
+      if (!loserPos) {
+        throw new Error(`contest default consequence: loser ${loser.id} is not on the grid (should be impossible — both units were just at known positions)`);
+      }
+      const killRatio = getConfigNumber(ctx.draft, "combat_kill_ratio", 2);
       const winnerPower = attackerWins ? atkPower : defPower;
       const loserPower = attackerWins ? defPower : atkPower;
+      const verdict = decideKillVsInjure(loser.injured, winnerPower, loserPower, killRatio);
 
-      if (loser.injured || winnerPower >= killRatio * loserPower) {
+      if (verdict === "kill") {
+        const cell = ctx.draft.grid[loserPos.row][loserPos.col];
         killUnit(ctx.draft, cell, loser, loserPos.row, loserPos.col, ctx.emit);
       } else {
-        injureUnit(cell, loser, loserPos.row, loserPos.col, ctx.emit);
+        injureUnit(loser, ctx.emit);
       }
     }
   }

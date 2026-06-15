@@ -14,9 +14,13 @@ import { setAutoFreeze } from "cards-engine";
 import { HotseatAdapter } from "./HotseatAdapter";
 import { DEFAULT_CONFIG, buildSeedingSetup, buildMainSetup } from "./gameSetup";
 import { autoSave, listSessions, loadSession, saveSession } from "./persistence";
-import { buildPairDetail, type PairDetail } from "./combatResult";
+import {
+  buildCombatContestResult,
+  buildDslContestResult,
+  type ContestResult,
+} from "./contestResult";
 
-export type { PairDetail, PairSideView } from "./combatResult";
+export type { ContestOutcome, ContestResult, PairDetail, PairSideView } from "./contestResult";
 
 // Immer auto-freezes produce() output. Svelte 5's $state uses deep proxies.
 // Frozen objects passed into $state (and proxied objects passed back to immer)
@@ -46,24 +50,7 @@ let _lastTurnStartIndex = $state(0);
 // player's view during the overlay screen.
 let _incomingPlayerId = $state<string | null>(null);
 
-export interface CombatOutcome {
-  type: "injured" | "killed";
-  unitName: string;
-  ownerName: string;
-}
-
-export interface CombatResult {
-  row: number;
-  col: number;
-  locationName: string;
-  attackerName: string;
-  defenderName: string;
-  pairs: PairDetail[];
-  outcomes: CombatOutcome[];
-  winnerName: string | null;
-}
-
-let _combatResult = $state<CombatResult | null>(null);
+let _contestResult = $state<ContestResult | null>(null);
 
 export function getScreen() {
   return _screen;
@@ -93,11 +80,11 @@ export function getSavedSessions() {
 export function getGamePhase() {
   return _gamePhase;
 }
-export function getCombatResult() {
-  return _combatResult;
+export function getContestResult() {
+  return _contestResult;
 }
-export function dismissCombat() {
-  _combatResult = null;
+export function dismissContest() {
+  _contestResult = null;
 }
 // Derived card name lookup — rebuilt when visible state changes.
 // Covers grid, hand, HQ, policies, decks, discard, removed, market,
@@ -205,6 +192,14 @@ export function setError(message: string): void {
   _error = message;
 }
 
+/** Append a message to the current error banner, separated by a newline if
+ *  another message is already showing. Replaces the old pattern of
+ *  `_error = "..."` which silently clobbered prior warnings — see
+ *  Finding #1 in the /review-pr findings. */
+function pushError(message: string): void {
+  _error = _error ? `${_error}\n${message}` : message;
+}
+
 // ---------------------------------------------------------------------------
 // Internal state
 // ---------------------------------------------------------------------------
@@ -236,7 +231,7 @@ function onBeforeTurn(playerId: string): Promise<void> {
     return Promise.resolve();
   }
   lastActivePlayerId = playerId;
-  _combatResult = null; // Clear stale combat results on player change
+  _contestResult = null; // Clear stale contest result on player change
   const player = players.find((p) => p.id === playerId);
   _currentPlayerName = player?.name ?? playerId;
   _incomingPlayerId = playerId;
@@ -277,45 +272,55 @@ function onEvent(events: GameEvent[], state: GameState): void {
     }
   }
 
-  // Extract combat result for popup. Names are resolved NOW because killed
-  // units will be removed from the visible state before the popup renders.
+  // Popup state — names resolved NOW because killed units will leave the
+  // visible state before the popup renders. Factories live in contestResult.ts
+  // so the construction invariants are testable in isolation.
+  const resolvers = { card: resolveCardName, player: resolvePlayerName };
   const combatStart = events.find((e) => e.type === "combat_started");
-  if (combatStart && combatStart.type === "combat_started") {
-    const combatEnd = events.find((e) => e.type === "combat_resolved");
-    if (!combatEnd) {
-      _error = "Combat resolution incomplete (missing combat_resolved event). Some outcomes may be missing from the dialog.";
+  const contestEvents = events.filter((e) => e.type === "contest_resolved");
+
+  // Collision warnings — both fire as their own pushError; the final dialog
+  // wins (combat takes priority over contest), but both warnings stay visible.
+  if (combatStart && contestEvents.length > 0) {
+    pushError("Both combat and a contest resolved in the same batch — only the combat popup is shown.");
+  }
+  if (contestEvents.length > 1) {
+    pushError("Multiple contest_resolved events in one batch — only the first is shown.");
+  }
+
+  if (combatStart) {
+    const { result: combatResult, error: combatError } = buildCombatContestResult(events, _visibleState, resolvers);
+    if (combatError) pushError(combatError);
+    if (combatResult) {
+      _contestResult = combatResult;
+    } else {
+      // Factory returned null with no error — couldn't find combat_started.
+      // Shouldn't happen since we just checked combatStart above; defensive.
+      _contestResult = null;
     }
-    const outcomes: CombatOutcome[] = [];
-    const pairs: PairDetail[] = [];
-    for (const e of events) {
-      if (e.type === "unit_injured") {
-        outcomes.push({ type: "injured", unitName: resolveCardName(e.unitId), ownerName: resolvePlayerName(e.controllerId) });
-      } else if (e.type === "unit_killed") {
-        outcomes.push({ type: "killed", unitName: resolveCardName(e.unitId), ownerName: resolvePlayerName(e.controllerId) });
-      } else if (e.type === "combat_pair_resolved") {
-        pairs.push(buildPairDetail(e, { card: resolveCardName, player: resolvePlayerName }));
-      }
-    }
-    const cell = _visibleState?.grid[combatStart.row]?.[combatStart.col];
-    _combatResult = {
-      row: combatStart.row,
-      col: combatStart.col,
-      locationName: cell?.location?.name ?? `(${combatStart.row},${combatStart.col})`,
-      attackerName: resolvePlayerName(combatStart.attackerId),
-      defenderName: resolvePlayerName(combatStart.defenderId),
-      pairs,
-      outcomes,
-      winnerName: combatEnd?.type === "combat_resolved" && combatEnd.winnerId
-        ? resolvePlayerName(combatEnd.winnerId)
-        : null,
-    };
   } else {
     // Orphan-pair guard: any `combat_pair_resolved` without a matching
     // `combat_started` in the same batch would silently disappear from
-    // the popup. Surface it.
+    // the popup. Clear stale popup state too — see Finding #2.
     const orphanPair = events.find((e) => e.type === "combat_pair_resolved");
     if (orphanPair) {
-      _error = "Combat pair event arrived without combat_started — popup skipped.";
+      _contestResult = null;
+      pushError("Combat pair event arrived without combat_started — popup skipped.");
+    }
+
+    const contestResolved = contestEvents[0];
+    if (contestResolved && contestResolved.type === "contest_resolved") {
+      const contestIdx = events.indexOf(contestResolved);
+      const { result: contestResult, error: contestError } = buildDslContestResult(
+        contestResolved, contestIdx, events, _visibleState, resolvers,
+      );
+      if (contestResult) {
+        _contestResult = contestResult;
+      } else if (contestError) {
+        // Skip path: clear any stale popup before surfacing the error.
+        _contestResult = null;
+        pushError(contestError);
+      }
     }
   }
 
@@ -390,7 +395,7 @@ export function startNewGame(
   _gamePhase = skipSeeding ? "main" : "seeding";
   _prevTurnStartIndex = 0;
   _lastTurnStartIndex = 0;
-  _combatResult = null;
+  _contestResult = null;
   lastActivePlayerId = null;
   autoSaveFailCount = 0;
 
@@ -443,7 +448,7 @@ export async function loadGame(key: string): Promise<void> {
   _error = null;
   _prevTurnStartIndex = 0;
   _lastTurnStartIndex = 0;
-  _combatResult = null;
+  _contestResult = null;
   lastActivePlayerId = null;
   autoSaveFailCount = 0;
 
@@ -542,7 +547,7 @@ export function returnToMenu(): void {
   _eventLog = [];
   _prevTurnStartIndex = 0;
   _lastTurnStartIndex = 0;
-  _combatResult = null;
+  _contestResult = null;
   _gamePhase = null;
   _currentPlayerName = "";
   _error = null;

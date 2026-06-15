@@ -680,7 +680,7 @@ export const TRAP_EFFECTS: Record<string, TrapEffectFactory> = {
       if (unit.injured) {
         killUnit(draft, cell, unit, row, col, emit);
       } else {
-        injureUnit(cell, unit, row, col, emit);
+        injureUnit(unit, emit);
       }
     }),
     queries: [],
@@ -691,7 +691,7 @@ export const TRAP_EFFECTS: Record<string, TrapEffectFactory> = {
       if (unit.strength <= 6 || unit.injured) {
         killUnit(draft, cell, unit, row, col, emit);
       } else {
-        injureUnit(cell, unit, row, col, emit);
+        injureUnit(unit, emit);
       }
     }),
     queries: [],

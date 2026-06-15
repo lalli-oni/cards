@@ -15,7 +15,7 @@
   import MainPhase from "./components/MainPhase.svelte";
   import EndedScreen from "./components/EndedScreen.svelte";
   import EventLog from "./components/EventLog.svelte";
-  import CombatResultPopup from "./components/CombatResultPopup.svelte";
+  import ContestResultPopup from "./components/ContestResultPopup.svelte";
   import PickPromptOverlay from "./components/PickPromptOverlay.svelte";
   import ViewPromptOverlay from "./components/ViewPromptOverlay.svelte";
   // TODO: Remove DevPreview import and /#dev route once quick-start variant (#82) lands
@@ -70,7 +70,7 @@
       <PassDeviceOverlay />
     {/if}
 
-    <CombatResultPopup />
+    <ContestResultPopup />
 
     {#if vs?.pickPrompt}
       <PickPromptOverlay />

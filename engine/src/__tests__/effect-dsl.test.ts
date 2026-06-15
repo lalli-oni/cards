@@ -229,6 +229,31 @@ describe("Effect DSL executor", () => {
     expect(events.some((e) => e.type === "unit_injured")).toBe(true);
   });
 
+  it("injure(enemy) does NOT drop equipped items (combat-injure-only by design)", () => {
+    // Companion regression to the contest-injure equipment test in
+    // contest-surfacing.test.ts. The DSL `injure` verb is one of the three
+    // non-combat injure sites whose item-drop side effect was intentionally
+    // removed when injureUnit was narrowed.
+    const state = gameWith((d, p) => {
+      d.grid[0][0].location = makeLocation({ ownerId: p.active });
+      const actor = makeUnit({ ownerId: p.active });
+      const enemy = makeUnit({ ownerId: p.other });
+      const sword = makeItem({ ownerId: p.other, equippedTo: enemy.id });
+      d.grid[0][0].units.push(actor, enemy);
+      d.grid[0][0].items.push(sword);
+    });
+    const actingUnit = state.grid[0][0].units[0];
+    const enemyUnit = state.grid[0][0].units[1];
+    const { state: next, events } = runEffect(state, "injure(enemy)", {
+      actingUnitId: actingUnit.id,
+      targetId: enemyUnit.id,
+    });
+    expect(events.some((e) => e.type === "unit_injured")).toBe(true);
+    expect(events.some((e) => e.type === "item_dropped")).toBe(false);
+    const item = next.grid[0][0].items[0];
+    expect(item.equippedTo).toBe(enemyUnit.id);
+  });
+
   it("compound: vp[1] + kill(self)", () => {
     const state = gameWith((d, p) => {
       d.players[p.activeIdx].vp = 0;

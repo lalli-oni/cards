@@ -90,8 +90,20 @@ export function describeAction(
       return `Raze ${cellLabel(action.row, action.col, c)}`;
     case "attempt_mission":
       return `Attempt mission at ${cellLabel(action.row, action.col, c)}`;
-    case "activate":
-      return `Activate ${idOrName(action.cardId, n)}: ${action.actionName}`;
+    case "activate": {
+      // Activate actions that resolve to multiple variants (e.g. `move(self)`
+      // on Marco Polo / Alexander / Ibn Battuta, or multi-target contests)
+      // arrive in the action list as duplicate rows differing only by
+      // targetCell / targetId. Surface the target so the player can tell
+      // them apart.
+      let label = `Activate ${idOrName(action.cardId, n)}: ${action.actionName}`;
+      if (action.targetCell) {
+        label += ` → ${cellLabel(action.targetCell.row, action.targetCell.col, c)}`;
+      } else if (action.targetId) {
+        label += ` → ${idOrName(action.targetId, n)}`;
+      }
+      return label;
+    }
     case "seed_draw":
       return "Draw seeding cards";
     case "seed_keep":

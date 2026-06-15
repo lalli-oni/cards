@@ -317,6 +317,16 @@ function onEvent(events: GameEvent[], state: GameState): void {
   // Extract combat result for popup. Names are resolved NOW because killed
   // units will be removed from the visible state before the popup renders.
   const combatStart = events.find((e) => e.type === "combat_started");
+  const contestEvents = events.filter((e) => e.type === "contest_resolved");
+  if (combatStart && contestEvents.length > 0) {
+    // Combat takes the popup; warn that the contest result is hidden.
+    _error = "Both combat and a contest resolved in the same batch — only the combat popup is shown.";
+  }
+  if (contestEvents.length > 1) {
+    // No v0.1 card emits two contests in one batch, but a future compound
+    // DSL effect could. Warn so we don't silently drop the trailing ones.
+    _error = "Multiple contest_resolved events in one batch — only the first is shown.";
+  }
   if (combatStart && combatStart.type === "combat_started") {
     const combatEnd = events.find((e) => e.type === "combat_resolved");
     if (!combatEnd) {
@@ -363,58 +373,60 @@ function onEvent(events: GameEvent[], state: GameState): void {
     // contest event has casterPlayerId (attacker side) + defenderId (unit id);
     // we look up the defender's controller from the OLD visible state because
     // contests don't move units, so the position is unchanged.
-    const contestResolved = events.find((e) => e.type === "contest_resolved");
+    const contestResolved = contestEvents[0];
     if (contestResolved && contestResolved.type === "contest_resolved") {
-      const contestIdx = events.indexOf(contestResolved);
       const grid = _visibleState?.grid;
       const attackerLoc = grid ? findUnitOnGrid(grid, contestResolved.attackerId) : null;
       const defenderLoc = grid ? findUnitOnGrid(grid, contestResolved.defenderId) : null;
       const defenderUnit = defenderLoc?.cell.units.find((u) => u.id === contestResolved.defenderId);
-      const defenderOwnerName = defenderUnit
-        ? resolvePlayerName(defenderUnit.controllerId)
-        : resolvePlayerName(contestResolved.defenderId);
 
-      const detail = buildPairDetailFromContest(
-        contestResolved,
-        { card: resolveCardName, player: resolvePlayerName },
-        defenderOwnerName,
-      );
+      if (!attackerLoc || !defenderUnit) {
+        // Can't render a faithful dialog if we can't pin both units on the
+        // grid — surface and skip rather than render with (0,0) coords or
+        // a unit id where a player name belongs.
+        _error = "Contest result: could not locate attacker or defender on the grid — popup skipped.";
+      } else {
+        const detail = buildPairDetailFromContest(
+          contestResolved,
+          { card: resolveCardName, player: resolvePlayerName },
+          resolvePlayerName(defenderUnit.controllerId),
+        );
 
-      const contestOutcomes: ContestOutcome[] = [];
-      const unitIds = new Set([contestResolved.attackerId, contestResolved.defenderId]);
-      for (let i = contestIdx + 1; i < events.length; i++) {
-        const e = events[i];
-        if (e.type === "unit_killed" && unitIds.has(e.unitId)) {
-          contestOutcomes.push({ type: "killed", unitName: resolveCardName(e.unitId), ownerName: resolvePlayerName(e.controllerId) });
-        } else if (e.type === "unit_injured" && unitIds.has(e.unitId)) {
-          contestOutcomes.push({ type: "injured", unitName: resolveCardName(e.unitId), ownerName: resolvePlayerName(e.controllerId) });
-        } else if (e.type === "unit_controlled" && unitIds.has(e.unitId)) {
-          contestOutcomes.push({
-            type: "controlled",
-            unitName: resolveCardName(e.unitId),
-            ownerName: resolvePlayerName(e.previousControllerId),
-            newControllerName: resolvePlayerName(e.controllerId),
-            durationTurns: e.duration,
-          });
+        const contestOutcomes: ContestOutcome[] = [];
+        const contestIdx = events.indexOf(contestResolved);
+        const unitIds = new Set([contestResolved.attackerId, contestResolved.defenderId]);
+        for (let i = contestIdx + 1; i < events.length; i++) {
+          const e = events[i];
+          if (e.type === "unit_killed" && unitIds.has(e.unitId)) {
+            contestOutcomes.push({ type: "killed", unitName: resolveCardName(e.unitId), ownerName: resolvePlayerName(e.controllerId) });
+          } else if (e.type === "unit_injured" && unitIds.has(e.unitId)) {
+            contestOutcomes.push({ type: "injured", unitName: resolveCardName(e.unitId), ownerName: resolvePlayerName(e.controllerId) });
+          } else if (e.type === "unit_controlled" && unitIds.has(e.unitId)) {
+            contestOutcomes.push({
+              type: "controlled",
+              unitName: resolveCardName(e.unitId),
+              ownerName: resolvePlayerName(e.previousControllerId),
+              newControllerName: resolvePlayerName(e.controllerId),
+              durationTurns: e.duration,
+            });
+          }
         }
-      }
 
-      const cell = attackerLoc?.cell;
-      const winnerOwnerName = contestResolved.winnerId === contestResolved.attackerId
-        ? detail.attacker.ownerName
-        : detail.defender.ownerName;
-      _contestResult = {
-        source: "dsl",
-        stat: contestResolved.stat,
-        row: attackerLoc?.row ?? 0,
-        col: attackerLoc?.col ?? 0,
-        locationName: cell?.location?.name ?? `(${attackerLoc?.row ?? 0},${attackerLoc?.col ?? 0})`,
-        attackerName: detail.attacker.ownerName,
-        defenderName: detail.defender.ownerName,
-        pairs: [detail],
-        outcomes: contestOutcomes,
-        winnerName: winnerOwnerName,
-      };
+        _contestResult = {
+          source: "dsl",
+          stat: contestResolved.stat,
+          row: attackerLoc.row,
+          col: attackerLoc.col,
+          locationName: attackerLoc.cell.location?.name ?? `(${attackerLoc.row},${attackerLoc.col})`,
+          attackerName: detail.attacker.ownerName,
+          defenderName: detail.defender.ownerName,
+          pairs: [detail],
+          outcomes: contestOutcomes,
+          winnerName: detail.winnerSide === "attacker"
+            ? detail.attacker.ownerName
+            : detail.defender.ownerName,
+        };
+      }
     }
   }
 

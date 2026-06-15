@@ -17,24 +17,42 @@
     return s.length === 0 ? s : s[0].toUpperCase() + s.slice(1);
   }
 
-  const headerTitle: string = $derived(
-    !result
-      ? ""
-      : result.source === "combat"
-        ? `Combat at ${result.locationName}`
-        : `${capitalize(result.stat)} contest at ${result.locationName}`,
-  );
+  type DialogView = {
+    title: string;
+    showPairCaption: boolean;
+    /** Empty when no message should render — the winner footer carries the
+     *  result on its own. Only the genuine no-resolution case (combat
+     *  draws; theoretical DSL contests with no winner) gets copy here. */
+    emptyOutcomesMsg: string;
+  };
 
-  const showPairCaption: boolean = $derived(!!result && result.source === "combat");
-  const noOutcomeMessage: string = $derived(
-    !result || result.source === "combat" ? "No casualties — draw!" : "No effect — defender held.",
-  );
+  const view: DialogView | null = $derived.by(() => {
+    if (!result) return null;
+    if (result.source === "combat") {
+      return {
+        title: `Combat at ${result.locationName}`,
+        showPairCaption: true,
+        emptyOutcomesMsg: "No casualties — draw!",
+      };
+    }
+    return {
+      title: `${capitalize(result.stat)} contest at ${result.locationName}`,
+      showPairCaption: false,
+      // A DSL contest that resolves with a winner but no follow-up effect
+      // is fully described by the "{winner} wins!" footer — adding "no
+      // effect — defender held" alongside would contradict the footer when
+      // the attacker won. Engine's executor.ts:586 only emits a default
+      // kill/injure consequence for stat==='strength', so non-strength
+      // contests without an explicit win/lose effect land here.
+      emptyOutcomesMsg: result.winnerName ? "" : "No effect.",
+    };
+  });
 </script>
 
-{#if result}
+{#if result && view}
   <Modal>
     <h3 class="mb-3 text-center text-lg font-bold text-text-primary">
-      {headerTitle}
+      {view.title}
     </h3>
 
     <div class="mb-4 flex items-center justify-center gap-3 text-sm">
@@ -79,7 +97,7 @@
       <div class="mb-4 space-y-2">
         {#each result.pairs as pair, i}
           <div class="rounded border border-border bg-surface p-2">
-            {#if showPairCaption}
+            {#if view.showPairCaption}
               <div class="mb-1 text-xs text-text-muted">Pair {i + 1}</div>
             {/if}
             <div class="flex gap-2">
@@ -121,8 +139,8 @@
           </div>
         {/each}
       </div>
-    {:else}
-      <p class="mb-4 text-center text-sm text-text-muted">{noOutcomeMessage}</p>
+    {:else if view.emptyOutcomesMsg}
+      <p class="mb-4 text-center text-sm text-text-muted">{view.emptyOutcomesMsg}</p>
     {/if}
 
     <div class="mb-4 text-center text-sm font-semibold">

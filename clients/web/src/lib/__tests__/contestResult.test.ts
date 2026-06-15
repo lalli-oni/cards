@@ -1,9 +1,11 @@
 import { describe, expect, it } from "bun:test";
 import {
+  buildDialogView,
   buildPairDetail,
   buildPairDetailFromContest,
   type CombatPairResolved,
   type ContestResolved,
+  type ContestResult,
 } from "../contestResult";
 
 const RESOLVERS = {
@@ -90,11 +92,68 @@ describe("buildPairDetailFromContest", () => {
     expect(detail.defender.ownerName).toBe("Bob");
   });
 
-  it("maps baseStat through unchanged and sets injuredBefore=false (contests don't carry it)", () => {
+  it("maps baseStat through unchanged", () => {
     const detail = buildPairDetailFromContest(makeContestEvent("attacker"), RESOLVERS, "player:p2");
     expect(detail.attacker.baseStat).toBe(9);
     expect(detail.defender.baseStat).toBe(4);
-    expect(detail.attacker.injuredBefore).toBe(false);
-    expect(detail.defender.injuredBefore).toBe(false);
+  });
+
+  it("throws when defenderOwnerName is empty (caller contract)", () => {
+    expect(() => buildPairDetailFromContest(makeContestEvent("attacker"), RESOLVERS, "")).toThrow(/defenderOwnerName/);
+  });
+});
+
+describe("buildDialogView", () => {
+  function combatResult(overrides: Partial<Extract<ContestResult, { source: "combat" }>> = {}): ContestResult {
+    return {
+      source: "combat",
+      stat: "strength",
+      row: 0, col: 0,
+      locationName: "Marketplace",
+      attackerName: "Alice",
+      defenderName: "Bob",
+      pairs: [],
+      outcomes: [],
+      winnerName: null,
+      ...overrides,
+    };
+  }
+  function dslResult(overrides: Partial<Extract<ContestResult, { source: "dsl" }>> = {}): ContestResult {
+    return {
+      source: "dsl",
+      stat: "charisma",
+      row: 0, col: 0,
+      locationName: "Palace",
+      attackerName: "Cleopatra-owner",
+      defenderName: "Tank-owner",
+      pairs: [],
+      outcomes: [],
+      winnerName: "Cleopatra-owner",
+      ...overrides,
+    };
+  }
+
+  it("combat → 'Combat at {loc}' title, showPairCaption, draw copy", () => {
+    const view = buildDialogView(combatResult());
+    expect(view.title).toBe("Combat at Marketplace");
+    expect(view.showPairCaption).toBe(true);
+    expect(view.emptyOutcomesMsg).toBe("No casualties — draw!");
+  });
+
+  it("dsl with winner → '{Stat} contest at {loc}' title, no caption, null empty-msg (footer carries it)", () => {
+    const view = buildDialogView(dslResult({ stat: "charisma" }));
+    expect(view.title).toBe("Charisma contest at Palace");
+    expect(view.showPairCaption).toBe(false);
+    expect(view.emptyOutcomesMsg).toBe(null);
+  });
+
+  it("dsl strength contest capitalizes stat in title", () => {
+    const view = buildDialogView(dslResult({ stat: "strength", locationName: "Battlefield" }));
+    expect(view.title).toBe("Strength contest at Battlefield");
+  });
+
+  it("dsl cunning contest capitalizes stat in title", () => {
+    const view = buildDialogView(dslResult({ stat: "cunning" }));
+    expect(view.title).toBe("Cunning contest at Palace");
   });
 });

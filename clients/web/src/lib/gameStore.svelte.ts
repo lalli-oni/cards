@@ -8,16 +8,19 @@ import {
   type GameEvent,
   type GameState,
   type PlayerDescriptor,
-  type StatName,
   type VisibleState,
 } from "cards-engine";
 import { setAutoFreeze } from "cards-engine";
 import { HotseatAdapter } from "./HotseatAdapter";
 import { DEFAULT_CONFIG, buildSeedingSetup, buildMainSetup } from "./gameSetup";
 import { autoSave, listSessions, loadSession, saveSession } from "./persistence";
-import { buildPairDetail, buildPairDetailFromContest, type PairDetail } from "./contestResult";
+import {
+  buildCombatContestResult,
+  buildDslContestResult,
+  type ContestResult,
+} from "./contestResult";
 
-export type { PairDetail, PairSideView } from "./contestResult";
+export type { ContestOutcome, ContestResult, PairDetail, PairSideView } from "./contestResult";
 
 // Immer auto-freezes produce() output. Svelte 5's $state uses deep proxies.
 // Frozen objects passed into $state (and proxied objects passed back to immer)
@@ -46,41 +49,6 @@ let _lastTurnStartIndex = $state(0);
 // for this id, not _visibleState.playerId, which still holds the OUTGOING
 // player's view during the overlay screen.
 let _incomingPlayerId = $state<string | null>(null);
-
-export type ContestOutcome =
-  | { type: "injured"; unitName: string; ownerName: string }
-  | { type: "killed"; unitName: string; ownerName: string }
-  | {
-      type: "controlled";
-      /** The unit that switched controllers (e.g. the enemy unit Cleopatra
-       *  charmed). */
-      unitName: string;
-      /** The previous controller's name — the player losing the unit. */
-      ownerName: string;
-      /** The new controller's name — the player who won the contest. */
-      newControllerName: string;
-      /** Engine `duration` field on `unit_controlled` — turn-units today,
-       *  rendered as "for N turn(s)". */
-      durationTurns: number;
-    };
-
-export interface ContestResult {
-  /** "combat" — multi-pair strength contest from the `attack` action.
-   *  "dsl" — single-pair contest from a `contest.<stat>` DSL effect (Hannibal's
-   *  flank, Cleopatra's diplomacy). Drives header text, pair caption visibility,
-   *  and (Phase 4+) which post-resolution events flow into `outcomes`. */
-  source: "combat" | "dsl";
-  /** Always "strength" for combat; matches the contest event's stat for dsl. */
-  stat: StatName;
-  row: number;
-  col: number;
-  locationName: string;
-  attackerName: string;
-  defenderName: string;
-  pairs: PairDetail[];
-  outcomes: ContestOutcome[];
-  winnerName: string | null;
-}
 
 let _contestResult = $state<ContestResult | null>(null);
 
@@ -159,24 +127,6 @@ export function resolveCellName(row: number, col: number): string | null {
   return cell?.location?.name ?? null;
 }
 
-/** Find a unit's current position by id. Used by the contest dialog to
- *  resolve the activator's location + the defender's controller name from
- *  the OLD visible state — contests don't move units. */
-function findUnitOnGrid(
-  grid: VisibleState["grid"],
-  unitId: string,
-): { row: number; col: number; cell: VisibleState["grid"][number][number] } | null {
-  for (let row = 0; row < grid.length; row++) {
-    for (let col = 0; col < grid[row].length; col++) {
-      const cell = grid[row][col];
-      if (cell.units.some((u) => u.id === unitId)) {
-        return { row, col, cell };
-      }
-    }
-  }
-  return null;
-}
-
 /**
  * Tooltip text for an `activate` action — looks up the source card and its
  * named action. For policies, `action.effect` is human-readable prose. For
@@ -242,6 +192,14 @@ export function setError(message: string): void {
   _error = message;
 }
 
+/** Append a message to the current error banner, separated by a newline if
+ *  another message is already showing. Replaces the old pattern of
+ *  `_error = "..."` which silently clobbered prior warnings — see
+ *  Finding #1 in the /review-pr findings. */
+function pushError(message: string): void {
+  _error = _error ? `${_error}\n${message}` : message;
+}
+
 // ---------------------------------------------------------------------------
 // Internal state
 // ---------------------------------------------------------------------------
@@ -273,7 +231,7 @@ function onBeforeTurn(playerId: string): Promise<void> {
     return Promise.resolve();
   }
   lastActivePlayerId = playerId;
-  _contestResult = null; // Clear stale combat results on player change
+  _contestResult = null; // Clear stale contest result on player change
   const player = players.find((p) => p.id === playerId);
   _currentPlayerName = player?.name ?? playerId;
   _incomingPlayerId = playerId;
@@ -314,118 +272,54 @@ function onEvent(events: GameEvent[], state: GameState): void {
     }
   }
 
-  // Extract combat result for popup. Names are resolved NOW because killed
-  // units will be removed from the visible state before the popup renders.
+  // Popup state — names resolved NOW because killed units will leave the
+  // visible state before the popup renders. Factories live in contestResult.ts
+  // so the construction invariants are testable in isolation.
+  const resolvers = { card: resolveCardName, player: resolvePlayerName };
   const combatStart = events.find((e) => e.type === "combat_started");
   const contestEvents = events.filter((e) => e.type === "contest_resolved");
+
+  // Collision warnings — both fire as their own pushError; the final dialog
+  // wins (combat takes priority over contest), but both warnings stay visible.
   if (combatStart && contestEvents.length > 0) {
-    // Combat takes the popup; warn that the contest result is hidden.
-    _error = "Both combat and a contest resolved in the same batch — only the combat popup is shown.";
+    pushError("Both combat and a contest resolved in the same batch — only the combat popup is shown.");
   }
   if (contestEvents.length > 1) {
-    // No v0.1 card emits two contests in one batch, but a future compound
-    // DSL effect could. Warn so we don't silently drop the trailing ones.
-    _error = "Multiple contest_resolved events in one batch — only the first is shown.";
+    pushError("Multiple contest_resolved events in one batch — only the first is shown.");
   }
-  if (combatStart && combatStart.type === "combat_started") {
-    const combatEnd = events.find((e) => e.type === "combat_resolved");
-    if (!combatEnd) {
-      _error = "Combat resolution incomplete (missing combat_resolved event). Some outcomes may be missing from the dialog.";
+
+  if (combatStart) {
+    const { result: combatResult, error: combatError } = buildCombatContestResult(events, _visibleState, resolvers);
+    if (combatError) pushError(combatError);
+    if (combatResult) {
+      _contestResult = combatResult;
+    } else {
+      // Factory returned null with no error — couldn't find combat_started.
+      // Shouldn't happen since we just checked combatStart above; defensive.
+      _contestResult = null;
     }
-    const outcomes: ContestOutcome[] = [];
-    const pairs: PairDetail[] = [];
-    for (const e of events) {
-      if (e.type === "unit_injured") {
-        outcomes.push({ type: "injured", unitName: resolveCardName(e.unitId), ownerName: resolvePlayerName(e.controllerId) });
-      } else if (e.type === "unit_killed") {
-        outcomes.push({ type: "killed", unitName: resolveCardName(e.unitId), ownerName: resolvePlayerName(e.controllerId) });
-      } else if (e.type === "combat_pair_resolved") {
-        pairs.push(buildPairDetail(e, { card: resolveCardName, player: resolvePlayerName }));
-      }
-    }
-    const cell = _visibleState?.grid[combatStart.row]?.[combatStart.col];
-    _contestResult = {
-      source: "combat",
-      stat: "strength",
-      row: combatStart.row,
-      col: combatStart.col,
-      locationName: cell?.location?.name ?? `(${combatStart.row},${combatStart.col})`,
-      attackerName: resolvePlayerName(combatStart.attackerId),
-      defenderName: resolvePlayerName(combatStart.defenderId),
-      pairs,
-      outcomes,
-      winnerName: combatEnd?.type === "combat_resolved" && combatEnd.winnerId
-        ? resolvePlayerName(combatEnd.winnerId)
-        : null,
-    };
   } else {
     // Orphan-pair guard: any `combat_pair_resolved` without a matching
     // `combat_started` in the same batch would silently disappear from
-    // the popup. Surface it.
+    // the popup. Clear stale popup state too — see Finding #2.
     const orphanPair = events.find((e) => e.type === "combat_pair_resolved");
     if (orphanPair) {
-      _error = "Combat pair event arrived without combat_started — popup skipped.";
+      _contestResult = null;
+      pushError("Combat pair event arrived without combat_started — popup skipped.");
     }
 
-    // DSL stat-contest dialog (Hannibal's flank, Cleopatra's diplomacy, ...).
-    // Only fires when there's no combat in the batch — combat takes priority
-    // since attack-driven contests already render via the combat path. The
-    // contest event has casterPlayerId (attacker side) + defenderId (unit id);
-    // we look up the defender's controller from the OLD visible state because
-    // contests don't move units, so the position is unchanged.
     const contestResolved = contestEvents[0];
     if (contestResolved && contestResolved.type === "contest_resolved") {
-      const grid = _visibleState?.grid;
-      const attackerLoc = grid ? findUnitOnGrid(grid, contestResolved.attackerId) : null;
-      const defenderLoc = grid ? findUnitOnGrid(grid, contestResolved.defenderId) : null;
-      const defenderUnit = defenderLoc?.cell.units.find((u) => u.id === contestResolved.defenderId);
-
-      if (!attackerLoc || !defenderUnit) {
-        // Can't render a faithful dialog if we can't pin both units on the
-        // grid — surface and skip rather than render with (0,0) coords or
-        // a unit id where a player name belongs.
-        _error = "Contest result: could not locate attacker or defender on the grid — popup skipped.";
-      } else {
-        const detail = buildPairDetailFromContest(
-          contestResolved,
-          { card: resolveCardName, player: resolvePlayerName },
-          resolvePlayerName(defenderUnit.controllerId),
-        );
-
-        const contestOutcomes: ContestOutcome[] = [];
-        const contestIdx = events.indexOf(contestResolved);
-        const unitIds = new Set([contestResolved.attackerId, contestResolved.defenderId]);
-        for (let i = contestIdx + 1; i < events.length; i++) {
-          const e = events[i];
-          if (e.type === "unit_killed" && unitIds.has(e.unitId)) {
-            contestOutcomes.push({ type: "killed", unitName: resolveCardName(e.unitId), ownerName: resolvePlayerName(e.controllerId) });
-          } else if (e.type === "unit_injured" && unitIds.has(e.unitId)) {
-            contestOutcomes.push({ type: "injured", unitName: resolveCardName(e.unitId), ownerName: resolvePlayerName(e.controllerId) });
-          } else if (e.type === "unit_controlled" && unitIds.has(e.unitId)) {
-            contestOutcomes.push({
-              type: "controlled",
-              unitName: resolveCardName(e.unitId),
-              ownerName: resolvePlayerName(e.previousControllerId),
-              newControllerName: resolvePlayerName(e.controllerId),
-              durationTurns: e.duration,
-            });
-          }
-        }
-
-        _contestResult = {
-          source: "dsl",
-          stat: contestResolved.stat,
-          row: attackerLoc.row,
-          col: attackerLoc.col,
-          locationName: attackerLoc.cell.location?.name ?? `(${attackerLoc.row},${attackerLoc.col})`,
-          attackerName: detail.attacker.ownerName,
-          defenderName: detail.defender.ownerName,
-          pairs: [detail],
-          outcomes: contestOutcomes,
-          winnerName: detail.winnerSide === "attacker"
-            ? detail.attacker.ownerName
-            : detail.defender.ownerName,
-        };
+      const contestIdx = events.indexOf(contestResolved);
+      const { result: contestResult, error: contestError } = buildDslContestResult(
+        contestResolved, contestIdx, events, _visibleState, resolvers,
+      );
+      if (contestResult) {
+        _contestResult = contestResult;
+      } else if (contestError) {
+        // Skip path: clear any stale popup before surfacing the error.
+        _contestResult = null;
+        pushError(contestError);
       }
     }
   }

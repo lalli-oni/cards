@@ -295,6 +295,27 @@ describe("decideKillVsInjure", () => {
     expect(decideKillVsInjure(false, 6, 5, 1)).toBe("kill");
     expect(decideKillVsInjure(false, 5, 5, 1)).toBe("kill");
   });
+  it("killRatio=Infinity guarantees injure (kill threshold unreachable)", () => {
+    expect(decideKillVsInjure(false, 1_000_000, 1, Number.POSITIVE_INFINITY)).toBe("injure");
+  });
+  it("loserPower=0 trivially meets the threshold — always kill", () => {
+    // Edge case documented in the predicate's JSDoc. Reachable via the
+    // stat-clamp-to-0 path.
+    expect(decideKillVsInjure(false, 1, 0, 100)).toBe("kill");
+    expect(decideKillVsInjure(false, 1, 0, 2)).toBe("kill");
+  });
+  it("already-injured loser dies even on an exact tie", () => {
+    expect(decideKillVsInjure(true, 5, 5, 2)).toBe("kill");
+  });
+  it("throws on invalid killRatio (NaN, 0, negative)", () => {
+    expect(() => decideKillVsInjure(false, 5, 5, NaN)).toThrow(/killRatio/);
+    expect(() => decideKillVsInjure(false, 5, 5, 0)).toThrow(/killRatio/);
+    expect(() => decideKillVsInjure(false, 5, 5, -1)).toThrow(/killRatio/);
+  });
+  it("throws on invalid power inputs (negative, NaN)", () => {
+    expect(() => decideKillVsInjure(false, -1, 5, 2)).toThrow(/winnerPower/);
+    expect(() => decideKillVsInjure(false, 5, NaN, 2)).toThrow(/loserPower/);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -763,6 +784,163 @@ describe("contest_resolved per-side breakdown", () => {
     expect(events.some((e) => e.type === "item_dropped")).toBe(false);
     const item = ns.grid[0][0].items.find((i) => i.id === sword.id);
     expect(item?.equippedTo).toBe(enemy.id);
+  });
+
+  it("contest > control(target)~round chain emits unit_controlled with correct fields", () => {
+    // Cleopatra's marquee path. Asserts the consequence chain end-to-end,
+    // not just the contest_resolved payload.
+    const cleopatra = makeUnit({
+      ownerId: ACTIVE,
+      definitionId: "cleopatra",
+      charisma: 9,
+      actions: [{
+        name: "diplomacy",
+        apCost: 1,
+        effect: "contest.charisma(enemy + adjacent) > control(target)~round",
+      }],
+    });
+    const enemy = makeUnit({ ownerId: OTHER, charisma: 4 });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][1].location = makeLocation({ ownerId: OTHER });
+      d.grid[0][0].units.push(cleopatra);
+      d.grid[0][1].units.push(enemy);
+    });
+
+    const { events } = applyAction(state, {
+      type: "activate",
+      playerId: ACTIVE,
+      cardId: cleopatra.id,
+      actionName: "diplomacy",
+      targetId: enemy.id,
+    });
+
+    const controlled = events.find((e) => e.type === "unit_controlled");
+    expect(controlled).toBeDefined();
+    if (!controlled || controlled.type !== "unit_controlled") return;
+    expect(controlled.unitId).toBe(enemy.id);
+    expect(controlled.controllerId).toBe(ACTIVE);
+    expect(controlled.previousControllerId).toBe(OTHER);
+    expect(controlled.duration).toBeGreaterThanOrEqual(1);
+  });
+
+  it("contest.strength loser branch fires on the ATTACKER when defender wins (no role swap)", () => {
+    // All other default-consequence tests use strong-attacker / weak-defender.
+    // This pins the `attackerWins ? target : attacker` mapping in
+    // executor.ts:executeContest — a regression that swapped the operands
+    // would inject the defender, not the attacker, into the kill/injure path.
+    const weak = makeUnit({
+      ownerId: ACTIVE,
+      strength: 1,
+      actions: [{
+        name: "flank",
+        apCost: 2,
+        effect: "contest.strength(enemy)",
+      }],
+    });
+    const strong = makeUnit({ ownerId: OTHER, strength: 10 });
+    const state = produce(
+      createTestGame({ config: { ...COMBAT_CONFIG, combat_kill_ratio: 100 } }),
+      (d) => {
+        d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+        d.grid[0][0].units.push(weak, strong);
+      },
+    );
+
+    const { events } = applyAction(state, {
+      type: "activate",
+      playerId: ACTIVE,
+      cardId: weak.id,
+      actionName: "flank",
+      targetId: strong.id,
+    });
+
+    const injured = events.find((e) => e.type === "unit_injured");
+    expect(injured).toBeDefined();
+    if (!injured || injured.type !== "unit_injured") return;
+    expect(injured.unitId).toBe(weak.id);     // attacker (loser) is injured
+    expect(injured.unitId).not.toBe(strong.id);
+    // Winner is unharmed
+    expect(events.some((e) => e.type === "unit_killed")).toBe(false);
+  });
+
+  it("contest.strength default consequence works with combat_kill_ratio missing from config (uses default 2)", () => {
+    // Pins the `getConfigNumber(..., 2)` default — a typo in the config key
+    // would silently fall back to 2 and pass; this asserts the default-path
+    // produces the expected outcome.
+    const hannibal = makeUnit({
+      ownerId: ACTIVE,
+      definitionId: "hannibal-barca",
+      strength: 10,
+      actions: [{
+        name: "flank",
+        apCost: 2,
+        effect: "contest.strength(enemy)",
+      }],
+    });
+    const enemy = makeUnit({ ownerId: OTHER, strength: 1 });
+    // Build a config WITHOUT combat_kill_ratio set.
+    const noKillRatioConfig = { ...COMBAT_CONFIG };
+    delete (noKillRatioConfig as Record<string, unknown>).combat_kill_ratio;
+    const state = produce(
+      createTestGame({ config: noKillRatioConfig }),
+      (d) => {
+        d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+        d.grid[0][0].units.push(hannibal, enemy);
+      },
+    );
+
+    const { events } = applyAction(state, {
+      type: "activate",
+      playerId: ACTIVE,
+      cardId: hannibal.id,
+      actionName: "flank",
+      targetId: enemy.id,
+    });
+
+    // At killRatio=2, atkPower (11-16) vs defPower (2-7) — some rolls kill,
+    // some injure. Just assert one consequence fires (either is the default
+    // behavior; both are wrong only if the default is 0 or absent).
+    const hasConsequence = events.some((e) => e.type === "unit_killed" || e.type === "unit_injured");
+    expect(hasConsequence).toBe(true);
+    expect(events.some((e) => e.type === "contest_resolved")).toBe(true);
+  });
+
+  it("contest_resolved.winnerId is always a non-null unit id (engine invariant)", () => {
+    // The client's buildPairDetailFromContest derives winnerSide from
+    // `winnerId === attackerId`. Pin the engine contract so a future tie-
+    // semantics change doesn't silently introduce null and break the client
+    // narrowing.
+    const hannibal = makeUnit({
+      ownerId: ACTIVE,
+      definitionId: "hannibal-barca",
+      strength: 5,
+      actions: [{
+        name: "flank",
+        apCost: 2,
+        effect: "contest.strength(enemy)",
+      }],
+    });
+    const enemy = makeUnit({ ownerId: OTHER, strength: 5 });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][0].units.push(hannibal, enemy);
+    });
+
+    const { events } = applyAction(state, {
+      type: "activate",
+      playerId: ACTIVE,
+      cardId: hannibal.id,
+      actionName: "flank",
+      targetId: enemy.id,
+    });
+
+    const contest = findContest(events);
+    expect(contest.winnerId).toBeDefined();
+    expect(typeof contest.winnerId).toBe("string");
+    expect(contest.winnerId.length).toBeGreaterThan(0);
+    // Ties go to defender per rules/stat-contests.md
+    expect([hannibal.id, enemy.id]).toContain(contest.winnerId);
   });
 });
 

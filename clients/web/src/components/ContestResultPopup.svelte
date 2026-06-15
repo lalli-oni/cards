@@ -5,6 +5,7 @@
     type ContestResult,
     type PairSideView,
   } from "../lib/gameStore.svelte";
+  import { buildDialogView, type DialogView } from "../lib/contestResult";
   import Modal from "./Modal.svelte";
 
   const result: ContestResult | null = $derived(getContestResult());
@@ -13,40 +14,7 @@
     return delta >= 0 ? `+${delta}` : `${delta}`;
   }
 
-  function capitalize(s: string): string {
-    return s.length === 0 ? s : s[0].toUpperCase() + s.slice(1);
-  }
-
-  type DialogView = {
-    title: string;
-    showPairCaption: boolean;
-    /** Empty when no message should render — the winner footer carries the
-     *  result on its own. Only the genuine no-resolution case (combat
-     *  draws; theoretical DSL contests with no winner) gets copy here. */
-    emptyOutcomesMsg: string;
-  };
-
-  const view: DialogView | null = $derived.by(() => {
-    if (!result) return null;
-    if (result.source === "combat") {
-      return {
-        title: `Combat at ${result.locationName}`,
-        showPairCaption: true,
-        emptyOutcomesMsg: "No casualties — draw!",
-      };
-    }
-    return {
-      title: `${capitalize(result.stat)} contest at ${result.locationName}`,
-      showPairCaption: false,
-      // A DSL contest that resolves with a winner but no follow-up effect
-      // is fully described by the "{winner} wins!" footer — adding "no
-      // effect — defender held" alongside would contradict the footer when
-      // the attacker won. Engine's executor.ts:586 only emits a default
-      // kill/injure consequence for stat==='strength', so non-strength
-      // contests without an explicit win/lose effect land here.
-      emptyOutcomesMsg: result.winnerName ? "" : "No effect.",
-    };
-  });
+  const view: DialogView | null = $derived(result ? buildDialogView(result) : null);
 </script>
 
 {#if result && view}
@@ -132,7 +100,7 @@
               <span>🪄</span>
               <span class="text-text-secondary">
                 {outcome.newControllerName} takes control of {outcome.unitName}
-                <span class="text-text-muted">({outcome.ownerName})</span>
+                <span class="text-text-muted">({outcome.previousControllerName})</span>
                 for {outcome.durationTurns} turn{outcome.durationTurns === 1 ? "" : "s"}
               </span>
             {/if}

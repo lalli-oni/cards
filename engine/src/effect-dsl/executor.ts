@@ -513,18 +513,29 @@ function executeContest(step: Step, ctx: ExecutionContext): void {
   if (!stat) throw new Error("contest verb requires a stat subVerb");
 
   const targets = resolveUnitTargets(p.target, ctx);
-  if (targets.length === 0) return;
+  if (targets.length === 0) {
+    // No valid target — match the established `if (targets.length === 0) return;`
+    // convention used by execKill / execInjure / execMove. valid-actions filtering
+    // should prevent this at activate time today; if it ever fires, the AP-spent
+    // activation produces no popup. Surfacing this as a structured no-target event
+    // is tracked in #153 (broader contest unification).
+    return;
+  }
 
   const target = targets[0];
   ctx._lastTarget = target;
 
   if (!ctx.actingUnitId) throw new Error("contest requires an acting unit");
   const actingPos = findUnitOnGrid(ctx.draft.grid, ctx.actingUnitId);
-  if (!actingPos) return;
+  if (!actingPos) {
+    throw new Error(`contest: acting unit ${ctx.actingUnitId} is not on the grid (should be impossible — valid-actions guards activation)`);
+  }
   const attacker = actingPos.unit as Draft<UnitCard>;
 
   const targetPos = findUnitOnGrid(ctx.draft.grid, target.id);
-  if (!targetPos) return;
+  if (!targetPos) {
+    throw new Error(`contest: target unit ${target.id} is not on the grid (should be impossible — resolveUnitTargets walked the grid moments ago)`);
+  }
 
   const atkBreakdown = getModifiedStatWithSources(
     ctx.draft as MainGameState, ctx.queries, attacker as UnitCard, stat,
@@ -587,7 +598,9 @@ function executeContest(step: Step, ctx: ExecutionContext): void {
     if (stat === "strength") {
       const loser = attackerWins ? target : attacker;
       const loserPos = findUnitOnGrid(ctx.draft.grid, loser.id);
-      if (!loserPos) return;
+      if (!loserPos) {
+        throw new Error(`contest default consequence: loser ${loser.id} is not on the grid (should be impossible — both units were just at known positions)`);
+      }
       const killRatio = getConfigNumber(ctx.draft, "combat_kill_ratio", 2);
       const winnerPower = attackerWins ? atkPower : defPower;
       const loserPower = attackerWins ? defPower : atkPower;

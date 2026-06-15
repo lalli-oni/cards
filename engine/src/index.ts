@@ -21,6 +21,8 @@ export type { ControllerOptions } from "./controller";
 export { GameController } from "./controller";
 export { createGame } from "./create-game";
 export { deriveCombatOutcome } from "./apply-main";
+export { decideKillVsInjure } from "./unit-helpers";
+export { findUnitOnGrid } from "./grid-helpers";
 // Pre-built game setup
 export type { PrebuiltGameInput, PrebuiltPlayerInput } from "./prebuilt";
 export { buildPrebuiltSetup } from "./prebuilt";

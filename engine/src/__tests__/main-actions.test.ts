@@ -1230,10 +1230,15 @@ describe("combat details", () => {
       (e): e is Extract<GameEvent, { type: "combat_pair_resolved" }> =>
         e.type === "combat_pair_resolved",
     );
-    const tiePair = pairs.find((e) => e.attacker.power === e.defender.power);
-    // Premise guard: the setup actually produced a tied pair (equal power sums).
+    // The engineered tie is round 1, so assert pairs[0] rather than find() — a
+    // later coincidental tie must not be what satisfies the test.
+    const tiePair = pairs[0];
     expect(tiePair).toBeDefined();
-    expect(tiePair?.outcome).toBe("injure_attacker");
+    // Premise guard: round 1 rolled the documented values and the sums tied.
+    expect(tiePair.attacker.roll).toBe(1);
+    expect(tiePair.defender.roll).toBe(2);
+    expect(tiePair.attacker.power).toBe(tiePair.defender.power);
+    expect(tiePair.outcome).toBe("injure_attacker");
     // The old no-consequence tie short-circuit is gone — combat never emits "tie".
     expect(pairs.every((e) => e.outcome !== "tie")).toBe(true);
   });
@@ -1269,6 +1274,8 @@ describe("combat details", () => {
 
     const pair = events.find((e) => e.type === "combat_pair_resolved");
     if (pair?.type !== "combat_pair_resolved") throw new Error("expected combat_pair_resolved");
+    expect(pair.attacker.roll).toBe(1);
+    expect(pair.defender.roll).toBe(2);
     expect(pair.attacker.power).toBe(pair.defender.power);
     // Tie → attacker loses; already-injured loser is killed, not injured again.
     expect(pair.outcome).toBe("kill_attacker");
@@ -1277,6 +1284,37 @@ describe("combat details", () => {
     // Attacker removed from the grid; its item stays behind, unequipped.
     expect(ns.grid[0][0].units.every((u) => u.id !== attacker.id)).toBe(true);
     expect(ns.grid[0][0].items.find((i) => i.id === sword.id)?.equippedTo).toBeUndefined();
+  });
+
+  // #151 regression: removing the tie short-circuit must not disturb a clean
+  // defender loss. The attacker out-powers the defender enough to guarantee a
+  // kill regardless of the d6 rolls (20+roll vs 1+roll, kill ratio 2).
+  it("resolves a decisive attacker win end-to-end (winnerId is the attacker)", () => {
+    const attacker = makeUnit({ ownerId: ACTIVE, strength: 20 });
+    const defender = makeUnit({ ownerId: OTHER, strength: 1 });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][0].units.push(attacker, defender);
+    });
+
+    const { state: next, events } = applyAction(state, {
+      type: "attack",
+      playerId: ACTIVE,
+      unitIds: [attacker.id],
+      row: 0,
+      col: 0,
+    });
+    const ns = next as MainGameState;
+
+    const pair = events.find((e) => e.type === "combat_pair_resolved");
+    if (pair?.type !== "combat_pair_resolved") throw new Error("expected combat_pair_resolved");
+    expect(pair.attacker.power).toBeGreaterThan(pair.defender.power);
+    expect(pair.outcome).toBe("kill_defender");
+
+    const resolved = events.find((e) => e.type === "combat_resolved");
+    if (resolved?.type !== "combat_resolved") throw new Error("expected combat_resolved");
+    expect(resolved.winnerId).toBe(ACTIVE);
+    expect(ns.grid[0][0].units.every((u) => u.id !== defender.id)).toBe(true);
   });
 });
 

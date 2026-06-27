@@ -253,8 +253,12 @@ describe("combat_pair_resolved", () => {
 // ---------------------------------------------------------------------------
 
 describe("deriveCombatOutcome", () => {
-  it("returns 'tie' when powers are equal", () => {
-    expect(deriveCombatOutcome(8, 8, false, false, 2)).toBe("tie");
+  // #151: ties go to the defender — equal powers make the attacker the loser.
+  it("injures the attacker when powers are equal (tie → defender)", () => {
+    expect(deriveCombatOutcome(8, 8, false, false, 2)).toBe("injure_attacker");
+  });
+  it("kills the attacker on a tie when the attacker was already injured", () => {
+    expect(deriveCombatOutcome(8, 8, true, false, 2)).toBe("kill_attacker");
   });
   it("returns 'kill_defender' when attacker hits the kill ratio", () => {
     expect(deriveCombatOutcome(10, 5, false, false, 2)).toBe("kill_defender");

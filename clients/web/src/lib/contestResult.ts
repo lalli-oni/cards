@@ -98,6 +98,10 @@ export function buildPairDetail(
   resolvers: NameResolvers,
 ): PairDetail {
   const winnerSide: PairDetail["winnerSide"] =
+    // Forward-compat: combat never emits "tie" — the engine resolves ties to
+    // the defender (see apply-main.ts deriveCombatOutcome). Kept so the mapping
+    // stays exhaustive over CombatPairOutcome and to surface a null winner if a
+    // future keyword (e.g. Resolute) ever reintroduces a true draw.
     ev.outcome === "tie"
       ? null
       : ev.outcome === "kill_defender" || ev.outcome === "injure_defender"

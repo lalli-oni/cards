@@ -8,6 +8,12 @@ the **attacker**; the targeted unit is the **defender**.
 ## Resolution
 
 1. Each unit rolls a d6. **Attack power** = relevant stat + d6 roll.
+   [design: temporary v0.1 shortcut — the engine floors effective stats at 0,
+   so a stat driven below 0 by modifiers contributes 0 (not a negative) to
+   attack power. The rules intend negative effective stats to be supported;
+   this clamp is an engine deviation documented here only to keep rules and
+   engine consistent for v0.1. Do not build design on it. To be removed — see
+   #156.]
 2. Higher attack power wins. **Ties go to the defender.**
 3. The granting card or effect specifies the duration and consequences
    of the contest. Duration tracking follows the same token pattern as

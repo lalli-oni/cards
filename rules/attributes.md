@@ -34,16 +34,19 @@ The set is deliberately structural and age-agnostic — each value names a
 *sphere* a card belongs to, not a specific role or era, so the same label fits a
 classical general and a modern one, a unit and an event alike.
 
-## Attributes vs. other classifiers
+## Attributes vs. keywords
 
-Attributes are one of two ways a card is classified; keep them distinct, and
-keep both distinct from keywords:
+Attributes are not the only label a card carries; keep them distinct from
+keywords:
 
 - **Attributes** (this file) — the *cross-type* synergy axis. The same
   vocabulary means the same thing on every card type.
-- **Subtypes** — *per-type* structural classification (a location's type, an
-  event's type, an item's type). Each card type governs its own subtype list;
-  subtypes do not carry meaning across types.
 - **Keywords** — mechanical keyword-effects (Lethal, Taunt, Fortified, …),
   defined in the [Keyword Glossary](README.md#keyword-system). Unlike an
   attribute, a keyword *does* something; it is not a classifier.
+
+[design: A third, *per-type* classifier — **subtypes** (a location's type, an
+event's type, an item's type) — is distinct from the cross-type attributes
+defined here, but is not yet a governed vocabulary; today it is flavor only.
+Governing the subtype lists and designing cards that mechanically reference them
+is tracked post-v0.1 in #160.]

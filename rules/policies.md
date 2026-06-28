@@ -35,5 +35,5 @@ seeding effect).
 **Warlord**
 - *Passive*: Gain 1 gold each time one of your units wins combat. Raze
   costs 2 AP instead of 3.
-- *Action — Rally (1 AP)*: Your killed Warrior units go to the top of
+- *Action — Rally (1 AP)*: Your killed Military units go to the top of
   your main deck instead of your discard pile until end of turn.

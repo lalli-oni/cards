@@ -37,9 +37,10 @@ export function injureUnit(unit: Draft<UnitCard>, emit: EmitFn): void {
  *  A loser is killed when (a) they were already injured going in, or (b) the
  *  winner's power is at least `killRatio` times the loser's. Otherwise injured.
  *
- *  Tie attribution (who is winner vs loser on equal power) lives in the caller —
- *  combat emits a `tie` outcome with no kill/injure; contest assigns defender
- *  as winner per `rules/stat-contests.md`.
+ *  Tie attribution (who is winner vs loser on equal power) lives in the caller:
+ *  both combat and contests assign the defender as winner on equal power (the
+ *  attacker becomes the loser) per `rules/stat-contests.md` — see
+ *  `deriveCombatOutcome`. Combat no longer emits a `tie` outcome.
  *
  *  Edge case: when `loserPower` is 0, the threshold is trivially met regardless
  *  of `killRatio`, so a zero-power loser is always killed. This is reachable

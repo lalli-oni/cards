@@ -3,7 +3,7 @@ import { produce } from "immer";
 import { applyAction } from "../apply-action";
 import { rebuildListeners } from "../listeners/rebuild";
 import { getModifiedStat } from "../listeners/query";
-import type { MainGameState, UnitCard } from "../types";
+import type { GameEvent, MainGameState, UnitCard } from "../types";
 import { getValidActions } from "../valid-actions";
 import {
   createTestGame,
@@ -1192,6 +1192,129 @@ describe("combat details", () => {
     // Attackers should survive
     expect(ns.grid[0][0].units.some((u) => u.id === atk1.id)).toBe(true);
     expect(ns.grid[0][0].units.some((u) => u.id === atk2.id)).toBe(true);
+  });
+
+  // #151: combat ties go to the defender. A tie is equality of *final attack
+  // power* — base stat + every modifier + the d6 roll — not equal base stats.
+  // Under SEED="test-seed" round 1 rolls attacker 1 / defender 2, so a +1
+  // strength modifier on the attacker levels the sums: 5 + 1 + 1 == 5 + 2. The
+  // modifier stands in for any modifier source (location passive, item, injury
+  // penalty, a future StatModifierListener) — all fold into one sum. Combat is
+  // multi-round, so we assert the tied *pair* resolves against the attacker,
+  // not the terminal state (the injured attacker fights on in later rounds).
+  it("resolves a tied combat pair against the attacker (injure_attacker)", () => {
+    const attacker = makeUnit({ ownerId: ACTIVE, strength: 5 });
+    attacker.statModifiers = [
+      {
+        stat: "strength",
+        delta: 1,
+        remainingDuration: 99,
+        source: { type: "unit", cardId: attacker.id, definitionId: "test-buff" },
+      },
+    ];
+    const defender = makeUnit({ ownerId: OTHER, strength: 5 });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][0].units.push(attacker, defender);
+    });
+
+    const { events } = applyAction(state, {
+      type: "attack",
+      playerId: ACTIVE,
+      unitIds: [attacker.id],
+      row: 0,
+      col: 0,
+    });
+
+    const pairs = events.filter(
+      (e): e is Extract<GameEvent, { type: "combat_pair_resolved" }> =>
+        e.type === "combat_pair_resolved",
+    );
+    // The engineered tie is round 1, so assert pairs[0] rather than find() — a
+    // later coincidental tie must not be what satisfies the test.
+    const tiePair = pairs[0];
+    expect(tiePair).toBeDefined();
+    // Premise guard: round 1 rolled the documented values and the sums tied.
+    expect(tiePair.attacker.roll).toBe(1);
+    expect(tiePair.defender.roll).toBe(2);
+    expect(tiePair.attacker.power).toBe(tiePair.defender.power);
+    expect(tiePair.outcome).toBe("injure_attacker");
+    // The old no-consequence tie short-circuit is gone — combat never emits "tie".
+    expect(pairs.every((e) => e.outcome !== "tie")).toBe(true);
+  });
+
+  it("kills the attacker on a tie when it is already injured, dropping its items", () => {
+    // Injured attacker carries a -1 injury penalty in the sum, so a +2 modifier
+    // is needed to tie: max(0, 5 + 2 - 1) + 1(roll) == 5 + 2(roll) == 7.
+    const attacker = makeUnit({ ownerId: ACTIVE, strength: 5, injured: true });
+    attacker.statModifiers = [
+      {
+        stat: "strength",
+        delta: 2,
+        remainingDuration: 99,
+        source: { type: "unit", cardId: attacker.id, definitionId: "test-buff" },
+      },
+    ];
+    const defender = makeUnit({ ownerId: OTHER, strength: 5 });
+    const sword = makeItem({ ownerId: ACTIVE, equippedTo: attacker.id });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][0].units.push(attacker, defender);
+      d.grid[0][0].items.push(sword);
+    });
+
+    const { state: next, events } = applyAction(state, {
+      type: "attack",
+      playerId: ACTIVE,
+      unitIds: [attacker.id],
+      row: 0,
+      col: 0,
+    });
+    const ns = next as MainGameState;
+
+    const pair = events.find((e) => e.type === "combat_pair_resolved");
+    if (pair?.type !== "combat_pair_resolved") throw new Error("expected combat_pair_resolved");
+    expect(pair.attacker.roll).toBe(1);
+    expect(pair.defender.roll).toBe(2);
+    expect(pair.attacker.power).toBe(pair.defender.power);
+    // Tie → attacker loses; already-injured loser is killed, not injured again.
+    expect(pair.outcome).toBe("kill_attacker");
+    expect(events.some((e) => e.type === "unit_killed")).toBe(true);
+    expect(events.some((e) => e.type === "item_dropped")).toBe(true);
+    // Attacker removed from the grid; its item stays behind, unequipped.
+    expect(ns.grid[0][0].units.every((u) => u.id !== attacker.id)).toBe(true);
+    expect(ns.grid[0][0].items.find((i) => i.id === sword.id)?.equippedTo).toBeUndefined();
+  });
+
+  // #151 regression: removing the tie short-circuit must not disturb a clean
+  // defender loss. The attacker out-powers the defender enough to guarantee a
+  // kill regardless of the d6 rolls (20+roll vs 1+roll, kill ratio 2).
+  it("resolves a decisive attacker win end-to-end (winnerId is the attacker)", () => {
+    const attacker = makeUnit({ ownerId: ACTIVE, strength: 20 });
+    const defender = makeUnit({ ownerId: OTHER, strength: 1 });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][0].units.push(attacker, defender);
+    });
+
+    const { state: next, events } = applyAction(state, {
+      type: "attack",
+      playerId: ACTIVE,
+      unitIds: [attacker.id],
+      row: 0,
+      col: 0,
+    });
+    const ns = next as MainGameState;
+
+    const pair = events.find((e) => e.type === "combat_pair_resolved");
+    if (pair?.type !== "combat_pair_resolved") throw new Error("expected combat_pair_resolved");
+    expect(pair.attacker.power).toBeGreaterThan(pair.defender.power);
+    expect(pair.outcome).toBe("kill_defender");
+
+    const resolved = events.find((e) => e.type === "combat_resolved");
+    if (resolved?.type !== "combat_resolved") throw new Error("expected combat_resolved");
+    expect(resolved.winnerId).toBe(ACTIVE);
+    expect(ns.grid[0][0].units.every((u) => u.id !== defender.id)).toBe(true);
   });
 });
 

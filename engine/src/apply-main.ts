@@ -820,8 +820,15 @@ function toCombatSide(c: CombatantRoll): CombatSide {
   };
 }
 
-/** Pure — derives the pair outcome from rolled powers + kill ratio. Exported
- *  so the five-branch decision can be unit-tested without RNG plumbing. */
+/** Pure — derives the pair outcome from rolled powers + kill ratio. Equal
+ *  powers resolve to the defender (rules/stat-contests.md: "Ties go to the
+ *  defender") — the attacker is the loser, so a tie yields injure_attacker, or
+ *  kill_attacker if the attacker was already injured. (A zero-power loser is
+ *  always killed — the kill-ratio threshold is trivially met — but that case is
+ *  only reachable by calling this directly: real combat power is always >= 1.)
+ *  Exported so the decision can be unit-tested without RNG plumbing. `"tie"` is
+ *  retained on CombatPairOutcome for the client's exhaustive outcome switch
+ *  (contestResult.ts buildPairDetail); combat itself never emits it. */
 export function deriveCombatOutcome(
   atkPower: number,
   defPower: number,
@@ -829,7 +836,6 @@ export function deriveCombatOutcome(
   defInjured: boolean,
   killRatio: number,
 ): CombatPairOutcome {
-  if (atkPower === defPower) return "tie";
   const attackerWins = atkPower > defPower;
   const winnerPower = attackerWins ? atkPower : defPower;
   const loserPower = attackerWins ? defPower : atkPower;
@@ -863,18 +869,6 @@ function resolveCombatPair(
     def.unit.injured,
     killRatio,
   );
-
-  if (outcome === "tie") {
-    emit({
-      type: "combat_pair_resolved",
-      row, col,
-      attackerPlayerId, defenderPlayerId,
-      attacker: attackerSide,
-      defender: defenderSide,
-      outcome: "tie",
-    });
-    return; // tie — nothing happens
-  }
 
   const attackerWins = atk.power > def.power;
   const loser = attackerWins ? def : atk;

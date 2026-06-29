@@ -249,12 +249,17 @@ describe("combat_pair_resolved", () => {
 });
 
 // ---------------------------------------------------------------------------
-// deriveCombatOutcome — exhaustive on the 5 branches
+// deriveCombatOutcome — exhaustive over the reachable outcomes ("tie" is
+// never returned: equal powers resolve against the attacker)
 // ---------------------------------------------------------------------------
 
 describe("deriveCombatOutcome", () => {
-  it("returns 'tie' when powers are equal", () => {
-    expect(deriveCombatOutcome(8, 8, false, false, 2)).toBe("tie");
+  // #151: ties go to the defender — equal powers make the attacker the loser.
+  it("injures the attacker when powers are equal (tie → defender)", () => {
+    expect(deriveCombatOutcome(8, 8, false, false, 2)).toBe("injure_attacker");
+  });
+  it("kills the attacker on a tie when the attacker was already injured", () => {
+    expect(deriveCombatOutcome(8, 8, true, false, 2)).toBe("kill_attacker");
   });
   it("returns 'kill_defender' when attacker hits the kill ratio", () => {
     expect(deriveCombatOutcome(10, 5, false, false, 2)).toBe("kill_defender");
@@ -271,6 +276,12 @@ describe("deriveCombatOutcome", () => {
   it("kills the already-injured loser even below the kill ratio", () => {
     expect(deriveCombatOutcome(8, 5, false, true, 2)).toBe("kill_defender");
     expect(deriveCombatOutcome(5, 8, true, false, 2)).toBe("kill_attacker");
+  });
+  // Edge: a zero-power tie kills the attacker (kill-ratio `0 >= 2*0` is true).
+  // Only reachable by calling this directly — real combat power is always >= 1
+  // (strength floored at 0, plus a d6 roll >= 1).
+  it("kills a zero-power loser on a tie (kill ratio trivially met)", () => {
+    expect(deriveCombatOutcome(0, 0, false, false, 2)).toBe("kill_attacker");
   });
 });
 

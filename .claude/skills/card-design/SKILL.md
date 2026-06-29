@@ -70,7 +70,7 @@ When picking figures for units:
 
 - **Locations**: Should reference real places. Mission requirements should connect thematically to the place (The Great Library needs Scientists; The Colosseum needs Warriors). Passive effects should feel like "being at this place helps you do X." Locations can have blocked edges (N, S, E, W) that restrict unit movement — use sparingly to create tactical chokepoints. Locations can also have actions usable by any player with a unit there, using the same `name:ap_cost:effect` format as unit actions.
 - **Items**: Can be historical artifacts, inventions, or concepts. Equip effects apply at the equipped unit's location; stored effects apply at the item's location. Items can have both.
-- **Events**: Name after historical events, natural phenomena, or strategic concepts. Instant/passive/trap subtype should match the event's nature (an earthquake is instant; a plague is passive; an ambush is a trap).
+- **Events**: Name after historical events, natural phenomena, or strategic concepts. Instant/passive/trap timing should match the event's nature (an earthquake is instant; a plague is passive; an ambush is a trap).
 - **Policies**: Name after real doctrines, philosophies, or economic systems. Effect should be a global modifier that shapes strategy without being mandatory.
 
 ## Design Workflow

@@ -75,7 +75,7 @@ REQUIRED_COLUMNS = {
     "unit": {"id", "name", "cost", "strength", "cunning", "charisma", "text", "flavor"},
     "location": {"id", "name", "cost", "text", "flavor"},
     "item": {"id", "name", "cost", "text", "flavor"},
-    "event": {"id", "name", "cost", "subtype", "text", "flavor"},
+    "event": {"id", "name", "cost", "timing", "text", "flavor"},
     "policy": {"id", "name", "cost", "effect", "text", "flavor"},
 }
 
@@ -129,7 +129,7 @@ KNOWN_COLUMNS = {
     "item": {"id", "name", "set", "rarity", "cost", "text", "flavor", "keywords",
              "equip", "stored", "actions"},
     "event": {"id", "name", "set", "rarity", "cost", "text", "flavor", "keywords",
-              "subtype", "duration", "trigger"},
+              "timing", "duration", "trigger"},
     "policy": {"id", "name", "set", "rarity", "cost", "text", "flavor", "keywords",
                "effect"},
 }
@@ -454,7 +454,7 @@ def compose_event_card(card, shape_ids, shape_geoms, tokens, page_id) -> list:
     rarity = card.get("rarity", "common")
     rarity_color = mappings["rarityColors"].get(rarity, mappings["rarityColors"]["common"])
 
-    subtype = card.get("subtype", "instant")
+    subtype = card.get("timing", "instant")
     subtype_color = mappings["subtypeColors"].get(subtype, colors["subtypeInstant"])
     duration = card.get("duration", "")
     trigger = card.get("trigger", "")

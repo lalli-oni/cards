@@ -42,12 +42,15 @@ keywords:
 - **Attributes** (this file) — the *cross-type* synergy axis. The same
   vocabulary means the same thing on every card type.
 - **Keywords** — mechanical keyword-effects (Lethal, Taunt, Fortified, …),
-  defined in the [Keyword Glossary](README.md#keyword-system). Unlike an
+  defined in the [Keyword Glossary](README.md#keyword-glossary). Unlike an
   attribute, a keyword *does* something; it is not a classifier.
 
-[design: Cross-type **attributes** (this file) are the card-classification axis
-for v0.1. A separate *per-type* thematic category — a location's, event's, or
-item's own kind (e.g. Palace, Catastrophe, Weapon) — is future intent: not yet a
-governed vocabulary, and flavor only today. Governing those per-type categories
-and designing cards that mechanically reference them is tracked post-v0.1 in
-#160.]
+[design: In v0.1 the attributes field is carried by **units**; extending it to
+the other card types — so the cross-type synergy described above is fully
+realized — is part of the #119 schema redesign. A card's *per-type*
+classification (its own kind within its type) is a separate axis from these
+cross-type attributes: some per-type vocabularies are already governed (see
+[Item types](README.md#item-types)); others — a location's or an event's kind,
+e.g. Palace or Catastrophe — are not yet governed and are flavor only today.
+Governing the remaining per-type vocabularies and designing cards that
+mechanically reference them is tracked post-v0.1 in #160.]

@@ -91,15 +91,15 @@
   const handCards = instantiateCards([...unitDefs.slice(10, 12), ...itemDefs.slice(5, 7)], p1, counter);
 
   // Trap & passive event for HUD testing
-  const trapDefs = eventDefs.filter((d) => "subtype" in d || d.type === "event");
+  const trapDefs = eventDefs.filter((d) => "timing" in d || d.type === "event");
   const trapCards = instantiateCards(trapDefs.slice(0, 1), p1, counter);
   const trapCard = trapCards[0] as TrapEventCard;
-  const mockTrap: Trap = { card: { ...trapCard, subtype: "trap", trigger: "Unit enters" } as TrapEventCard, targetId: locations[0]?.id };
+  const mockTrap: Trap = { card: { ...trapCard, timing: "trap", trigger: "Unit enters" } as TrapEventCard, targetId: locations[0]?.id };
 
   const passiveCards = instantiateCards(eventDefs.slice(1, 2), p1, counter);
   const mockPassive: ActivePassiveEvent = {
     ...(passiveCards[0] as any),
-    subtype: "passive",
+    timing: "passive",
     duration: 3,
     remainingDuration: 2,
     targetId: locations[3]?.id,

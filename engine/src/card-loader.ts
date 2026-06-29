@@ -4,7 +4,7 @@ import type {
   ActionDef,
   Card,
   CardType,
-  EventSubtype,
+  EventTiming,
   InstantEventCard,
   ItemCard,
   LocationCard,
@@ -48,7 +48,7 @@ export interface CardDefinition {
   stored?: string | null;
 
   // Event fields
-  subtype?: EventSubtype;
+  timing?: EventTiming;
   duration?: number | null;
   trigger?: string | null;
 
@@ -80,7 +80,7 @@ const VALID_RARITIES: Rarity[] = [
   "epic",
   "legendary",
 ];
-const VALID_SUBTYPES: EventSubtype[] = ["instant", "passive", "trap"];
+const VALID_TIMINGS: EventTiming[] = ["instant", "passive", "trap"];
 
 export class CardValidationError extends Error {
   constructor(public readonly errors: { cardId: string; message: string }[]) {
@@ -142,9 +142,9 @@ function validateDefinition(
   }
   if (
     def.type === "event" &&
-    !VALID_SUBTYPES.includes(def.subtype as EventSubtype)
+    !VALID_TIMINGS.includes(def.timing as EventTiming)
   ) {
-    errors.push({ cardId, message: `invalid event subtype: ${def.subtype}` });
+    errors.push({ cardId, message: `invalid event timing: ${def.timing}` });
   }
   if (
     def.type === "policy" &&
@@ -292,28 +292,28 @@ export function instantiateCard(
       } satisfies ItemCard;
 
     case "event": {
-      if (!def.subtype) {
-        throw new Error(`Event card "${def.id}" missing required subtype`);
+      if (!def.timing) {
+        throw new Error(`Event card "${def.id}" missing required timing`);
       }
-      switch (def.subtype) {
+      switch (def.timing) {
         case "instant":
-          return { ...base, type: "event", subtype: "instant", effect: def.effect ?? undefined } satisfies InstantEventCard;
+          return { ...base, type: "event", timing: "instant", effect: def.effect ?? undefined } satisfies InstantEventCard;
         case "passive":
           return {
             ...base,
             type: "event",
-            subtype: "passive",
+            timing: "passive",
             duration: def.duration ?? 1,
           } satisfies PassiveEventCard;
         case "trap":
           return {
             ...base,
             type: "event",
-            subtype: "trap",
+            timing: "trap",
             trigger: def.trigger ?? "",
           } satisfies TrapEventCard;
         default:
-          throw new Error(`Event card "${def.id}" has unknown subtype "${def.subtype}"`);
+          throw new Error(`Event card "${def.id}" has unknown timing "${def.timing}"`);
       }
     }
 

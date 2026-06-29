@@ -48,7 +48,7 @@ export type {
   EndedGameState,
   ActivePassiveEvent,
   EventCard,
-  EventSubtype,
+  EventTiming,
   InstantEventCard,
   GameConfig,
   GameEvent,

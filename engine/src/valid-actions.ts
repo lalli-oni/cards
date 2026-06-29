@@ -126,10 +126,10 @@ function getSeedingValidActions(
 // ---------------------------------------------------------------------------
 
 export function needsLocationTarget(card: EventCard): boolean {
-  if (card.subtype === "trap") {
+  if (card.timing === "trap") {
     return card.trigger === "enemy_unit_enters_location";
   }
-  if (card.subtype === "passive") {
+  if (card.timing === "passive") {
     return PASSIVE_EVENTS_NEEDING_LOCATION_TARGET.has(card.definitionId);
   }
   return false;

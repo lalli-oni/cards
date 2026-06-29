@@ -33,7 +33,7 @@
     } else if (card.type === "item") {
       if (card.equip) lines.push(`Equip: ${card.equip}`);
       if (card.stored) lines.push(`Stored: ${card.stored}`);
-    } else if (card.type === "event" && card.subtype === "trap") {
+    } else if (card.type === "event" && card.timing === "trap") {
       lines.push(`Trigger: ${card.trigger}`);
     } else if (card.type === "policy") {
       lines.push(`Effect: ${card.effect}`);

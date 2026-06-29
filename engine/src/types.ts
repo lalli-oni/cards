@@ -45,7 +45,7 @@ export interface PlayerState {
 
 export type CardType = "unit" | "location" | "item" | "event" | "policy";
 export type Rarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
-export type EventSubtype = "instant" | "passive" | "trap";
+export type EventTiming = "instant" | "passive" | "trap";
 
 export interface GridPosition {
   row: number;
@@ -206,12 +206,12 @@ interface EventCardBase extends CardBase {
 }
 
 export interface InstantEventCard extends EventCardBase {
-  subtype: "instant";
+  timing: "instant";
   effect?: string;
 }
 
 export interface PassiveEventCard extends EventCardBase {
-  subtype: "passive";
+  timing: "passive";
   duration: number;
 }
 
@@ -224,7 +224,7 @@ export interface ActivePassiveEvent extends PassiveEventCard {
 }
 
 export interface TrapEventCard extends EventCardBase {
-  subtype: "trap";
+  timing: "trap";
   trigger: string;
 }
 

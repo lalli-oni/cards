@@ -45,8 +45,9 @@ keywords:
   defined in the [Keyword Glossary](README.md#keyword-system). Unlike an
   attribute, a keyword *does* something; it is not a classifier.
 
-[design: A third, *per-type* classifier — **subtypes** (a location's type, an
-event's type, an item's type) — is distinct from the cross-type attributes
-defined here, but is not yet a governed vocabulary; today it is flavor only.
-Governing the subtype lists and designing cards that mechanically reference them
-is tracked post-v0.1 in #160.]
+[design: Cross-type **attributes** (this file) are the card-classification axis
+for v0.1. A separate *per-type* thematic category — a location's, event's, or
+item's own kind (e.g. Palace, Catastrophe, Weapon) — is future intent: not yet a
+governed vocabulary, and flavor only today. Governing those per-type categories
+and designing cards that mechanically reference them is tracked post-v0.1 in
+#160.]

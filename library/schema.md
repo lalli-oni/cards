@@ -50,9 +50,9 @@ Every card type includes these columns:
 
 | Column   | Type   | Required | Description |
 |----------|--------|----------|-------------|
-| subtype  | enum   | yes      | `instant`, `passive`, `trap` |
-| duration | int    | no       | Number of turns (for `passive` subtype) |
-| trigger  | string | no       | Trigger condition (for `trap` subtype) |
+| timing  | enum   | yes      | `instant`, `passive`, `trap` |
+| duration | int    | no       | Number of turns (for `passive` timing) |
+| trigger  | string | no       | Trigger condition (for `trap` timing) |
 
 ## Policies
 

@@ -76,7 +76,7 @@ const VALID_EVENT: CardDefinition = {
   text: null,
   flavor: null,
   keywords: [],
-  subtype: "trap",
+  timing: "trap",
   trigger: "unit_enters",
   duration: null,
 };
@@ -172,8 +172,8 @@ describe("loadCardDefinitions", () => {
     }
   });
 
-  test("validates event subtype", () => {
-    const badEvent = { ...VALID_EVENT, subtype: "wrong" };
+  test("validates event timing", () => {
+    const badEvent = { ...VALID_EVENT, timing: "wrong" };
     const path = writeTmpJson("bad-event.json", [badEvent]);
     try {
       loadCardDefinitions(path);
@@ -181,7 +181,7 @@ describe("loadCardDefinitions", () => {
     } catch (e) {
       expect(e).toBeInstanceOf(CardValidationError);
       expect((e as CardValidationError).errors[0].message).toContain(
-        "invalid event subtype",
+        "invalid event timing",
       );
     }
   });
@@ -300,7 +300,7 @@ describe("loadCardDefinitions with real library", () => {
     const defs = loadCardDefinitions(join(LIBRARY_BUILD, "alpha-1.json"));
     const plague = defs.find((d) => d.id === "plague");
     expect(plague).toBeDefined();
-    expect(plague?.subtype).toBe("passive");
+    expect(plague?.timing).toBe("passive");
     expect((plague as { duration?: number }).duration).toBe(2);
   });
 });
@@ -355,8 +355,8 @@ describe("instantiateCard", () => {
     const card = instantiateCard(VALID_EVENT, "player-1", counter);
     expect(card.type).toBe("event");
     if (card.type === "event") {
-      expect(card.subtype).toBe("trap");
-      if (card.subtype === "trap") {
+      expect(card.timing).toBe("trap");
+      if (card.timing === "trap") {
         expect(card.trigger).toBe("unit_enters");
       }
     }
@@ -393,10 +393,10 @@ describe("instantiateCard", () => {
     expect(cardB.id).toBe("1");
   });
 
-  test("throws when event card missing subtype", () => {
-    const badEvent = { ...VALID_EVENT, subtype: undefined } as CardDefinition;
+  test("throws when event card missing timing", () => {
+    const badEvent = { ...VALID_EVENT, timing: undefined } as CardDefinition;
     expect(() => instantiateCard(badEvent, "p1", counter)).toThrow(
-      "missing required subtype",
+      "missing required timing",
     );
   });
 

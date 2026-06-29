@@ -247,7 +247,7 @@ Stats (for example; strength, cunning, charisma). Stats are open-ended
 Any stats not listed on the card are treated as [var:default_stat:5].
 See [Stat Contests](stat-contests.md) for how stats are used in 1v1
 contest resolution.
-Attributes (for example: Scientist, Politician, Engineer, Warrior, Spiritual)
+Attributes (for example: Knowledge, Politics, Engineering, Military, Spirituality). See [Attributes](attributes.md) for the closed vocabulary.
 Actions: Units can have various actions that players can activate.
 
 #### Unit status
@@ -323,7 +323,7 @@ as follows:
      (e.g. "Requires 12 strength" — add up all friendly units'
      strength).
    - **Attribute checks** pass if at least one friendly unit has the
-     required attribute (e.g. "Requires a Scientist").
+     required attribute (e.g. "Requires a unit with Knowledge").
    - **Match-one checks** list multiple conditions separated by OR —
      meeting any one is sufficient.
    - A dilemma may combine multiple requirements (all must be met
@@ -349,7 +349,7 @@ Upon completion:
 
 #### Passive effects
 Locations can grant ongoing bonuses to units present at that location.
-Example: "While a unit with the Warrior attribute is here: +1 strength to all your units at this location."
+Example: "While a unit with the Military attribute is here: +1 strength to all your units at this location."
 
 ### Dilemmas
 Inspired by the Star Trek CCG dilemma system. Dilemmas are placed

@@ -47,7 +47,7 @@ For each card, check:
 - **Attributes**: are all attributes valid per the rules?
 - **Keywords**: are all keywords defined in the rules?
 - **Actions**: do action mechanics match what the rules allow (contest types, effect types, AP cost ranges)?
-- **Subtypes**: for events — is the subtype valid?
+- **Timing**: for events — is the timing (instant/passive/trap) valid?
 - **Card text**: does the text reference mechanics, zones, or concepts that exist in the rules?
 - **Economy**: is the cost reasonable given the rules' economy structure?
 

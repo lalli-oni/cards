@@ -486,7 +486,7 @@ function handlePlayEvent(
 
   player.hand.splice(cardIdx, 1);
 
-  switch (card.subtype) {
+  switch (card.timing) {
     case "instant": {
       if (card.effect) {
         let rng = fromState(draft.rngState);
@@ -523,7 +523,7 @@ function handlePlayEvent(
       break;
 
     default:
-      throw new Error(`Unknown event subtype "${(card as any).subtype}" for card "${cardId}"`);
+      throw new Error(`Unknown event timing "${(card as any).timing}" for card "${cardId}"`);
   }
 
 

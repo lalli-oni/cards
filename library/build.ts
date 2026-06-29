@@ -21,7 +21,7 @@ const CARD_TYPES = ["units", "locations", "items", "events", "policies"] as cons
 type CardType = (typeof CARD_TYPES)[number];
 
 const RARITIES = ["common", "uncommon", "rare", "epic", "legendary"] as const;
-const EVENT_SUBTYPES = ["instant", "passive", "trap"] as const;
+const EVENT_TIMINGS = ["instant", "passive", "trap"] as const;
 
 // --- CSV parsing ---
 
@@ -139,7 +139,7 @@ function transformCard(type: CardType, raw: Record<string, string>): Record<stri
       break;
 
     case "events":
-      base.subtype = raw.subtype;
+      base.timing = raw.timing;
       base.duration = intOrNull(raw.duration || "");
       base.trigger = raw.trigger || null;
       if (raw.effect) base.effect = raw.effect;
@@ -174,8 +174,8 @@ function validate(type: CardType, card: Record<string, unknown>): ValidationErro
     errors.push({ card: id, field: "rarity", message: `invalid rarity: ${card.rarity}` });
   }
 
-  if (type === "events" && !EVENT_SUBTYPES.includes(card.subtype as any)) {
-    errors.push({ card: id, field: "subtype", message: `invalid subtype: ${card.subtype}` });
+  if (type === "events" && !EVENT_TIMINGS.includes(card.timing as any)) {
+    errors.push({ card: id, field: "timing", message: `invalid timing: ${card.timing}` });
   }
 
   // DSL effect validation — skipped for policies (action.effect is
@@ -191,7 +191,7 @@ function validate(type: CardType, card: Record<string, unknown>): ValidationErro
       }
     }
   }
-  if (card.subtype === "instant" && card.effect) {
+  if (card.timing === "instant" && card.effect) {
     try {
       parseDSL(card.effect as string);
     } catch (e) {

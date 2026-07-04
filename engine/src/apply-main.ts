@@ -693,8 +693,15 @@ function handleAttack(
   // Auto-resolve combat rounds
   const maxRounds = 10; // safety limit
   for (let round = 0; round < maxRounds; round++) {
-    const livingAttackers = attackers.filter((u) => !isDeadOrRemoved(cell, u));
-    const livingDefenders = defenders.filter((u) => !isDeadOrRemoved(cell, u));
+    // Drop-out survivor semantics (rules/README.md Combat step 6, "Next round
+    // or end"): the first round rolls all committed units, but subsequent
+    // rounds continue only "surviving (non-injured, non-killed)" units. An
+    // injured unit therefore fights the round in which it is hurt, then leaves
+    // the pool. Because every matchup removes its loser (killed, or injured →
+    // out next round), the combined fighting pool strictly shrinks each round,
+    // guaranteeing termination.
+    const livingAttackers = attackers.filter((u) => !isDeadOrRemoved(cell, u) && (round === 0 || !u.injured));
+    const livingDefenders = defenders.filter((u) => !isDeadOrRemoved(cell, u) && (round === 0 || !u.injured));
 
     if (livingAttackers.length === 0 || livingDefenders.length === 0) break;
 

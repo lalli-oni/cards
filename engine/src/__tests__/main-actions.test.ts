@@ -1201,7 +1201,8 @@ describe("combat details", () => {
   // modifier stands in for any modifier source (location passive, item, injury
   // penalty, a future StatModifierListener) — all fold into one sum. Combat is
   // multi-round, so we assert the tied *pair* resolves against the attacker,
-  // not the terminal state (the injured attacker fights on in later rounds).
+  // not the terminal state — under drop-out survivor semantics the injured
+  // attacker leaves the pool after this round rather than fighting on.
   it("resolves a tied combat pair against the attacker (injure_attacker)", () => {
     const attacker = makeUnit({ ownerId: ACTIVE, strength: 5 });
     attacker.statModifiers = [

@@ -249,6 +249,52 @@ describe("combat_pair_resolved", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Combat survivor semantics (drop-out) — #169
+// ---------------------------------------------------------------------------
+
+describe("combat drop-out survivor semantics", () => {
+  it("drops an injured unit from the pool after the round it is hurt", () => {
+    // Strength 17 vs 11: the gap (>=6) makes the attacker win every round
+    // regardless of the d6, and (17+6 < 2*(11+1)) makes round 1 an INJURE, not
+    // a kill, for every roll. Under the old "injured keep fighting" rule the
+    // defender would re-roll round 2 (now at effective strength 10, injured)
+    // and die; under drop-out it leaves the pool and survives injured, so
+    // exactly one matchup resolves.
+    const attacker = makeUnit({ ownerId: ACTIVE, strength: 17 });
+    const defender = makeUnit({ ownerId: OTHER, strength: 11 });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][0].units.push(attacker, defender);
+    });
+
+    const { state: next, events } = applyAction(state, {
+      type: "attack",
+      playerId: ACTIVE,
+      unitIds: [attacker.id],
+      row: 0,
+      col: 0,
+    });
+    const ns = next as MainGameState;
+
+    // Exactly one matchup — the injured defender does not re-roll a round 2.
+    const pairs = findAllPairs(events);
+    expect(pairs).toHaveLength(1);
+    expect(pairs[0].outcome).toBe("injure_defender");
+
+    // Defender survives, injured, still on the grid; attacker unharmed.
+    const survivor = ns.grid[0][0].units.find((u) => u.id === defender.id);
+    expect(survivor?.injured).toBe(true);
+    const atk = ns.grid[0][0].units.find((u) => u.id === attacker.id);
+    expect(atk?.injured).toBe(false);
+
+    // A side reduced to only-injured survivors is not "empty" → no winner.
+    const resolved = events.find((e) => e.type === "combat_resolved");
+    if (resolved?.type !== "combat_resolved") throw new Error("expected combat_resolved");
+    expect(resolved.winnerId).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // deriveCombatOutcome — exhaustive over the reachable outcomes ("tie" is
 // never returned: equal powers resolve against the attacker)
 // ---------------------------------------------------------------------------

@@ -690,8 +690,11 @@ function handleAttack(
 
   let rng = fromState(draft.rngState);
 
-  // Auto-resolve combat rounds
-  const maxRounds = 10; // safety limit
+  // Auto-resolve combat rounds. Drop-out survivor semantics already guarantee
+  // termination (every matchup removes its loser from the pool); this cap is a
+  // documented safety limit for pathological states — see rules/README.md
+  // Combat ([var:combat_round_cap]).
+  const maxRounds = getConfigNumber(draft, "combat_round_cap", 10);
   for (let round = 0; round < maxRounds; round++) {
     // Drop-out survivor semantics (rules/README.md Combat step 6, "Next round
     // or end"): the first round rolls all committed units, but subsequent

@@ -10,7 +10,7 @@ Design cards that are historically grounded, mechanically sound, and fun to play
 ## Arguments
 - Free-form description of what cards to design. Examples:
   - "5 common units for alpha-1"
-  - "a cunning-focused legendary scientist"
+  - "a cunning-focused legendary Knowledge unit"
   - "items and events that support a trade strategy"
   - "fill gaps in the alpha-1 set"
 - Optional: specific set target (defaults to `alpha-1`)

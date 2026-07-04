@@ -19,6 +19,8 @@ import {
   makeInstantEvent,
   resetIds,
 } from "./helpers";
+import { loadCardDefinitions } from "../card-loader";
+import { join } from "node:path";
 
 /** Get active and other player IDs from a game state. */
 function getPlayers(state: MainGameState) {
@@ -962,6 +964,183 @@ describe("stat modifier queries", () => {
 
     // Forge +1 + Arms Race +2 = 4 + 3 = 7
     expect(getModifiedStat(state, queries, military, "strength", { row: 0, col: 0 })).toBe(7);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Attribute-gated effects — every effect that hardcodes an attribute literal
+// (#158 migration). Each test drives a Politics/Military/etc. unit through the
+// effect and asserts a non-matching attribute gets +0, so a renamed CSV value
+// or a mistyped literal in effects.ts fails loudly instead of silently no-op'ing.
+// ---------------------------------------------------------------------------
+
+describe("attribute-gated effects (#158 rename guards)", () => {
+  it("Versailles: +1 charisma for Politics only", () => {
+    const state = gameWith((d, p) => {
+      d.grid[0][0].location = makeLocation({ ownerId: p.active, definitionId: "versailles" });
+    });
+    const { queries } = rebuildListeners(state);
+    const politics = makeUnit({ ownerId: state.turn.activePlayerId, charisma: 4, attributes: ["Politics"] });
+    const military = makeUnit({ ownerId: state.turn.activePlayerId, charisma: 4, attributes: ["Military"] });
+
+    expect(getModifiedStat(state, queries, politics, "charisma", { row: 0, col: 0 })).toBe(5);
+    expect(getModifiedStat(state, queries, military, "charisma", { row: 0, col: 0 })).toBe(4);
+  });
+
+  it("Renaissance: +2 cunning to owner's Knowledge units only", () => {
+    const state = gameWith((d, p) => {
+      d.players[p.activeIdx].passiveEvents.push({
+        ...makePassiveEvent({ ownerId: p.active, definitionId: "renaissance" }),
+        remainingDuration: 2,
+      });
+    });
+    const { active, other } = getPlayers(state);
+    const { queries } = rebuildListeners(state);
+    const myKnowledge = makeUnit({ ownerId: active, cunning: 4, attributes: ["Knowledge"] });
+    const myMilitary = makeUnit({ ownerId: active, cunning: 4, attributes: ["Military"] });
+    const enemyKnowledge = makeUnit({ ownerId: other, cunning: 4, attributes: ["Knowledge"] });
+
+    expect(getModifiedStat(state, queries, myKnowledge, "cunning")).toBe(6);
+    expect(getModifiedStat(state, queries, myMilitary, "cunning")).toBe(4);
+    expect(getModifiedStat(state, queries, enemyKnowledge, "cunning")).toBe(4);
+  });
+
+  it("Diplomatic Summit: +2 charisma to owner's Diplomacy units only", () => {
+    const state = gameWith((d, p) => {
+      d.players[p.activeIdx].passiveEvents.push({
+        ...makePassiveEvent({ ownerId: p.active, definitionId: "diplomatic-summit" }),
+        remainingDuration: 2,
+      });
+    });
+    const { active, other } = getPlayers(state);
+    const { queries } = rebuildListeners(state);
+    const myDiplomacy = makeUnit({ ownerId: active, charisma: 4, attributes: ["Diplomacy"] });
+    const myMilitary = makeUnit({ ownerId: active, charisma: 4, attributes: ["Military"] });
+    const enemyDiplomacy = makeUnit({ ownerId: other, charisma: 4, attributes: ["Diplomacy"] });
+
+    expect(getModifiedStat(state, queries, myDiplomacy, "charisma")).toBe(6);
+    expect(getModifiedStat(state, queries, myMilitary, "charisma")).toBe(4);
+    expect(getModifiedStat(state, queries, enemyDiplomacy, "charisma")).toBe(4);
+  });
+
+  it("Holy Relic (equipped): +3 charisma to a Spirituality bearer only", () => {
+    const state = gameWith((d, p) => {
+      d.grid[0][0].location = makeLocation({ ownerId: p.active });
+      d.grid[0][0].items.push(makeItem({ ownerId: p.active, definitionId: "holy-relic", equippedTo: "unit-1" }));
+    });
+    const { queries } = rebuildListeners(state);
+    const spiritual = makeUnit({ id: "unit-1", ownerId: state.turn.activePlayerId, charisma: 4, attributes: ["Spirituality"] });
+    const military = makeUnit({ id: "unit-1", ownerId: state.turn.activePlayerId, charisma: 4, attributes: ["Military"] });
+
+    expect(getModifiedStat(state, queries, spiritual, "charisma", { row: 0, col: 0 })).toBe(7);
+    expect(getModifiedStat(state, queries, military, "charisma", { row: 0, col: 0 })).toBe(4);
+  });
+
+  it("Holy Relic (stored): +1 charisma to Spirituality units at the location", () => {
+    const state = gameWith((d, p) => {
+      d.grid[0][0].location = makeLocation({ ownerId: p.active });
+      d.grid[0][0].items.push(makeItem({ ownerId: p.active, definitionId: "holy-relic" }));
+    });
+    const { queries } = rebuildListeners(state);
+    const spiritual = makeUnit({ ownerId: state.turn.activePlayerId, charisma: 4, attributes: ["Spirituality"] });
+    const military = makeUnit({ ownerId: state.turn.activePlayerId, charisma: 4, attributes: ["Military"] });
+
+    expect(getModifiedStat(state, queries, spiritual, "charisma", { row: 0, col: 0 })).toBe(5);
+    expect(getModifiedStat(state, queries, military, "charisma", { row: 0, col: 0 })).toBe(4);
+  });
+
+  it("Crowning Jewel: +2 charisma to an equipped Politics bearer only", () => {
+    const state = gameWith((d, p) => {
+      d.grid[0][0].location = makeLocation({ ownerId: p.active });
+      d.grid[0][0].items.push(makeItem({ ownerId: p.active, definitionId: "crowning-jewel", equippedTo: "unit-1" }));
+    });
+    const { queries } = rebuildListeners(state);
+    const politics = makeUnit({ id: "unit-1", ownerId: state.turn.activePlayerId, charisma: 4, attributes: ["Politics"] });
+    const military = makeUnit({ id: "unit-1", ownerId: state.turn.activePlayerId, charisma: 4, attributes: ["Military"] });
+
+    expect(getModifiedStat(state, queries, politics, "charisma", { row: 0, col: 0 })).toBe(6);
+    expect(getModifiedStat(state, queries, military, "charisma", { row: 0, col: 0 })).toBe(4);
+  });
+
+  it("Militarist: -1 buy cost for Military units, not others", () => {
+    const state = gameWith((d, p) => {
+      d.players[p.activeIdx].activePolicies.push(
+        makePolicy({ ownerId: p.active, definitionId: "militarist" }),
+      );
+    });
+    const { active } = getPlayers(state);
+    const { queries } = rebuildListeners(state);
+    const military = makeUnit({ ownerId: active, cost: "3", attributes: ["Military"] });
+    const knowledge = makeUnit({ ownerId: active, cost: "3", attributes: ["Knowledge"] });
+
+    expect(getModifiedCost(state, queries, military, active, "buy")).toBe(2);
+    expect(getModifiedCost(state, queries, knowledge, active, "buy")).toBe(3);
+  });
+
+  it("Diplomat policy: -1 first buy for Politics units, normal on second buy", () => {
+    const state = gameWith((d, p) => {
+      d.players[p.activeIdx].activePolicies.push(
+        makePolicy({ ownerId: p.active, definitionId: "diplomat" }),
+      );
+    });
+    const { active } = getPlayers(state);
+    const { queries } = rebuildListeners(state);
+    const politics = makeUnit({ ownerId: active, cost: "3", attributes: ["Politics"] });
+    const military = makeUnit({ ownerId: active, cost: "3", attributes: ["Military"] });
+
+    // First buy of the turn — Politics discounted, Military not
+    expect(getModifiedCost(state, queries, politics, active, "buy")).toBe(2);
+    expect(getModifiedCost(state, queries, military, active, "buy")).toBe(3);
+
+    // After a buy already logged this turn — discount is gone
+    const afterBuy = produce(state, (d) => {
+      d.actionLog.push({ type: "buy", playerId: active, cardId: "x" } as any);
+    });
+    const { queries: q2 } = rebuildListeners(afterBuy);
+    expect(getModifiedCost(afterBuy, q2, politics, active, "buy")).toBe(3);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Real-library integration — feeds a real card's CSV attributes through a real
+// effect factory. Guards against CSV↔effects.ts drift that inline-fixture
+// tests (which hand-type the attribute on both sides) cannot detect.
+// ---------------------------------------------------------------------------
+
+describe("attribute effects — real library integration", () => {
+  const LIBRARY_BUILD = join(import.meta.dir, "../../../library/build");
+  const realAttributes = (id: string): string[] => {
+    const defs = loadCardDefinitions(join(LIBRARY_BUILD, "alpha-1.json"));
+    return (
+      (defs.find((d) => d.id === id) as { attributes?: string[] } | undefined)
+        ?.attributes ?? []
+    );
+  };
+
+  it("Versailles boosts a real Politics unit (Cleopatra) from the CSV build", () => {
+    const cleoAttrs = realAttributes("cleopatra");
+    expect(cleoAttrs).toContain("Politics"); // CSV genuinely tags her Politics
+    const state = gameWith((d, p) => {
+      d.grid[0][0].location = makeLocation({ ownerId: p.active, definitionId: "versailles" });
+    });
+    const { queries } = rebuildListeners(state);
+    const cleopatra = makeUnit({ ownerId: state.turn.activePlayerId, charisma: 8, attributes: cleoAttrs });
+    expect(getModifiedStat(state, queries, cleopatra, "charisma", { row: 0, col: 0 })).toBe(9);
+  });
+
+  it("Arms Race boosts a real Military unit (Genghis Khan) from the CSV build", () => {
+    const khanAttrs = realAttributes("genghis-khan");
+    expect(khanAttrs).toContain("Military");
+    const state = gameWith((d, p) => {
+      d.players[p.activeIdx].passiveEvents.push({
+        ...makePassiveEvent({ ownerId: p.active, definitionId: "arms-race" }),
+        remainingDuration: 2,
+      });
+    });
+    const { active } = getPlayers(state);
+    const { queries } = rebuildListeners(state);
+    const khan = makeUnit({ ownerId: active, strength: 7, attributes: khanAttrs });
+    expect(getModifiedStat(state, queries, khan, "strength")).toBe(9);
   });
 });
 

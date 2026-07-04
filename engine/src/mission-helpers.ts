@@ -1,6 +1,7 @@
 import type { MainGameState, UnitCard } from "./types";
 import type { QueryListener } from "./listeners/types";
 import { getModifiedStat } from "./listeners/query";
+import { hasAttribute, isAttribute } from "./attributes";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -87,8 +88,15 @@ function parseAtomicCheck(check: string): MissionRequirement[] {
       continue;
     }
 
-    // Attribute name
+    // Attribute name — must be one of the governed attributes. Rejecting
+    // unknown tokens here turns a silently-unwinnable mission (a typo or an
+    // un-migrated role-noun matches zero units) into a loud parse error.
     const attribute = capitalize(token);
+    if (!isAttribute(attribute)) {
+      throw new Error(
+        `Unknown attribute "${attribute}" in "${check}" — not a governed attribute (see rules/attributes.md)`,
+      );
+    }
     i++;
 
     if (i >= tokens.length) {
@@ -169,9 +177,7 @@ function checkSingleRequirement(
 ): boolean {
   switch (req.kind) {
     case "attribute": {
-      const matching = units.filter((u) =>
-        u.attributes.some((a) => a.toLowerCase() === req.attribute.toLowerCase()),
-      );
+      const matching = units.filter((u) => hasAttribute(u, req.attribute));
       return matching.length >= req.count;
     }
 

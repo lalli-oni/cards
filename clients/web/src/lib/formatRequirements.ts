@@ -45,15 +45,7 @@ export function parseRequirementParts(raw: string): RequirementPart[] {
 }
 
 function formatOne(check: string): string {
-  const sep = check.lastIndexOf("_");
-  if (sep === -1) return check;
-
-  const key = check.slice(0, sep);
-  const value = check.slice(sep + 1);
-
-  if (key === "units") return `${value} Units`;
-  if (STATS.has(key)) return `${capitalize(key)} ≥ ${value}`;
-  return `${value}× ${capitalize(key)}`;
+  return formatOnePart(check).text;
 }
 
 function formatOnePart(check: string): RequirementPart {

@@ -24,6 +24,7 @@ import { getPlayerById } from "../state-helpers";
 import { isOrthogonallyAdjacent } from "../grid-helpers";
 import { drawOneCard } from "../deck-helpers";
 import { countActionsThisTurn } from "./query";
+import { hasAttribute } from "../attributes";
 
 // ---------------------------------------------------------------------------
 // Effect definition types — each card type has a factory that produces
@@ -96,7 +97,7 @@ export const LOCATION_EFFECTS: Record<string, LocationEffectFactory> = {
         if (!("playerId" in event)) return false;
         const cell = state.grid[row]?.[col];
         if (!cell) return false;
-        return cell.units.some((u) => u.controllerId === event.playerId && u.attributes.includes("Diplomacy"));
+        return cell.units.some((u) => u.controllerId === event.playerId && hasAttribute(u, "Diplomacy"));
       },
       apply: (_draft, _event, emit) => {
         const pid = ("playerId" in _event) ? _event.playerId as string : controllerId;
@@ -125,7 +126,7 @@ export const LOCATION_EFFECTS: Record<string, LocationEffectFactory> = {
       query: "stat",
       modify: (_state, ctx) =>
         ctx.stat === "cunning" && ctx.position?.row === row && ctx.position?.col === col
-        && ctx.unit.attributes.includes("Knowledge") ? 1 : 0,
+        && hasAttribute(ctx.unit, "Knowledge") ? 1 : 0,
     } satisfies StatModifierListener],
   }),
 
@@ -136,7 +137,7 @@ export const LOCATION_EFFECTS: Record<string, LocationEffectFactory> = {
       query: "stat",
       modify: (_state, ctx) =>
         ctx.stat === "charisma" && ctx.position?.row === row && ctx.position?.col === col
-        && ctx.unit.attributes.includes("Politics") ? 1 : 0,
+        && hasAttribute(ctx.unit, "Politics") ? 1 : 0,
     } satisfies StatModifierListener],
   }),
 
@@ -258,7 +259,7 @@ export const POLICY_EFFECTS: Record<string, PolicyEffectFactory> = {
       modify: (_state, ctx) => {
         if (ctx.playerId !== controllerId) return 0;
         const card = ctx.card;
-        if (card.type === "unit" && "attributes" in card && (card as UnitCard).attributes.includes("Military")) return -1;
+        if (card.type === "unit" && "attributes" in card && hasAttribute(card as UnitCard, "Military")) return -1;
         if (card.type === "item" && card.keywords?.includes("Weapon")) return -1;
         return 0;
       },
@@ -274,7 +275,7 @@ export const POLICY_EFFECTS: Record<string, PolicyEffectFactory> = {
       modify: (state, ctx) => {
         if (ctx.playerId !== controllerId || ctx.action !== "buy") return 0;
         const card = ctx.card;
-        const isPolitics = card.type === "unit" && "attributes" in card && (card as UnitCard).attributes.includes("Politics");
+        const isPolitics = card.type === "unit" && "attributes" in card && hasAttribute(card as UnitCard, "Politics");
         const isAccessory = card.type === "item" && card.keywords?.includes("Accessory");
         if (!isPolitics && !isAccessory) return 0;
         return countActionsThisTurn(state, controllerId, (a) => a.type === "buy") === 0 ? -1 : 0;
@@ -367,7 +368,7 @@ export const PASSIVE_EVENT_EFFECTS: Record<string, PassiveEventEffectFactory> = 
       query: "stat",
       modify: (_state, ctx) =>
         ctx.stat === "strength" && ctx.unit.controllerId === controllerId
-        && ctx.unit.attributes.includes("Military") ? 2 : 0,
+        && hasAttribute(ctx.unit, "Military") ? 2 : 0,
     } satisfies StatModifierListener],
   }),
 
@@ -378,7 +379,7 @@ export const PASSIVE_EVENT_EFFECTS: Record<string, PassiveEventEffectFactory> = 
       query: "stat",
       modify: (_state, ctx) =>
         ctx.stat === "cunning" && ctx.unit.controllerId === controllerId
-        && ctx.unit.attributes.includes("Knowledge") ? 2 : 0,
+        && hasAttribute(ctx.unit, "Knowledge") ? 2 : 0,
     } satisfies StatModifierListener],
   }),
 
@@ -389,7 +390,7 @@ export const PASSIVE_EVENT_EFFECTS: Record<string, PassiveEventEffectFactory> = 
       query: "stat",
       modify: (_state, ctx) =>
         ctx.stat === "charisma" && ctx.unit.controllerId === controllerId
-        && ctx.unit.attributes.includes("Diplomacy") ? 2 : 0,
+        && hasAttribute(ctx.unit, "Diplomacy") ? 2 : 0,
     } satisfies StatModifierListener],
   }),
 
@@ -487,7 +488,7 @@ export const ITEM_EFFECTS: Record<string, ItemEffectFactory> = {
         query: "stat",
         modify: (_state, ctx) =>
           ctx.stat === "charisma" && item.equippedTo === ctx.unit.id
-          && ctx.unit.attributes.includes("Spirituality") ? 3 : 0,
+          && hasAttribute(ctx.unit, "Spirituality") ? 3 : 0,
       } satisfies StatModifierListener,
       // Stored: +1 charisma to Spirituality units at location
       {
@@ -496,7 +497,7 @@ export const ITEM_EFFECTS: Record<string, ItemEffectFactory> = {
         modify: (_state, ctx) => {
           if (item.equippedTo || ctx.stat !== "charisma" || !position) return 0;
           if (ctx.position?.row !== position.row || ctx.position?.col !== position.col) return 0;
-          return ctx.unit.attributes.includes("Spirituality") ? 1 : 0;
+          return hasAttribute(ctx.unit, "Spirituality") ? 1 : 0;
         },
       } satisfies StatModifierListener,
     ],
@@ -518,7 +519,7 @@ export const ITEM_EFFECTS: Record<string, ItemEffectFactory> = {
       query: "stat",
       modify: (_state, ctx) =>
         ctx.stat === "charisma" && item.equippedTo === ctx.unit.id
-        && ctx.unit.attributes.includes("Politics") ? 2 : 0,
+        && hasAttribute(ctx.unit, "Politics") ? 2 : 0,
     } satisfies StatModifierListener],
   }),
 

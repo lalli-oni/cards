@@ -10,6 +10,7 @@ import {
   loadCardDefinitions,
   loadCardDefinitionsFromBuild,
 } from "../card-loader";
+import { ATTRIBUTES, isAttribute } from "../attributes";
 
 const TMP_DIR = join(import.meta.dir, "__tmp_card_loader__");
 
@@ -291,6 +292,38 @@ describe("loadCardDefinitions with real library", () => {
       expect(def.id).toBeTruthy();
       expect(def.name).toBeTruthy();
     }
+  });
+
+  // Guards the vocabulary migration (#158): every attribute value in the
+  // real CSV data must be one of the governed domain-nouns, spelled in the
+  // exact CamelCase the effect factories (`effects.ts`) match against. A
+  // casing/typo/un-migrated value in the CSV would otherwise silently
+  // no-op the effect with no other test failing.
+  test("every unit attribute in the loaded library is a governed attribute", () => {
+    const defs = loadCardDefinitions(join(LIBRARY_BUILD, "alpha-1.json"));
+    const units = defs.filter((d) => d.type === "unit");
+    expect(units.length).toBeGreaterThan(0);
+    for (const unit of units) {
+      const attrs = (unit as { attributes?: string[] }).attributes ?? [];
+      for (const attr of attrs) {
+        expect(isAttribute(attr)).toBe(true);
+        // Exact CamelCase — not just case-insensitively valid.
+        expect(ATTRIBUTES as readonly string[]).toContain(attr);
+      }
+    }
+  });
+
+  // `Engineering` and `Commerce` have no effect/mission consumer, so this
+  // is the ONLY test that would fail if their rename were reverted or
+  // mistyped in the CSV (see PR #162 review, finding 6).
+  test("Engineering and Commerce carriers are present and correctly spelled", () => {
+    const defs = loadCardDefinitions(join(LIBRARY_BUILD, "alpha-1.json"));
+    const attrsOf = (id: string): string[] =>
+      (defs.find((d) => d.id === id) as { attributes?: string[] } | undefined)
+        ?.attributes ?? [];
+    expect(attrsOf("nikola-tesla")).toContain("Engineering");
+    expect(attrsOf("leonardo-da-vinci")).toContain("Engineering");
+    expect(attrsOf("marco-polo")).toContain("Commerce");
   });
 
   // Pins individual CSV values that are otherwise only verified via test

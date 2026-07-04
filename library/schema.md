@@ -25,7 +25,7 @@ Every card type includes these columns:
 | strength   | int    | no       | Defaults to `[var:default_stat:5]` if omitted |
 | cunning    | int    | no       | Defaults to `[var:default_stat:5]` if omitted |
 | charisma   | int    | no       | Defaults to `[var:default_stat:5]` if omitted |
-| attributes | string | no       | Semicolon-separated (e.g. `Scientist;Engineer`) |
+| attributes | string | no       | Semicolon-separated (e.g. `Knowledge;Engineering`) |
 | actions    | string | no       | Semicolon-separated action definitions. Format: `name:ap_cost:effect` |
 
 ## Locations
@@ -68,11 +68,11 @@ Mission requirements use semicolon-separated atomic checks, all AND'd together.
 
 | Check type | Format | Example | Meaning |
 |------------|--------|---------|---------|
-| Attribute count | `attribute_N` | `scientist_2` | ≥ 2 units with the Scientist attribute |
+| Attribute count | `attribute_N` | `knowledge_2` | ≥ 2 units with the Knowledge attribute |
 | Stat threshold | `stat_N` | `strength_15` | Sum of stat across ALL friendly units ≥ 15 |
 | Unit count | `units_N` | `units_3` | ≥ 3 friendly units |
 
-Combined example: `warrior_1;strength_15` → have at least 1 Warrior AND combined strength ≥ 15 across all friendly units.
+Combined example: `military_1;strength_15` → have at least 1 Military unit AND combined strength ≥ 15 across all friendly units.
 
 Stat checks always sum across all friendly units at the location — the attribute check and stat check are independent.
 

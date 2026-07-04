@@ -1,6 +1,7 @@
 import type { MainGameState, UnitCard } from "./types";
 import type { QueryListener } from "./listeners/types";
 import { getModifiedStat } from "./listeners/query";
+import { hasAttribute, isAttribute } from "./attributes";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -25,11 +26,11 @@ const STATS = new Set<string>(["strength", "cunning", "charisma"]);
 
 /**
  * Parse a requirements string into atomic checks.
- * Format: semicolon-separated checks, e.g. "warrior_1;strength_15"
+ * Format: semicolon-separated checks, e.g. "military_1;strength_15"
  *
  * Also supports legacy coupled formats for backward compat:
- *   "warrior_strength_15" → [attribute("Warrior", 1), stat("strength", 15)]
- *   "cunning_unit_7"      → [stat("cunning", 7)]
+ *   "military_strength_15" → [attribute("Military", 1), stat("strength", 15)]
+ *   "cunning_unit_7"       → [stat("cunning", 7)]
  */
 export function parseRequirements(requirementsString: string): MissionRequirement[] {
   const parts = requirementsString.split(";");
@@ -48,7 +49,7 @@ export function parseRequirements(requirementsString: string): MissionRequiremen
 
 /**
  * Parse a single atomic check. May return multiple requirements
- * for legacy coupled formats (e.g. "warrior_strength_15" → 2 checks).
+ * for legacy coupled formats (e.g. "military_strength_15" → 2 checks).
  */
 function parseAtomicCheck(check: string): MissionRequirement[] {
   const tokens = check.split("_");
@@ -87,8 +88,15 @@ function parseAtomicCheck(check: string): MissionRequirement[] {
       continue;
     }
 
-    // Attribute name
+    // Attribute name — must be one of the governed attributes. Rejecting
+    // unknown tokens here turns a silently-unwinnable mission (a typo or an
+    // un-migrated role-noun matches zero units) into a loud parse error.
     const attribute = capitalize(token);
+    if (!isAttribute(attribute)) {
+      throw new Error(
+        `Unknown attribute "${attribute}" in "${check}" — not a governed attribute (see rules/attributes.md)`,
+      );
+    }
     i++;
 
     if (i >= tokens.length) {
@@ -110,7 +118,7 @@ function parseAtomicCheck(check: string): MissionRequirement[] {
       continue;
     }
 
-    // Attribute count: "scientist_2"
+    // Attribute count: "knowledge_2"
     const count = Number(tokens[i]);
     if (Number.isNaN(count)) {
       throw new Error(`Expected number or stat after "${attribute}" in "${check}", got "${tokens[i]}"`);
@@ -169,9 +177,7 @@ function checkSingleRequirement(
 ): boolean {
   switch (req.kind) {
     case "attribute": {
-      const matching = units.filter((u) =>
-        u.attributes.some((a) => a.toLowerCase() === req.attribute.toLowerCase()),
-      );
+      const matching = units.filter((u) => hasAttribute(u, req.attribute));
       return matching.length >= req.count;
     }
 

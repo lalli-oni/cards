@@ -334,23 +334,23 @@ describe("decideKillVsInjure", () => {
 // ---------------------------------------------------------------------------
 
 describe("combat modifier sources", () => {
-  it("Arms Race lands as the only modifier on the warrior", () => {
+  it("Arms Race lands as the only modifier on the Military unit", () => {
     const armsRace = {
       ...makePassiveEvent({ ownerId: ACTIVE, definitionId: "arms-race" }),
       remainingDuration: 99,
     };
-    const warrior = makeUnit({ ownerId: ACTIVE, strength: 5, attributes: ["Warrior"] });
+    const military = makeUnit({ ownerId: ACTIVE, strength: 5, attributes: ["Military"] });
     const defender = makeUnit({ ownerId: OTHER, strength: 5 });
     const state = gameWith((d) => {
       d.players[ACTIVE_IDX].passiveEvents.push(armsRace);
       d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
-      d.grid[0][0].units.push(warrior, defender);
+      d.grid[0][0].units.push(military, defender);
     });
 
     const { events } = applyAction(state, {
       type: "attack",
       playerId: ACTIVE,
-      unitIds: [warrior.id],
+      unitIds: [military.id],
       row: 0,
       col: 0,
     });
@@ -969,9 +969,9 @@ describe("getModifiedStatWithSources", () => {
       d.players[ACTIVE_IDX].passiveEvents.push(armsRace);
     });
     const { queries } = rebuildListeners(state);
-    const warrior = makeUnit({ ownerId: ACTIVE, strength: 4, attributes: ["Warrior"] });
+    const military = makeUnit({ ownerId: ACTIVE, strength: 4, attributes: ["Military"] });
 
-    const breakdown = getModifiedStatWithSources(state, queries, warrior, "strength");
+    const breakdown = getModifiedStatWithSources(state, queries, military, "strength");
     expect(breakdown.base).toBe(4);
     expect(breakdown.modifiers).toHaveLength(1);
     expect(breakdown.modifiers[0].source.definitionId).toBe("arms-race");

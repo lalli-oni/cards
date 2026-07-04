@@ -15,7 +15,7 @@ export interface RequirementPart {
  * Format a raw mission requirements string into human-readable text.
  *
  * Input formats (separated by ";"):
- *   "scientist_2"   → "2× Scientist"   (attribute count)
+ *   "knowledge_2"   → "2× Knowledge"   (attribute count)
  *   "strength_15"   → "Strength ≥ 15"  (stat threshold)
  *   "units_3"       → "3 Units"         (unit count)
  *
@@ -45,15 +45,7 @@ export function parseRequirementParts(raw: string): RequirementPart[] {
 }
 
 function formatOne(check: string): string {
-  const sep = check.lastIndexOf("_");
-  if (sep === -1) return check;
-
-  const key = check.slice(0, sep);
-  const value = check.slice(sep + 1);
-
-  if (key === "units") return `${value} Units`;
-  if (STATS.has(key)) return `${capitalize(key)} ≥ ${value}`;
-  return `${value}× ${capitalize(key)}`;
+  return formatOnePart(check).text;
 }
 
 function formatOnePart(check: string): RequirementPart {

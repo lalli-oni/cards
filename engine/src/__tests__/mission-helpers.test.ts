@@ -6,6 +6,7 @@ import {
   parseRequirements,
   parseRewards,
 } from "../mission-helpers";
+import { isAttribute } from "../attributes";
 import type { UnitCard } from "../types";
 
 function unit(attrs: string[], overrides?: Partial<UnitCard>): UnitCard {
@@ -28,9 +29,9 @@ function unit(attrs: string[], overrides?: Partial<UnitCard>): UnitCard {
 }
 
 describe("parseRequirements", () => {
-  it("parses attribute count: scientist_2", () => {
-    const reqs = parseRequirements("scientist_2");
-    expect(reqs).toEqual([{ kind: "attribute", attribute: "Scientist", count: 2 }]);
+  it("parses attribute count: knowledge_2", () => {
+    const reqs = parseRequirements("knowledge_2");
+    expect(reqs).toEqual([{ kind: "attribute", attribute: "Knowledge", count: 2 }]);
   });
 
   it("parses stat threshold: strength_15", () => {
@@ -43,35 +44,35 @@ describe("parseRequirements", () => {
     expect(reqs).toEqual([{ kind: "units", count: 3 }]);
   });
 
-  it("parses semicolon-separated AND: warrior_1;strength_15", () => {
-    const reqs = parseRequirements("warrior_1;strength_15");
+  it("parses semicolon-separated AND: military_1;strength_15", () => {
+    const reqs = parseRequirements("military_1;strength_15");
     expect(reqs).toEqual([
-      { kind: "attribute", attribute: "Warrior", count: 1 },
+      { kind: "attribute", attribute: "Military", count: 1 },
       { kind: "stat", stat: "strength", threshold: 15 },
     ]);
   });
 
-  it("parses multi-attribute AND: scientist_1;diplomat_1", () => {
-    const reqs = parseRequirements("scientist_1;diplomat_1");
+  it("parses multi-attribute AND: knowledge_1;diplomacy_1", () => {
+    const reqs = parseRequirements("knowledge_1;diplomacy_1");
     expect(reqs).toEqual([
-      { kind: "attribute", attribute: "Scientist", count: 1 },
-      { kind: "attribute", attribute: "Diplomat", count: 1 },
+      { kind: "attribute", attribute: "Knowledge", count: 1 },
+      { kind: "attribute", attribute: "Diplomacy", count: 1 },
     ]);
   });
 
   // Legacy backward-compat formats
-  it("legacy: warrior_strength_15 decomposes to attribute + stat", () => {
-    const reqs = parseRequirements("warrior_strength_15");
+  it("legacy: military_strength_15 decomposes to attribute + stat", () => {
+    const reqs = parseRequirements("military_strength_15");
     expect(reqs).toEqual([
-      { kind: "attribute", attribute: "Warrior", count: 1 },
+      { kind: "attribute", attribute: "Military", count: 1 },
       { kind: "stat", stat: "strength", threshold: 15 },
     ]);
   });
 
-  it("legacy: scientist_cunning_14 decomposes to attribute + stat", () => {
-    const reqs = parseRequirements("scientist_cunning_14");
+  it("legacy: knowledge_cunning_14 decomposes to attribute + stat", () => {
+    const reqs = parseRequirements("knowledge_cunning_14");
     expect(reqs).toEqual([
-      { kind: "attribute", attribute: "Scientist", count: 1 },
+      { kind: "attribute", attribute: "Knowledge", count: 1 },
       { kind: "stat", stat: "cunning", threshold: 14 },
     ]);
   });
@@ -81,11 +82,28 @@ describe("parseRequirements", () => {
     expect(reqs).toEqual([{ kind: "stat", stat: "cunning", threshold: 7 }]);
   });
 
-  it("legacy: scientist_1_diplomat_1 as multi-attribute", () => {
-    const reqs = parseRequirements("scientist_1_diplomat_1");
+  it("legacy: knowledge_1_diplomacy_1 as multi-attribute", () => {
+    const reqs = parseRequirements("knowledge_1_diplomacy_1");
     expect(reqs).toEqual([
-      { kind: "attribute", attribute: "Scientist", count: 1 },
-      { kind: "attribute", attribute: "Diplomat", count: 1 },
+      { kind: "attribute", attribute: "Knowledge", count: 1 },
+      { kind: "attribute", attribute: "Diplomacy", count: 1 },
+    ]);
+  });
+
+  // Vocabulary validation (#158): an un-migrated legacy role-noun or a typo
+  // must throw, not parse into an attribute requirement that matches zero
+  // units (which would make the mission silently unwinnable).
+  it("throws on an un-migrated legacy role-noun: scientist_2", () => {
+    expect(() => parseRequirements("scientist_2")).toThrow('Unknown attribute "Scientist"');
+  });
+
+  it("throws on a misspelled attribute: diplomancy_1", () => {
+    expect(() => parseRequirements("diplomancy_1")).toThrow("Unknown attribute");
+  });
+
+  it("accepts governed attribute tokens case-insensitively: KNOWLEDGE_2", () => {
+    expect(parseRequirements("KNOWLEDGE_2")).toEqual([
+      { kind: "attribute", attribute: "Knowledge", count: 2 },
     ]);
   });
 });
@@ -106,13 +124,13 @@ describe("parseRewards", () => {
 
 describe("checkMissionRequirements", () => {
   it("attribute: passes with enough matching units", () => {
-    const reqs = parseRequirements("scientist_2");
-    expect(checkMissionRequirements(reqs, [unit(["Scientist"]), unit(["Scientist"])])).toBe(true);
+    const reqs = parseRequirements("knowledge_2");
+    expect(checkMissionRequirements(reqs, [unit(["Knowledge"]), unit(["Knowledge"])])).toBe(true);
   });
 
   it("attribute: fails with insufficient matching units", () => {
-    const reqs = parseRequirements("scientist_2");
-    expect(checkMissionRequirements(reqs, [unit(["Scientist"]), unit(["Warrior"])])).toBe(false);
+    const reqs = parseRequirements("knowledge_2");
+    expect(checkMissionRequirements(reqs, [unit(["Knowledge"]), unit(["Military"])])).toBe(false);
   });
 
   it("stat: sums across ALL friendly units", () => {
@@ -129,12 +147,12 @@ describe("checkMissionRequirements", () => {
 
   it("stat: non-attribute units still contribute to stat sum", () => {
     // With decoupled model, ALL units contribute to stat checks
-    const reqs = parseRequirements("warrior_1;strength_15");
+    const reqs = parseRequirements("military_1;strength_15");
     const units = [
-      unit(["Warrior"], { strength: 5 }),
-      unit(["Scientist"], { strength: 11 }),
+      unit(["Military"], { strength: 5 }),
+      unit(["Knowledge"], { strength: 11 }),
     ];
-    // warrior_1: 1 Warrior present ✓
+    // military_1: 1 Military unit present ✓
     // strength_15: 5 + 11 = 16 ✓ (both units contribute)
     expect(checkMissionRequirements(reqs, units)).toBe(true);
   });
@@ -150,9 +168,9 @@ describe("checkMissionRequirements", () => {
   });
 
   it("AND composition: all checks must pass", () => {
-    const reqs = parseRequirements("scientist_1;diplomat_1");
-    expect(checkMissionRequirements(reqs, [unit(["Scientist"]), unit(["Diplomat"])])).toBe(true);
-    expect(checkMissionRequirements(reqs, [unit(["Scientist"]), unit(["Scientist"])])).toBe(false);
+    const reqs = parseRequirements("knowledge_1;diplomacy_1");
+    expect(checkMissionRequirements(reqs, [unit(["Knowledge"]), unit(["Diplomacy"])])).toBe(true);
+    expect(checkMissionRequirements(reqs, [unit(["Knowledge"]), unit(["Knowledge"])])).toBe(false);
   });
 });
 
@@ -184,22 +202,30 @@ describe("library validation", () => {
 
     expect(requirements.length).toBeGreaterThan(0);
 
-    const parsed: string[] = [];
     const unparseable: string[] = [];
+    const attributeNouns: string[] = [];
     for (const r of requirements) {
       try {
         const result = parseRequirements(r);
         expect(result.length).toBeGreaterThan(0);
-        parsed.push(r);
+        for (const req of result) {
+          if (req.kind === "attribute") attributeNouns.push(req.attribute);
+        }
       } catch {
         unparseable.push(r);
       }
     }
 
-    expect(parsed.length).toBeGreaterThan(0);
-    // Log unparseable for visibility — these need updating in #60
-    if (unparseable.length > 0) {
-      console.warn(`Unparseable requirement strings (see #60): ${unparseable.join(", ")}`);
+    // Every real requirement string must parse. `parseRequirements` now
+    // rejects unknown attribute tokens, so an un-migrated role-noun
+    // (e.g. `scientist_2`) lands here and fails the test loudly instead of
+    // producing a silently-unwinnable mission.
+    expect(unparseable).toEqual([]);
+
+    // And every attribute referenced by a real mission must be governed.
+    expect(attributeNouns.length).toBeGreaterThan(0);
+    for (const noun of attributeNouns) {
+      expect(isAttribute(noun)).toBe(true);
     }
   });
 });

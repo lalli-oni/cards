@@ -5,7 +5,7 @@ merchant-ledger,Merchant Ledger,alpha-1,epic,4,,Generates 2 gold at start of you
 compass,Compass,alpha-1,common,1,Equipped unit can move through one blocked edge.,,Navigation,,Ignore one blocked edge when moving.,It always knows the way home.
 philosophers-stone,Philosopher's Stone,alpha-1,legendary,6,Equipped unit gains +2 to all stats.,,Artifact,transmute:1:gain_3_gold,+2 all stats. Action: gain 3 gold.,The real treasure was understanding.
 spy-glass,Spy Glass,alpha-1,common,1,Equipped unit can look at face-down traps at its location.,,Recon,,Reveal traps at your location.,Knowledge is the best armor.
-holy-relic,Holy Relic,alpha-1,uncommon,3,Equipped Spiritual unit gets +3 charisma.,All Spiritual units at this location get +1 charisma.,Artifact,,+3 charisma to Spiritual (equip) or +1 charisma to Spiritual (stored).,Faith made tangible.
+holy-relic,Holy Relic,alpha-1,uncommon,3,Equipped Spirituality unit gets +3 charisma.,All Spirituality units at this location get +1 charisma.,Artifact,,+3 charisma to Spirituality (equip) or +1 charisma to Spirituality (stored).,Faith made tangible.
 siege-engine,Siege Engine,alpha-1,epic,5,,,Siege,bombard:1:minus2_strength_all_enemy_location,All enemy units at target adjacent location get -2 strength until end of turn. Must be stored at a location to use.,The walls came down.
 trade-goods,Trade Goods,alpha-1,common,1,,Generates 1 gold at start of your turn.,Commerce,,Stored: gain 1 gold per turn.,Worth more than their weight.
-crowning-jewel,Crowning Jewel,alpha-1,uncommon,3,Equipped Politician gets +2 charisma. When this unit wins a charisma contest gain 2 gold.,,Regalia,,+2 charisma to Politicians; gold on charisma contest wins.,Every throne needs its shine.
+crowning-jewel,Crowning Jewel,alpha-1,uncommon,3,Equipped Politics unit gets +2 charisma. When this unit wins a charisma contest gain 2 gold.,,Regalia,,+2 charisma to Politics units; gold on charisma contest wins.,Every throne needs its shine.

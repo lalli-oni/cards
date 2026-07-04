@@ -26,7 +26,7 @@ import { rebuildListeners } from "./listeners/rebuild";
 import { getModifiedStatWithSources, getModifiedCost, getModifiedAPCost } from "./listeners/query";
 import type { EmitFn, QueryListener } from "./listeners/types";
 import { needsLocationTarget } from "./valid-actions";
-import { killUnit, injureUnit, dropEquippedItems } from "./unit-helpers";
+import { killUnit, injureUnit, dropEquippedItems, decideKillVsInjure, computeContestPower } from "./unit-helpers";
 import type {
   ActionDef,
   ActivePassiveEvent,
@@ -690,28 +690,39 @@ function handleAttack(
 
   let rng = fromState(draft.rngState);
 
-  // Auto-resolve combat rounds
-  const maxRounds = 10; // safety limit
+  // Auto-resolve combat rounds. Drop-out survivor semantics guarantee the loop
+  // terminates regardless of this cap: every matchup removes its loser (killed,
+  // or injured → out next round), so the fighting pool strictly shrinks. The
+  // worst case is the larger committed side's size — a lone unit injuring one
+  // of N enemies per round takes N rounds — so this cap only bounds combats
+  // with unusually large unit stacks; normal combats end well within it. See
+  // rules/README.md Combat design note ([var:combat_round_cap:10]).
+  const maxRounds = getConfigNumber(draft, "combat_round_cap", 10);
   for (let round = 0; round < maxRounds; round++) {
-    const livingAttackers = attackers.filter((u) => !isDeadOrRemoved(cell, u));
-    const livingDefenders = defenders.filter((u) => !isDeadOrRemoved(cell, u));
+    // Drop-out survivor semantics (rules/README.md Combat step 6, "Next round
+    // or end"): the first round rolls all committed units, but subsequent
+    // rounds continue only "surviving (non-injured, non-killed)" units. An
+    // injured unit therefore fights the round in which it is hurt, then leaves
+    // the pool. Because every matchup removes its loser (killed, or injured →
+    // out next round), the combined fighting pool strictly shrinks each round,
+    // guaranteeing termination.
+    const livingAttackers = attackers.filter((u) => !isDeadOrRemoved(cell, u) && (round === 0 || !u.injured));
+    const livingDefenders = defenders.filter((u) => !isDeadOrRemoved(cell, u) && (round === 0 || !u.injured));
 
     if (livingAttackers.length === 0 || livingDefenders.length === 0) break;
-
-    const injuryPenalty = getConfigNumber(draft, "injury_stat_penalty", 1);
 
     const atkRolls: CombatantRoll[] = [];
     for (const u of livingAttackers) {
       const [roll, nextRng] = uniformIntDistribution(1, 6, rng);
       rng = nextRng;
-      atkRolls.push(buildCombatantRoll(draft, queries, u, "attacker", row, col, roll, injuryPenalty));
+      atkRolls.push(buildCombatantRoll(draft, queries, u, "attacker", row, col, roll));
     }
 
     const defRolls: CombatantRoll[] = [];
     for (const u of livingDefenders) {
       const [roll, nextRng] = uniformIntDistribution(1, 6, rng);
       rng = nextRng;
-      defRolls.push(buildCombatantRoll(draft, queries, u, "defender", row, col, roll, injuryPenalty));
+      defRolls.push(buildCombatantRoll(draft, queries, u, "defender", row, col, roll));
     }
 
     // Sort by power descending, pair highest vs highest
@@ -767,7 +778,6 @@ function buildCombatantRoll(
   row: number,
   col: number,
   roll: number,
-  injuryPenalty: number,
 ): CombatantRoll {
   const breakdown = getModifiedStatWithSources(
     draft as MainGameState,
@@ -777,17 +787,11 @@ function buildCombatantRoll(
     { row, col },
     { role, row, col },
   );
+  // The injury penalty is now a global stat modifier applied inside
+  // getModifiedStatWithSources, so the "injured" chip already lives in
+  // `breakdown.modifiers` — no combat-specific push needed here.
   const injuredBefore = unit.injured;
   const modifiers: ModifierEntry[] = [...breakdown.modifiers];
-  if (injuredBefore && injuryPenalty !== 0) {
-    // Synthesize a `definitionId: "injured"` source so the breakdown chip
-    // reads "injured" rather than the unit name. `cardId` stays as the
-    // unit instance for downstream tooltip resolution.
-    modifiers.push({
-      source: { type: "unit", cardId: unit.id, definitionId: "injured" },
-      delta: -injuryPenalty,
-    });
-  }
   const sum = modifiers.reduce((acc, m) => acc + m.delta, 0);
   const clampedFloor = breakdown.base + sum;
   if (clampedFloor < 0) {
@@ -798,13 +802,12 @@ function buildCombatantRoll(
       delta: -clampedFloor,
     });
   }
-  const strength = Math.max(0, clampedFloor);
   return {
     unit,
     baseStrength: breakdown.base,
     modifiers,
     roll,
-    power: strength + roll,
+    power: computeContestPower(breakdown.base, sum, roll),
     injuredBefore,
   };
 }
@@ -840,8 +843,9 @@ export function deriveCombatOutcome(
   const winnerPower = attackerWins ? atkPower : defPower;
   const loserPower = attackerWins ? defPower : atkPower;
   const loserInjured = attackerWins ? defInjured : atkInjured;
-  const isKill = winnerPower >= killRatio * loserPower;
-  const loserKilled = isKill || loserInjured;
+  // Single source of truth for kill-vs-injure — shared with DSL stat contests
+  // (executor.ts:executeContest) via unit-helpers.decideKillVsInjure.
+  const loserKilled = decideKillVsInjure(loserInjured, winnerPower, loserPower, killRatio) === "kill";
   return attackerWins
     ? (loserKilled ? "kill_defender" : "injure_defender")
     : (loserKilled ? "kill_attacker" : "injure_attacker");

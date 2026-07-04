@@ -6,7 +6,7 @@ import type { Card, GameEvent, LocationCard, MainGameState, ModifierSource, Stat
 import type { QueryListener, EmitFn } from "../listeners/types";
 import { getPlayerById, getConfigNumber } from "../state-helpers";
 import { drawOneCard } from "../deck-helpers";
-import { killUnit, injureUnit, decideKillVsInjure } from "../unit-helpers";
+import { killUnit, injureUnit, decideKillVsInjure, computeContestPower } from "../unit-helpers";
 import { findUnitOnGrid } from "../grid-helpers";
 import { getModifiedStatWithSources } from "../listeners/query";
 
@@ -553,9 +553,9 @@ function executeContest(step: Step, ctx: ExecutionContext): void {
   ctx.rng = rng2;
 
   const atkSum = atkBreakdown.modifiers.reduce((acc, m) => acc + m.delta, 0);
-  const atkPower = Math.max(0, atkBreakdown.base + atkSum) + atkRoll;
+  const atkPower = computeContestPower(atkBreakdown.base, atkSum, atkRoll);
   const defSum = defBreakdown.modifiers.reduce((acc, m) => acc + m.delta, 0);
-  const defPower = Math.max(0, defBreakdown.base + defSum) + defRoll;
+  const defPower = computeContestPower(defBreakdown.base, defSum, defRoll);
 
   // Ties go to defender
   const attackerWins = atkPower > defPower;

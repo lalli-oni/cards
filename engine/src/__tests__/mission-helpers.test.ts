@@ -7,6 +7,8 @@ import {
   parseRewards,
 } from "../mission-helpers";
 import { isAttribute } from "../attributes";
+import { createTestGame } from "./helpers";
+import { rebuildListeners } from "../listeners/rebuild";
 import type { UnitCard } from "../types";
 
 function unit(attrs: string[], overrides?: Partial<UnitCard>): UnitCard {
@@ -143,6 +145,29 @@ describe("checkMissionRequirements", () => {
     const reqs = parseRequirements("strength_15");
     const units = [unit([], { strength: 5 }), unit([], { strength: 5 })];
     expect(checkMissionRequirements(reqs, units)).toBe(false); // 10 < 15
+  });
+
+  it("stat: an injured contributor's penalty can flip a mission from met to unmet", () => {
+    // Injury is a global -1 to all stats (rules/README.md Unit status), applied
+    // to mission stat checks via the same getModifiedStat path production uses
+    // — but only when state+queries are supplied. strength_16 with two
+    // strength-8 units is met at 16; injuring one drops the modified sum to
+    // 8 + (8-1) = 15 → unmet. This closes the mission leg of the #171 "one
+    // primitive applies the injury penalty everywhere" claim.
+    const reqs = parseRequirements("strength_16");
+    const state = createTestGame();
+    const { queries } = rebuildListeners(state);
+
+    const healthy1 = unit([], { id: "h1", strength: 8 });
+    const healthy2 = unit([], { id: "h2", strength: 8 });
+    const hurt = unit([], { id: "i1", strength: 8, injured: true });
+
+    // Both healthy → 16 >= 16 (met).
+    expect(checkMissionRequirements(reqs, [healthy1, healthy2], state, queries)).toBe(true);
+    // One injured → 8 + 7 = 15 < 16 (unmet) once the penalty is applied.
+    expect(checkMissionRequirements(reqs, [healthy1, hurt], state, queries)).toBe(false);
+    // Without state+queries the raw fallback ignores injury → 16, still met.
+    expect(checkMissionRequirements(reqs, [healthy1, hurt])).toBe(true);
   });
 
   it("stat: non-attribute units still contribute to stat sum", () => {

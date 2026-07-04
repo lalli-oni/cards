@@ -244,17 +244,17 @@ intended design but is **not yet implemented** (see #164). The engine
 currently auto-resolves combat atomically: the attacker commits units,
 both sides are paired greedily highest-power vs highest-power, excess
 units on the larger side sit out lowest-power-first, and all rounds run
-without pausing for player decisions. Two further deviations from the
-text above: (1) combat is capped at a 10-round engine safety limit;
-(2) injured units are **not** removed between rounds — they keep fighting
-and re-roll (with the injury penalty) each round, whereas the Next round
-step continues only "surviving (non-injured, non-killed)" units;
-reconciling this per-round survivor/injury semantics with the contest
-primitive is tracked in #169. The injure/kill consequences and
-tie-to-defender rule *are* implemented and match this text. Until #164
-lands, do not build card designs on the tactical layer or on injured
-units dropping out mid-combat — validate such designs against engine
-behavior.]
+without pausing for player decisions. The injure/kill consequences, the
+tie-to-defender rule, and the drop-out survivor semantics (injured units
+leave the fighting pool between rounds, per the Next round or end step)
+*are* implemented and match this text. As a safety limit, combat
+resolution is capped at [var:combat_round_cap:10] rounds — drop-out
+guarantees termination regardless (each round removes every matchup's
+loser), and normal combats finish in far fewer rounds; the cap only
+bounds combats with unusually large unit stacks (worst case scales with
+the larger committed side's size). Until #164 lands, do not build card
+designs on the tactical layer (defender-assigned matchups, sit-out,
+per-round retreat) — validate such designs against engine behavior.]
 
 > See [Market and Economy Rules](market.md) for details on the Buy action.
 

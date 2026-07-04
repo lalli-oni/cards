@@ -244,7 +244,7 @@ intended design but is **not yet implemented** (see #164). The engine
 currently auto-resolves combat atomically: the attacker commits units,
 both sides are paired greedily highest-power vs highest-power, excess
 units on the larger side sit out lowest-power-first, and all rounds run
-without pausing for player decisions. Three further deviations from the
+without pausing for player decisions. Two further deviations from the
 text above: (1) combat is capped at a 10-round engine safety limit;
 (2) injured units are **not** removed between rounds — they keep fighting
 and re-roll (with the injury penalty) each round, whereas the Next round

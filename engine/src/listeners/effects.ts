@@ -260,7 +260,11 @@ export const POLICY_EFFECTS: Record<string, PolicyEffectFactory> = {
         if (ctx.playerId !== controllerId) return 0;
         const card = ctx.card;
         if (card.type === "unit" && "attributes" in card && hasAttribute(card as UnitCard, "Military")) return -1;
-        if (card.type === "item" && card.keywords?.includes("Weapon")) return -1;
+        // Reads the item `type` column (#119). "Weapon" is a forward-looking
+        // item type — no alpha-1 item carries it yet, so this discount matches
+        // nothing today. Whether real items get `Weapon`/`Accessory` types is a
+        // #45 equipment decision (see the note on that issue).
+        if (card.type === "item" && card.itemType?.includes("Weapon")) return -1;
         return 0;
       },
     } satisfies CostModifierListener],
@@ -276,7 +280,9 @@ export const POLICY_EFFECTS: Record<string, PolicyEffectFactory> = {
         if (ctx.playerId !== controllerId || ctx.action !== "buy") return 0;
         const card = ctx.card;
         const isPolitics = card.type === "unit" && "attributes" in card && hasAttribute(card as UnitCard, "Politics");
-        const isAccessory = card.type === "item" && card.keywords?.includes("Accessory");
+        // Reads the item `type` column (#119). "Accessory" is forward-looking
+        // and not a governed item type yet — matches nothing today (see #45).
+        const isAccessory = card.type === "item" && card.itemType?.includes("Accessory");
         if (!isPolitics && !isAccessory) return 0;
         return countActionsThisTurn(state, controllerId, (a) => a.type === "buy") === 0 ? -1 : 0;
       },

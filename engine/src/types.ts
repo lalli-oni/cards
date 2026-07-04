@@ -68,7 +68,12 @@ interface CardBase {
   cost: string;
   rarity: Rarity;
   text?: string;
-  keywords?: string[];
+  /** Mechanical keyword-effects (Lethal, Taunt, Fortified, …). Split out of
+   *  the old `keywords` column in #119. Absent when the card has none. */
+  abilities?: string[];
+  /** Cross-type synergy vocabulary (`rules/attributes.md`). Shared across all
+   *  card types; `UnitCard` narrows this to a required field. */
+  attributes?: string[];
   /** Seeding/creation origin. Immutable after the card is instantiated. */
   ownerId: string;
   /** Current in-game controller. Mutates on buy, seed-steal, and control effects. */
@@ -191,6 +196,8 @@ export interface LocationCard extends CardBase {
   requirements?: string;
   rewards?: string;
   passive?: string;
+  /** Per-type category (Palace, Archive, Arena, …). Flavor-only today; see #160. */
+  location_type?: string;
 }
 
 export interface ItemCard extends CardBase {
@@ -199,10 +206,16 @@ export interface ItemCard extends CardBase {
   stored?: string;
   /** Unit this item is attached to (by card instance id). */
   equippedTo?: string;
+  /** Multi-value item category (Weapon, Armor, Tool, Artifact, Banner, Regalia).
+   *  Named `itemType` to avoid colliding with the `type` discriminant. The
+   *  militarist/diplomat policy discounts key off this (see effects.ts). */
+  itemType?: string[];
 }
 
 interface EventCardBase extends CardBase {
   type: "event";
+  /** Per-type category (Catastrophe, Prosperity). Flavor-only today; see #160. */
+  event_type?: string;
 }
 
 export interface InstantEventCard extends EventCardBase {

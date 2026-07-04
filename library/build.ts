@@ -12,6 +12,7 @@
 import { readdirSync, readFileSync, mkdirSync, writeFileSync, existsSync } from "fs";
 import { join } from "path";
 import { parse as parseDSL, DSLParseError, DSLValidationError } from "../engine/src/effect-dsl";
+import { ATTRIBUTES } from "../engine/src/attributes";
 
 const LIBRARY_DIR = join(import.meta.dir);
 const SETS_DIR = join(LIBRARY_DIR, "sets");
@@ -22,6 +23,39 @@ type CardType = (typeof CARD_TYPES)[number];
 
 const RARITIES = ["common", "uncommon", "rare", "epic", "legendary"] as const;
 const EVENT_TIMINGS = ["instant", "passive", "trap"] as const;
+
+// --- Governed per-type category vocabularies ---
+// Small closed enums, validated at build time like `rarity`/`timing`. These
+// are the *per-type* classification axis (a card's own kind within its type),
+// distinct from the cross-type `attributes` vocabulary. Governance + mechanical
+// utilization of these categories is tracked post-v0.1 in #160; today they are
+// structural/flavor storage split out of the old overloaded `keywords` column.
+const LOCATION_TYPES = [
+  "Palace",
+  "Archive",
+  "Arena",
+  "Port",
+  "Workshop",
+  "Hideout",
+  "Sanctuary",
+  "Monument",
+  "Market",
+  "Research",
+  "Fortification",
+] as const;
+const EVENT_TYPES = ["Catastrophe", "Prosperity"] as const;
+// Multi-value item `type` (per the #45 equipment decision — a single `type`
+// column, not `item_type` + `slot`). Weapon/Armor/Tool are forward-looking
+// values (no alpha-1 item carries them yet); Artifact/Banner/Regalia are in use.
+// `Accessory` is intentionally NOT governed here — see #45.
+const ITEM_TYPES = [
+  "Weapon",
+  "Armor",
+  "Tool",
+  "Artifact",
+  "Banner",
+  "Regalia",
+] as const;
 
 // --- CSV parsing ---
 
@@ -107,7 +141,11 @@ function transformCard(type: CardType, raw: Record<string, string>): Record<stri
     cost: raw.cost.includes("|") ? raw.cost.split("|").map((c) => c.trim()) : raw.cost,
     text: raw.text || null,
     flavor: raw.flavor || null,
-    keywords: splitList(raw.keywords || ""),
+    // Shared classification columns (split out of the old `keywords` column):
+    // `abilities` = mechanical keyword-effects, `attributes` = cross-type
+    // synergy vocabulary. Both apply to every card type.
+    abilities: splitList(raw.abilities || ""),
+    attributes: splitList(raw.attributes || ""),
   };
 
   switch (type) {
@@ -115,7 +153,6 @@ function transformCard(type: CardType, raw: Record<string, string>): Record<stri
       base.strength = intOrNull(raw.strength);
       base.cunning = intOrNull(raw.cunning);
       base.charisma = intOrNull(raw.charisma);
-      base.attributes = splitList(raw.attributes || "");
       base.actions = splitList(raw.actions || "").map(parseAction).filter(Boolean);
       break;
 
@@ -130,11 +167,15 @@ function transformCard(type: CardType, raw: Record<string, string>): Record<stri
         base.rewards = `${parts[1].trim()}vp`;
       }
       base.passive = raw.passive || null;
+      base.location_type = raw.location_type || null;
       break;
 
     case "items":
       base.equip = raw.equip || null;
       base.stored = raw.stored || null;
+      // CSV column is `type`; stored as `itemType` on the card so it does not
+      // collide with the card-type discriminant (`base.type`).
+      base.itemType = splitList(raw.type || "");
       base.actions = splitList(raw.actions || "").map(parseAction).filter(Boolean);
       break;
 
@@ -142,6 +183,7 @@ function transformCard(type: CardType, raw: Record<string, string>): Record<stri
       base.timing = raw.timing;
       base.duration = intOrNull(raw.duration || "");
       base.trigger = raw.trigger || null;
+      base.event_type = raw.event_type || null;
       if (raw.effect) base.effect = raw.effect;
       break;
 
@@ -176,6 +218,33 @@ function validate(type: CardType, card: Record<string, unknown>): ValidationErro
 
   if (type === "events" && !EVENT_TIMINGS.includes(card.timing as any)) {
     errors.push({ card: id, field: "timing", message: `invalid timing: ${card.timing}` });
+  }
+
+  // Cross-type attribute vocabulary — exact CamelCase membership in the
+  // governed set (`engine/src/attributes.ts`). Closes the gap #158 left: the
+  // old `keywords` column was unvalidated, so typos/un-migrated values could
+  // silently no-op an effect. Case-sensitive on purpose so CSV data and the
+  // hardcoded literals in effect factories cannot drift on spelling.
+  const attributes = (card.attributes as string[] | undefined) ?? [];
+  for (const attr of attributes) {
+    if (!ATTRIBUTES.includes(attr as (typeof ATTRIBUTES)[number])) {
+      errors.push({ card: id, field: "attributes", message: `invalid attribute: ${attr}` });
+    }
+  }
+
+  // Per-type category enums.
+  if (type === "locations" && card.location_type && !LOCATION_TYPES.includes(card.location_type as any)) {
+    errors.push({ card: id, field: "location_type", message: `invalid location_type: ${card.location_type}` });
+  }
+  if (type === "events" && card.event_type && !EVENT_TYPES.includes(card.event_type as any)) {
+    errors.push({ card: id, field: "event_type", message: `invalid event_type: ${card.event_type}` });
+  }
+  if (type === "items") {
+    for (const t of (card.itemType as string[] | undefined) ?? []) {
+      if (!ITEM_TYPES.includes(t as any)) {
+        errors.push({ card: id, field: "type", message: `invalid item type: ${t}` });
+      }
+    }
   }
 
   // DSL effect validation — skipped for policies (action.effect is

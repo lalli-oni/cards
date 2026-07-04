@@ -28,13 +28,14 @@ export interface CardDefinition {
   cost: string | string[];
   text: string | null;
   flavor: string | null;
-  keywords: string[];
+  // Shared classification (split out of the old `keywords` column in #119).
+  abilities: string[];
+  attributes?: string[];
 
   // Unit fields
   strength?: number | null;
   cunning?: number | null;
   charisma?: number | null;
-  attributes?: string[];
   actions?: ActionDef[];
 
   // Location fields
@@ -42,15 +43,20 @@ export interface CardDefinition {
   requirements?: string | null;
   rewards?: string | null;
   passive?: string | null;
+  location_type?: string | null;
 
   // Item fields
   equip?: string | null;
   stored?: string | null;
+  /** CSV `type` column, parsed to an array. Named `itemType` to avoid
+   *  colliding with the card-type discriminant. */
+  itemType?: string[];
 
   // Event fields
   timing?: EventTiming;
   duration?: number | null;
   trigger?: string | null;
+  event_type?: string | null;
 
   // Policy fields
   effect?: string;
@@ -120,11 +126,19 @@ function validateDefinition(
     errors.push({ cardId, message: `invalid cost type: ${typeof def.cost}` });
   }
 
-  // Keywords: required, must be string[]
-  if (!Array.isArray(def.keywords)) {
+  // Abilities: required, must be string[] (build.ts always emits an array).
+  if (!Array.isArray(def.abilities)) {
     errors.push({
       cardId,
-      message: "missing or invalid keywords (expected array)",
+      message: "missing or invalid abilities (expected array)",
+    });
+  }
+
+  // Attributes: optional, but must be string[] when present.
+  if (def.attributes !== undefined && !Array.isArray(def.attributes)) {
+    errors.push({
+      cardId,
+      message: "invalid attributes (expected array)",
     });
   }
 
@@ -255,7 +269,9 @@ export function instantiateCard(
     cost: normalizeCost(def.cost),
     rarity: def.rarity,
     text: def.text ?? undefined,
-    keywords: def.keywords.length > 0 ? def.keywords : undefined,
+    abilities: def.abilities.length > 0 ? def.abilities : undefined,
+    attributes:
+      def.attributes && def.attributes.length > 0 ? def.attributes : undefined,
     ownerId,
     controllerId: ownerId,
   };
@@ -281,6 +297,7 @@ export function instantiateCard(
         requirements: def.requirements ?? def.mission ?? undefined,
         rewards: def.rewards ?? undefined,
         passive: def.passive ?? undefined,
+        location_type: def.location_type ?? undefined,
       } satisfies LocationCard;
 
     case "item":
@@ -289,6 +306,8 @@ export function instantiateCard(
         type: "item",
         equip: def.equip ?? undefined,
         stored: def.stored ?? undefined,
+        itemType:
+          def.itemType && def.itemType.length > 0 ? def.itemType : undefined,
       } satisfies ItemCard;
 
     case "event": {
@@ -297,12 +316,13 @@ export function instantiateCard(
       }
       switch (def.timing) {
         case "instant":
-          return { ...base, type: "event", timing: "instant", effect: def.effect ?? undefined } satisfies InstantEventCard;
+          return { ...base, type: "event", timing: "instant", event_type: def.event_type ?? undefined, effect: def.effect ?? undefined } satisfies InstantEventCard;
         case "passive":
           return {
             ...base,
             type: "event",
             timing: "passive",
+            event_type: def.event_type ?? undefined,
             duration: def.duration ?? 1,
           } satisfies PassiveEventCard;
         case "trap":
@@ -310,6 +330,7 @@ export function instantiateCard(
             ...base,
             type: "event",
             timing: "trap",
+            event_type: def.event_type ?? undefined,
             trigger: def.trigger ?? "",
           } satisfies TrapEventCard;
         default:

@@ -192,9 +192,11 @@ Each deck has its own draw behavior:
 
 #### Combat
 
-> Combat is a series of **strength contests** resolved through a
-> multi-unit commitment and matchup system. See
-> [Stat Contests](stat-contests.md) for the general contest mechanic.
+> Combat is a multi-unit commitment and matchup system in which **each
+> matchup is resolved as a single strength [stat contest](stat-contests.md)**
+> — same roll, same tie rule, same injure/kill consequences. Combat is
+> the multi-unit *orchestration* of that 1v1 primitive, not a parallel
+> mechanic.
 
 Combat is initiated by the **Attack** action (1 AP). The attacker must
 have at least one unit at the location and at least one enemy unit must
@@ -206,19 +208,18 @@ be present.
    the location participate. Must commit at least one.
 2. **Commit (defender)**: All defender units at the location are
    committed automatically — the defender cannot hold units back.
-3. **Roll**: Each side rolls one d6 per committed unit. Each unit's
-   **attack power** = printed strength + d6 roll.
+3. **Roll**: Each side rolls one d[var:combat_die:6] per committed unit.
+   Each unit's **attack power** = strength (including modifiers) + roll.
 4. **Matchup (defender assigns)**: The defender pairs units into 1v1
    matchups. The number of pairs equals the smaller side's committed
    count. The side with more units chooses which of their excess units
    sit out (decided after seeing all rolls).
-5. **Resolve**: Each pair resolves independently:
-   - Higher attack power wins. **Tie = defender wins.**
-   - Loser is **injured** (see Unit status). Items are dropped at the
-     location.
-   - If the winner's attack power is [var:combat_kill_ratio:2]x or more the loser's
-     attack power, the loser is **killed** instead (see Unit status).
-     Items are dropped at the location.
+5. **Resolve**: Each pair is a **strength [stat contest](stat-contests.md)**
+   and resolves independently by that file's rules — higher attack power
+   wins, ties go to the defender, and the loser is **injured** or (at
+   [var:combat_kill_ratio:2]x attack power) **killed** (see Unit status).
+   Combat adds one consequence on top of the primitive: a unit that is
+   **killed** drops its equipped items at the location.
 6. **Next round or end**: After all pairs resolve, if both sides still
    have surviving (non-injured, non-killed) units at the location,
    combat continues — return to step 3 (re-roll all surviving units).
@@ -235,6 +236,25 @@ be present.
   Each opponent's units are committed separately and the attacker
   resolves combat against each opponent in turn (attacker chooses
   order). Surviving attacker units carry over between resolutions.
+
+[design: The multi-unit *tactical* layer above — the defender assigning
+matchups and the larger side choosing which units sit out (the Matchup
+step), and per-round retreat (the Next round or end step) — is the
+intended design but is **not yet implemented** (see #164). The engine
+currently auto-resolves combat atomically: the attacker commits units,
+both sides are paired greedily highest-power vs highest-power, excess
+units on the larger side sit out lowest-power-first, and all rounds run
+without pausing for player decisions. Two further deviations from the
+text above: (1) combat is capped at a 10-round engine safety limit;
+(2) injured units are **not** removed between rounds — they keep fighting
+and re-roll (with the injury penalty) each round, whereas the Next round
+step continues only "surviving (non-injured, non-killed)" units;
+reconciling this per-round survivor/injury semantics with the contest
+primitive is tracked in #169. The injure/kill consequences and
+tie-to-defender rule *are* implemented and match this text. Until #164
+lands, do not build card designs on the tactical layer or on injured
+units dropping out mid-combat — validate such designs against engine
+behavior.]
 
 > See [Market and Economy Rules](market.md) for details on the Buy action.
 

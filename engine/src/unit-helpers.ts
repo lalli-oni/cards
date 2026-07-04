@@ -70,6 +70,14 @@ export function decideKillVsInjure(
   return "injure";
 }
 
+/** Pure — effective contest power: the stat clamped at 0 (negative effective
+ *  stats contribute 0 for v0.1 — see stat-contests.md #156) plus the die roll.
+ *  Shared by combat matchups (`apply-main.ts:buildCombatantRoll`) and DSL stat
+ *  contests (`executor.ts:executeContest`) so both compute power identically. */
+export function computeContestPower(base: number, modifierSum: number, roll: number): number {
+  return Math.max(0, base + modifierSum) + roll;
+}
+
 /** Drop all items equipped to a unit at the unit's location. */
 export function dropEquippedItems(
   cell: Draft<{ units: UnitCard[]; items: ItemCard[] }>,

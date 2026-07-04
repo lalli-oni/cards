@@ -26,7 +26,7 @@ import { rebuildListeners } from "./listeners/rebuild";
 import { getModifiedStatWithSources, getModifiedCost, getModifiedAPCost } from "./listeners/query";
 import type { EmitFn, QueryListener } from "./listeners/types";
 import { needsLocationTarget } from "./valid-actions";
-import { killUnit, injureUnit, dropEquippedItems } from "./unit-helpers";
+import { killUnit, injureUnit, dropEquippedItems, decideKillVsInjure, computeContestPower } from "./unit-helpers";
 import type {
   ActionDef,
   ActivePassiveEvent,
@@ -798,13 +798,12 @@ function buildCombatantRoll(
       delta: -clampedFloor,
     });
   }
-  const strength = Math.max(0, clampedFloor);
   return {
     unit,
     baseStrength: breakdown.base,
     modifiers,
     roll,
-    power: strength + roll,
+    power: computeContestPower(breakdown.base, sum, roll),
     injuredBefore,
   };
 }
@@ -840,8 +839,9 @@ export function deriveCombatOutcome(
   const winnerPower = attackerWins ? atkPower : defPower;
   const loserPower = attackerWins ? defPower : atkPower;
   const loserInjured = attackerWins ? defInjured : atkInjured;
-  const isKill = winnerPower >= killRatio * loserPower;
-  const loserKilled = isKill || loserInjured;
+  // Single source of truth for kill-vs-injure — shared with DSL stat contests
+  // (executor.ts:executeContest) via unit-helpers.decideKillVsInjure.
+  const loserKilled = decideKillVsInjure(loserInjured, winnerPower, loserPower, killRatio) === "kill";
   return attackerWins
     ? (loserKilled ? "kill_defender" : "injure_defender")
     : (loserKilled ? "kill_attacker" : "injure_attacker");

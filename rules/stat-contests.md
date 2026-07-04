@@ -25,8 +25,10 @@ the **attacker**; the targeted unit is the **defender**.
   **injured** (see [Unit status](README.md#unit-status)). If the
   winner's attack power is [var:combat_kill_ratio:2]x or more the
   loser's, the loser is **killed** instead. The **Attack** action
-  initiates strength contests — see [Combat](README.md#combat) for
-  the full multi-unit flow.
+  initiates strength contests — **each combat matchup is one strength
+  contest resolved by exactly these rules**; see
+  [Combat](README.md#combat) for how the multi-unit flow orchestrates
+  them.
 - **All other stat contests** have no default consequence. The card or
   effect that initiates the contest defines what happens on win and/or
   loss.

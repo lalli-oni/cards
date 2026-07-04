@@ -192,9 +192,11 @@ Each deck has its own draw behavior:
 
 #### Combat
 
-> Combat is a series of **strength contests** resolved through a
-> multi-unit commitment and matchup system. See
-> [Stat Contests](stat-contests.md) for the general contest mechanic.
+> Combat is a multi-unit commitment and matchup system in which **each
+> matchup is resolved as a single strength [stat contest](stat-contests.md)**
+> — same roll, same tie rule, same injure/kill consequences. Combat is
+> the multi-unit *orchestration* of that 1v1 primitive, not a parallel
+> mechanic.
 
 Combat is initiated by the **Attack** action (1 AP). The attacker must
 have at least one unit at the location and at least one enemy unit must
@@ -212,7 +214,8 @@ be present.
    matchups. The number of pairs equals the smaller side's committed
    count. The side with more units chooses which of their excess units
    sit out (decided after seeing all rolls).
-5. **Resolve**: Each pair resolves independently:
+5. **Resolve**: Each pair is a **strength [stat contest](stat-contests.md)**
+   and resolves independently:
    - Higher attack power wins. **Tie = defender wins.**
    - Loser is **injured** (see Unit status). Items are dropped at the
      location.
@@ -235,6 +238,17 @@ be present.
   Each opponent's units are committed separately and the attacker
   resolves combat against each opponent in turn (attacker chooses
   order). Surviving attacker units carry over between resolutions.
+
+[design: The multi-unit *tactical* layer above — the defender assigning
+matchups (step 4), the larger side choosing which units sit out (step 4),
+and per-round retreat (step 6) — is the intended design but is **not yet
+implemented**. The engine currently auto-resolves combat atomically:
+attacker commits units, both sides are paired greedily highest-power vs
+highest-power, and all rounds run without pausing for player decisions.
+This is an engine deviation documented here to keep rules and engine
+consistent; building the interactive layer is tracked in #164. The
+injure/kill consequences and tie-to-defender rule are implemented and
+match this text.]
 
 > See [Market and Economy Rules](market.md) for details on the Buy action.
 

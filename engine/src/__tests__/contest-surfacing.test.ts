@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { produce } from "immer";
 import { applyAction } from "../apply-action";
 import { deriveCombatOutcome } from "../apply-main";
-import { decideKillVsInjure } from "../unit-helpers";
+import { decideKillVsInjure, computeContestPower } from "../unit-helpers";
 import { rebuildListeners } from "../listeners/rebuild";
 import { POLICY_ACTIONS } from "../listeners/effects";
 import { getModifiedStatWithSources } from "../listeners/query";
@@ -181,6 +181,15 @@ describe("combat_pair_resolved", () => {
     expect(penalty).toBeDefined();
     expect(penalty!.source.cardId).toBe(defender.id);
     expect(penalty!.delta).toBe(-1);
+    // Exactly ONE injured chip. The #171 refactor moved the penalty from a
+    // combat-local push in buildCombatantRoll to the global synthesis in
+    // getModifiedStatWithSources; re-introducing the old push would emit two
+    // -1 chips (double-counting the penalty), which this guards against.
+    const injuredChips = pair.defender.modifiers.filter((m) => m.source.definitionId === "injured");
+    expect(injuredChips).toHaveLength(1);
+    // Power reflects the penalty exactly once: base + Σmodifiers + roll.
+    const defSum = pair.defender.modifiers.reduce((a, m) => a + m.delta, 0);
+    expect(pair.defender.baseStrength + defSum + pair.defender.roll).toBe(pair.defender.power);
   });
 
   it("emits per pair across a 2v2 — pairing pulls highest-power vs highest-power", () => {
@@ -292,6 +301,123 @@ describe("combat drop-out survivor semantics", () => {
     if (resolved?.type !== "combat_resolved") throw new Error("expected combat_resolved");
     expect(resolved.winnerId).toBeNull();
   });
+
+  it("lets a pre-injured unit fight round 0, then drops it from round 1", () => {
+    // The filter is `round === 0 || !u.injured`: a unit injured BEFORE combat
+    // still fights round 0, then leaves the pool. Here a pre-injured attacker
+    // (str 20, effective 19) kills one of two defenders in round 0; in round 1
+    // it is excluded, so the second defender — which sat out round 0 — is never
+    // engaged and survives un-injured.
+    const attacker = makeUnit({ ownerId: ACTIVE, strength: 20, injured: true });
+    const defenders = [
+      makeUnit({ ownerId: OTHER, strength: 1 }),
+      makeUnit({ ownerId: OTHER, strength: 1 }),
+    ];
+    const state = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][0].units.push(attacker, ...defenders);
+    });
+
+    const { state: next, events } = applyAction(state, {
+      type: "attack",
+      playerId: ACTIVE,
+      unitIds: [attacker.id],
+      row: 0,
+      col: 0,
+    });
+    const ns = next as MainGameState;
+
+    // Round 0 ran (pre-injured attacker participated, killing one defender);
+    // round 1 did not (attacker excluded, no attackers left to roll).
+    const pairs = findAllPairs(events);
+    expect(pairs).toHaveLength(1);
+    expect(pairs[0].outcome).toBe("kill_defender");
+
+    // Attacker survives, still injured, still on the grid.
+    const atk = ns.grid[0][0].units.find((u) => u.id === attacker.id);
+    expect(atk?.injured).toBe(true);
+    // The sat-out defender is untouched: exactly one defender remains, un-injured.
+    const liveDefenders = ns.grid[0][0].units.filter((u) => u.ownerId === OTHER);
+    expect(liveDefenders).toHaveLength(1);
+    expect(liveDefenders[0].injured).toBe(false);
+
+    const resolved = events.find((e) => e.type === "combat_resolved");
+    if (resolved?.type !== "combat_resolved") throw new Error("expected combat_resolved");
+    expect(resolved.winnerId).toBeNull();
+  });
+
+  it("halts combat at combat_round_cap even when live units remain to fight", () => {
+    // 1 attacker (str 20) vs 3 defenders (str 1): the attacker kills one
+    // defender per round (20 >= 2*1) while the other two sit out, so an
+    // uncapped combat takes 3 rounds. Pinning the cap at 1 must stop after the
+    // first round with two live, un-injured defenders remaining. A typo in the
+    // "combat_round_cap" config key would ignore the override and fail here.
+    const attacker = makeUnit({ ownerId: ACTIVE, strength: 20 });
+    const defenders = [
+      makeUnit({ ownerId: OTHER, strength: 1 }),
+      makeUnit({ ownerId: OTHER, strength: 1 }),
+      makeUnit({ ownerId: OTHER, strength: 1 }),
+    ];
+    const state = produce(
+      createTestGame({ config: { ...COMBAT_CONFIG, combat_round_cap: 1 } }),
+      (d) => {
+        d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+        d.grid[0][0].units.push(attacker, ...defenders);
+      },
+    );
+
+    const { state: next, events } = applyAction(state, {
+      type: "attack",
+      playerId: ACTIVE,
+      unitIds: [attacker.id],
+      row: 0,
+      col: 0,
+    });
+    const ns = next as MainGameState;
+
+    // Only one round ran → exactly one matchup resolved.
+    expect(findAllPairs(events)).toHaveLength(1);
+    // Two defenders never fought; they survive, un-injured, on the grid.
+    const liveDefenders = ns.grid[0][0].units.filter((u) => u.ownerId === OTHER && !u.injured);
+    expect(liveDefenders).toHaveLength(2);
+    // Combat did not clear the cell → no winner.
+    const resolved = events.find((e) => e.type === "combat_resolved");
+    if (resolved?.type !== "combat_resolved") throw new Error("expected combat_resolved");
+    expect(resolved.winnerId).toBeNull();
+  });
+
+  it("uses the default round cap (10) when combat_round_cap is absent from config", () => {
+    // The same 1-vs-3 setup resolves fully under the default cap: the attacker
+    // kills all three defenders across three rounds and takes the cell. Pins
+    // the `getConfigNumber(..., 10)` fallback. COMBAT_CONFIG never sets
+    // combat_round_cap, so gameWith exercises the default path directly.
+    const attacker = makeUnit({ ownerId: ACTIVE, strength: 20 });
+    const defenders = [
+      makeUnit({ ownerId: OTHER, strength: 1 }),
+      makeUnit({ ownerId: OTHER, strength: 1 }),
+      makeUnit({ ownerId: OTHER, strength: 1 }),
+    ];
+    const state = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][0].units.push(attacker, ...defenders);
+    });
+
+    const { state: next, events } = applyAction(state, {
+      type: "attack",
+      playerId: ACTIVE,
+      unitIds: [attacker.id],
+      row: 0,
+      col: 0,
+    });
+    const ns = next as MainGameState;
+
+    // Three rounds, three kills — all defenders cleared, attacker takes the cell.
+    expect(findAllPairs(events)).toHaveLength(3);
+    expect(ns.grid[0][0].units.filter((u) => u.ownerId === OTHER)).toHaveLength(0);
+    const resolved = events.find((e) => e.type === "combat_resolved");
+    if (resolved?.type !== "combat_resolved") throw new Error("expected combat_resolved");
+    expect(resolved.winnerId).toBe(ACTIVE);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -372,6 +498,23 @@ describe("decideKillVsInjure", () => {
   it("throws on invalid power inputs (negative, NaN)", () => {
     expect(() => decideKillVsInjure(false, -1, 5, 2)).toThrow(/winnerPower/);
     expect(() => decideKillVsInjure(false, 5, NaN, 2)).toThrow(/loserPower/);
+  });
+});
+
+describe("computeContestPower", () => {
+  // The shared primitive both combat (buildCombatantRoll) and DSL contests
+  // (executeContest) depend on: power = max(0, base + Σmodifiers) + roll.
+  it("adds the roll to the positive clamped stat", () => {
+    expect(computeContestPower(5, 2, 4)).toBe(11); // max(0, 7) + 4
+    expect(computeContestPower(5, 0, 1)).toBe(6);
+  });
+  it("clamps a negative base+Σmodifiers to 0 before adding the roll", () => {
+    // The die roll is NOT clamped away — a fully-debuffed unit still rolls.
+    expect(computeContestPower(1, -3, 4)).toBe(4); // max(0, -2)=0, +4
+    expect(computeContestPower(0, -5, 6)).toBe(6);
+  });
+  it("treats an exact-zero clamped stat as contributing only the roll", () => {
+    expect(computeContestPower(2, -2, 3)).toBe(3);
   });
 });
 
@@ -683,6 +826,50 @@ describe("contest_resolved per-side breakdown", () => {
       roll: contest.defender.roll,
       power: 4 + contest.defender.roll,
     });
+  });
+
+  it("applies the global injury penalty inside a DSL stat contest", () => {
+    // The injury penalty lives in getModifiedStatWithSources, so it must reach
+    // the DSL contest path (executeContest) too — not just combat. An injured
+    // caster contests at charisma - injury_stat_penalty, surfaced as an
+    // `injured` chip in the contest breakdown.
+    const cleopatra = makeUnit({
+      ownerId: ACTIVE,
+      definitionId: "cleopatra",
+      charisma: 9,
+      injured: true,
+      actions: [{
+        name: "diplomacy",
+        apCost: 1,
+        effect: "contest.charisma(enemy + adjacent) > control(target)~round",
+      }],
+    });
+    const enemy = makeUnit({ ownerId: OTHER, charisma: 4 });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][1].location = makeLocation({ ownerId: OTHER });
+      d.grid[0][0].units.push(cleopatra);
+      d.grid[0][1].units.push(enemy);
+    });
+
+    const { events } = applyAction(state, {
+      type: "activate",
+      playerId: ACTIVE,
+      cardId: cleopatra.id,
+      actionName: "diplomacy",
+      targetId: enemy.id,
+    });
+
+    const contest = findContest(events);
+    expect(contest.attacker.baseStat).toBe(9);
+    const injuredChip = modifierFrom(contest.attacker, "injured");
+    expect(injuredChip).toBeDefined();
+    expect(injuredChip!.delta).toBe(-1);
+    expect(injuredChip!.source.cardId).toBe(cleopatra.id);
+    // Applied exactly once and folded into power: base + Σmodifiers + roll.
+    expect(contest.attacker.modifiers.filter((m) => m.source.definitionId === "injured")).toHaveLength(1);
+    const atkSum = contest.attacker.modifiers.reduce((a, m) => a + m.delta, 0);
+    expect(contest.attacker.baseStat + atkSum + contest.attacker.roll).toBe(contest.attacker.power);
   });
 
   it("surfaces a buff-verb modifier on the DSL contest payload too", () => {

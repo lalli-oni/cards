@@ -690,10 +690,13 @@ function handleAttack(
 
   let rng = fromState(draft.rngState);
 
-  // Auto-resolve combat rounds. Drop-out survivor semantics already guarantee
-  // termination (every matchup removes its loser from the pool); this cap is a
-  // documented safety limit for pathological states — see rules/README.md
-  // Combat ([var:combat_round_cap]).
+  // Auto-resolve combat rounds. Drop-out survivor semantics guarantee the loop
+  // terminates regardless of this cap: every matchup removes its loser (killed,
+  // or injured → out next round), so the fighting pool strictly shrinks. The
+  // worst case is the larger committed side's size — a lone unit injuring one
+  // of N enemies per round takes N rounds — so this cap only bounds combats
+  // with unusually large unit stacks; normal combats end well within it. See
+  // rules/README.md Combat design note ([var:combat_round_cap:10]).
   const maxRounds = getConfigNumber(draft, "combat_round_cap", 10);
   for (let round = 0; round < maxRounds; round++) {
     // Drop-out survivor semantics (rules/README.md Combat step 6, "Next round

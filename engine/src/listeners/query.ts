@@ -62,7 +62,8 @@ export function getModifiedStatWithSources(
   // Injured units take a global -injury_stat_penalty to every stat
   // (rules/README.md Unit status). Synthesized here — the single source of
   // truth for effective stats — so combat, DSL contests, and mission stat
-  // checks all apply it uniformly. `definitionId: "injured"` labels the chip.
+  // checks (the last via the `getModifiedStat` wrapper) all apply it
+  // uniformly. `definitionId: "injured"` labels the chip.
   if (unit.injured) {
     const penalty = getConfigNumber(state, "injury_stat_penalty", 1);
     if (penalty !== 0) {

@@ -249,8 +249,10 @@ tie-to-defender rule, and the drop-out survivor semantics (injured units
 leave the fighting pool between rounds, per the Next round or end step)
 *are* implemented and match this text. As a safety limit, combat
 resolution is capped at [var:combat_round_cap:10] rounds — drop-out
-already guarantees termination well within this bound, so the cap only
-guards against pathological states. Until #164 lands, do not build card
+guarantees termination regardless (each round removes every matchup's
+loser), and normal combats finish in far fewer rounds; the cap only
+bounds combats with unusually large unit stacks (worst case scales with
+the larger committed side's size). Until #164 lands, do not build card
 designs on the tactical layer (defender-assigned matchups, sit-out,
 per-round retreat) — validate such designs against engine behavior.]
 

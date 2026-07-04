@@ -10,6 +10,7 @@
   "scripts": {
     "build:library": "bun library/build.ts",
     "build:rules": "bun engine/src/rules-config.ts",
+    "test": "bun run build:library && bun --filter '*' test",
     "typecheck": "bun --filter '*' typecheck"
   },
   "devDependencies": {

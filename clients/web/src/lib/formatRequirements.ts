@@ -15,7 +15,7 @@ export interface RequirementPart {
  * Format a raw mission requirements string into human-readable text.
  *
  * Input formats (separated by ";"):
- *   "scientist_2"   → "2× Scientist"   (attribute count)
+ *   "knowledge_2"   → "2× Knowledge"   (attribute count)
  *   "strength_15"   → "Strength ≥ 15"  (stat threshold)
  *   "units_3"       → "3 Units"         (unit count)
  *

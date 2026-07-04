@@ -622,10 +622,10 @@ describe("turn-start listeners", () => {
     )).toBe(false);
   });
 
-  it("Trade Port: +1 gold with Diplomat present", () => {
+  it("Trade Port: +1 gold with Diplomacy unit present", () => {
     const state = gameWith((d, p) => {
       d.grid[0][0].location = makeLocation({ ownerId: p.active, definitionId: "trade-port" });
-      d.grid[0][0].units.push(makeUnit({ ownerId: p.active, attributes: ["Diplomat"] }));
+      d.grid[0][0].units.push(makeUnit({ ownerId: p.active, attributes: ["Diplomacy"] }));
       d.players[p.activeIdx].mainDeck.push(makeUnit({ ownerId: p.active }));
       d.players[p.otherIdx].mainDeck.push(makeUnit({ ownerId: p.other }));
     });
@@ -637,10 +637,10 @@ describe("turn-start listeners", () => {
     )).toBe(true);
   });
 
-  it("Trade Port: bonus goes to player with Diplomat, not location owner", () => {
+  it("Trade Port: bonus goes to player with Diplomacy unit, not location owner", () => {
     const state = gameWith((d, p) => {
       d.grid[0][0].location = makeLocation({ ownerId: p.other, definitionId: "trade-port" });
-      d.grid[0][0].units.push(makeUnit({ ownerId: p.active, attributes: ["Diplomat"] }));
+      d.grid[0][0].units.push(makeUnit({ ownerId: p.active, attributes: ["Diplomacy"] }));
       d.players[p.activeIdx].mainDeck.push(makeUnit({ ownerId: p.active }));
       d.players[p.otherIdx].mainDeck.push(makeUnit({ ownerId: p.other }));
     });
@@ -655,10 +655,10 @@ describe("turn-start listeners", () => {
     expect("playerId" in goldEvent! && goldEvent.playerId).toBe(active);
   });
 
-  it("Trade Port: no gold without Diplomat", () => {
+  it("Trade Port: no gold without Diplomacy unit", () => {
     const state = gameWith((d, p) => {
       d.grid[0][0].location = makeLocation({ ownerId: p.active, definitionId: "trade-port" });
-      d.grid[0][0].units.push(makeUnit({ ownerId: p.active, attributes: ["Warrior"] }));
+      d.grid[0][0].units.push(makeUnit({ ownerId: p.active, attributes: ["Military"] }));
       d.players[p.activeIdx].mainDeck.push(makeUnit({ ownerId: p.active }));
       d.players[p.otherIdx].mainDeck.push(makeUnit({ ownerId: p.other }));
     });
@@ -844,16 +844,16 @@ describe("stat modifier queries", () => {
     expect(getModifiedStat(state, queries, unit, "cunning", { row: 0, col: 0 })).toBe(5);
   });
 
-  it("Great Library: +1 cunning for Scientist only", () => {
+  it("Great Library: +1 cunning for Knowledge only", () => {
     const state = gameWith((d, p) => {
       d.grid[0][0].location = makeLocation({ ownerId: p.active, definitionId: "the-great-library" });
     });
     const { queries } = rebuildListeners(state);
-    const scientist = makeUnit({ ownerId: state.turn.activePlayerId, cunning: 4, attributes: ["Scientist"] });
-    const warrior = makeUnit({ ownerId: state.turn.activePlayerId, cunning: 4, attributes: ["Warrior"] });
+    const knowledge = makeUnit({ ownerId: state.turn.activePlayerId, cunning: 4, attributes: ["Knowledge"] });
+    const military = makeUnit({ ownerId: state.turn.activePlayerId, cunning: 4, attributes: ["Military"] });
 
-    expect(getModifiedStat(state, queries, scientist, "cunning", { row: 0, col: 0 })).toBe(5);
-    expect(getModifiedStat(state, queries, warrior, "cunning", { row: 0, col: 0 })).toBe(4);
+    expect(getModifiedStat(state, queries, knowledge, "cunning", { row: 0, col: 0 })).toBe(5);
+    expect(getModifiedStat(state, queries, military, "cunning", { row: 0, col: 0 })).toBe(4);
   });
 
   it("The Arena: +1 str attacker only, not defender", () => {
@@ -910,7 +910,7 @@ describe("stat modifier queries", () => {
     expect(getModifiedStat(state, queries, unit, "charisma", { row: 0, col: 0 })).toBe(5);
   });
 
-  it("Arms Race: +2 str to owner's Warriors only", () => {
+  it("Arms Race: +2 str to owner's Military units only", () => {
     const state = gameWith((d, p) => {
       d.players[p.activeIdx].passiveEvents.push({
         ...makePassiveEvent({ ownerId: p.active, definitionId: "arms-race" }),
@@ -919,13 +919,13 @@ describe("stat modifier queries", () => {
     });
     const { active, other } = getPlayers(state);
     const { queries } = rebuildListeners(state);
-    const myWarrior = makeUnit({ ownerId: active, strength: 4, attributes: ["Warrior"] });
-    const myScientist = makeUnit({ ownerId: active, strength: 4, attributes: ["Scientist"] });
-    const enemyWarrior = makeUnit({ ownerId: other, strength: 4, attributes: ["Warrior"] });
+    const myMilitary = makeUnit({ ownerId: active, strength: 4, attributes: ["Military"] });
+    const myKnowledge = makeUnit({ ownerId: active, strength: 4, attributes: ["Knowledge"] });
+    const enemyMilitary = makeUnit({ ownerId: other, strength: 4, attributes: ["Military"] });
 
-    expect(getModifiedStat(state, queries, myWarrior, "strength")).toBe(6);
-    expect(getModifiedStat(state, queries, myScientist, "strength")).toBe(4);
-    expect(getModifiedStat(state, queries, enemyWarrior, "strength")).toBe(4);
+    expect(getModifiedStat(state, queries, myMilitary, "strength")).toBe(6);
+    expect(getModifiedStat(state, queries, myKnowledge, "strength")).toBe(4);
+    expect(getModifiedStat(state, queries, enemyMilitary, "strength")).toBe(4);
   });
 
   it("Plague: -2 str at target + adjacent, not further", () => {
@@ -948,7 +948,7 @@ describe("stat modifier queries", () => {
     expect(getModifiedStat(state, queries, unit, "strength", { row: 0, col: 0 })).toBe(5); // diagonal = not adjacent
   });
 
-  it("multiple modifiers stack: Forge + Arms Race on Warrior", () => {
+  it("multiple modifiers stack: Forge + Arms Race on Military unit", () => {
     const state = gameWith((d, p) => {
       d.grid[0][0].location = makeLocation({ ownerId: p.active, definitionId: "the-forge" });
       d.players[p.activeIdx].passiveEvents.push({
@@ -958,10 +958,10 @@ describe("stat modifier queries", () => {
     });
     const { active } = getPlayers(state);
     const { queries } = rebuildListeners(state);
-    const warrior = makeUnit({ ownerId: active, strength: 4, attributes: ["Warrior"] });
+    const military = makeUnit({ ownerId: active, strength: 4, attributes: ["Military"] });
 
     // Forge +1 + Arms Race +2 = 4 + 3 = 7
-    expect(getModifiedStat(state, queries, warrior, "strength", { row: 0, col: 0 })).toBe(7);
+    expect(getModifiedStat(state, queries, military, "strength", { row: 0, col: 0 })).toBe(7);
   });
 });
 

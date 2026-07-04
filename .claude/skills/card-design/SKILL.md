@@ -23,7 +23,7 @@ Every unit is a real historical figure. The card should make someone say "oh, th
 
 - **Stats should tell a story.** Cleopatra has 4 strength, 8 cunning, and 9 charisma — she ruled through intellect and diplomacy, not armies. Miyamoto Musashi has 9 strength and 4 charisma — a swordsman, not a diplomat. A card's stat line should be defensible with a one-sentence historical argument.
 - **Actions should echo the figure's legacy.** Tesla's action buys items from the market for free (inventions). Musashi duels. Ada Lovelace analyzes (looks at cards). The action name + effect should evoke the person without needing flavor text to explain it.
-- **Attributes connect to identity.** Scientist, Warrior, Politician, etc. Pick attributes that reflect what the person *did*, not just who they were. Someone can be Warrior;Politician if they fought and governed.
+- **Attributes connect to identity.** Knowledge, Military, Politics, etc. Pick attributes that reflect what the person *did*, not just who they were. Someone can be Military;Politics if they fought and governed.
 - **Flavor text is a bonus, not a crutch.** If the card needs flavor text to make thematic sense, the design is weak. Flavor text should add color to an already-clear design.
 
 ### 2. Mechanical purpose
@@ -31,7 +31,7 @@ Every card should have a reason to exist in a deck.
 
 - **Does it enable a strategy?** Cards should support or reward specific approaches (combat, economy, mission rushing, denial, movement control).
 - **Does it have interesting decisions?** The best cards create choice tension — when to play, where to deploy, what to target.
-- **Does it interact with other cards?** Look for natural synergies with existing cards. A Scientist unit is better when The Great Library exists. A trade item matters more with The Silk Road.
+- **Does it interact with other cards?** Look for natural synergies with existing cards. A Knowledge unit is better when The Great Library exists. A trade item matters more with The Silk Road.
 - **Is it useful at different game stages?** Cheap commons should be relevant early. Expensive legendaries should be worth waiting for. Mid-cost cards should be flexible.
 
 ### 3. Stat balance guidelines
@@ -68,7 +68,7 @@ When picking figures for units:
 
 ### 5. Non-unit cards
 
-- **Locations**: Should reference real places. Mission requirements should connect thematically to the place (The Great Library needs Scientists; The Colosseum needs Warriors). Passive effects should feel like "being at this place helps you do X." Locations can have blocked edges (N, S, E, W) that restrict unit movement — use sparingly to create tactical chokepoints. Locations can also have actions usable by any player with a unit there, using the same `name:ap_cost:effect` format as unit actions.
+- **Locations**: Should reference real places. Mission requirements should connect thematically to the place (The Great Library needs Knowledge units; The Colosseum needs Military units). Passive effects should feel like "being at this place helps you do X." Locations can have blocked edges (N, S, E, W) that restrict unit movement — use sparingly to create tactical chokepoints. Locations can also have actions usable by any player with a unit there, using the same `name:ap_cost:effect` format as unit actions.
 - **Items**: Can be historical artifacts, inventions, or concepts. Equip effects apply at the equipped unit's location; stored effects apply at the item's location. Items can have both.
 - **Events**: Name after historical events, natural phenomena, or strategic concepts. Instant/passive/trap timing should match the event's nature (an earthquake is instant; a plague is passive; an ambush is a trap).
 - **Policies**: Name after real doctrines, philosophies, or economic systems. Effect should be a global modifier that shapes strategy without being mandatory.

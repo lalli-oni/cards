@@ -33,7 +33,7 @@ const VALID_UNIT: CardDefinition = {
   strength: 5,
   cunning: 3,
   charisma: 2,
-  attributes: ["Warrior"],
+  attributes: ["Military"],
 };
 
 const VALID_LOCATION: CardDefinition = {
@@ -326,7 +326,7 @@ describe("instantiateCard", () => {
     expect((card as any).strength).toBe(5);
     expect((card as any).cunning).toBe(3);
     expect((card as any).charisma).toBe(2);
-    expect((card as any).attributes).toEqual(["Warrior"]);
+    expect((card as any).attributes).toEqual(["Military"]);
     expect((card as any).injured).toBe(false);
   });
 

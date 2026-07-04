@@ -1,5 +1,6 @@
 import type { Action, Card, MainAction, MainGameState, ModifierEntry, ModifierSource, UnitCard } from "../types";
 import { parseCost } from "../cost-helpers";
+import { getConfigNumber } from "../state-helpers";
 import type {
   APQueryContext,
   CostModifierListener,
@@ -56,6 +57,20 @@ export function getModifiedStatWithSources(
     // source proxy gets revoked when `produce` returns and any later
     // read throws "Proxy has already been revoked".
     modifiers.push({ source: cloneModifierSource(mod.source), delta: mod.delta });
+  }
+
+  // Injured units take a global -injury_stat_penalty to every stat
+  // (rules/README.md Unit status). Synthesized here — the single source of
+  // truth for effective stats — so combat, DSL contests, and mission stat
+  // checks all apply it uniformly. `definitionId: "injured"` labels the chip.
+  if (unit.injured) {
+    const penalty = getConfigNumber(state, "injury_stat_penalty", 1);
+    if (penalty !== 0) {
+      modifiers.push({
+        source: { type: "unit", cardId: unit.id, definitionId: "injured" },
+        delta: -penalty,
+      });
+    }
   }
 
   const sum = modifiers.reduce((acc, m) => acc + m.delta, 0);

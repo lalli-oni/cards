@@ -698,20 +698,18 @@ function handleAttack(
 
     if (livingAttackers.length === 0 || livingDefenders.length === 0) break;
 
-    const injuryPenalty = getConfigNumber(draft, "injury_stat_penalty", 1);
-
     const atkRolls: CombatantRoll[] = [];
     for (const u of livingAttackers) {
       const [roll, nextRng] = uniformIntDistribution(1, 6, rng);
       rng = nextRng;
-      atkRolls.push(buildCombatantRoll(draft, queries, u, "attacker", row, col, roll, injuryPenalty));
+      atkRolls.push(buildCombatantRoll(draft, queries, u, "attacker", row, col, roll));
     }
 
     const defRolls: CombatantRoll[] = [];
     for (const u of livingDefenders) {
       const [roll, nextRng] = uniformIntDistribution(1, 6, rng);
       rng = nextRng;
-      defRolls.push(buildCombatantRoll(draft, queries, u, "defender", row, col, roll, injuryPenalty));
+      defRolls.push(buildCombatantRoll(draft, queries, u, "defender", row, col, roll));
     }
 
     // Sort by power descending, pair highest vs highest
@@ -767,7 +765,6 @@ function buildCombatantRoll(
   row: number,
   col: number,
   roll: number,
-  injuryPenalty: number,
 ): CombatantRoll {
   const breakdown = getModifiedStatWithSources(
     draft as MainGameState,
@@ -777,17 +774,11 @@ function buildCombatantRoll(
     { row, col },
     { role, row, col },
   );
+  // The injury penalty is now a global stat modifier applied inside
+  // getModifiedStatWithSources, so the "injured" chip already lives in
+  // `breakdown.modifiers` — no combat-specific push needed here.
   const injuredBefore = unit.injured;
   const modifiers: ModifierEntry[] = [...breakdown.modifiers];
-  if (injuredBefore && injuryPenalty !== 0) {
-    // Synthesize a `definitionId: "injured"` source so the breakdown chip
-    // reads "injured" rather than the unit name. `cardId` stays as the
-    // unit instance for downstream tooltip resolution.
-    modifiers.push({
-      source: { type: "unit", cardId: unit.id, definitionId: "injured" },
-      delta: -injuryPenalty,
-    });
-  }
   const sum = modifiers.reduce((acc, m) => acc + m.delta, 0);
   const clampedFloor = breakdown.base + sum;
   if (clampedFloor < 0) {

@@ -1001,4 +1001,30 @@ describe("getModifiedStatWithSources", () => {
     expect(breakdown.modifiers[0].delta).toBe(-2);
     expect(breakdown.final).toBe(0);  // clamped from -1
   });
+
+  it("applies a global injury penalty to ANY stat for injured units", () => {
+    // Injury is "-1 to all stats" (rules/README.md Unit status), not a
+    // combat-only modifier. Assert on a non-combat stat (charisma) to prove
+    // it's global — combat, DSL contests, and mission stat checks all read
+    // this one function, so applying it here covers every consumer.
+    const state = gameWith(() => {});
+    const { queries } = rebuildListeners(state);
+    const injured = makeUnit({ ownerId: ACTIVE, charisma: 6, injured: true });
+
+    const breakdown = getModifiedStatWithSources(state, queries, injured, "charisma");
+    expect(breakdown.base).toBe(6);
+    const injuredChip = breakdown.modifiers.find((m) => m.source.definitionId === "injured");
+    expect(injuredChip?.delta).toBe(-1);  // injury_stat_penalty pinned to 1 in COMBAT_CONFIG
+    expect(breakdown.final).toBe(5);
+  });
+
+  it("does not apply an injury penalty to healthy units", () => {
+    const state = gameWith(() => {});
+    const { queries } = rebuildListeners(state);
+    const healthy = makeUnit({ ownerId: ACTIVE, charisma: 6, injured: false });
+
+    const breakdown = getModifiedStatWithSources(state, queries, healthy, "charisma");
+    expect(breakdown.modifiers.find((m) => m.source.definitionId === "injured")).toBeUndefined();
+    expect(breakdown.final).toBe(6);
+  });
 });

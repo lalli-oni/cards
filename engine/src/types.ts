@@ -357,19 +357,6 @@ interface GameStateBase {
    * the same surface as main-phase `pick` verbs.
    */
   pickPrompt?: PickPrompt;
-  /**
-   * Set when combat suspends between rounds to await a player decision, cleared
-   * by `resolve_combat_round`. Combat is main-phase only today, but this lives
-   * on the base to mirror the `pickPrompt` precedent (a single suspend surface
-   * shared across phases). The prompt carries the full resumable loop state
-   * inline — the same Option-A pattern `pickPrompt`/`viewPrompt` use.
-   *
-   * Dormant in #165: no production combat ever pauses (see
-   * `combatDecisionPending` in `apply-main.ts`). The real pause conditions —
-   * defender-assigned matchups (#166), sit-out (#167), retreat (#168) — arrive
-   * later.
-   */
-  combatPrompt?: CombatPrompt;
 }
 
 export interface SeedingGameState extends GameStateBase {
@@ -490,11 +477,24 @@ export interface MainGameState extends GameStateBase {
    * Set by `peek(opponent + hand)` to surface opponent hand contents to the
    * active player. Cleared by `dismiss_view`. Main-phase only.
    *
-   * Invariant: at most one of `pickPrompt` / `viewPrompt` is set at a time
-   * (enforced by the executor's early-pause guard in `effect-dsl/executor.ts`
-   * and asserted at the top of `applyMainAction`).
+   * Invariant: at most one of `pickPrompt` / `viewPrompt` / `combatPrompt` is
+   * set at a time (enforced by the executor's early-pause guard in
+   * `effect-dsl/executor.ts` and asserted at the top of `applyMainAction`).
    */
   viewPrompt?: ViewPrompt;
+  /**
+   * Set when combat suspends between rounds to await a player decision, cleared
+   * by `resolve_combat_round`. Main-phase only — placed here (not on
+   * `GameStateBase`) so a seeding or ended state cannot structurally carry one,
+   * mirroring `viewPrompt`. The prompt carries the full resumable loop state
+   * inline — the same Option-A pattern `pickPrompt`/`viewPrompt` use.
+   *
+   * Dormant in #165: no production combat ever pauses (see
+   * `combatDecisionPending` in `apply-main.ts`). The real pause conditions —
+   * defender-assigned matchups (#166), sit-out (#167), retreat (#168) — arrive
+   * later.
+   */
+  combatPrompt?: CombatPrompt;
 }
 
 export interface EndedGameState extends GameStateBase {

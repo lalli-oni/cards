@@ -14,6 +14,15 @@ import type {
   TrapEventCard,
   UnitCard,
 } from "./types";
+import { ATTRIBUTES, type Attribute } from "./attributes";
+import {
+  LOCATION_TYPES,
+  EVENT_TYPES,
+  ITEM_TYPES,
+  type LocationType,
+  type EventType,
+  type ItemType,
+} from "./card-categories";
 
 // ---------------------------------------------------------------------------
 // Card definition — the raw JSON shape produced by library/build.ts
@@ -43,7 +52,8 @@ export interface CardDefinition {
   requirements?: string | null;
   rewards?: string | null;
   passive?: string | null;
-  location_type?: string | null;
+  /** CSV `location_type` column. Named `locationType` in-engine (camelCase). */
+  locationType?: string | null;
 
   // Item fields
   equip?: string | null;
@@ -56,7 +66,8 @@ export interface CardDefinition {
   timing?: EventTiming;
   duration?: number | null;
   trigger?: string | null;
-  event_type?: string | null;
+  /** CSV `event_type` column. Named `eventType` in-engine (camelCase). */
+  eventType?: string | null;
 
   // Policy fields
   effect?: string;
@@ -140,6 +151,41 @@ function validateDefinition(
       cardId,
       message: "invalid attributes (expected array)",
     });
+  }
+
+  // Governed-vocabulary checks. `library/build.ts` is the canonical gate, but
+  // the engine re-validates so hand-edited or stale JSON can't smuggle an
+  // out-of-vocab value past the loader and silently no-op an effect (the exact
+  // failure the #119 split set out to close). Exact CamelCase membership — the
+  // same canonical spelling build enforces; case-insensitive matching exists
+  // only for runtime effect application (`hasAttribute`), not for this gate.
+  if (Array.isArray(def.attributes)) {
+    for (const attr of def.attributes as string[]) {
+      if (!ATTRIBUTES.includes(attr as Attribute)) {
+        errors.push({ cardId, message: `invalid attribute: ${attr}` });
+      }
+    }
+  }
+  if (
+    def.type === "location" &&
+    def.locationType != null &&
+    !LOCATION_TYPES.includes(def.locationType as LocationType)
+  ) {
+    errors.push({ cardId, message: `invalid location_type: ${def.locationType}` });
+  }
+  if (
+    def.type === "event" &&
+    def.eventType != null &&
+    !EVENT_TYPES.includes(def.eventType as EventType)
+  ) {
+    errors.push({ cardId, message: `invalid event_type: ${def.eventType}` });
+  }
+  if (def.type === "item" && Array.isArray(def.itemType)) {
+    for (const t of def.itemType as string[]) {
+      if (!ITEM_TYPES.includes(t as ItemType)) {
+        errors.push({ cardId, message: `invalid item type: ${t}` });
+      }
+    }
   }
 
   // Type-specific validation
@@ -269,9 +315,17 @@ export function instantiateCard(
     cost: normalizeCost(def.cost),
     rarity: def.rarity,
     text: def.text ?? undefined,
-    abilities: def.abilities.length > 0 ? def.abilities : undefined,
+    // Optional-chained so a def constructed outside `loadCardDefinitions`
+    // (which guarantees an array) yields `undefined` instead of throwing an
+    // opaque, card-id-less TypeError.
+    abilities: def.abilities?.length ? def.abilities : undefined,
+    // Cast is safe: `validateDefinition` has already gated these values against
+    // the governed vocabularies (`ATTRIBUTES`), so the raw string[] holds only
+    // valid members by the time instantiation runs through the loader.
     attributes:
-      def.attributes && def.attributes.length > 0 ? def.attributes : undefined,
+      def.attributes && def.attributes.length > 0
+        ? (def.attributes as Attribute[])
+        : undefined,
     ownerId,
     controllerId: ownerId,
   };
@@ -284,7 +338,7 @@ export function instantiateCard(
         strength: def.strength ?? 0,
         cunning: def.cunning ?? 0,
         charisma: def.charisma ?? 0,
-        attributes: def.attributes ?? [],
+        attributes: (def.attributes ?? []) as Attribute[],
         injured: false,
         actions: def.actions ?? undefined,
       } satisfies UnitCard;
@@ -297,7 +351,7 @@ export function instantiateCard(
         requirements: def.requirements ?? def.mission ?? undefined,
         rewards: def.rewards ?? undefined,
         passive: def.passive ?? undefined,
-        location_type: def.location_type ?? undefined,
+        locationType: (def.locationType ?? undefined) as LocationType | undefined,
       } satisfies LocationCard;
 
     case "item":
@@ -307,7 +361,9 @@ export function instantiateCard(
         equip: def.equip ?? undefined,
         stored: def.stored ?? undefined,
         itemType:
-          def.itemType && def.itemType.length > 0 ? def.itemType : undefined,
+          def.itemType && def.itemType.length > 0
+            ? (def.itemType as ItemType[])
+            : undefined,
       } satisfies ItemCard;
 
     case "event": {
@@ -316,13 +372,13 @@ export function instantiateCard(
       }
       switch (def.timing) {
         case "instant":
-          return { ...base, type: "event", timing: "instant", event_type: def.event_type ?? undefined, effect: def.effect ?? undefined } satisfies InstantEventCard;
+          return { ...base, type: "event", timing: "instant", eventType: (def.eventType ?? undefined) as EventType | undefined, effect: def.effect ?? undefined } satisfies InstantEventCard;
         case "passive":
           return {
             ...base,
             type: "event",
             timing: "passive",
-            event_type: def.event_type ?? undefined,
+            eventType: (def.eventType ?? undefined) as EventType | undefined,
             duration: def.duration ?? 1,
           } satisfies PassiveEventCard;
         case "trap":
@@ -330,7 +386,7 @@ export function instantiateCard(
             ...base,
             type: "event",
             timing: "trap",
-            event_type: def.event_type ?? undefined,
+            eventType: (def.eventType ?? undefined) as EventType | undefined,
             trigger: def.trigger ?? "",
           } satisfies TrapEventCard;
         default:

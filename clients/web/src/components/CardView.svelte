@@ -23,8 +23,12 @@
     if (card.abilities && card.abilities.length > 0) {
       lines.push(`Abilities: ${card.abilities.join(", ")}`);
     }
+    // `attributes` is a shared cross-type column (#119) — show it for every
+    // card type, not just units.
+    if (card.attributes && card.attributes.length > 0) {
+      lines.push(`Attributes: ${card.attributes.join(", ")}`);
+    }
     if (card.type === "unit") {
-      if (card.attributes.length > 0) lines.push(`Attributes: ${card.attributes.join(", ")}`);
       lines.push(`Str:${card.strength} Cun:${card.cunning} Cha:${card.charisma}${card.injured ? " (injured)" : ""}`);
     } else if (card.type === "location") {
       if (card.requirements) lines.push(`Req: ${formatRequirements(card.requirements)}`);
@@ -43,7 +47,7 @@
   });
 
   const attributeStr = $derived(
-    card.type === "unit" && card.attributes.length > 0
+    card.attributes && card.attributes.length > 0
       ? card.attributes.join(", ")
       : "",
   );

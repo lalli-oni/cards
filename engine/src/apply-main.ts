@@ -715,18 +715,107 @@ function handleAttack(
 }
 
 /**
- * Whether the defender has a meaningful matchup choice this round (#166).
- *
- * The `pairs` count is `min(attackers, defenders)` — the greedy sit-out trims
- * the larger side to that size lowest-power-first, leaving equal-length
- * participant lists. A bijection over them offers a real choice only when there
- * are at least two pairs; a single pair (`min <= 1`) has exactly one matching,
- * so those rounds auto-resolve. Cases where `min == 1` but the larger side must
- * pick which unit faces the lone opponent are a *sit-out* choice (#167), not a
- * pairing choice — deferred, so they auto-resolve greedily here too.
+ * Whether the defender has a meaningful matchup choice among `n` equal-length
+ * participants (#166). A bijection over them offers a real choice only when
+ * there are at least two pairs; a single pair has exactly one matching, so those
+ * rounds auto-resolve.
  */
-function matchupDecisionPending(attackers: number, defenders: number): boolean {
-  return Math.min(attackers, defenders) >= 2;
+function matchupDecisionPending(n: number): boolean {
+  return n >= 2;
+}
+
+/**
+ * Rules steps 4–5 for one already-rolled round: decide whether the round needs a
+ * player decision (suspend) or can auto-resolve, and act on it. Shared by the
+ * fresh-round path in `runCombat` and — for the post-sit-out continuation — the
+ * `resolve_combat_round` handler, so a round that suspends for sit-out still
+ * re-evaluates for a matchup decision on resume (the 3v2 double-suspend).
+ *
+ * When the sides are unequal (excess exists — and since `runCombat` already
+ * `break`s on an empty side, `min >= 1` always holds here) the larger side must
+ * choose which excess units sit out (#167): suspend with a `sit_out` prompt
+ * carrying the *full* living rolls, decided by the larger side's owner.
+ * Otherwise the sides are already equal participants — hand off to
+ * `resolveOrSuspendMatchup`.
+ *
+ * Returns `"suspended"` if it set `draft.combatPrompt` (caller must stop), or
+ * `"resolved"` if it resolved the round's pairs in place (caller continues).
+ */
+function processRolledRound(
+  draft: Draft<MainGameState>,
+  cell: Draft<GridCell>,
+  base: CombatLoopState,
+  atkRolls: CombatantRoll[],
+  defRolls: CombatantRoll[],
+  emit: EmitFn,
+): "suspended" | "resolved" {
+  if (atkRolls.length !== defRolls.length) {
+    const attackerLarger: boolean = atkRolls.length > defRolls.length;
+    const prompt: CombatPrompt = {
+      kind: "sit_out",
+      playerId: attackerLarger ? base.attackerId : base.defenderId,
+      row: base.row,
+      col: base.col,
+      attackerId: base.attackerId,
+      defenderId: base.defenderId,
+      round: base.round,
+      attackerUnitIds: base.attackerUnitIds,
+      defenderUnitIds: base.defenderUnitIds,
+      atkRolls: atkRolls.map(toCombatSide),
+      defRolls: defRolls.map(toCombatSide),
+    };
+    draft.combatPrompt = castDraft(prompt);
+    return "suspended";
+  }
+  return resolveOrSuspendMatchup(draft, cell, base, atkRolls, defRolls, emit);
+}
+
+/**
+ * Rules steps 4–5 for equal-length participant lists: either suspend for the
+ * defender's matchup assignment (when `>= 2` pairs offer a real choice) or
+ * auto-resolve greedily. Sorts both sides power-descending first, so the stored
+ * participant order is highest-first — the greedy identity pairing is the
+ * auto-resolve default (and element `[0]` of the enumerated matchup actions).
+ *
+ * `atkParticipants.length === defParticipants.length` is a precondition.
+ * Returns `"suspended"` (prompt set) or `"resolved"` (pairs resolved).
+ */
+function resolveOrSuspendMatchup(
+  draft: Draft<MainGameState>,
+  cell: Draft<GridCell>,
+  base: CombatLoopState,
+  atkParticipants: CombatantRoll[],
+  defParticipants: CombatantRoll[],
+  emit: EmitFn,
+): "suspended" | "resolved" {
+  atkParticipants.sort((a, b) => b.power - a.power);
+  defParticipants.sort((a, b) => b.power - a.power);
+  const n: number = atkParticipants.length;
+
+  if (matchupDecisionPending(n)) {
+    const prompt: CombatPrompt = {
+      kind: "assign_matchups",
+      playerId: base.defenderId,
+      row: base.row,
+      col: base.col,
+      attackerId: base.attackerId,
+      defenderId: base.defenderId,
+      round: base.round,
+      attackerUnitIds: base.attackerUnitIds,
+      defenderUnitIds: base.defenderUnitIds,
+      atkRolls: atkParticipants.map(toCombatSide),
+      defRolls: defParticipants.map(toCombatSide),
+    };
+    draft.combatPrompt = castDraft(prompt);
+    return "suspended";
+  }
+
+  // Rules step 5 — Resolve: auto-resolve the participants greedily (the sort
+  // above already lined them up highest vs highest).
+  for (let i = 0; i < n; i++) {
+    resolveCombatPair(draft, cell, atkParticipants[i], defParticipants[i], base.row, base.col, emit);
+  }
+  return "resolved";
 }
 
 /**
@@ -795,39 +884,19 @@ function runCombat(
       defRolls.push(buildCombatantRoll(draft, queries, u, "defender", row, col, roll));
     }
 
-    // Greedy sit-out: sort by power descending and trim the larger side to the
-    // pair count, so its lowest-power excess sits out. The trimmed lists are
-    // equal length — the participants the defender pairs (or that auto-resolve
-    // greedily, highest vs highest). #167 hands this sit-out choice to the
-    // larger side; until then it stays lowest-power-first.
-    atkRolls.sort((a, b) => b.power - a.power);
-    defRolls.sort((a, b) => b.power - a.power);
-    const nPairs = Math.min(atkRolls.length, defRolls.length);
-    const atkParticipants = atkRolls.slice(0, nPairs);
-    const defParticipants = defRolls.slice(0, nPairs);
+    // Persist rng now: it has advanced past this round's rolls and combat
+    // resolution consumes no further randomness, so this covers both the
+    // suspend-and-return paths below and normal loop continuation. Keeps the
+    // roll stream unbroken across a `produce()` suspend boundary.
+    draft.rngState = extractRngState(rng) as number[];
 
-    // Rules step 4 — Matchup: when the defender has a real pairing choice,
-    // suspend AFTER the roll and BEFORE resolving, so the assignment is made
-    // "after seeing all rolls". Persist rng (already advanced past this round's
-    // rolls) so the roll stream is unbroken on resume; `combat_resolved` is
-    // deliberately NOT emitted — combat is paused, not over.
-    if (matchupDecisionPending(livingAttackers.length, livingDefenders.length)) {
-      draft.rngState = extractRngState(rng) as number[];
-      const prompt: CombatPrompt = {
-        playerId: defenderId,
-        row, col, attackerId, defenderId, round,
-        attackerUnitIds, defenderUnitIds,
-        atkRolls: atkParticipants.map(toCombatSide),
-        defRolls: defParticipants.map(toCombatSide),
-      };
-      draft.combatPrompt = castDraft(prompt);
+    // Rules steps 4–5 — Matchup + Resolve. `processRolledRound` either suspends
+    // for a player decision (sit-out and/or matchup, setting `draft.combatPrompt`
+    // and NOT emitting `combat_resolved` — combat is paused, not over) or
+    // auto-resolves the round's pairs in place.
+    const base: CombatLoopState = { ...state, round };
+    if (processRolledRound(draft, cell, base, atkRolls, defRolls, emit) === "suspended") {
       return;
-    }
-
-    // Rules step 5 — Resolve: auto-resolve the participants greedily (the sort
-    // above already lined them up highest vs highest).
-    for (let i = 0; i < nPairs; i++) {
-      resolveCombatPair(draft, cell, atkParticipants[i], defParticipants[i], row, col, emit);
     }
   }
 
@@ -1305,11 +1374,11 @@ function resolveAssignedMatchups(
   decision: CombatDecision,
   emit: EmitFn,
 ): void {
-  // Forward-defensive guard for the future `kind`s (#167 sit-out, #168 retreat)
-  // and for a malformed adapter submission: the `decision == null` arm turns a
-  // missing payload into a descriptive rejection rather than a bare TypeError on
-  // `.kind`. With today's single-variant `CombatDecision` the kind check is
-  // otherwise unreachable — intentional, not dead code.
+  // Defensive guard: `handleResolveCombatRound` already dispatches on `kind` and
+  // only routes an `assign_matchups` decision here, so this is unreachable in
+  // practice — kept so a future caller (or a malformed adapter submission) fails
+  // loud rather than mis-pairing. The `decision == null` arm turns a missing
+  // payload into a descriptive rejection rather than a bare TypeError on `.kind`.
   if (decision == null || decision.kind !== "assign_matchups") {
     throw new Error(`resolve_combat_round rejected: unsupported decision kind "${decision?.kind}"`);
   }
@@ -1351,6 +1420,55 @@ function resolveAssignedMatchups(
   }
 }
 
+/**
+ * Validate a sit-out decision (#167) against the pending prompt and return the
+ * resulting equal-length participants: the larger side with its chosen excess
+ * removed, paired against the (unchanged) smaller side. Rejects a wrong count or
+ * ids that are not on the larger side, so a malformed submission fails loud
+ * rather than silently dropping the wrong units.
+ */
+function resolveSitOut(
+  cell: Draft<GridCell>,
+  prompt: CombatPrompt,
+  decision: Extract<CombatDecision, { kind: "sit_out" }>,
+): { atkParticipants: CombatantRoll[]; defParticipants: CombatantRoll[] } {
+  const atkLen: number = prompt.atkRolls.length;
+  const defLen: number = prompt.defRolls.length;
+  // A sit-out prompt is only raised for unequal sides — guard defensively.
+  if (atkLen === defLen) {
+    throw new Error(`resolve_combat_round rejected: sit_out on balanced sides (${atkLen} vs ${defLen})`);
+  }
+  const attackerLarger: boolean = atkLen > defLen;
+  const largerSides: CombatSide[] = attackerLarger ? prompt.atkRolls : prompt.defRolls;
+  const excess: number = Math.abs(atkLen - defLen);
+
+  if (decision.sitOutUnitIds.length !== excess) {
+    throw new Error(
+      `resolve_combat_round rejected: expected ${excess} sit-out(s), got ${decision.sitOutUnitIds.length}`,
+    );
+  }
+
+  const largerIds = new Set<string>(largerSides.map((s) => s.unitId));
+  const sittingOut = new Set<string>();
+  for (const id of decision.sitOutUnitIds) {
+    if (!largerIds.has(id)) {
+      throw new Error(`resolve_combat_round rejected: "${id}" is not an excess unit on the larger side`);
+    }
+    if (sittingOut.has(id)) {
+      throw new Error(`resolve_combat_round rejected: "${id}" sits out more than once`);
+    }
+    sittingOut.add(id);
+  }
+
+  const remainingLarger: CombatSide[] = largerSides.filter((s) => !sittingOut.has(s.unitId));
+  const atkSides: CombatSide[] = attackerLarger ? remainingLarger : prompt.atkRolls;
+  const defSides: CombatSide[] = attackerLarger ? prompt.defRolls : remainingLarger;
+  return {
+    atkParticipants: atkSides.map((s) => combatantRollFromSide(cell, s)),
+    defParticipants: defSides.map((s) => combatantRollFromSide(cell, s)),
+  };
+}
+
 function handleResolveCombatRound(
   draft: Draft<MainGameState>,
   playerId: string,
@@ -1375,31 +1493,46 @@ function handleResolveCombatRound(
   // reader such as the event log. `current` yields a plain deep copy.
   const prompt: CombatPrompt = current(promptDraft);
 
+  if (decision == null || decision.kind !== prompt.kind) {
+    throw new Error(
+      `resolve_combat_round rejected: expected a "${prompt.kind}" decision, got "${decision?.kind}"`,
+    );
+  }
+
   const cell: Draft<GridCell> = draft.grid[prompt.row][prompt.col];
+  const base: CombatLoopState = {
+    row: prompt.row,
+    col: prompt.col,
+    attackerId: prompt.attackerId,
+    defenderId: prompt.defenderId,
+    round: prompt.round,
+    attackerUnitIds: prompt.attackerUnitIds,
+    defenderUnitIds: prompt.defenderUnitIds,
+  };
 
-  // Apply the defender's assignment: resolve this round's pairs from the rolls
-  // revealed at suspend (no re-roll, so the outcome matches what the defender
-  // saw), then resume from the next round.
+  if (decision.kind === "sit_out") {
+    // Remove the larger side's chosen excess, then continue the SAME round: the
+    // remaining participants either auto-resolve or raise a matchup decision (the
+    // 3v2 double-suspend). Clear the sit-out prompt first — `resolveOrSuspendMatchup`
+    // may set a fresh matchup prompt in its place, and a fight must never carry
+    // two live prompts.
+    const { atkParticipants, defParticipants } = resolveSitOut(cell, prompt, decision);
+    draft.combatPrompt = undefined;
+    if (resolveOrSuspendMatchup(draft, cell, base, atkParticipants, defParticipants, emit) === "suspended") {
+      return;
+    }
+    // Round fully resolved — resume from the next round.
+    runCombat(draft, { ...base, round: prompt.round + 1 }, emit, queries);
+    return;
+  }
+
+  // assign_matchups: resolve this round's pairs from the rolls revealed at
+  // suspend (no re-roll, so the outcome matches what the defender saw), then
+  // resume from the next round. Clear the prompt before resuming so `runCombat`
+  // is the single writer of any later prompt (one live `combatPrompt` per fight).
   resolveAssignedMatchups(draft, cell, prompt, decision, emit);
-
-  // Clear the prompt before resuming: `runCombat` re-sets it if a later round
-  // also needs a decision, so clearing first keeps a single source of truth (an
-  // unresolved fight always has exactly one live `combatPrompt`).
   draft.combatPrompt = undefined;
-  runCombat(
-    draft,
-    {
-      row: prompt.row,
-      col: prompt.col,
-      attackerId: prompt.attackerId,
-      defenderId: prompt.defenderId,
-      round: prompt.round + 1,
-      attackerUnitIds: prompt.attackerUnitIds,
-      defenderUnitIds: prompt.defenderUnitIds,
-    },
-    emit,
-    queries,
-  );
+  runCombat(draft, { ...base, round: prompt.round + 1 }, emit, queries);
 }
 
 // ---------------------------------------------------------------------------

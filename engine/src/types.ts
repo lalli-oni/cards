@@ -463,29 +463,38 @@ export interface CombatLoopState {
 }
 
 /**
- * A combat suspended mid-round awaiting the defender's matchup assignment
- * (#166). Per the rules (README.md Combat step 4 — Matchup) the defender assigns
- * pairings after the step-3 roll, so the suspend lands *within* a round — after
- * the roll, before resolution — carrying that round's revealed rolls inline.
+ * A combat suspended mid-round awaiting a player decision. Per the rules
+ * (README.md Combat step 4 — Matchup) decisions land *within* a round — after
+ * the step-3 roll, before resolution — carrying that round's revealed rolls
+ * inline. A single round can suspend twice (`kind` transitions): a `sit_out`
+ * prompt first (larger side drops its excess), then, if `min >= 2` participants
+ * remain, an `assign_matchups` prompt.
  *
- * `playerId` is who must submit `resolve_combat_round`: the **defender**, who is
- * normally the *non-active* player, so the active-player gate in
+ * `kind` discriminates the two decisions:
+ * - `"sit_out"` (#167): the larger side removes `max - min` excess units.
+ *   `playerId` is the **larger side's** owner (attacker or defender), and
+ *   `atkRolls` / `defRolls` are the *full* living rolls — so the lists have
+ *   **unequal** length (that is what makes the choice exist).
+ * - `"assign_matchups"` (#166): the defender pairs the participants. `playerId`
+ *   is the **defender**, and `atkRolls` / `defRolls` are the equal-length
+ *   participant lists (post sit-out), a bijection to assign between them.
+ *
+ * `playerId` is who must submit `resolve_combat_round`. It may be the *non-active*
+ * player (always so for `assign_matchups`), so the active-player gate in
  * `apply-action.ts` admits the prompt's decider as a special case.
  *
- * `atkRolls` / `defRolls` are the participating units' revealed rolls for
- * `round` — the greedily-selected top `min` of each side's *living* units this
- * round. Excess units on the larger side sit out lowest-power-first (the
- * auto-resolve default; #167 hands that sit-out choice to the larger side).
- * Both lists therefore have equal length, and the defender assigns a bijection
- * between them. Plain `CombatSide` data (no live unit refs) so it survives the
- * `produce()` suspend boundary.
+ * Plain `CombatSide` data (no live unit refs) so it survives the `produce()`
+ * suspend boundary.
  */
 export interface CombatPrompt extends CombatLoopState {
-  /** Player expected to submit `resolve_combat_round` (the defender). */
+  /** Which decision this suspend is awaiting (see type doc). */
+  kind: CombatDecision["kind"];
+  /** Player expected to submit `resolve_combat_round`. */
   playerId: string;
-  /** Revealed rolls of the participating attacker units for `round`. */
+  /** Revealed rolls of the attacker units for `round` (full living set for
+   *  `sit_out`; equal-length participants for `assign_matchups`). */
   atkRolls: CombatSide[];
-  /** Revealed rolls of the participating defender units for `round`. */
+  /** Revealed rolls of the defender units for `round` (see `atkRolls`). */
   defRolls: CombatSide[];
 }
 
@@ -670,11 +679,23 @@ export interface CombatMatchup {
  * in later without a flat bag of optional fields — a retreat payload cannot then
  * structurally carry matchup data.
  */
-export type CombatDecision = {
-  kind: "assign_matchups";
-  /** A bijection over the prompt's participating units; length = min(sides). */
-  pairs: CombatMatchup[];
-};
+export type CombatDecision =
+  | {
+      kind: "assign_matchups";
+      /** A bijection over the prompt's participating units; length = min(sides). */
+      pairs: CombatMatchup[];
+    }
+  | {
+      kind: "sit_out";
+      /**
+       * The excess units the larger side removes this round (#167). Length must
+       * equal `max(sides) - min(sides)`, and every id must be on the larger side
+       * (the prompt's longer roll list). Removing them leaves equal-length
+       * participants, which then either auto-resolve or trigger a matchup
+       * decision (the 3v2 double-suspend case).
+       */
+      sitOutUnitIds: string[];
+    };
 
 /**
  * Submitted to resume a combat suspended for a player decision (pending

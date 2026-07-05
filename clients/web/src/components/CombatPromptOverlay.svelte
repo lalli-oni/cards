@@ -22,12 +22,26 @@
   // re-pair before confirming.
   let assignment = $state<Record<string, string>>({});
   let submitted = $state(false);
+  // The error banner present at submit time, so the recovery effect below can
+  // tell a NEW mid-submit error (which should re-enable Confirm) from a stale,
+  // unrelated banner (which must not).
+  let errorAtSubmit = $state<string | null>(null);
 
   // Reseed when the prompt content changes. Today the outer `{#if vs?.combatPrompt}`
   // unmounts and remounts on every prompt transition, so this is defensive.
   $effect(() => {
     if (!prompt) return;
     void prompt.atkRolls.map((r) => r.unitId).join(",");
+    // The engine guarantees equal-length participant lists (the greedy sit-out
+    // trims both sides to `min`). If they ever desync, surface it rather than
+    // silently seeding `""` — an unseeded attacker would leave `isBijection`
+    // false forever with no explanation.
+    if (prompt.atkRolls.length !== prompt.defRolls.length) {
+      console.warn(
+        "CombatPromptOverlay: atkRolls/defRolls length mismatch — participant lists should be equal",
+        { atk: prompt.atkRolls.length, def: prompt.defRolls.length },
+      );
+    }
     const seed: Record<string, string> = {};
     prompt.atkRolls.forEach((atk, i) => {
       seed[atk.unitId] = prompt.defRolls[i]?.unitId ?? "";
@@ -36,11 +50,13 @@
     submitted = false;
   });
 
-  // Unlock the confirm button if the engine surfaces an error mid-submit, so the
-  // defender can retry. Mirrors PickPromptOverlay's recovery pattern.
+  // Unlock the confirm button if the engine surfaces a NEW error mid-submit, so
+  // the defender can retry. Gating on a fresh error (not merely any error
+  // present) avoids a stale banner re-enabling Confirm and inviting a second,
+  // dropped click. Mirrors PickPromptOverlay's recovery pattern.
   const error = $derived(getError());
   $effect(() => {
-    if (error && submitted) submitted = false;
+    if (submitted && error && error !== errorAtSubmit) submitted = false;
   });
 
   // A valid assignment is a bijection: every defender participant used exactly
@@ -56,6 +72,7 @@
 
   function confirm(): void {
     if (!prompt || submitted || !isBijection) return;
+    errorAtSubmit = error;
     submitted = true;
     selectAction({
       type: "resolve_combat_round",
@@ -91,7 +108,9 @@
           <span
             class="rounded bg-surface px-1.5 py-0.5 font-mono {mod.delta > 0
               ? 'text-success'
-              : 'text-error'}"
+              : mod.delta < 0
+                ? 'text-error'
+                : 'text-text-secondary'}"
             title="{mod.source.type}: {mod.source.definitionId}"
           >
             {signed(mod.delta)} {mod.source.definitionId}

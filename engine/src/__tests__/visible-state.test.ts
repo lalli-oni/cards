@@ -223,10 +223,36 @@ describe("getVisibleState", () => {
         scores: {},
         pickPrompt: undefined,
         viewPrompt: undefined,
+        combatPrompt: undefined,
       };
       const vis = getVisibleState(endedState, "p1");
       expect(vis.phase).toBe("ended");
       expect(vis.currentPlayerId).toBe(base.turn.activePlayerId);
+    });
+  });
+
+  describe("combatPrompt (public info)", () => {
+    const prompt = {
+      playerId: "p1",
+      row: 0,
+      col: 0,
+      attackerId: "p1",
+      defenderId: "p2",
+      round: 1,
+      attackerUnitIds: ["u1"],
+      defenderUnitIds: ["u2", "u3"],
+    };
+
+    it("surfaces the full prompt unredacted to every viewer, decider or not", () => {
+      const state = produce(createTestGame(), (d) => {
+        d.combatPrompt = prompt;
+      });
+      // Combat is open information, so both the decider (p1) and the opponent
+      // (p2) see the same unredacted prompt — unlike pickPrompt/viewPrompt,
+      // which are private to the acting player. A regression that copied the
+      // pick/view redaction pattern would hide the opponent's view and fail here.
+      expect(getVisibleState(state, "p1").combatPrompt).toEqual(prompt);
+      expect(getVisibleState(state, "p2").combatPrompt).toEqual(prompt);
     });
   });
 

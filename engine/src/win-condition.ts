@@ -62,5 +62,6 @@ export function toEndedState(
     scores,
     pickPrompt: undefined,
     viewPrompt: undefined,
+    combatPrompt: undefined,
   };
 }

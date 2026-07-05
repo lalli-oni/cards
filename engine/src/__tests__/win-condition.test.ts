@@ -136,6 +136,28 @@ describe("toEndedState", () => {
     const ended = toEndedState(withPrompt, base.turn.activePlayerId, []);
     expect(ended.pickPrompt).toBeUndefined();
   });
+
+  it("clears a populated combatPrompt when transitioning to ended", () => {
+    const base = createTestGame();
+    const opponentId = base.players.find(
+      (p) => p.id !== base.turn.activePlayerId,
+    )!.id;
+    const withPrompt = produce(base, (d) => {
+      d.combatPrompt = {
+        playerId: d.turn.activePlayerId,
+        row: 0,
+        col: 0,
+        attackerId: d.turn.activePlayerId,
+        defenderId: opponentId,
+        round: 1,
+        attackerUnitIds: [],
+        defenderUnitIds: [],
+      };
+    });
+
+    const ended = toEndedState(withPrompt, base.turn.activePlayerId, []);
+    expect(ended.combatPrompt).toBeUndefined();
+  });
 });
 
 // ---- Integration: game ends via applyAction ----

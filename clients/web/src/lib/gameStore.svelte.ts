@@ -17,6 +17,7 @@ import { autoSave, listSessions, loadSession, saveSession } from "./persistence"
 import {
   buildCombatContestResult,
   buildDslContestResult,
+  stepCombatBuffer,
   type ContestResult,
 } from "./contestResult";
 
@@ -51,6 +52,12 @@ let _lastTurnStartIndex = $state(0);
 let _incomingPlayerId = $state<string | null>(null);
 
 let _contestResult = $state<ContestResult | null>(null);
+// Combat spans multiple event batches when the defender assigns matchups (#166):
+// `combat_started` arrives with the `attack`, and the pair/resolution events with
+// the later `resolve_combat_round`. Buffer the fight's events from `combat_started`
+// until `combat_resolved` so the result dialog is built once, from the whole
+// combat, rather than warning on each half-batch. Non-null only mid-combat.
+let _combatEvents: GameEvent[] = [];
 
 export function getScreen() {
   return _screen;
@@ -279,6 +286,11 @@ function onEvent(events: GameEvent[], state: GameState): void {
   const combatStart = events.find((e) => e.type === "combat_started");
   const contestEvents = events.filter((e) => e.type === "contest_resolved");
 
+  // Fold this batch into the running combat buffer — combat spans multiple
+  // batches once the defender assigns matchups (#166). See `stepCombatBuffer`.
+  const combat = stepCombatBuffer(_combatEvents, events);
+  _combatEvents = combat.buffer;
+
   // Collision warnings — both fire as their own pushError; the final dialog
   // wins (combat takes priority over contest), but both warnings stay visible.
   if (combatStart && contestEvents.length > 0) {
@@ -288,26 +300,22 @@ function onEvent(events: GameEvent[], state: GameState): void {
     pushError("Multiple contest_resolved events in one batch — only the first is shown.");
   }
 
-  if (combatStart) {
-    const { result: combatResult, error: combatError } = buildCombatContestResult(events, _visibleState, resolvers);
+  if (combat.outcome.kind === "complete") {
+    // The fight finished (atomically, or on the final resume batch). Build the
+    // dialog from the whole accumulated combat.
+    const { result: combatResult, error: combatError } = buildCombatContestResult(
+      combat.outcome.dialogEvents, _visibleState, resolvers,
+    );
     if (combatError) pushError(combatError);
-    if (combatResult) {
-      _contestResult = combatResult;
-    } else {
-      // Factory returned null with no error — couldn't find combat_started.
-      // Shouldn't happen since we just checked combatStart above; defensive.
-      _contestResult = null;
-    }
+    _contestResult = combatResult;
+  } else if (combat.outcome.kind === "suspended") {
+    // Combat paused for the defender's matchup decision — the overlay takes
+    // over. Show no dialog and don't warn about a "missing" resolution.
+  } else if (combat.outcome.kind === "orphan") {
+    _contestResult = null;
+    pushError("Combat pair event arrived without combat_started — popup skipped.");
   } else {
-    // Orphan-pair guard: any `combat_pair_resolved` without a matching
-    // `combat_started` in the same batch would silently disappear from
-    // the popup. Clear stale popup state too — see Finding #2.
-    const orphanPair = events.find((e) => e.type === "combat_pair_resolved");
-    if (orphanPair) {
-      _contestResult = null;
-      pushError("Combat pair event arrived without combat_started — popup skipped.");
-    }
-
+    // No combat this batch — handle a DSL stat contest, if any.
     const contestResolved = contestEvents[0];
     if (contestResolved && contestResolved.type === "contest_resolved") {
       const contestIdx = events.indexOf(contestResolved);
@@ -396,6 +404,7 @@ export function startNewGame(
   _prevTurnStartIndex = 0;
   _lastTurnStartIndex = 0;
   _contestResult = null;
+  _combatEvents = [];
   lastActivePlayerId = null;
   autoSaveFailCount = 0;
 
@@ -449,6 +458,7 @@ export async function loadGame(key: string): Promise<void> {
   _prevTurnStartIndex = 0;
   _lastTurnStartIndex = 0;
   _contestResult = null;
+  _combatEvents = [];
   lastActivePlayerId = null;
   autoSaveFailCount = 0;
 
@@ -548,6 +558,7 @@ export function returnToMenu(): void {
   _prevTurnStartIndex = 0;
   _lastTurnStartIndex = 0;
   _contestResult = null;
+  _combatEvents = [];
   _gamePhase = null;
   _currentPlayerName = "";
   _error = null;

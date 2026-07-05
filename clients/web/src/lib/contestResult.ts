@@ -210,6 +210,73 @@ export interface ContestResultBuild {
   error: string | null;
 }
 
+/** Combat events the result dialog is built from — accumulated across batches. */
+const COMBAT_DIALOG_EVENT_TYPES: ReadonlySet<GameEvent["type"]> = new Set([
+  "combat_started",
+  "combat_pair_resolved",
+  "unit_injured",
+  "unit_killed",
+  "combat_resolved",
+]);
+
+/** What a freshly-processed event batch means for the combat result dialog. */
+export type CombatBatchOutcome =
+  /** The fight finished this batch — build the dialog from `dialogEvents`. */
+  | { kind: "complete"; dialogEvents: GameEvent[] }
+  /** Combat began but suspended for the defender's matchup decision (#166) —
+   *  the overlay takes over; keep buffering, show nothing yet. */
+  | { kind: "suspended" }
+  /** A `combat_pair_resolved` with no buffered `combat_started` — genuinely
+   *  orphaned (the caller warns and clears any stale dialog). */
+  | { kind: "orphan" }
+  /** No combat activity in this batch. */
+  | { kind: "none" };
+
+export interface CombatBufferStep {
+  /** Events to carry into the next batch (empty once a fight completes). */
+  buffer: GameEvent[];
+  outcome: CombatBatchOutcome;
+}
+
+/** Fold a new event batch into the running combat buffer. Combat spans multiple
+ *  batches when the defender assigns matchups (#166): `combat_started` arrives
+ *  with the `attack`, and the pair/resolution events with each later
+ *  `resolve_combat_round`. Accumulate the fight's events from `combat_started`
+ *  until `combat_resolved`, so the dialog is built once from the whole combat
+ *  rather than warning on each half. Pure so the batch-splitting edge cases
+ *  (suspend, multi-round resume, orphan pair) are testable without a store. */
+export function stepCombatBuffer(
+  prevBuffer: readonly GameEvent[],
+  batch: readonly GameEvent[],
+): CombatBufferStep {
+  const started: boolean = batch.some((e) => e.type === "combat_started");
+  const ended: boolean = batch.some((e) => e.type === "combat_resolved");
+
+  // A fresh `combat_started` begins a new fight; otherwise continue the running
+  // one. Only collect while a fight is in flight (started now, or already buffered).
+  const buffer: GameEvent[] = started ? [] : [...prevBuffer];
+  if (started || buffer.length > 0) {
+    for (const e of batch) {
+      if (COMBAT_DIALOG_EVENT_TYPES.has(e.type)) buffer.push(e);
+    }
+  }
+
+  if (ended) {
+    return { buffer: [], outcome: { kind: "complete", dialogEvents: buffer } };
+  }
+  if (started) {
+    return { buffer, outcome: { kind: "suspended" } };
+  }
+  if (batch.some((e) => e.type === "combat_pair_resolved")) {
+    // A pair with a live buffer is a mid-combat resume round (already collected);
+    // a pair with no buffer is a true orphan.
+    return prevBuffer.length > 0
+      ? { buffer, outcome: { kind: "none" } }
+      : { buffer, outcome: { kind: "orphan" } };
+  }
+  return { buffer, outcome: { kind: "none" } };
+}
+
 /** Build the combat-source dialog state from an event batch containing a
  *  `combat_started` (combat is multi-pair strength). Returns `null` result
  *  if `combat_started` is missing from the batch. */

@@ -1,8 +1,10 @@
 import { describe, expect, it } from "bun:test";
+import type { GameEvent } from "cards-engine";
 import {
   buildDialogView,
   buildPairDetail,
   buildPairDetailFromContest,
+  stepCombatBuffer,
   type CombatPairResolved,
   type ContestResolved,
   type ContestResult,
@@ -64,6 +66,58 @@ describe("buildPairDetail", () => {
     const detail = buildPairDetail(makeEvent("injure_defender"), RESOLVERS);
     expect(detail.attacker.baseStat).toBe(5);
     expect(detail.defender.baseStat).toBe(5);
+  });
+});
+
+describe("stepCombatBuffer", () => {
+  const started: GameEvent = { type: "combat_started", row: 0, col: 0, attackerId: "p1", defenderId: "p2" };
+  const resolved: GameEvent = { type: "combat_resolved", row: 0, col: 0, winnerId: "p1" };
+  const pair: GameEvent = makeEvent("kill_defender");
+  const injured: GameEvent = { type: "unit_injured", unitId: "def", controllerId: "p2" };
+  const unrelated: GameEvent = { type: "turn_started", playerId: "p1", round: 1 };
+
+  it("atomic combat (start+pair+resolved in one batch) completes with all events, empty buffer", () => {
+    const step = stepCombatBuffer([], [started, pair, injured, resolved]);
+    expect(step.outcome.kind).toBe("complete");
+    if (step.outcome.kind !== "complete") return;
+    expect(step.outcome.dialogEvents).toEqual([started, pair, injured, resolved]);
+    expect(step.buffer).toEqual([]);
+  });
+
+  it("start with no resolve → suspended, buffering the started context", () => {
+    const step = stepCombatBuffer([], [started]);
+    expect(step.outcome.kind).toBe("suspended");
+    expect(step.buffer).toEqual([started]);
+  });
+
+  it("resume batch completes the fight using the buffered start", () => {
+    const step = stepCombatBuffer([started], [pair, injured, resolved]);
+    expect(step.outcome.kind).toBe("complete");
+    if (step.outcome.kind !== "complete") return;
+    // Whole fight, start (buffered) through resolved (this batch).
+    expect(step.outcome.dialogEvents).toEqual([started, pair, injured, resolved]);
+    expect(step.buffer).toEqual([]);
+  });
+
+  it("multi-round: a resume that resolves a round and suspends again accumulates, no dialog yet", () => {
+    const step = stepCombatBuffer([started], [pair]);
+    expect(step.outcome.kind).toBe("none");
+    expect(step.buffer).toEqual([started, pair]);
+    // The next resume finally resolves — dialog carries both rounds' pairs.
+    const final = stepCombatBuffer(step.buffer, [pair, resolved]);
+    expect(final.outcome.kind).toBe("complete");
+    if (final.outcome.kind !== "complete") return;
+    expect(final.outcome.dialogEvents).toEqual([started, pair, pair, resolved]);
+  });
+
+  it("a pair with no buffered start is a true orphan", () => {
+    const step = stepCombatBuffer([], [pair]);
+    expect(step.outcome.kind).toBe("orphan");
+  });
+
+  it("a batch with no combat activity is 'none' and leaves the buffer untouched", () => {
+    expect(stepCombatBuffer([], [unrelated]).outcome.kind).toBe("none");
+    expect(stepCombatBuffer([started], [unrelated]).buffer).toEqual([started]);
   });
 });
 

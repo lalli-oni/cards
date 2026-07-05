@@ -21,7 +21,7 @@
   role="dialog"
   aria-modal="true"
 >
-  <div class={`${width} rounded-lg bg-surface p-5`}>
+  <div class={`${width} max-h-[90vh] overflow-y-auto rounded-lg bg-surface p-5`}>
     {@render children()}
   </div>
 </div>

@@ -17,6 +17,34 @@
   const view: DialogView | null = $derived(result ? buildDialogView(result) : null);
 </script>
 
+{#snippet sideBreakdown(side: PairSideView, isWinner: boolean)}
+  <div
+    class="flex-1 rounded p-2 text-xs {isWinner
+      ? 'bg-highlight/15 ring-1 ring-highlight'
+      : 'bg-surface-raised'}"
+  >
+    <div class="mb-1 font-semibold text-text-primary">
+      {side.unitName}
+      <span class="text-text-muted">({side.ownerName})</span>
+    </div>
+    <div class="flex flex-wrap items-center gap-1 text-text-secondary">
+      <span class="font-mono">{side.baseStat}</span>
+      {#each side.modifiers as mod}
+        <span
+          class="rounded bg-surface px-1.5 py-0.5 font-mono {mod.delta > 0
+            ? 'text-success'
+            : 'text-error'}"
+          title="{mod.source.type}: {mod.source.definitionId}"
+        >
+          {signed(mod.delta)} {mod.source.definitionId}
+        </span>
+      {/each}
+      <span class="font-mono">+ {side.roll}🎲</span>
+      <span class="ml-auto font-mono font-semibold text-text-primary">= {side.power}</span>
+    </div>
+  </div>
+{/snippet}
+
 {#if result && view}
   <Modal>
     <h3 class="mb-3 text-center text-lg font-bold text-text-primary">
@@ -32,34 +60,6 @@
         {result.defenderName}
       </span>
     </div>
-
-    {#snippet sideBreakdown(side: PairSideView, isWinner: boolean)}
-      <div
-        class="flex-1 rounded p-2 text-xs {isWinner
-          ? 'bg-highlight/15 ring-1 ring-highlight'
-          : 'bg-surface-raised'}"
-      >
-        <div class="mb-1 font-semibold text-text-primary">
-          {side.unitName}
-          <span class="text-text-muted">({side.ownerName})</span>
-        </div>
-        <div class="flex flex-wrap items-center gap-1 text-text-secondary">
-          <span class="font-mono">{side.baseStat}</span>
-          {#each side.modifiers as mod}
-            <span
-              class="rounded bg-surface px-1.5 py-0.5 font-mono {mod.delta > 0
-                ? 'text-success'
-                : 'text-error'}"
-              title="{mod.source.type}: {mod.source.definitionId}"
-            >
-              {signed(mod.delta)} {mod.source.definitionId}
-            </span>
-          {/each}
-          <span class="font-mono">+ {side.roll}🎲</span>
-          <span class="ml-auto font-mono font-semibold text-text-primary">= {side.power}</span>
-        </div>
-      </div>
-    {/snippet}
 
     {#if result.pairs.length > 0}
       <div class="mb-4 space-y-2">

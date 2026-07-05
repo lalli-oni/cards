@@ -47,7 +47,7 @@ export function groupActions(actions: Action[]): ActionGroup[] {
 }
 
 type NameResolver = (id: string) => string;
-type CellNameResolver = (row: number, col: number) => string | undefined;
+type CellNameResolver = (row: number, col: number) => string | null | undefined;
 
 function idOrName(id: string, n?: NameResolver): string {
   return n?.(id) ?? id;

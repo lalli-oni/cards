@@ -725,11 +725,47 @@ function matchupDecisionPending(n: number): boolean {
 }
 
 /**
+ * Single source of truth for a suspended-combat prompt: derives BOTH the `kind`
+ * discriminator and the decider from the two roll lists, so the invariants
+ * "unequal ⟺ sit_out, decided by the larger side" and "equal ⟺ assign_matchups,
+ * decided by the defender" hold *by construction* rather than being re-asserted
+ * at each call site (which could drift). Callers pass the already-selected rolls;
+ * this only assembles the record.
+ */
+function makeCombatPrompt(
+  base: CombatLoopState,
+  atkRolls: CombatantRoll[],
+  defRolls: CombatantRoll[],
+): CombatPrompt {
+  const kind: CombatDecision["kind"] =
+    atkRolls.length === defRolls.length ? "assign_matchups" : "sit_out";
+  // sit_out is decided by the larger side's owner; assign_matchups by the
+  // defender (both derivable from the same length comparison).
+  const playerId: string =
+    kind === "sit_out" && atkRolls.length > defRolls.length ? base.attackerId : base.defenderId;
+  return {
+    kind,
+    playerId,
+    row: base.row,
+    col: base.col,
+    attackerId: base.attackerId,
+    defenderId: base.defenderId,
+    round: base.round,
+    attackerUnitIds: base.attackerUnitIds,
+    defenderUnitIds: base.defenderUnitIds,
+    atkRolls: atkRolls.map(toCombatSide),
+    defRolls: defRolls.map(toCombatSide),
+  };
+}
+
+/**
  * Rules steps 4–5 for one already-rolled round: decide whether the round needs a
- * player decision (suspend) or can auto-resolve, and act on it. Shared by the
- * fresh-round path in `runCombat` and — for the post-sit-out continuation — the
- * `resolve_combat_round` handler, so a round that suspends for sit-out still
- * re-evaluates for a matchup decision on resume (the 3v2 double-suspend).
+ * player decision (suspend) or can auto-resolve, and act on it. Called only from
+ * `runCombat`'s fresh-round path. The equal-length step-4–5 logic it delegates to
+ * (`resolveOrSuspendMatchup`) is what the `resolve_combat_round` handler re-enters
+ * after a sit-out — so a sit-out round still re-evaluates for a matchup decision
+ * on resume (the 3v2 double-suspend) without re-running this function's sit-out
+ * check (by then the sides are already equal).
  *
  * When the sides are unequal (excess exists — and since `runCombat` already
  * `break`s on an empty side, `min >= 1` always holds here) the larger side must
@@ -750,21 +786,7 @@ function processRolledRound(
   emit: EmitFn,
 ): "suspended" | "resolved" {
   if (atkRolls.length !== defRolls.length) {
-    const attackerLarger: boolean = atkRolls.length > defRolls.length;
-    const prompt: CombatPrompt = {
-      kind: "sit_out",
-      playerId: attackerLarger ? base.attackerId : base.defenderId,
-      row: base.row,
-      col: base.col,
-      attackerId: base.attackerId,
-      defenderId: base.defenderId,
-      round: base.round,
-      attackerUnitIds: base.attackerUnitIds,
-      defenderUnitIds: base.defenderUnitIds,
-      atkRolls: atkRolls.map(toCombatSide),
-      defRolls: defRolls.map(toCombatSide),
-    };
-    draft.combatPrompt = castDraft(prompt);
+    draft.combatPrompt = castDraft(makeCombatPrompt(base, atkRolls, defRolls));
     return "suspended";
   }
   return resolveOrSuspendMatchup(draft, cell, base, atkRolls, defRolls, emit);
@@ -777,7 +799,8 @@ function processRolledRound(
  * participant order is highest-first — the greedy identity pairing is the
  * auto-resolve default (and element `[0]` of the enumerated matchup actions).
  *
- * `atkParticipants.length === defParticipants.length` is a precondition.
+ * `atkParticipants.length === defParticipants.length` is a precondition (equal
+ * lengths make `makeCombatPrompt` derive `kind: "assign_matchups"`).
  * Returns `"suspended"` (prompt set) or `"resolved"` (pairs resolved).
  */
 function resolveOrSuspendMatchup(
@@ -793,20 +816,7 @@ function resolveOrSuspendMatchup(
   const n: number = atkParticipants.length;
 
   if (matchupDecisionPending(n)) {
-    const prompt: CombatPrompt = {
-      kind: "assign_matchups",
-      playerId: base.defenderId,
-      row: base.row,
-      col: base.col,
-      attackerId: base.attackerId,
-      defenderId: base.defenderId,
-      round: base.round,
-      attackerUnitIds: base.attackerUnitIds,
-      defenderUnitIds: base.defenderUnitIds,
-      atkRolls: atkParticipants.map(toCombatSide),
-      defRolls: defParticipants.map(toCombatSide),
-    };
-    draft.combatPrompt = castDraft(prompt);
+    draft.combatPrompt = castDraft(makeCombatPrompt(base, atkParticipants, defParticipants));
     return "suspended";
   }
 

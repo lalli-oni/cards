@@ -992,6 +992,135 @@ describe("defender-assigned matchups (#166)", () => {
     ).toThrow("is paired more than once");
   });
 
+  it("rejects an assignment naming a non-participant defender", () => {
+    // Mirror of the attacker-side check, but the ghost id is in the defender
+    // slot so the `!defSide` branch throws.
+    const s = suspendingCombat();
+    const suspended = attackAndSuspend(s);
+    expect(() =>
+      applyAction(suspended, {
+        type: "resolve_combat_round",
+        playerId: OTHER,
+        decision: {
+          kind: "assign_matchups",
+          pairs: [
+            { attackerUnitId: s.strongAtk, defenderUnitId: "ghost" },
+            { attackerUnitId: s.weakAtk, defenderUnitId: s.weakDef },
+          ],
+        },
+      }),
+    ).toThrow('defender "ghost" is not a participant');
+  });
+
+  it("rejects an assignment placing a real unit on the wrong side", () => {
+    // `strongDef` is a real unit but a DEFENDER — it is not an attacker
+    // participant, so naming it in the attacker slot is rejected.
+    const s = suspendingCombat();
+    const suspended = attackAndSuspend(s);
+    expect(() =>
+      applyAction(suspended, {
+        type: "resolve_combat_round",
+        playerId: OTHER,
+        decision: {
+          kind: "assign_matchups",
+          pairs: [
+            { attackerUnitId: s.strongDef, defenderUnitId: s.weakDef },
+            { attackerUnitId: s.weakAtk, defenderUnitId: s.strongDef },
+          ],
+        },
+      }),
+    ).toThrow(`attacker "${s.strongDef}" is not a participant`);
+  });
+
+  it("rejects an assignment when a participant left the cell before resume", () => {
+    // Defensive path: the dispatch gate normally freezes the board while a
+    // combat is suspended, but if a stashed participant is gone at resume,
+    // `combatantRollFromSide` refuses to reconstruct its roll.
+    const s = suspendingCombat();
+    const suspended = attackAndSuspend(s);
+    const tampered = produce(suspended, (d) => {
+      const cell = d.grid[0][0];
+      cell.units = cell.units.filter((u) => u.id !== s.strongDef);
+    });
+    expect(() =>
+      applyAction(tampered, {
+        type: "resolve_combat_round",
+        playerId: OTHER,
+        decision: {
+          kind: "assign_matchups",
+          pairs: [
+            { attackerUnitId: s.strongAtk, defenderUnitId: s.strongDef },
+            { attackerUnitId: s.weakAtk, defenderUnitId: s.weakDef },
+          ],
+        },
+      }),
+    ).toThrow(`participant "${s.strongDef}" is no longer at the cell`);
+  });
+
+  it("persists the rng stream across the suspend boundary and reuses the shown rolls", () => {
+    const s = suspendingCombat();
+    const preAttackRng = s.state.rngState;
+    const suspended = attackAndSuspend(s);
+
+    // The dice were rolled before the pause, and that rng advance was persisted
+    // on the suspended state — so the resumed round cannot replay round 0's seed.
+    expect(suspended.rngState).not.toEqual(preAttackRng);
+
+    // Resolving reuses the exact rolls the defender saw (no re-roll): the
+    // round-0 pair events carry the rolls stored on the prompt.
+    const shown = new Map(
+      suspended.combatPrompt!.atkRolls.map((r) => [r.unitId, r.roll]),
+    );
+    const { events } = applyAction(
+      suspended,
+      getValidActions(suspended, OTHER)[0] as MainAction,
+    );
+    const round0 = events
+      .filter((e) => e.type === "combat_pair_resolved")
+      .slice(0, 2);
+    expect(round0).toHaveLength(2);
+    for (const e of round0) {
+      if (e.type !== "combat_pair_resolved") continue;
+      const shownRoll = shown.get(e.attacker.unitId);
+      expect(shownRoll).toBeDefined();
+      expect(e.attacker.roll).toBe(shownRoll as number);
+    }
+  });
+
+  it("resolves to the correct winner after the defender assigns matchups", () => {
+    // Two str-100 attackers vs two str-1 defenders: min=2 so it suspends, and
+    // any greedy pairing (101+ vs 7-max) means the attacker always wins — a
+    // deterministic winner the resume path must report.
+    const atk1 = makeUnit({ ownerId: ACTIVE, strength: 100 });
+    const atk2 = makeUnit({ ownerId: ACTIVE, strength: 100 });
+    const def1 = makeUnit({ ownerId: OTHER, strength: 1 });
+    const def2 = makeUnit({ ownerId: OTHER, strength: 1 });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][0].units.push(atk1, atk2, def1, def2);
+    });
+    const { state: suspended } = applyAction(state, {
+      type: "attack",
+      playerId: ACTIVE,
+      row: 0,
+      col: 0,
+      unitIds: [atk1.id, atk2.id],
+    });
+    const susp = suspended as MainGameState;
+    expect(susp.combatPrompt).toBeDefined();
+
+    const { events } = applyAction(
+      susp,
+      getValidActions(susp, OTHER)[0] as MainAction,
+    );
+    const resolved = events.filter((e) => e.type === "combat_resolved");
+    expect(resolved).toHaveLength(1);
+    const ev = resolved[0];
+    if (ev.type === "combat_resolved") {
+      expect(ev.winnerId).toBe(ACTIVE);
+    }
+  });
+
   it("rejects any non-resolver action while combat is suspended", () => {
     const suspended = attackAndSuspend(suspendingCombat());
     expect(() =>
@@ -999,12 +1128,15 @@ describe("defender-assigned matchups (#166)", () => {
     ).toThrow("suspended combat must be resolved first");
   });
 
-  it("offers the greedy-default matchup to the decider, nothing to others", () => {
+  it("offers every matchup bijection to the decider, greedy default first, nothing to others", () => {
     const s = suspendingCombat();
     const suspended = attackAndSuspend(s);
 
-    // The defender is offered exactly the greedy default (strong↔strong).
-    expect(getValidActions(suspended, OTHER)).toEqual([
+    // 2v2: the defender is offered both bijections so bots/search can explore
+    // non-greedy pairings. The identity permutation (strong↔strong) is first —
+    // the greedy auto-resolve default a bot can submit as-is.
+    const offered = getValidActions(suspended, OTHER);
+    expect(offered).toEqual([
       {
         type: "resolve_combat_round",
         playerId: OTHER,
@@ -1013,6 +1145,17 @@ describe("defender-assigned matchups (#166)", () => {
           pairs: [
             { attackerUnitId: s.strongAtk, defenderUnitId: s.strongDef },
             { attackerUnitId: s.weakAtk, defenderUnitId: s.weakDef },
+          ],
+        },
+      },
+      {
+        type: "resolve_combat_round",
+        playerId: OTHER,
+        decision: {
+          kind: "assign_matchups",
+          pairs: [
+            { attackerUnitId: s.strongAtk, defenderUnitId: s.weakDef },
+            { attackerUnitId: s.weakAtk, defenderUnitId: s.strongDef },
           ],
         },
       },

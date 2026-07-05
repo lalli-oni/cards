@@ -143,25 +143,32 @@ export function needsLocationTarget(card: EventCard): boolean {
 }
 
 /**
- * The greedy-default matchup as a complete, submittable `resolve_combat_round`.
- * The prompt's `atkRolls` / `defRolls` are stored highest-power-first, so
- * index-pairing reproduces the auto-resolve default (highest vs highest). The
- * client's pairing overlay starts from this and lets the defender re-pair; a bot
- * can submit it as-is.
+ * Every matchup the defender may assign, as complete `resolve_combat_round`
+ * actions — one per bijection between the equal-length participant lists.
+ * Enumerated by permuting the defenders against the fixed attacker order
+ * (mirrors `scholar_reorder`'s full-permutation enumeration), so consumers that
+ * treat `getValidActions` as the exhaustive action space (bots, search) can
+ * explore non-greedy pairings, not just the default. The lists are stored
+ * highest-power-first, so the identity permutation — element `[0]` — is the
+ * greedy highest-vs-highest auto-resolve default a bot can submit as-is.
  */
-function buildDefaultCombatResolution(
+function buildCombatResolutions(
   prompt: CombatPrompt,
   playerId: string,
-): ResolveCombatRoundAction {
-  const pairs = prompt.atkRolls.map((atk, i) => ({
-    attackerUnitId: atk.unitId,
-    defenderUnitId: prompt.defRolls[i].unitId,
-  }));
-  return {
+): ResolveCombatRoundAction[] {
+  const attackerIds: readonly string[] = prompt.atkRolls.map((s) => s.unitId);
+  const defenderIds: readonly string[] = prompt.defRolls.map((s) => s.unitId);
+  return permutationsOf(defenderIds).map((perm) => ({
     type: "resolve_combat_round",
     playerId,
-    decision: { kind: "assign_matchups", pairs },
-  };
+    decision: {
+      kind: "assign_matchups",
+      pairs: attackerIds.map((attackerUnitId, i) => ({
+        attackerUnitId,
+        defenderUnitId: perm[i],
+      })),
+    },
+  }));
 }
 
 function getMainValidActions(
@@ -173,7 +180,7 @@ function getMainValidActions(
   // gets nothing until the fight resumes.
   if (state.combatPrompt) {
     return state.combatPrompt.playerId === playerId
-      ? [buildDefaultCombatResolution(state.combatPrompt, playerId)]
+      ? buildCombatResolutions(state.combatPrompt, playerId)
       : [];
   }
   if (state.pickPrompt && state.pickPrompt.playerId === playerId) {

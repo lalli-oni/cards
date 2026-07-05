@@ -5,13 +5,25 @@
     type ContestResult,
     type PairSideView,
   } from "../lib/gameStore.svelte";
-  import { buildDialogView, type DialogView } from "../lib/contestResult";
+  import { buildDialogView, type ContestOutcome, type DialogView } from "../lib/contestResult";
   import Modal from "./Modal.svelte";
 
   const result: ContestResult | null = $derived(getContestResult());
 
   function signed(delta: number): string {
     return delta >= 0 ? `+${delta}` : `${delta}`;
+  }
+
+  // Which player owns the unit in an outcome, so the row can align to that
+  // side (attacker/Player 1 → left, defender/Player 2 → right). Names come from
+  // the same resolver as attacker/defenderName, so equality is exact.
+  function outcomeSide(outcome: ContestOutcome): "attacker" | "defender" | null {
+    if (!result) return null;
+    if (outcome.type === "injured" || outcome.type === "killed") {
+      if (outcome.ownerName === result.attackerName) return "attacker";
+      if (outcome.ownerName === result.defenderName) return "defender";
+    }
+    return null;
   }
 
   const view: DialogView | null = $derived(result ? buildDialogView(result) : null);
@@ -81,7 +93,13 @@
     {#if result.outcomes.length > 0}
       <div class="mb-4 space-y-1">
         {#each result.outcomes as outcome}
-          <div class="flex items-center gap-2 rounded bg-surface-raised px-3 py-1.5 text-sm">
+          {@const side = outcomeSide(outcome)}
+          <div
+            class="flex w-fit max-w-[90%] items-center gap-2 rounded bg-surface-raised px-3 py-1.5 text-sm {side ===
+            'defender'
+              ? 'ml-auto flex-row-reverse text-right'
+              : ''}"
+          >
             {#if outcome.type === "injured"}
               <span>🩸</span>
               <span class="text-text-secondary">
@@ -111,15 +129,13 @@
       <p class="mb-4 text-center text-sm text-text-muted">{view.emptyOutcomesMsg}</p>
     {/if}
 
-    <div class="mb-4 text-center text-sm font-semibold">
-      {#if result.winnerName}
+    {#if result.winnerName}
+      <div class="mb-4 text-center text-sm font-semibold">
         <span class="text-highlight">
           {result.winnerName} wins!
         </span>
-      {:else}
-        <span class="text-text-muted">Draw — no clear winner</span>
-      {/if}
-    </div>
+      </div>
+    {/if}
 
     <button
       onclick={dismissContest}

@@ -11,34 +11,64 @@
 
   const vs = $derived(getVisibleState());
   const prompt = $derived(vs?.combatPrompt);
+  const isSitOut = $derived(prompt?.kind === "sit_out");
 
   function signed(delta: number): string {
     return delta >= 0 ? `+${delta}` : `${delta}`;
   }
 
+  // ---- assign_matchups state -------------------------------------------------
   // assignment[attackerUnitId] = defenderUnitId. Seeded to the greedy default
   // (participants are stored highest-power-first, so index-pairing matches
   // highest-vs-highest — the engine's auto-resolve fallback). The defender may
   // re-pair before confirming.
   let assignment = $state<Record<string, string>>({});
+
+  // ---- sit_out state ---------------------------------------------------------
+  // The excess units the larger side removes this round. Seeded to the greedy
+  // lowest-power default (mirroring the engine's `getValidActions[0]`), which the
+  // decider may change before confirming.
+  let sitOut = $state<string[]>([]);
+
   let submitted = $state(false);
   // The error banner present at submit time, so the recovery effect below can
   // tell a NEW mid-submit error (which should re-enable Confirm) from a stale,
   // unrelated banner (which must not).
   let errorAtSubmit = $state<string | null>(null);
 
+  // For a sit-out prompt the larger side is the longer roll list; that side's
+  // owner (prompt.playerId) picks exactly `excess` units to remove.
+  const attackerLarger = $derived(
+    !!prompt && prompt.atkRolls.length > prompt.defRolls.length,
+  );
+  const largerRolls = $derived<CombatSide[]>(
+    !prompt ? [] : attackerLarger ? prompt.atkRolls : prompt.defRolls,
+  );
+  const excess = $derived(
+    !prompt ? 0 : Math.abs(prompt.atkRolls.length - prompt.defRolls.length),
+  );
+
   // Reseed when the prompt content changes. Today the outer `{#if vs?.combatPrompt}`
   // unmounts and remounts on every prompt transition, so this is defensive.
   $effect(() => {
     if (!prompt) return;
     void prompt.atkRolls.map((r) => r.unitId).join(",");
-    // The engine guarantees equal-length participant lists (the greedy sit-out
-    // trims both sides to `min`). If they ever desync, surface it rather than
-    // silently seeding `""` — an unseeded attacker would leave `isBijection`
-    // false forever with no explanation.
+    submitted = false;
+
+    if (prompt.kind === "sit_out") {
+      // Greedy default: the lowest-power `excess` units on the larger side.
+      const weakestFirst = [...largerRolls].sort((a, b) => a.power - b.power);
+      sitOut = weakestFirst.slice(0, excess).map((r) => r.unitId);
+      return;
+    }
+
+    // assign_matchups: the engine guarantees equal-length participant lists (the
+    // sit-out step already trimmed both sides to `min`). If they ever desync,
+    // surface it rather than silently seeding `""` — an unseeded attacker would
+    // leave `isBijection` false forever with no explanation.
     if (prompt.atkRolls.length !== prompt.defRolls.length) {
       console.warn(
-        "CombatPromptOverlay: atkRolls/defRolls length mismatch — participant lists should be equal",
+        "CombatPromptOverlay: atkRolls/defRolls length mismatch — matchup participant lists should be equal",
         { atk: prompt.atkRolls.length, def: prompt.defRolls.length },
       );
     }
@@ -47,13 +77,12 @@
       seed[atk.unitId] = prompt.defRolls[i]?.unitId ?? "";
     });
     assignment = seed;
-    submitted = false;
   });
 
   // Unlock the confirm button if the engine surfaces a NEW error mid-submit, so
-  // the defender can retry. Gating on a fresh error (not merely any error
-  // present) avoids a stale banner re-enabling Confirm and inviting a second,
-  // dropped click. Mirrors PickPromptOverlay's recovery pattern.
+  // the decider can retry. Gating on a fresh error (not merely any error present)
+  // avoids a stale banner re-enabling Confirm and inviting a second, dropped
+  // click. Mirrors PickPromptOverlay's recovery pattern.
   const error = $derived(getError());
   $effect(() => {
     if (submitted && error && error !== errorAtSubmit) submitted = false;
@@ -70,10 +99,31 @@
     );
   });
 
+  // A valid sit-out picks exactly `excess` distinct units off the larger side.
+  const isValidSitOut = $derived(sitOut.length === excess);
+
+  const canConfirm = $derived(isSitOut ? isValidSitOut : isBijection);
+
+  function toggleSitOut(unitId: string): void {
+    if (sitOut.includes(unitId)) {
+      sitOut = sitOut.filter((id) => id !== unitId);
+    } else {
+      sitOut = [...sitOut, unitId];
+    }
+  }
+
   function confirm(): void {
-    if (!prompt || submitted || !isBijection) return;
+    if (!prompt || submitted || !canConfirm) return;
     errorAtSubmit = error;
     submitted = true;
+    if (prompt.kind === "sit_out") {
+      selectAction({
+        type: "resolve_combat_round",
+        playerId: prompt.playerId,
+        decision: { kind: "sit_out", sitOutUnitIds: sitOut },
+      });
+      return;
+    }
     selectAction({
       type: "resolve_combat_round",
       playerId: prompt.playerId,
@@ -113,49 +163,90 @@
   {@const defenderName = resolvePlayerName(prompt.defenderId)}
   {@const attackerName = resolvePlayerName(prompt.attackerId)}
   <Modal width="w-auto max-w-2xl">
-    <h3 class="mb-1 text-center text-lg font-bold text-text-primary">
-      Assign combat matchups — round {prompt.round + 1}
-    </h3>
-    <p class="mb-4 text-center text-sm text-text-muted">
-      {defenderName} is defending against {attackerName}. Pair each attacker
-      against one of your units — you choose after seeing every roll.
-    </p>
-
-    <div class="mb-4 space-y-2">
-      {#each prompt.atkRolls as atk (atk.unitId)}
-        <div class="rounded border border-border bg-surface p-2">
-          <div class="mb-2 rounded bg-surface-raised p-2">
-            {@render rollLine(atk)}
-          </div>
-          <div class="flex items-center gap-2">
-            <span class="text-xs text-text-faint">faces</span>
-            <select
-              bind:value={assignment[atk.unitId]}
-              class="flex-1 rounded border border-border bg-surface-raised px-2 py-1 text-sm text-text-primary"
-            >
-              {#each prompt.defRolls as def (def.unitId)}
-                <option value={def.unitId}>
-                  {resolveCardName(def.unitId)} (power {def.power}{def.injuredBefore ? ", injured" : ""})
-                </option>
-              {/each}
-            </select>
-          </div>
-        </div>
-      {/each}
-    </div>
-
-    {#if !isBijection}
-      <p class="mb-3 text-center text-xs text-error">
-        Each of your units must face exactly one attacker.
+    {#if isSitOut}
+      {@const deciderName = resolvePlayerName(prompt.playerId)}
+      {@const smallerRolls = attackerLarger ? prompt.defRolls : prompt.atkRolls}
+      <h3 class="mb-1 text-center text-lg font-bold text-text-primary">
+        Choose units to sit out — round {prompt.round + 1}
+      </h3>
+      <p class="mb-4 text-center text-sm text-text-muted">
+        {deciderName} committed {largerRolls.length} units against {smallerRolls.length}.
+        Pick exactly {excess} to sit out this round — the rest fight.
       </p>
+
+      <div class="mb-4 space-y-2">
+        {#each largerRolls as side (side.unitId)}
+          {@const chosen = sitOut.includes(side.unitId)}
+          <button
+            type="button"
+            onclick={() => toggleSitOut(side.unitId)}
+            class="w-full rounded border p-2 text-left transition-colors {chosen
+              ? 'border-amber-500 bg-amber-500/10'
+              : 'border-border bg-surface hover:border-border-strong'}"
+          >
+            <div class="mb-1 flex items-center justify-between">
+              <span class="text-xs font-semibold {chosen ? 'text-amber-500' : 'text-text-faint'}">
+                {chosen ? "Sitting out" : "Fighting"}
+              </span>
+            </div>
+            <div class="rounded bg-surface-raised p-2">
+              {@render rollLine(side)}
+            </div>
+          </button>
+        {/each}
+      </div>
+
+      {#if !isValidSitOut}
+        <p class="mb-3 text-center text-xs text-error">
+          Select exactly {excess} unit{excess === 1 ? "" : "s"} to sit out
+          (currently {sitOut.length}).
+        </p>
+      {/if}
+    {:else}
+      <h3 class="mb-1 text-center text-lg font-bold text-text-primary">
+        Assign combat matchups — round {prompt.round + 1}
+      </h3>
+      <p class="mb-4 text-center text-sm text-text-muted">
+        {defenderName} is defending against {attackerName}. Pair each attacker
+        against one of your units — you choose after seeing every roll.
+      </p>
+
+      <div class="mb-4 space-y-2">
+        {#each prompt.atkRolls as atk (atk.unitId)}
+          <div class="rounded border border-border bg-surface p-2">
+            <div class="mb-2 rounded bg-surface-raised p-2">
+              {@render rollLine(atk)}
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-text-faint">faces</span>
+              <select
+                bind:value={assignment[atk.unitId]}
+                class="flex-1 rounded border border-border bg-surface-raised px-2 py-1 text-sm text-text-primary"
+              >
+                {#each prompt.defRolls as def (def.unitId)}
+                  <option value={def.unitId}>
+                    {resolveCardName(def.unitId)} (power {def.power}{def.injuredBefore ? ", injured" : ""})
+                  </option>
+                {/each}
+              </select>
+            </div>
+          </div>
+        {/each}
+      </div>
+
+      {#if !isBijection}
+        <p class="mb-3 text-center text-xs text-error">
+          Each of your units must face exactly one attacker.
+        </p>
+      {/if}
     {/if}
 
     <button
       onclick={confirm}
-      disabled={submitted || !isBijection}
+      disabled={submitted || !canConfirm}
       class="w-full rounded bg-amber-600 py-2 font-semibold text-white hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-50"
     >
-      {submitted ? "Resolving…" : "Confirm matchups"}
+      {submitted ? "Resolving…" : isSitOut ? "Confirm sit-out" : "Confirm matchups"}
     </button>
   </Modal>
 {/if}

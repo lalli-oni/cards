@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "test": "bun test",
     "typecheck": "tsc -b tsconfig.json"
   },
   "dependencies": {

@@ -12,16 +12,27 @@
 import { readdirSync, readFileSync, mkdirSync, writeFileSync, existsSync } from "fs";
 import { join } from "path";
 import { parse as parseDSL, DSLParseError, DSLValidationError } from "../engine/src/effect-dsl";
+import { ATTRIBUTES } from "../engine/src/attributes";
+import {
+  LOCATION_TYPES,
+  EVENT_TYPES,
+  ITEM_TYPES,
+} from "../engine/src/card-categories";
 
 const LIBRARY_DIR = join(import.meta.dir);
 const SETS_DIR = join(LIBRARY_DIR, "sets");
 const BUILD_DIR = join(LIBRARY_DIR, "build");
 
 const CARD_TYPES = ["units", "locations", "items", "events", "policies"] as const;
-type CardType = (typeof CARD_TYPES)[number];
+export type CardType = (typeof CARD_TYPES)[number];
 
 const RARITIES = ["common", "uncommon", "rare", "epic", "legendary"] as const;
 const EVENT_TIMINGS = ["instant", "passive", "trap"] as const;
+
+// Governed per-type category vocabularies (`LOCATION_TYPES`/`EVENT_TYPES`/
+// `ITEM_TYPES`) live in `engine/src/card-categories.ts` — the single source of
+// truth shared with the engine types and effect factories. Validated here at
+// build time like `rarity`/`timing`.
 
 // --- CSV parsing ---
 
@@ -97,7 +108,7 @@ function intOrNull(value: string): number | null {
 
 // --- Card transformers ---
 
-function transformCard(type: CardType, raw: Record<string, string>): Record<string, unknown> {
+export function transformCard(type: CardType, raw: Record<string, string>): Record<string, unknown> {
   const base: Record<string, unknown> = {
     id: raw.id,
     name: raw.name,
@@ -107,7 +118,14 @@ function transformCard(type: CardType, raw: Record<string, string>): Record<stri
     cost: raw.cost.includes("|") ? raw.cost.split("|").map((c) => c.trim()) : raw.cost,
     text: raw.text || null,
     flavor: raw.flavor || null,
-    keywords: splitList(raw.keywords || ""),
+    // Shared classification columns (split out of the old `keywords` column):
+    // `abilities` = mechanical keyword-effects, `attributes` = cross-type
+    // synergy vocabulary. Both apply to every card type. `attributes` is
+    // vocabulary-validated below; `abilities` is intentionally free-text (no
+    // governed `ABILITIES` set yet) — the rules' Keyword Glossary is the human
+    // reference until abilities are wired to effect factories (then govern them).
+    abilities: splitList(raw.abilities || ""),
+    attributes: splitList(raw.attributes || ""),
   };
 
   switch (type) {
@@ -115,7 +133,6 @@ function transformCard(type: CardType, raw: Record<string, string>): Record<stri
       base.strength = intOrNull(raw.strength);
       base.cunning = intOrNull(raw.cunning);
       base.charisma = intOrNull(raw.charisma);
-      base.attributes = splitList(raw.attributes || "");
       base.actions = splitList(raw.actions || "").map(parseAction).filter(Boolean);
       break;
 
@@ -130,11 +147,17 @@ function transformCard(type: CardType, raw: Record<string, string>): Record<stri
         base.rewards = `${parts[1].trim()}vp`;
       }
       base.passive = raw.passive || null;
+      // CSV column is `location_type`; stored as `locationType` on the card for
+      // camelCase consistency with `itemType` and the engine field.
+      base.locationType = raw.location_type || null;
       break;
 
     case "items":
       base.equip = raw.equip || null;
       base.stored = raw.stored || null;
+      // CSV column is `type`; stored as `itemType` on the card so it does not
+      // collide with the card-type discriminant (`base.type`).
+      base.itemType = splitList(raw.type || "");
       base.actions = splitList(raw.actions || "").map(parseAction).filter(Boolean);
       break;
 
@@ -142,6 +165,8 @@ function transformCard(type: CardType, raw: Record<string, string>): Record<stri
       base.timing = raw.timing;
       base.duration = intOrNull(raw.duration || "");
       base.trigger = raw.trigger || null;
+      // CSV column is `event_type`; stored as `eventType` (camelCase) in-engine.
+      base.eventType = raw.event_type || null;
       if (raw.effect) base.effect = raw.effect;
       break;
 
@@ -161,9 +186,9 @@ function transformCard(type: CardType, raw: Record<string, string>): Record<stri
 
 // --- Validation ---
 
-type ValidationError = { card: string; field: string; message: string };
+export type ValidationError = { card: string; field: string; message: string };
 
-function validate(type: CardType, card: Record<string, unknown>): ValidationError[] {
+export function validate(type: CardType, card: Record<string, unknown>): ValidationError[] {
   const errors: ValidationError[] = [];
   const id = (card.id as string) || "unknown";
 
@@ -176,6 +201,37 @@ function validate(type: CardType, card: Record<string, unknown>): ValidationErro
 
   if (type === "events" && !EVENT_TIMINGS.includes(card.timing as any)) {
     errors.push({ card: id, field: "timing", message: `invalid timing: ${card.timing}` });
+  }
+
+  // Cross-type attribute vocabulary — exact CamelCase membership in the
+  // governed set (`engine/src/attributes.ts`). Closes the gap #158 left: the
+  // old `keywords` column was unvalidated, so typos/un-migrated values could
+  // silently no-op an effect. Case-sensitive on purpose so CSV data and the
+  // hardcoded literals in effect factories cannot drift on spelling.
+  const attributes = (card.attributes as string[] | undefined) ?? [];
+  for (const attr of attributes) {
+    if (!ATTRIBUTES.includes(attr as (typeof ATTRIBUTES)[number])) {
+      errors.push({ card: id, field: "attributes", message: `invalid attribute: ${attr}` });
+    }
+  }
+
+  // Per-type category enums. Fields are stored camelCase post-transform
+  // (`locationType`/`eventType`/`itemType`); the CSV columns they map from are
+  // `location_type`/`event_type`/`type` (reflected in the error `field`).
+  const locationType = card.locationType as (typeof LOCATION_TYPES)[number] | undefined;
+  if (type === "locations" && locationType && !LOCATION_TYPES.includes(locationType)) {
+    errors.push({ card: id, field: "location_type", message: `invalid location_type: ${locationType}` });
+  }
+  const eventType = card.eventType as (typeof EVENT_TYPES)[number] | undefined;
+  if (type === "events" && eventType && !EVENT_TYPES.includes(eventType)) {
+    errors.push({ card: id, field: "event_type", message: `invalid event_type: ${eventType}` });
+  }
+  if (type === "items") {
+    for (const t of (card.itemType as string[] | undefined) ?? []) {
+      if (!ITEM_TYPES.includes(t as (typeof ITEM_TYPES)[number])) {
+        errors.push({ card: id, field: "type", message: `invalid item type: ${t}` });
+      }
+    }
   }
 
   // DSL effect validation — skipped for policies (action.effect is
@@ -270,4 +326,8 @@ function main() {
   console.log(`\nDone. ${allCards.length} cards total across ${sets.length} set(s).`);
 }
 
-main();
+// Only run the build when invoked directly (`bun library/build.ts`), not when
+// imported by tests (`library/build.test.ts` pulls in `validate`/`transformCard`).
+if (import.meta.main) {
+  main();
+}

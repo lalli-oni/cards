@@ -20,6 +20,7 @@ import {
   resetIds,
 } from "./helpers";
 import { loadCardDefinitions } from "../card-loader";
+import type { Attribute } from "../attributes";
 import { join } from "node:path";
 
 /** Get active and other player IDs from a game state. */
@@ -1077,6 +1078,25 @@ describe("attribute-gated effects (#158 rename guards)", () => {
     expect(getModifiedCost(state, queries, knowledge, active, "buy")).toBe(3);
   });
 
+  it("Militarist: -1 buy cost for Weapon items via the item `type` column, not untyped items", () => {
+    const state = gameWith((d, p) => {
+      d.players[p.activeIdx].activePolicies.push(
+        makePolicy({ ownerId: p.active, definitionId: "militarist" }),
+      );
+    });
+    const { active } = getPlayers(state);
+    const { queries } = rebuildListeners(state);
+    // Guards the #119 rename: militarist now reads item `itemType` (was
+    // `keywords`). "Weapon" is a governed-but-forward-looking item type.
+    const weapon = makeItem({ ownerId: active, cost: "3", itemType: ["Weapon"] });
+    const plainItem = makeItem({ ownerId: active, cost: "3" });
+    const artifact = makeItem({ ownerId: active, cost: "3", itemType: ["Artifact"] });
+
+    expect(getModifiedCost(state, queries, weapon, active, "buy")).toBe(2);
+    expect(getModifiedCost(state, queries, plainItem, active, "buy")).toBe(3);
+    expect(getModifiedCost(state, queries, artifact, active, "buy")).toBe(3);
+  });
+
   it("Diplomat policy: -1 first buy for Politics units, normal on second buy", () => {
     const state = gameWith((d, p) => {
       d.players[p.activeIdx].activePolicies.push(
@@ -1109,12 +1129,13 @@ describe("attribute-gated effects (#158 rename guards)", () => {
 
 describe("attribute effects — real library integration", () => {
   const LIBRARY_BUILD = join(import.meta.dir, "../../../library/build");
-  const realAttributes = (id: string): string[] => {
+  const realAttributes = (id: string): Attribute[] => {
     const defs = loadCardDefinitions(join(LIBRARY_BUILD, "alpha-1.json"));
+    // The loader has already gated these against ATTRIBUTES, so the cast holds.
     return (
       (defs.find((d) => d.id === id) as { attributes?: string[] } | undefined)
         ?.attributes ?? []
-    );
+    ) as Attribute[];
   };
 
   it("Versailles boosts a real Politics unit (Cleopatra) from the CSV build", () => {

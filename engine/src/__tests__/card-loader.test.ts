@@ -30,7 +30,7 @@ const VALID_UNIT: CardDefinition = {
   cost: "3",
   text: "A test unit.",
   flavor: null,
-  keywords: ["Fighter"],
+  abilities: ["Fighter"],
   strength: 5,
   cunning: 3,
   charisma: 2,
@@ -46,11 +46,12 @@ const VALID_LOCATION: CardDefinition = {
   cost: "4",
   text: null,
   flavor: null,
-  keywords: [],
+  abilities: [],
   mission: "control>3",
   requirements: "units_3",
   rewards: "3vp",
   passive: "gain_gold_1",
+  locationType: "Sanctuary",
 };
 
 const VALID_ITEM: CardDefinition = {
@@ -62,9 +63,10 @@ const VALID_ITEM: CardDefinition = {
   cost: "2",
   text: "+2 Strength",
   flavor: null,
-  keywords: [],
+  abilities: [],
   equip: "strength_plus_2",
   stored: null,
+  itemType: ["Weapon"],
 };
 
 const VALID_EVENT: CardDefinition = {
@@ -76,10 +78,11 @@ const VALID_EVENT: CardDefinition = {
   cost: "1",
   text: null,
   flavor: null,
-  keywords: [],
+  abilities: [],
   timing: "trap",
   trigger: "unit_enters",
   duration: null,
+  eventType: "Catastrophe",
 };
 
 const VALID_POLICY: CardDefinition = {
@@ -91,7 +94,7 @@ const VALID_POLICY: CardDefinition = {
   cost: "0",
   text: null,
   flavor: null,
-  keywords: [],
+  abilities: [],
   effect: "all_players_pay_1",
 };
 
@@ -233,9 +236,9 @@ describe("loadCardDefinitions", () => {
     }
   });
 
-  test("validates keywords field", () => {
-    const badKeywords = { ...VALID_UNIT, keywords: "not-an-array" };
-    const path = writeTmpJson("bad-keywords.json", [badKeywords]);
+  test("validates abilities field", () => {
+    const badAbilities = { ...VALID_UNIT, abilities: "not-an-array" };
+    const path = writeTmpJson("bad-abilities.json", [badAbilities]);
     try {
       loadCardDefinitions(path);
       expect(true).toBe(false);
@@ -243,7 +246,74 @@ describe("loadCardDefinitions", () => {
       expect(e).toBeInstanceOf(CardValidationError);
       expect(
         (e as CardValidationError).errors.some((err) =>
-          err.message.includes("keywords"),
+          err.message.includes("abilities"),
+        ),
+      ).toBe(true);
+    }
+  });
+
+  test("rejects non-array attributes", () => {
+    const badAttributes = { ...VALID_UNIT, attributes: "Military" };
+    const path = writeTmpJson("bad-attributes.json", [badAttributes]);
+    try {
+      loadCardDefinitions(path);
+      expect(true).toBe(false);
+    } catch (e) {
+      expect(e).toBeInstanceOf(CardValidationError);
+      expect(
+        (e as CardValidationError).errors.some((err) =>
+          err.message.includes("attributes"),
+        ),
+      ).toBe(true);
+    }
+  });
+
+  // The engine loader re-validates governed vocabulary (not just array-shape),
+  // so hand-edited or stale JSON with an out-of-vocab value is rejected at load
+  // rather than silently no-opping an effect downstream (#119).
+  test("rejects an un-governed attribute value", () => {
+    const badAttr = { ...VALID_UNIT, attributes: ["Millitary"] };
+    const path = writeTmpJson("bad-attr-value.json", [badAttr]);
+    try {
+      loadCardDefinitions(path);
+      expect(true).toBe(false);
+    } catch (e) {
+      expect(e).toBeInstanceOf(CardValidationError);
+      expect(
+        (e as CardValidationError).errors.some((err) =>
+          err.message.includes("invalid attribute"),
+        ),
+      ).toBe(true);
+    }
+  });
+
+  test("rejects an un-governed location_type value", () => {
+    const badLoc = { ...VALID_LOCATION, locationType: "Bazaar" };
+    const path = writeTmpJson("bad-loc-type.json", [badLoc]);
+    try {
+      loadCardDefinitions(path);
+      expect(true).toBe(false);
+    } catch (e) {
+      expect(e).toBeInstanceOf(CardValidationError);
+      expect(
+        (e as CardValidationError).errors.some((err) =>
+          err.message.includes("invalid location_type"),
+        ),
+      ).toBe(true);
+    }
+  });
+
+  test("rejects an un-governed item type value", () => {
+    const badItem = { ...VALID_ITEM, itemType: ["Accessory"] };
+    const path = writeTmpJson("bad-item-type.json", [badItem]);
+    try {
+      loadCardDefinitions(path);
+      expect(true).toBe(false);
+    } catch (e) {
+      expect(e).toBeInstanceOf(CardValidationError);
+      expect(
+        (e as CardValidationError).errors.some((err) =>
+          err.message.includes("invalid item type"),
         ),
       ).toBe(true);
     }
@@ -294,17 +364,18 @@ describe("loadCardDefinitions with real library", () => {
     }
   });
 
-  // Guards the vocabulary migration (#158): every attribute value in the
+  // Guards the vocabulary migration (#158/#119): every attribute value in the
   // real CSV data must be one of the governed domain-nouns, spelled in the
   // exact CamelCase the effect factories (`effects.ts`) match against. A
   // casing/typo/un-migrated value in the CSV would otherwise silently
-  // no-op the effect with no other test failing.
-  test("every unit attribute in the loaded library is a governed attribute", () => {
+  // no-op the effect with no other test failing. Attributes are a cross-type
+  // axis (#119 folded thematic keywords into `attributes` on locations/items/
+  // events/policies too), so this scans every card type, not just units.
+  test("every attribute in the loaded library is a governed attribute", () => {
     const defs = loadCardDefinitions(join(LIBRARY_BUILD, "alpha-1.json"));
-    const units = defs.filter((d) => d.type === "unit");
-    expect(units.length).toBeGreaterThan(0);
-    for (const unit of units) {
-      const attrs = (unit as { attributes?: string[] }).attributes ?? [];
+    expect(defs.length).toBeGreaterThan(0);
+    for (const def of defs) {
+      const attrs = (def as { attributes?: string[] }).attributes ?? [];
       for (const attr of attrs) {
         expect(isAttribute(attr)).toBe(true);
         // Exact CamelCase — not just case-insensitively valid.
@@ -353,7 +424,7 @@ describe("instantiateCard", () => {
     expect(card.cost).toBe("3");
     expect(card.rarity).toBe("common");
     expect(card.text).toBe("A test unit.");
-    expect(card.keywords).toEqual(["Fighter"]);
+    expect(card.abilities).toEqual(["Fighter"]);
 
     // Unit-specific
     expect((card as any).strength).toBe(5);
@@ -371,6 +442,7 @@ describe("instantiateCard", () => {
       expect(card.requirements).toBe("units_3");
       expect(card.rewards).toBe("3vp");
       expect(card.passive).toBe("gain_gold_1");
+      expect(card.locationType).toBe("Sanctuary");
     }
   });
 
@@ -381,6 +453,7 @@ describe("instantiateCard", () => {
       expect(card.equip).toBe("strength_plus_2");
       expect(card.stored).toBeUndefined();
       expect(card.equippedTo).toBeUndefined();
+      expect(card.itemType).toEqual(["Weapon"]);
     }
   });
 
@@ -389,6 +462,7 @@ describe("instantiateCard", () => {
     expect(card.type).toBe("event");
     if (card.type === "event") {
       expect(card.timing).toBe("trap");
+      expect(card.eventType).toBe("Catastrophe");
       if (card.timing === "trap") {
         expect(card.trigger).toBe("unit_enters");
       }

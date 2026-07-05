@@ -20,11 +20,15 @@
 
   const tooltip = $derived.by(() => {
     const lines = [`${card.name} (${card.type}) — Cost: ${card.cost}`];
-    if (card.keywords && card.keywords.length > 0) {
-      lines.push(`Keywords: ${card.keywords.join(", ")}`);
+    if (card.abilities && card.abilities.length > 0) {
+      lines.push(`Abilities: ${card.abilities.join(", ")}`);
+    }
+    // `attributes` is a shared cross-type column (#119) — show it for every
+    // card type, not just units.
+    if (card.attributes && card.attributes.length > 0) {
+      lines.push(`Attributes: ${card.attributes.join(", ")}`);
     }
     if (card.type === "unit") {
-      if (card.attributes.length > 0) lines.push(`Attributes: ${card.attributes.join(", ")}`);
       lines.push(`Str:${card.strength} Cun:${card.cunning} Cha:${card.charisma}${card.injured ? " (injured)" : ""}`);
     } else if (card.type === "location") {
       if (card.requirements) lines.push(`Req: ${formatRequirements(card.requirements)}`);
@@ -43,7 +47,7 @@
   });
 
   const attributeStr = $derived(
-    card.type === "unit" && card.attributes.length > 0
+    card.attributes && card.attributes.length > 0
       ? card.attributes.join(", ")
       : "",
   );
@@ -88,8 +92,8 @@
       <div class="truncate text-2xs text-policy">{card.effect}</div>
     {/if}
   {/if}
-  {#if card.keywords && card.keywords.length > 0}
-    <div class="truncate text-2xs text-text-faint italic">{card.keywords.join(", ")}</div>
+  {#if card.abilities && card.abilities.length > 0}
+    <div class="truncate text-2xs text-text-faint italic">{card.abilities.join(", ")}</div>
   {/if}
   {#if card.text}
     <div class="mt-1 truncate text-text-faint">{card.text}</div>

@@ -7,11 +7,12 @@ import {
   parseRewards,
 } from "../mission-helpers";
 import { isAttribute } from "../attributes";
+import type { Attribute } from "../attributes";
 import { createTestGame } from "./helpers";
 import { rebuildListeners } from "../listeners/rebuild";
 import type { UnitCard } from "../types";
 
-function unit(attrs: string[], overrides?: Partial<UnitCard>): UnitCard {
+function unit(attrs: Attribute[], overrides?: Partial<UnitCard>): UnitCard {
   return {
     id: "u1",
     definitionId: "test",

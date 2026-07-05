@@ -260,7 +260,10 @@ export const POLICY_EFFECTS: Record<string, PolicyEffectFactory> = {
         if (ctx.playerId !== controllerId) return 0;
         const card = ctx.card;
         if (card.type === "unit" && "attributes" in card && hasAttribute(card as UnitCard, "Military")) return -1;
-        if (card.type === "item" && card.keywords?.includes("Weapon")) return -1;
+        // Reads the item `type` column (#119). "Weapon" is a governed item type
+        // (`card-categories.ts`) but forward-looking — no alpha-1 item carries it
+        // yet, so this discount matches nothing today while remaining type-safe.
+        if (card.type === "item" && card.itemType?.includes("Weapon")) return -1;
         return 0;
       },
     } satisfies CostModifierListener],
@@ -276,8 +279,13 @@ export const POLICY_EFFECTS: Record<string, PolicyEffectFactory> = {
         if (ctx.playerId !== controllerId || ctx.action !== "buy") return 0;
         const card = ctx.card;
         const isPolitics = card.type === "unit" && "attributes" in card && hasAttribute(card as UnitCard, "Politics");
-        const isAccessory = card.type === "item" && card.keywords?.includes("Accessory");
-        if (!isPolitics && !isAccessory) return 0;
+        // TODO(#45): the diplomat discount is also meant to cover "accessory"
+        // items, but no such governed item `type` exists yet — "Accessory" is
+        // intentionally absent from `ITEM_TYPES` (`card-categories.ts`), so a
+        // check against it would be provably dead and rejected by the `ItemType`
+        // union. Re-add an item-`type` branch here once #45 promotes a concrete
+        // accessory-like type into the governed set.
+        if (!isPolitics) return 0;
         return countActionsThisTurn(state, controllerId, (a) => a.type === "buy") === 0 ? -1 : 0;
       },
     } satisfies CostModifierListener],

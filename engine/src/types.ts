@@ -1,3 +1,6 @@
+import type { Attribute } from "./attributes";
+import type { LocationType, EventType, ItemType } from "./card-categories";
+
 // ---------------------------------------------------------------------------
 // Config
 // ---------------------------------------------------------------------------
@@ -68,7 +71,12 @@ interface CardBase {
   cost: string;
   rarity: Rarity;
   text?: string;
-  keywords?: string[];
+  /** Mechanical keyword-effects (Lethal, Taunt, Fortified, …). Split out of
+   *  the old `keywords` column in #119. Absent when the card has none. */
+  abilities?: string[];
+  /** Cross-type synergy vocabulary (`rules/attributes.md`). Shared across all
+   *  card types; `UnitCard` narrows this to a required field. */
+  attributes?: Attribute[];
   /** Seeding/creation origin. Immutable after the card is instantiated. */
   ownerId: string;
   /** Current in-game controller. Mutates on buy, seed-steal, and control effects. */
@@ -178,7 +186,7 @@ export interface UnitCard extends CardBase {
   strength: number;
   cunning: number;
   charisma: number;
-  attributes: string[];
+  attributes: Attribute[];
   injured: boolean;
   actions?: ActionDef[];
   statModifiers?: StatModifier[];
@@ -191,6 +199,9 @@ export interface LocationCard extends CardBase {
   requirements?: string;
   rewards?: string;
   passive?: string;
+  /** Per-type category (Palace, Archive, Arena, …). Flavor-only today; see #160.
+   *  From the CSV `location_type` column (renamed to camelCase in-engine). */
+  locationType?: LocationType;
 }
 
 export interface ItemCard extends CardBase {
@@ -199,10 +210,17 @@ export interface ItemCard extends CardBase {
   stored?: string;
   /** Unit this item is attached to (by card instance id). */
   equippedTo?: string;
+  /** Multi-value item category (Weapon, Armor, Tool, Artifact, Banner, Regalia).
+   *  Named `itemType` to avoid colliding with the `type` discriminant. The
+   *  militarist policy discount keys off this (see effects.ts). */
+  itemType?: ItemType[];
 }
 
 interface EventCardBase extends CardBase {
   type: "event";
+  /** Per-type category (Catastrophe, Prosperity). Flavor-only today; see #160.
+   *  From the CSV `event_type` column (renamed to camelCase in-engine). */
+  eventType?: EventType;
 }
 
 export interface InstantEventCard extends EventCardBase {

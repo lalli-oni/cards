@@ -16,7 +16,8 @@ Every card type includes these columns:
 | cost     | string | yes      | Gold cost to deploy/play. Multiple costs separated by `\|` (player pays one) |
 | text     | string | no       | Card text — rules text, abilities, effects |
 | flavor   | string | no       | Flavor text |
-| keywords | string | no       | Semicolon-separated keywords (e.g. `Ambush;Lethal`) |
+| abilities  | string | no     | Semicolon-separated mechanical keyword-effects (e.g. `Lethal;Taunt`). Things the card *does*. These are what the rules call **Keywords** (see the Keyword Glossary in `rules/README.md` / `rules/attributes.md`) — the column was named `abilities` in #119 to disambiguate from the thematic `keywords` that moved to `attributes`. Free-text: not vocabulary-validated. |
+| attributes | string | no     | Semicolon-separated cross-type synergy labels (e.g. `Knowledge;Engineering`). Governed closed set — see [Governed vocabularies](#governed-vocabularies). |
 
 ## Units
 
@@ -25,8 +26,9 @@ Every card type includes these columns:
 | strength   | int    | no       | Defaults to `[var:default_stat:5]` if omitted |
 | cunning    | int    | no       | Defaults to `[var:default_stat:5]` if omitted |
 | charisma   | int    | no       | Defaults to `[var:default_stat:5]` if omitted |
-| attributes | string | no       | Semicolon-separated (e.g. `Knowledge;Engineering`) |
 | actions    | string | no       | Semicolon-separated action definitions. Format: `name:ap_cost:effect` |
+
+`attributes` is a shared column (see above) — units are the primary carriers.
 
 ## Locations
 
@@ -37,6 +39,7 @@ Every card type includes these columns:
 | passive      | string | no       | Passive effect text |
 | edges   | string | no       | Blocked edges, semicolon-separated (`N`, `S`, `E`, `W`). Unlisted edges are open. Empty = all open. |
 | actions | string | no       | Semicolon-separated action definitions. Format: `name:ap_cost:effect`. Usable by any player with a unit at this location. |
+| location_type | enum | no      | Per-type category (single value). See [Governed vocabularies](#governed-vocabularies). Loaded as `locationType` in the engine (camelCase). |
 
 ## Items
 
@@ -44,6 +47,7 @@ Every card type includes these columns:
 |---------|--------|----------|-------------|
 | equip   | string | no       | Effect when equipped by a unit |
 | stored  | string | no       | Effect when stored at a location |
+| type    | enum   | no       | Multi-value item category (semicolon-separated). See [Governed vocabularies](#governed-vocabularies). Loaded as `itemType` in the engine (avoids colliding with the card-type discriminant). |
 | actions | string | no       | Semicolon-separated action definitions. Format: `name:ap_cost:effect` |
 
 ## Events
@@ -53,6 +57,8 @@ Every card type includes these columns:
 | timing  | enum   | yes      | `instant`, `passive`, `trap` |
 | duration | int    | no       | Number of turns (for `passive` timing) |
 | trigger  | string | no       | Trigger condition (for `trap` timing) |
+| effect   | string | no       | DSL effect string, resolved when the event fires (`instant` timing). Build-validated via `parseDSL`. |
+| event_type | enum | no       | Per-type category (single value): `Catastrophe`, `Prosperity`. Thematic — distinct from the mechanical `timing` field. See [Governed vocabularies](#governed-vocabularies). Loaded as `eventType` in the engine (camelCase). |
 
 ## Policies
 
@@ -61,6 +67,32 @@ Every card type includes these columns:
 | effect         | string | yes      | Passive global modifier text |
 | seeding_effect | string | no       | Effect that applies during the seeding phase |
 | actions        | string | no       | Semicolon-separated action definitions. Format: `name:ap_cost:effect` |
+
+## Governed vocabularies
+
+The build script validates these columns against closed vocabularies and fails
+on any unknown value (exact spelling, case-sensitive).
+
+- **`attributes`** (all types) — the cross-type synergy axis. Governed by
+  `rules/attributes.md` / `engine/src/attributes.ts`: `Knowledge`, `Military`,
+  `Diplomacy`, `Commerce`, `Politics`, `Spirituality`, `Engineering`,
+  `Exploration`, `Espionage`, `Culture`.
+- **`location_type`** — `Palace`, `Archive`, `Arena`, `Port`, `Workshop`,
+  `Hideout`, `Sanctuary`, `Monument`, `Market`, `Research`, `Fortification`.
+- **`event_type`** — `Catastrophe`, `Prosperity`.
+- **item `type`** — `Weapon`, `Armor`, `Tool`, `Artifact`, `Banner`, `Regalia`.
+  `Weapon`/`Armor`/`Tool` are forward-looking (no card carries them yet).
+
+> The lists above are documentation copies. The **source of truth** is code:
+> `attributes` in `engine/src/attributes.ts`, and the three `*_type` lists in
+> `engine/src/card-categories.ts` (shared by the build validator and the engine
+> types). Keep this section in sync with those constants when they change.
+
+`attributes` is the *cross-type* axis — the same value means the same thing on
+any card type. The three `*_type` columns are the *per-type* category
+axis (a card's own kind within its type) — mostly flavor today; governing them
+and wiring them into mechanics is tracked post-v0.1 in #160. `abilities` is not
+vocabulary-validated (freeform mechanical keyword-effects).
 
 ## Requirement Checks
 
@@ -78,7 +110,7 @@ Stat checks always sum across all friendly units at the location — the attribu
 
 ## Delimiter Conventions
 
-- **Semicolons** (`;`) separate list items within a single field (attributes, keywords, actions, requirements)
+- **Semicolons** (`;`) separate list items within a single field (attributes, abilities, item `type`, actions, requirements)
 - **Pipes** (`|`) separate alternative costs
 - **Colons** (`:`) separate action components (name:ap_cost:effect)
 

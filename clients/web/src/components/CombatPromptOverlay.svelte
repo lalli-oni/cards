@@ -88,6 +88,27 @@
   }
 </script>
 
+{#snippet rollLine(side: CombatSide)}
+  <div class="flex flex-wrap items-center gap-1 text-xs text-text-secondary">
+    <span class="font-semibold text-text-primary">{resolveCardName(side.unitId)}</span>
+    <span class="font-mono">{side.baseStrength}</span>
+    {#each side.modifiers as mod}
+      <span
+        class="rounded bg-surface px-1.5 py-0.5 font-mono {mod.delta > 0
+          ? 'text-success'
+          : mod.delta < 0
+            ? 'text-error'
+            : 'text-text-secondary'}"
+        title="{mod.source.type}: {mod.source.definitionId}"
+      >
+        {signed(mod.delta)} {mod.source.definitionId}
+      </span>
+    {/each}
+    <span class="font-mono">+ {side.roll}🎲</span>
+    <span class="ml-auto font-mono font-semibold text-text-primary">= {side.power}</span>
+  </div>
+{/snippet}
+
 {#if prompt}
   {@const defenderName = resolvePlayerName(prompt.defenderId)}
   {@const attackerName = resolvePlayerName(prompt.attackerId)}
@@ -99,27 +120,6 @@
       {defenderName} is defending against {attackerName}. Pair each attacker
       against one of your units — you choose after seeing every roll.
     </p>
-
-    {#snippet rollLine(side: CombatSide)}
-      <div class="flex flex-wrap items-center gap-1 text-xs text-text-secondary">
-        <span class="font-semibold text-text-primary">{resolveCardName(side.unitId)}</span>
-        <span class="font-mono">{side.baseStrength}</span>
-        {#each side.modifiers as mod}
-          <span
-            class="rounded bg-surface px-1.5 py-0.5 font-mono {mod.delta > 0
-              ? 'text-success'
-              : mod.delta < 0
-                ? 'text-error'
-                : 'text-text-secondary'}"
-            title="{mod.source.type}: {mod.source.definitionId}"
-          >
-            {signed(mod.delta)} {mod.source.definitionId}
-          </span>
-        {/each}
-        <span class="font-mono">+ {side.roll}🎲</span>
-        <span class="ml-auto font-mono font-semibold text-text-primary">= {side.power}</span>
-      </div>
-    {/snippet}
 
     <div class="mb-4 space-y-2">
       {#each prompt.atkRolls as atk (atk.unitId)}

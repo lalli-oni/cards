@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "bun test src",
-    "typecheck": "tsc -b tsconfig.json && tsc -b tsconfig.test.json"
+    "check": "svelte-check --threshold error",
+    "typecheck": "tsc -b tsconfig.json && tsc -b tsconfig.test.json && svelte-check --threshold error"
   },
   "dependencies": {
     "cards-engine": "workspace:*",
@@ -18,6 +19,7 @@
     "@sveltejs/vite-plugin-svelte": "^5.0.0",
     "@tailwindcss/vite": "^4.2.2",
     "svelte": "^5.0.0",
+    "svelte-check": "^4.0.0",
     "tailwindcss": "^4.2.2",
     "typescript": "^5.7.0",
     "vite": "^6.0.0"

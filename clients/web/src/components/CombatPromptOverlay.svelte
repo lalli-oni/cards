@@ -48,8 +48,10 @@
     !prompt ? 0 : Math.abs(prompt.atkRolls.length - prompt.defRolls.length),
   );
 
-  // Reseed when the prompt content changes. Today the outer `{#if vs?.combatPrompt}`
-  // unmounts and remounts on every prompt transition, so this is defensive.
+  // Reseed when the prompt content changes. A sit_out → assign_matchups transition
+  // keeps the outer `{#if vs?.combatPrompt}` truthy (no remount), so this effect —
+  // re-running on the changed `atkRolls` — is what reseeds the new decision and
+  // clears `submitted`; it also covers the defensive remount case.
   $effect(() => {
     if (!prompt) return;
     void prompt.atkRolls.map((r) => r.unitId).join(",");
@@ -100,7 +102,17 @@
   });
 
   // A valid sit-out picks exactly `excess` distinct units off the larger side.
-  const isValidSitOut = $derived(sitOut.length === excess);
+  // `toggleSitOut` already guarantees this, but validate structurally (matching
+  // `isBijection`'s rigor) so a future seeding change can't slip an out-of-set or
+  // duplicate id past the confirm gate.
+  const isValidSitOut = $derived.by(() => {
+    const largerIds = new Set(largerRolls.map((r) => r.unitId));
+    return (
+      sitOut.length === excess &&
+      new Set(sitOut).size === excess &&
+      sitOut.every((id) => largerIds.has(id))
+    );
+  });
 
   const canConfirm = $derived(isSitOut ? isValidSitOut : isBijection);
 

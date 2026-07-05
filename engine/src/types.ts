@@ -445,29 +445,46 @@ export interface ViewPrompt {
  * The duplicated cell coordinates and player ids cannot drift because the
  * dispatch gate (`applyMainAction`) freezes every other mutation while a
  * `combatPrompt` is live — do not reuse this type outside that suspend guard.
- *
- * `playerId` is who must submit `resolve_combat_round`. For #165 (no real
- * decision) that is the attacker (also the active player). #166 will hand the
- * decision to the defender — normally the *non-active* player — which must also
- * relax the active-player gate in `apply-action.ts` (see the TODO there); today
- * that gate would reject a non-active decider. Revealed rolls / matchup payloads
- * are deferred to #166–#168.
  */
-export interface CombatPrompt {
-  /** Player expected to submit `resolve_combat_round`. */
-  playerId: string;
+export interface CombatLoopState {
   row: number;
   col: number;
   /** Attacking player id (the one who issued `attack`). */
   attackerId: string;
   /** Defending player id. */
   defenderId: string;
-  /** Next round index to run on resume (0-based; `combat_round_cap` bounds it). */
+  /** Round index to run (0-based; `combat_round_cap` bounds it). */
   round: number;
   /** Committed attacker unit instance ids (never mutated after suspend). */
   attackerUnitIds: readonly string[];
   /** Committed defender unit instance ids (never mutated after suspend). */
   defenderUnitIds: readonly string[];
+}
+
+/**
+ * A combat suspended mid-round awaiting the defender's matchup assignment
+ * (#166). Per the rules (README.md Combat step 4) the defender pairs units
+ * "after seeing all rolls", so the suspend lands *within* a round — after the
+ * roll, before resolution — carrying that round's revealed rolls inline.
+ *
+ * `playerId` is who must submit `resolve_combat_round`: the **defender**, who is
+ * normally the *non-active* player, so the active-player gate in
+ * `apply-action.ts` admits the prompt's decider as a special case.
+ *
+ * `atkRolls` / `defRolls` are the participating units' revealed rolls for
+ * `round` — the greedily-selected top `min(committed)` per side. Excess units on
+ * the larger side sit out lowest-power-first (the auto-resolve default; #167
+ * hands that sit-out choice to the larger side). Both lists therefore have equal
+ * length, and the defender assigns a bijection between them. Plain `CombatSide`
+ * data (no live unit refs) so it survives the `produce()` suspend boundary.
+ */
+export interface CombatPrompt extends CombatLoopState {
+  /** Player expected to submit `resolve_combat_round` (the defender). */
+  playerId: string;
+  /** Revealed rolls of the participating attacker units for `round`. */
+  atkRolls: CombatSide[];
+  /** Revealed rolls of the participating defender units for `round`. */
+  defRolls: CombatSide[];
 }
 
 export interface MainGameState extends GameStateBase {
@@ -626,17 +643,37 @@ export interface DismissViewAction {
 }
 
 /**
- * Submitted to resume a combat suspended between rounds (pending
- * `combatPrompt`). For #165 the decision is empty — combat merely resumes its
- * auto-resolve loop. The heterogeneous real payloads (matchup assignment #166,
- * sit-out #167, retreat #168) should arrive as a discriminated `decision`
- * sub-union (mirroring `PickPrompt`'s `kind` split) rather than a flat bag of
- * optional fields, so a retreat payload cannot structurally carry matchup data.
- * AP is not spent here (already spent on the initiating `attack`).
+ * One matchup the defender assigns: attacker unit `attackerUnitId` fights
+ * defender unit `defenderUnitId`. Both ids must appear in the pending prompt's
+ * `atkRolls` / `defRolls` (the participating units), each used exactly once.
+ */
+export interface CombatMatchup {
+  attackerUnitId: string;
+  defenderUnitId: string;
+}
+
+/**
+ * The defender's decision when resuming a combat suspended for matchup
+ * assignment (#166). Modeled as a discriminated `kind` sub-union (mirroring
+ * `PickPrompt`'s split) so the sit-out (#167) and retreat (#168) payloads slot
+ * in later without a flat bag of optional fields — a retreat payload cannot then
+ * structurally carry matchup data.
+ */
+export type CombatDecision = {
+  kind: "assign_matchups";
+  /** A bijection over the prompt's participating units; length = min(sides). */
+  pairs: CombatMatchup[];
+};
+
+/**
+ * Submitted to resume a combat suspended for a player decision (pending
+ * `combatPrompt`). Carries the discriminated `decision`. AP is not spent here
+ * (already spent on the initiating `attack`).
  */
 export interface ResolveCombatRoundAction {
   type: "resolve_combat_round";
   playerId: string;
+  decision: CombatDecision;
 }
 
 export type Action = SeedingAction | MainAction;

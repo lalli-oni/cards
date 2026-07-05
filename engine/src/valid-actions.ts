@@ -17,11 +17,13 @@ import { PASSIVE_EVENTS_NEEDING_LOCATION_TARGET, POLICY_ACTIONS } from "./listen
 import { getModifiedCost, getModifiedAPCost } from "./listeners/query";
 import type {
   Action,
+  CombatPrompt,
   EventCard,
   GameState,
   MainAction,
   MainGameState,
   PickPrompt,
+  ResolveCombatRoundAction,
   SeedingAction,
   SeedingGameState,
 } from "./types";
@@ -37,7 +39,12 @@ export function getValidActions(state: GameState, playerId: string): Action[] {
   }
 
   const activePlayerId = getActivePlayerId(state);
-  if (activePlayerId !== playerId) {
+  // A suspended combat offers its resolution to the prompt's decider (the
+  // defender for #166), normally the non-active player — admit them even though
+  // it isn't their turn. Mirrors the dispatch gate in apply-action.ts.
+  const combatDecider: string | undefined =
+    state.phase === "main" ? state.combatPrompt?.playerId : undefined;
+  if (activePlayerId !== playerId && combatDecider !== playerId) {
     return [];
   }
 
@@ -135,12 +142,39 @@ export function needsLocationTarget(card: EventCard): boolean {
   return false;
 }
 
+/**
+ * The greedy-default matchup as a complete, submittable `resolve_combat_round`.
+ * The prompt's `atkRolls` / `defRolls` are stored highest-power-first, so
+ * index-pairing reproduces the auto-resolve default (highest vs highest). The
+ * client's pairing overlay starts from this and lets the defender re-pair; a bot
+ * can submit it as-is.
+ */
+function buildDefaultCombatResolution(
+  prompt: CombatPrompt,
+  playerId: string,
+): ResolveCombatRoundAction {
+  const pairs = prompt.atkRolls.map((atk, i) => ({
+    attackerUnitId: atk.unitId,
+    defenderUnitId: prompt.defRolls[i].unitId,
+  }));
+  return {
+    type: "resolve_combat_round",
+    playerId,
+    decision: { kind: "assign_matchups", pairs },
+  };
+}
+
 function getMainValidActions(
   state: MainGameState,
   playerId: string,
 ): MainAction[] {
-  if (state.combatPrompt && state.combatPrompt.playerId === playerId) {
-    return [{ type: "resolve_combat_round", playerId }];
+  // While a combat is suspended, only its decider may act — and only to resolve
+  // it. Everyone else (including the active attacker waiting on the defender)
+  // gets nothing until the fight resumes.
+  if (state.combatPrompt) {
+    return state.combatPrompt.playerId === playerId
+      ? [buildDefaultCombatResolution(state.combatPrompt, playerId)]
+      : [];
   }
   if (state.pickPrompt && state.pickPrompt.playerId === playerId) {
     return getResolvePickActions(state.pickPrompt, playerId);

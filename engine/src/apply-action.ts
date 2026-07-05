@@ -26,14 +26,13 @@ export function applyAction<S extends GameState>(
 
   // A suspended combat hands its decision to the prompt's decider — for #166's
   // matchup assignment that is the **defender**, normally the *non-active*
-  // player. Admit that decider's `resolve_combat_round` as a special case;
-  // `applyMainAction` then enforces that the action is in fact
-  // `resolve_combat_round` and that the id matches the prompt. `getValidActions`
-  // mirrors this by keying its combat offer off `combatPrompt.playerId`. Every
-  // other action still requires the active player.
+  // player. This gate here already restricts the decider to `resolve_combat_round`;
+  // `handleResolveCombatRound` then re-checks that the id matches the prompt.
+  // `getValidActions` mirrors this by keying its combat offer off
+  // `combatPrompt.playerId`. Every other action still requires the active player.
   const combatDecider: string | undefined =
     state.phase === "main" ? state.combatPrompt?.playerId : undefined;
-  const isCombatDecider =
+  const isCombatDecider: boolean =
     action.type === "resolve_combat_round" && action.playerId === combatDecider;
   if (action.playerId !== activePlayerId && !isCombatDecider) {
     throw new Error(

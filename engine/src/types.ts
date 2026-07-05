@@ -434,17 +434,18 @@ export interface ViewPrompt {
 }
 
 /**
- * Set on `GameStateBase.combatPrompt` when a combat suspends between rounds.
- * Stores the resumable loop state inline so `resolve_combat_round` can pick the
- * fight back up: which cell, the two sides' committed unit instance ids, and the
- * next round index. Living combatants are recomputed from the cell each round
- * (units may have been killed/injured), so only the *committed* id lists are
- * stored — not live unit references, which cannot survive the `produce()`
- * boundary between suspend and resume.
+ * Resumable loop state for `runCombat`, shared by both callers: the fresh
+ * round-0 run from `handleAttack` and every `resolve_combat_round` resume of a
+ * suspended fight. Stores the durable handle needed to pick a fight back up:
+ * which cell, the two sides' committed unit instance ids, and the round index to
+ * run. Living combatants are recomputed from the cell each round (units may have
+ * been killed/injured), so only the *committed* id lists are stored — not live
+ * unit references, which cannot survive the `produce()` boundary between suspend
+ * and resume.
  *
- * The duplicated cell coordinates and player ids cannot drift because the
- * dispatch gate (`applyMainAction`) freezes every other mutation while a
- * `combatPrompt` is live — do not reuse this type outside that suspend guard.
+ * `CombatPrompt` extends this with the suspended-decision context (revealed
+ * rolls + decider); `runCombat` itself consumes only the fields here, so the
+ * loop structurally cannot depend on prompt-only data.
  */
 export interface CombatLoopState {
   row: number;
@@ -463,16 +464,17 @@ export interface CombatLoopState {
 
 /**
  * A combat suspended mid-round awaiting the defender's matchup assignment
- * (#166). Per the rules (README.md Combat step 4) the defender pairs units
- * "after seeing all rolls", so the suspend lands *within* a round — after the
- * roll, before resolution — carrying that round's revealed rolls inline.
+ * (#166). Per the rules (README.md Combat step 4 — Matchup) the defender assigns
+ * pairings after the step-3 roll, so the suspend lands *within* a round — after
+ * the roll, before resolution — carrying that round's revealed rolls inline.
  *
  * `playerId` is who must submit `resolve_combat_round`: the **defender**, who is
  * normally the *non-active* player, so the active-player gate in
  * `apply-action.ts` admits the prompt's decider as a special case.
  *
  * `atkRolls` / `defRolls` are the participating units' revealed rolls for
- * `round` — the greedily-selected top `min(committed)` per side. Excess units on
+ * `round` — the greedily-selected top `min` of each side's *living* units this
+ * round. Excess units on
  * the larger side sit out lowest-power-first (the auto-resolve default; #167
  * hands that sit-out choice to the larger side). Both lists therefore have equal
  * length, and the defender assigns a bijection between them. Plain `CombatSide`
@@ -500,16 +502,15 @@ export interface MainGameState extends GameStateBase {
    */
   viewPrompt?: ViewPrompt;
   /**
-   * Set when combat suspends between rounds to await a player decision, cleared
-   * by `resolve_combat_round`. Main-phase only — placed here (not on
+   * Set when combat suspends mid-round for the defender's matchup assignment,
+   * cleared by `resolve_combat_round`. Main-phase only — placed here (not on
    * `GameStateBase`) so a seeding or ended state cannot structurally carry one,
    * mirroring `viewPrompt`. The prompt carries the full resumable loop state
    * inline — the same Option-A pattern `pickPrompt`/`viewPrompt` use.
    *
-   * Dormant in #165: no production combat ever pauses (see
-   * `combatDecisionPending` in `apply-main.ts`). The real pause conditions —
-   * defender-assigned matchups (#166), sit-out (#167), retreat (#168) — arrive
-   * later.
+   * Live as of #166: combat pauses whenever the defender has a real pairing
+   * choice (`matchupDecisionPending` in `apply-main.ts`). Sit-out (#167) and
+   * retreat (#168) will add further pause conditions later.
    */
   combatPrompt?: CombatPrompt;
 }
@@ -948,7 +949,7 @@ export interface VisibleState {
   pickPrompt?: PickPrompt;
   /** Set during main phase when this viewer is the active player on a `peek(opponent + hand)`. */
   viewPrompt?: ViewPrompt;
-  /** Set when combat is suspended between rounds. Public — combat is fully open, so surfaced to every viewer unredacted. */
+  /** Set when combat is suspended mid-round for the defender's matchup decision. Public — combat is fully open, so surfaced to every viewer unredacted. */
   combatPrompt?: CombatPrompt;
   winner?: string;
   scores?: Record<string, number>;

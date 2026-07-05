@@ -1,5 +1,5 @@
 import type { Draft } from "immer";
-import { castDraft, produce } from "immer";
+import { castDraft, current, produce } from "immer";
 import { fromState, uniformIntDistribution } from "./rng";
 import { parseCost, spendAP, spendGold } from "./cost-helpers";
 import { drawLocationFromProspect, drawMarketCard, drawOneCard } from "./deck-helpers";
@@ -1356,15 +1356,22 @@ function handleResolveCombatRound(
   emit: EmitFn,
   queries: QueryListener[],
 ): void {
-  const prompt = draft.combatPrompt;
-  if (!prompt) {
+  const promptDraft = draft.combatPrompt;
+  if (!promptDraft) {
     throw new Error(`resolve_combat_round rejected: no suspended combat (by player "${playerId}")`);
   }
-  if (prompt.playerId !== playerId) {
+  if (promptDraft.playerId !== playerId) {
     throw new Error(
-      `resolve_combat_round rejected: pending combat decision is for "${prompt.playerId}", not "${playerId}"`,
+      `resolve_combat_round rejected: pending combat decision is for "${promptDraft.playerId}", not "${playerId}"`,
     );
   }
+
+  // Snapshot the stashed rolls out of the draft before they flow into events.
+  // The prompt's `CombatSide` data is copied into emitted `combat_pair_resolved`
+  // events (via `toCombatSide`); a live draft proxy there — e.g. the `modifiers`
+  // array — would be revoked once this `produce()` finalizes, crashing any later
+  // reader such as the event log. `current` yields a plain deep copy.
+  const prompt: CombatPrompt = current(promptDraft);
 
   const cell: Draft<GridCell> = draft.grid[prompt.row][prompt.col];
 

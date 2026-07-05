@@ -1087,6 +1087,27 @@ describe("defender-assigned matchups (#166)", () => {
     }
   });
 
+  it("emits plain combat sides on resume (no revoked draft proxies leak into events)", () => {
+    // The stashed rolls live on `draft.combatPrompt`; before snapshotting them
+    // out of the draft, `toCombatSide` copied `modifiers` by reference, so the
+    // emitted event held a draft proxy that was revoked once produce() finished
+    // — any later reader (the event log) then threw "proxy revoked".
+    const s = suspendingCombat();
+    const suspended = attackAndSuspend(s);
+    const { events } = applyAction(
+      suspended,
+      getValidActions(suspended, OTHER)[0] as MainAction,
+    );
+    const pair = events.find((e) => e.type === "combat_pair_resolved");
+    expect(pair).toBeDefined();
+    if (pair?.type !== "combat_pair_resolved") return;
+    // Traversing the side (as JSON serialization / the event log does) must not
+    // throw on a revoked proxy.
+    expect(() => JSON.stringify(pair.attacker)).not.toThrow();
+    expect(() => JSON.stringify(pair.defender)).not.toThrow();
+    expect(Array.isArray(pair.attacker.modifiers)).toBe(true);
+  });
+
   it("resolves to the correct winner after the defender assigns matchups", () => {
     // Two str-100 attackers vs two str-1 defenders: min=2 so it suspends, and
     // any greedy pairing (101+ vs 7-max) means the attacker always wins — a

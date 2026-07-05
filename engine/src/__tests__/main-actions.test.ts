@@ -856,6 +856,8 @@ describe("mid-combat suspension (#165)", () => {
     expect(allEvents.filter((e) => e.type === "combat_started")).toHaveLength(1);
     // All three defenders killed; the attacker holds the cell.
     expect(cur.grid[0][0].units.map((u) => u.id)).toEqual([attackerId]);
+    // Resuming spends no AP — it was all spent up front on the initiating attack.
+    expect(cur.turn.actionPointsRemaining).toBe(2);
   });
 
   it("rejects any non-resolver action while combat is suspended", () => {
@@ -930,6 +932,132 @@ describe("mid-combat suspension (#165)", () => {
 
     expect(ns.combatPrompt).toBeUndefined();
     expect(events.some((e) => e.type === "combat_resolved")).toBe(true);
+  });
+
+  it("yields identical rolls, grid and winner whether auto-resolved or suspended", () => {
+    // The scope guard's strongest form: suspend/resume must reproduce the exact
+    // auto-resolve outcome. rng is persisted across the suspend boundary, so the
+    // per-round d6 stream — captured here from `combat_pair_resolved` — must
+    // match between the two paths. A resume that re-drew or dropped an rng value
+    // would desync round ≥1 rolls and fail this test even when the win/loss
+    // outcome happens to be roll-insensitive.
+    function rollSequence(events: GameEvent[]): Array<[number, number]> {
+      return events
+        .filter((e) => e.type === "combat_pair_resolved")
+        .map((e) => [e.attacker.roll, e.defender.roll] as [number, number]);
+    }
+
+    // Build one fight, then derive both paths from it so unit instance ids (and
+    // the seed) are identical and the final grids are directly comparable.
+    const { state: base, attackerId } = suspendingCombat();
+
+    // Auto path (seam off): one atomic action.
+    const autoState = produce(base, (d) => {
+      d.config["combat_suspend_between_rounds"] = 0;
+    });
+    const autoRun = applyAction(autoState, { ...attackAction, unitIds: [attackerId] });
+    const autoFinal = autoRun.state as MainGameState;
+
+    // Suspended path (seam on): drive resolve_combat_round to completion.
+    const first = applyAction(base, { ...attackAction, unitIds: [attackerId] });
+    let cur = first.state as MainGameState;
+    const suspEvents: GameEvent[] = [...first.events];
+    let guard = 0;
+    while (cur.combatPrompt) {
+      if (guard++ > 10) throw new Error("combat failed to terminate");
+      const r = applyAction(cur, { type: "resolve_combat_round", playerId: ACTIVE });
+      cur = r.state as MainGameState;
+      suspEvents.push(...r.events);
+    }
+
+    expect(rollSequence(suspEvents)).toEqual(rollSequence(autoRun.events));
+    expect(cur.grid[0][0].units.map((u) => u.id)).toEqual(
+      autoFinal.grid[0][0].units.map((u) => u.id),
+    );
+    const suspWinner = suspEvents.find((e) => e.type === "combat_resolved");
+    const autoWinner = autoRun.events.find((e) => e.type === "combat_resolved");
+    expect(suspWinner).toEqual(autoWinner);
+  });
+
+  it("keeps an injured survivor out of the resumed round and alive in the cell", () => {
+    // Drop-out survivor semantics across a suspend boundary: an already-injured
+    // unit must not fight the resumed round, yet must remain in the cell.
+    // Constructed synthetically (a real fight can't deterministically injure
+    // without killing under d6 swing) — the decider is the active attacker so
+    // the resolve is accepted.
+    const attacker = makeUnit({ ownerId: ACTIVE, strength: 100 });
+    const dInjured = makeUnit({ ownerId: OTHER, strength: 1, injured: true });
+    const dHealthy = makeUnit({ ownerId: OTHER, strength: 1 });
+    const state = gameWith((d) => {
+      d.config["combat_suspend_between_rounds"] = 1;
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][0].units.push(attacker, dInjured, dHealthy);
+      d.combatPrompt = {
+        playerId: ACTIVE,
+        row: 0,
+        col: 0,
+        attackerId: ACTIVE,
+        defenderId: OTHER,
+        round: 1,
+        attackerUnitIds: [attacker.id],
+        defenderUnitIds: [dInjured.id, dHealthy.id],
+      };
+    });
+
+    const { state: next, events } = applyAction(state, {
+      type: "resolve_combat_round",
+      playerId: ACTIVE,
+    });
+    const ns = next as MainGameState;
+
+    // Only the healthy defender was ever paired; the injured one sat out.
+    const pairedDefenders = events
+      .filter((e) => e.type === "combat_pair_resolved")
+      .map((e) => e.defender.unitId);
+    expect(pairedDefenders).toEqual([dHealthy.id]);
+    // The injured survivor is still in the cell; the healthy one was killed.
+    const survivors = ns.grid[0][0].units.map((u) => u.id);
+    expect(survivors).toContain(dInjured.id);
+    expect(survivors).not.toContain(dHealthy.id);
+  });
+
+  it("returns no valid actions to a non-decider while combat is suspended", () => {
+    // Documents the current contract: getValidActions returns [] for any
+    // non-active player, and today the decider is always the active attacker.
+    // #166 (defender-assigned decision) must revisit both this and the
+    // active-player gate in apply-action.ts (see the TODO there).
+    const { state, attackerId } = suspendingCombat();
+    const { state: next } = applyAction(state, { ...attackAction, unitIds: [attackerId] });
+
+    expect(getValidActions(next as MainGameState, OTHER)).toEqual([]);
+  });
+
+  it("throws if multiple prompts are set at once (mutual-exclusion invariant)", () => {
+    // combatPrompt / pickPrompt / viewPrompt are mutually exclusive; a producer
+    // that co-sets two must fail loud at dispatch rather than deadlock.
+    const state = gameWith((d) => {
+      d.combatPrompt = {
+        playerId: ACTIVE,
+        row: 0,
+        col: 0,
+        attackerId: ACTIVE,
+        defenderId: OTHER,
+        round: 1,
+        attackerUnitIds: [],
+        defenderUnitIds: [],
+      };
+      d.pickPrompt = {
+        playerId: ACTIVE,
+        kind: "deck_pick",
+        count: 1,
+        options: ["a", "b"],
+        source: "main_deck",
+      };
+    });
+
+    expect(() =>
+      applyAction(state, { type: "resolve_combat_round", playerId: ACTIVE }),
+    ).toThrow("multiple prompts are set");
   });
 });
 

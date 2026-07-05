@@ -241,6 +241,8 @@ describe("getVisibleState", () => {
       round: 1,
       attackerUnitIds: ["u1"],
       defenderUnitIds: ["u2", "u3"],
+      atkRolls: [],
+      defRolls: [],
     };
 
     it("surfaces the full prompt unredacted to every viewer, decider or not", () => {

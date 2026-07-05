@@ -3,7 +3,7 @@ import { produce } from "immer";
 import { applyAction } from "../apply-action";
 import { rebuildListeners } from "../listeners/rebuild";
 import { getModifiedStat } from "../listeners/query";
-import type { GameEvent, MainGameState, UnitCard } from "../types";
+import type { GameEvent, MainAction, MainGameState, UnitCard } from "../types";
 import { getValidActions } from "../valid-actions";
 import {
   createTestGame,
@@ -774,145 +774,256 @@ describe("attack", () => {
 });
 
 // ---------------------------------------------------------------------------
-// mid-combat suspension (#165)
+// defender-assigned matchups (#166)
 // ---------------------------------------------------------------------------
 //
-// A 1-vs-3 stack fights one pair per round (min(1,3) = 1), so a lone strong
-// attacker (str 100) deterministically kills one str-1 defender per round —
-// three rounds, with both sides still having uninjured combatants after rounds
-// 0 and 1. That gives a real between-rounds boundary for the suspension hook to
-// pause at. The `combat_suspend_between_rounds` config is the #165 test seam:
-// `combatDecisionPending` returns true, standing in for the real pause
-// conditions that arrive with #166–#168.
-describe("mid-combat suspension (#165)", () => {
+// Per rules step 4 the defender pairs units "after seeing all rolls", so combat
+// suspends *within* a round — after the roll, before resolution — whenever the
+// defender has a real pairing choice (min(sides) >= 2). A 2-vs-2 with widely
+// separated strengths is the canonical case: As (str 100) always outpowers
+// Aw (str 1) and Ds always outpowers Dw regardless of the d6, so the roll-sorted
+// participant order is deterministic — [As, Aw] vs [Ds, Dw] — and the greedy
+// default pairs As↔Ds / Aw↔Dw. The defender may instead cross them (As↔Dw,
+// Aw↔Ds), which the engine must honor.
+describe("defender-assigned matchups (#166)", () => {
   function suspendingCombat(): {
     state: MainGameState;
-    attackerId: string;
-    defenderIds: string[];
+    strongAtk: string;
+    weakAtk: string;
+    strongDef: string;
+    weakDef: string;
   } {
-    const attacker = makeUnit({ ownerId: ACTIVE, strength: 100 });
-    const d1 = makeUnit({ ownerId: OTHER, strength: 1 });
-    const d2 = makeUnit({ ownerId: OTHER, strength: 1 });
-    const d3 = makeUnit({ ownerId: OTHER, strength: 1 });
+    const strongAtk = makeUnit({ ownerId: ACTIVE, strength: 100 });
+    const weakAtk = makeUnit({ ownerId: ACTIVE, strength: 1 });
+    const strongDef = makeUnit({ ownerId: OTHER, strength: 100 });
+    const weakDef = makeUnit({ ownerId: OTHER, strength: 1 });
     const state = gameWith((d) => {
-      d.config["combat_suspend_between_rounds"] = 1;
       d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
-      d.grid[0][0].units.push(attacker, d1, d2, d3);
+      d.grid[0][0].units.push(strongAtk, weakAtk, strongDef, weakDef);
     });
-    return { state, attackerId: attacker.id, defenderIds: [d1.id, d2.id, d3.id] };
+    return {
+      state,
+      strongAtk: strongAtk.id,
+      weakAtk: weakAtk.id,
+      strongDef: strongDef.id,
+      weakDef: weakDef.id,
+    };
   }
 
   const attackAction = { type: "attack" as const, playerId: ACTIVE, row: 0, col: 0 };
 
-  it("suspends between rounds without resolving combat", () => {
-    const { state, attackerId } = suspendingCombat();
-
-    const { state: next, events } = applyAction(state, {
+  /** Attack with both attackers and return the suspended state. */
+  function attackAndSuspend(s: ReturnType<typeof suspendingCombat>): MainGameState {
+    const { state } = applyAction(s.state, {
       ...attackAction,
-      unitIds: [attackerId],
+      unitIds: [s.strongAtk, s.weakAtk],
+    });
+    return state as MainGameState;
+  }
+
+  /** The defender-side ids each attacker was actually paired against, from the
+   *  first (round-0) pair-resolved events. */
+  function round0Pairing(events: GameEvent[]): Record<string, string> {
+    const map: Record<string, string> = {};
+    for (const e of events) {
+      if (e.type === "combat_pair_resolved" && !(e.attacker.unitId in map)) {
+        map[e.attacker.unitId] = e.defender.unitId;
+      }
+    }
+    return map;
+  }
+
+  it("suspends at round 0 for the defender's matchup decision, before resolving", () => {
+    const s = suspendingCombat();
+    const { state: next, events } = applyAction(s.state, {
+      ...attackAction,
+      unitIds: [s.strongAtk, s.weakAtk],
     });
     const ns = next as MainGameState;
 
-    // Combat began and paused: started but not resolved.
+    // Combat began and paused. Unlike #165's between-rounds suspend, NOTHING is
+    // resolved before the pause — the roll is revealed, resolution waits.
     expect(events.map((e) => e.type)).toContain("combat_started");
     expect(events.some((e) => e.type === "combat_resolved")).toBe(false);
-    // Exactly one pair (the opening round) resolved before the pause.
-    expect(events.filter((e) => e.type === "combat_pair_resolved")).toHaveLength(1);
+    expect(events.some((e) => e.type === "combat_pair_resolved")).toBe(false);
 
-    // The prompt carries the resumable state, awaiting round 1.
+    // The prompt hands the decision to the defender (the non-active player) and
+    // carries the round's revealed rolls for both participating sides.
     expect(ns.combatPrompt).toBeDefined();
-    expect(ns.combatPrompt?.round).toBe(1);
-    expect(ns.combatPrompt?.playerId).toBe(ACTIVE);
+    expect(ns.combatPrompt?.round).toBe(0);
+    expect(ns.combatPrompt?.playerId).toBe(OTHER);
     expect(ns.combatPrompt?.attackerId).toBe(ACTIVE);
     expect(ns.combatPrompt?.defenderId).toBe(OTHER);
-    expect(ns.combatPrompt?.attackerUnitIds).toEqual([attackerId]);
+    expect(ns.combatPrompt?.atkRolls.map((r) => r.unitId)).toEqual([s.strongAtk, s.weakAtk]);
+    expect(ns.combatPrompt?.defRolls.map((r) => r.unitId)).toEqual([s.strongDef, s.weakDef]);
 
     // AP was spent up front on the initiating attack (not on resume).
     expect(ns.turn.actionPointsRemaining).toBe(2);
   });
 
-  it("resumes via resolve_combat_round and eventually completes", () => {
-    const { state, attackerId } = suspendingCombat();
+  it("lets the non-active defender submit the assignment and resolve", () => {
+    const s = suspendingCombat();
+    const suspended = attackAndSuspend(s);
 
-    const first = applyAction(state, { ...attackAction, unitIds: [attackerId] });
-    let cur = first.state as MainGameState;
-    const allEvents: GameEvent[] = [...first.events];
+    // The defender (OTHER) is not the active player, yet may resolve.
+    const decision = getValidActions(suspended, OTHER)[0];
+    expect(decision).toMatchObject({ type: "resolve_combat_round", playerId: OTHER });
 
-    // Drive resolve_combat_round until the fight terminates. Each resume fights
-    // exactly one more round then re-suspends (seam still on) until a side empties.
+    let cur = suspended;
+    const events: GameEvent[] = [];
     let guard = 0;
     while (cur.combatPrompt) {
       if (guard++ > 10) throw new Error("combat failed to terminate");
-      const r = applyAction(cur, { type: "resolve_combat_round", playerId: ACTIVE });
+      const r = applyAction(cur, getValidActions(cur, cur.combatPrompt.playerId)[0] as MainAction);
       cur = r.state as MainGameState;
-      allEvents.push(...r.events);
+      events.push(...r.events);
     }
 
-    // Emitted exactly once, at the true end, with the attacker as winner.
-    const resolved = allEvents.filter((e) => e.type === "combat_resolved");
-    expect(resolved).toHaveLength(1);
-    expect(resolved[0]).toMatchObject({ type: "combat_resolved", winnerId: ACTIVE });
-    // combat_started is emitted only once, never on resume.
-    expect(allEvents.filter((e) => e.type === "combat_started")).toHaveLength(1);
-    // All three defenders killed; the attacker holds the cell.
-    expect(cur.grid[0][0].units.map((u) => u.id)).toEqual([attackerId]);
-    // Resuming spends no AP — it was all spent up front on the initiating attack.
-    expect(cur.turn.actionPointsRemaining).toBe(2);
+    expect(cur.combatPrompt).toBeUndefined();
+    expect(events.filter((e) => e.type === "combat_resolved")).toHaveLength(1);
+    expect(events.filter((e) => e.type === "combat_started")).toHaveLength(0); // started fired pre-suspend
   });
 
-  it("rejects any non-resolver action while combat is suspended", () => {
-    const { state, attackerId } = suspendingCombat();
-    const { state: next } = applyAction(state, { ...attackAction, unitIds: [attackerId] });
+  it("honors a non-greedy assignment that diverges from the greedy default", () => {
+    // Greedy default pairs strong↔strong; the defender instead crosses the
+    // matchups (strong attacker vs weak defender, weak attacker vs strong
+    // defender). The engine must resolve the pairs the defender chose. Both
+    // decisions are applied to the same immutable suspended state, so unit ids
+    // (and rolls) match and the pairings are directly comparable.
+    const s = suspendingCombat();
+    const suspended = attackAndSuspend(s);
 
-    expect(() =>
-      applyAction(next, { type: "pass", playerId: ACTIVE }),
-    ).toThrow("suspended combat must be resolved first");
+    const greedyRun = applyAction(suspended, getValidActions(suspended, OTHER)[0] as MainAction);
+    const greedyPairing = round0Pairing(greedyRun.events);
+
+    const crossedRun = applyAction(suspended, {
+      type: "resolve_combat_round",
+      playerId: OTHER,
+      decision: {
+        kind: "assign_matchups",
+        pairs: [
+          { attackerUnitId: s.strongAtk, defenderUnitId: s.weakDef },
+          { attackerUnitId: s.weakAtk, defenderUnitId: s.strongDef },
+        ],
+      },
+    });
+    const crossedPairing = round0Pairing(crossedRun.events);
+
+    // Greedy paired the strong attacker against the strong defender; the
+    // defender's crossed assignment paired it against the weak defender instead.
+    expect(greedyPairing[s.strongAtk]).toBe(s.strongDef);
+    expect(crossedPairing[s.strongAtk]).toBe(s.weakDef);
+    expect(crossedPairing[s.weakAtk]).toBe(s.strongDef);
+    expect(crossedPairing).not.toEqual(greedyPairing);
   });
 
   it("rejects resolve_combat_round from a non-decider", () => {
-    // Construct a suspended combat whose decider is NOT the active player, so the
-    // active player's submit clears the turn-ownership check and reaches the
-    // handler's own decider guard. (In #165 the decider is always the attacker,
-    // i.e. the active player, so this mismatch is only reachable synthetically —
-    // but #166 hands the decision to the defender, where this guard bites.)
-    const state = gameWith((d) => {
-      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
-      d.combatPrompt = {
-        playerId: OTHER,
-        row: 0,
-        col: 0,
-        attackerId: ACTIVE,
-        defenderId: OTHER,
-        round: 1,
-        attackerUnitIds: [],
-        defenderUnitIds: [],
-      };
-    });
-
+    // The decider is the defender (OTHER); the active attacker (ACTIVE) clears
+    // the turn-ownership gate but is rejected by the handler's decider guard.
+    const suspended = attackAndSuspend(suspendingCombat());
     expect(() =>
-      applyAction(state, { type: "resolve_combat_round", playerId: ACTIVE }),
+      applyAction(suspended, {
+        type: "resolve_combat_round",
+        playerId: ACTIVE,
+        decision: { kind: "assign_matchups", pairs: [] },
+      }),
     ).toThrow("pending combat decision is for");
   });
 
   it("rejects resolve_combat_round when no combat is suspended", () => {
     const state = gameWith(() => {});
     expect(() =>
-      applyAction(state, { type: "resolve_combat_round", playerId: ACTIVE }),
+      applyAction(state, {
+        type: "resolve_combat_round",
+        playerId: ACTIVE,
+        decision: { kind: "assign_matchups", pairs: [] },
+      }),
     ).toThrow("no suspended combat");
   });
 
-  it("offers only resolve_combat_round to the decider while suspended", () => {
-    const { state, attackerId } = suspendingCombat();
-    const { state: next } = applyAction(state, { ...attackAction, unitIds: [attackerId] });
-
-    expect(getValidActions(next as MainGameState, ACTIVE)).toEqual([
-      { type: "resolve_combat_round", playerId: ACTIVE },
-    ]);
+  it("rejects an assignment with the wrong pair count", () => {
+    const s = suspendingCombat();
+    const suspended = attackAndSuspend(s);
+    expect(() =>
+      applyAction(suspended, {
+        type: "resolve_combat_round",
+        playerId: OTHER,
+        decision: {
+          kind: "assign_matchups",
+          pairs: [{ attackerUnitId: s.strongAtk, defenderUnitId: s.strongDef }],
+        },
+      }),
+    ).toThrow("expected 2 matchup(s), got 1");
   });
 
-  it("auto-resolves atomically when the decision seam is off", () => {
-    // Same 1-vs-3 stack, but without the seam: combat must resolve in a single
-    // action with no lingering prompt — the #165 scope guard.
+  it("rejects an assignment naming a non-participant unit", () => {
+    const s = suspendingCombat();
+    const suspended = attackAndSuspend(s);
+    expect(() =>
+      applyAction(suspended, {
+        type: "resolve_combat_round",
+        playerId: OTHER,
+        decision: {
+          kind: "assign_matchups",
+          pairs: [
+            { attackerUnitId: s.strongAtk, defenderUnitId: s.strongDef },
+            { attackerUnitId: "ghost", defenderUnitId: s.weakDef },
+          ],
+        },
+      }),
+    ).toThrow('attacker "ghost" is not a participant');
+  });
+
+  it("rejects an assignment that pairs a unit twice", () => {
+    const s = suspendingCombat();
+    const suspended = attackAndSuspend(s);
+    expect(() =>
+      applyAction(suspended, {
+        type: "resolve_combat_round",
+        playerId: OTHER,
+        decision: {
+          kind: "assign_matchups",
+          pairs: [
+            { attackerUnitId: s.strongAtk, defenderUnitId: s.strongDef },
+            { attackerUnitId: s.weakAtk, defenderUnitId: s.strongDef },
+          ],
+        },
+      }),
+    ).toThrow("is paired more than once");
+  });
+
+  it("rejects any non-resolver action while combat is suspended", () => {
+    const suspended = attackAndSuspend(suspendingCombat());
+    expect(() =>
+      applyAction(suspended, { type: "pass", playerId: ACTIVE }),
+    ).toThrow("suspended combat must be resolved first");
+  });
+
+  it("offers the greedy-default matchup to the decider, nothing to others", () => {
+    const s = suspendingCombat();
+    const suspended = attackAndSuspend(s);
+
+    // The defender is offered exactly the greedy default (strong↔strong).
+    expect(getValidActions(suspended, OTHER)).toEqual([
+      {
+        type: "resolve_combat_round",
+        playerId: OTHER,
+        decision: {
+          kind: "assign_matchups",
+          pairs: [
+            { attackerUnitId: s.strongAtk, defenderUnitId: s.strongDef },
+            { attackerUnitId: s.weakAtk, defenderUnitId: s.weakDef },
+          ],
+        },
+      },
+    ]);
+    // The active attacker gets nothing while it waits on the defender.
+    expect(getValidActions(suspended, ACTIVE)).toEqual([]);
+  });
+
+  it("auto-resolves atomically for a trivial pairing (one side has a single unit)", () => {
+    // 1-vs-3: min(1,3) = 1, so there is only one possible matching — no defender
+    // decision. Combat resolves in a single action with no lingering prompt.
     const attacker = makeUnit({ ownerId: ACTIVE, strength: 100 });
     const defenders = [
       makeUnit({ ownerId: OTHER, strength: 1 }),
@@ -934,104 +1045,6 @@ describe("mid-combat suspension (#165)", () => {
     expect(events.some((e) => e.type === "combat_resolved")).toBe(true);
   });
 
-  it("yields identical rolls, grid and winner whether auto-resolved or suspended", () => {
-    // The scope guard's strongest form: suspend/resume must reproduce the exact
-    // auto-resolve outcome. rng is persisted across the suspend boundary, so the
-    // per-round d6 stream — captured here from `combat_pair_resolved` — must
-    // match between the two paths. A resume that re-drew or dropped an rng value
-    // would desync round ≥1 rolls and fail this test even when the win/loss
-    // outcome happens to be roll-insensitive.
-    function rollSequence(events: GameEvent[]): Array<[number, number]> {
-      return events
-        .filter((e) => e.type === "combat_pair_resolved")
-        .map((e) => [e.attacker.roll, e.defender.roll] as [number, number]);
-    }
-
-    // Build one fight, then derive both paths from it so unit instance ids (and
-    // the seed) are identical and the final grids are directly comparable.
-    const { state: base, attackerId } = suspendingCombat();
-
-    // Auto path (seam off): one atomic action.
-    const autoState = produce(base, (d) => {
-      d.config["combat_suspend_between_rounds"] = 0;
-    });
-    const autoRun = applyAction(autoState, { ...attackAction, unitIds: [attackerId] });
-    const autoFinal = autoRun.state as MainGameState;
-
-    // Suspended path (seam on): drive resolve_combat_round to completion.
-    const first = applyAction(base, { ...attackAction, unitIds: [attackerId] });
-    let cur = first.state as MainGameState;
-    const suspEvents: GameEvent[] = [...first.events];
-    let guard = 0;
-    while (cur.combatPrompt) {
-      if (guard++ > 10) throw new Error("combat failed to terminate");
-      const r = applyAction(cur, { type: "resolve_combat_round", playerId: ACTIVE });
-      cur = r.state as MainGameState;
-      suspEvents.push(...r.events);
-    }
-
-    expect(rollSequence(suspEvents)).toEqual(rollSequence(autoRun.events));
-    expect(cur.grid[0][0].units.map((u) => u.id)).toEqual(
-      autoFinal.grid[0][0].units.map((u) => u.id),
-    );
-    const suspWinner = suspEvents.find((e) => e.type === "combat_resolved");
-    const autoWinner = autoRun.events.find((e) => e.type === "combat_resolved");
-    expect(suspWinner).toEqual(autoWinner);
-  });
-
-  it("keeps an injured survivor out of the resumed round and alive in the cell", () => {
-    // Drop-out survivor semantics across a suspend boundary: an already-injured
-    // unit must not fight the resumed round, yet must remain in the cell.
-    // Constructed synthetically (a real fight can't deterministically injure
-    // without killing under d6 swing) — the decider is the active attacker so
-    // the resolve is accepted.
-    const attacker = makeUnit({ ownerId: ACTIVE, strength: 100 });
-    const dInjured = makeUnit({ ownerId: OTHER, strength: 1, injured: true });
-    const dHealthy = makeUnit({ ownerId: OTHER, strength: 1 });
-    const state = gameWith((d) => {
-      d.config["combat_suspend_between_rounds"] = 1;
-      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
-      d.grid[0][0].units.push(attacker, dInjured, dHealthy);
-      d.combatPrompt = {
-        playerId: ACTIVE,
-        row: 0,
-        col: 0,
-        attackerId: ACTIVE,
-        defenderId: OTHER,
-        round: 1,
-        attackerUnitIds: [attacker.id],
-        defenderUnitIds: [dInjured.id, dHealthy.id],
-      };
-    });
-
-    const { state: next, events } = applyAction(state, {
-      type: "resolve_combat_round",
-      playerId: ACTIVE,
-    });
-    const ns = next as MainGameState;
-
-    // Only the healthy defender was ever paired; the injured one sat out.
-    const pairedDefenders = events
-      .filter((e) => e.type === "combat_pair_resolved")
-      .map((e) => e.defender.unitId);
-    expect(pairedDefenders).toEqual([dHealthy.id]);
-    // The injured survivor is still in the cell; the healthy one was killed.
-    const survivors = ns.grid[0][0].units.map((u) => u.id);
-    expect(survivors).toContain(dInjured.id);
-    expect(survivors).not.toContain(dHealthy.id);
-  });
-
-  it("returns no valid actions to a non-decider while combat is suspended", () => {
-    // Documents the current contract: getValidActions returns [] for any
-    // non-active player, and today the decider is always the active attacker.
-    // #166 (defender-assigned decision) must revisit both this and the
-    // active-player gate in apply-action.ts (see the TODO there).
-    const { state, attackerId } = suspendingCombat();
-    const { state: next } = applyAction(state, { ...attackAction, unitIds: [attackerId] });
-
-    expect(getValidActions(next as MainGameState, OTHER)).toEqual([]);
-  });
-
   it("throws if multiple prompts are set at once (mutual-exclusion invariant)", () => {
     // combatPrompt / pickPrompt / viewPrompt are mutually exclusive; a producer
     // that co-sets two must fail loud at dispatch rather than deadlock.
@@ -1045,6 +1058,8 @@ describe("mid-combat suspension (#165)", () => {
         round: 1,
         attackerUnitIds: [],
         defenderUnitIds: [],
+        atkRolls: [],
+        defRolls: [],
       };
       d.pickPrompt = {
         playerId: ACTIVE,
@@ -1056,7 +1071,11 @@ describe("mid-combat suspension (#165)", () => {
     });
 
     expect(() =>
-      applyAction(state, { type: "resolve_combat_round", playerId: ACTIVE }),
+      applyAction(state, {
+        type: "resolve_combat_round",
+        playerId: ACTIVE,
+        decision: { kind: "assign_matchups", pairs: [] },
+      }),
     ).toThrow("multiple prompts are set");
   });
 });

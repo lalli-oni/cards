@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { produce } from "immer";
 import { applyAction } from "../apply-action";
+import { getValidActions } from "../valid-actions";
 import { deriveCombatOutcome } from "../apply-main";
 import { decideKillVsInjure, computeContestPower } from "../unit-helpers";
 import { rebuildListeners } from "../listeners/rebuild";
@@ -10,6 +11,7 @@ import type {
   CombatSide,
   ContestSide,
   GameEvent,
+  MainAction,
   MainGameState,
   ModifierEntry,
 } from "../types";
@@ -192,7 +194,7 @@ describe("combat_pair_resolved", () => {
     expect(pair.defender.baseStrength + defSum + pair.defender.roll).toBe(pair.defender.power);
   });
 
-  it("emits per pair across a 2v2 — pairing pulls highest-power vs highest-power", () => {
+  it("emits per pair across a 2v2 — greedy default pairs highest-power vs highest-power", () => {
     const a1 = makeUnit({ ownerId: ACTIVE, strength: 10 });
     const a2 = makeUnit({ ownerId: ACTIVE, strength: 3 });
     const d1 = makeUnit({ ownerId: OTHER, strength: 8 });
@@ -202,13 +204,18 @@ describe("combat_pair_resolved", () => {
       d.grid[0][0].units.push(a1, a2, d1, d2);
     });
 
-    const { events } = applyAction(state, {
+    // A 2v2 suspends for the defender's matchup decision (#166). The greedy
+    // default that getValidActions offers pairs highest-vs-highest — the pairing
+    // this per-pair emission check pins.
+    const { state: suspended } = applyAction(state, {
       type: "attack",
       playerId: ACTIVE,
       unitIds: [a1.id, a2.id],
       row: 0,
       col: 0,
     });
+    const ns = suspended as MainGameState;
+    const { events } = applyAction(ns, getValidActions(ns, OTHER)[0] as MainAction);
 
     const pairs = findAllPairs(events);
     expect(pairs.length).toBeGreaterThanOrEqual(2);

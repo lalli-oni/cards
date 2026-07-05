@@ -774,6 +774,166 @@ describe("attack", () => {
 });
 
 // ---------------------------------------------------------------------------
+// mid-combat suspension (#165)
+// ---------------------------------------------------------------------------
+//
+// A 1-vs-3 stack fights one pair per round (min(1,3) = 1), so a lone strong
+// attacker (str 100) deterministically kills one str-1 defender per round —
+// three rounds, with both sides still having uninjured combatants after rounds
+// 0 and 1. That gives a real between-rounds boundary for the suspension hook to
+// pause at. The `combat_suspend_between_rounds` config is the #165 test seam:
+// `combatDecisionPending` returns true, standing in for the real pause
+// conditions that arrive with #166–#168.
+describe("mid-combat suspension (#165)", () => {
+  function suspendingCombat(): {
+    state: MainGameState;
+    attackerId: string;
+    defenderIds: string[];
+  } {
+    const attacker = makeUnit({ ownerId: ACTIVE, strength: 100 });
+    const d1 = makeUnit({ ownerId: OTHER, strength: 1 });
+    const d2 = makeUnit({ ownerId: OTHER, strength: 1 });
+    const d3 = makeUnit({ ownerId: OTHER, strength: 1 });
+    const state = gameWith((d) => {
+      d.config["combat_suspend_between_rounds"] = 1;
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][0].units.push(attacker, d1, d2, d3);
+    });
+    return { state, attackerId: attacker.id, defenderIds: [d1.id, d2.id, d3.id] };
+  }
+
+  const attackAction = { type: "attack" as const, playerId: ACTIVE, row: 0, col: 0 };
+
+  it("suspends between rounds without resolving combat", () => {
+    const { state, attackerId } = suspendingCombat();
+
+    const { state: next, events } = applyAction(state, {
+      ...attackAction,
+      unitIds: [attackerId],
+    });
+    const ns = next as MainGameState;
+
+    // Combat began and paused: started but not resolved.
+    expect(events.map((e) => e.type)).toContain("combat_started");
+    expect(events.some((e) => e.type === "combat_resolved")).toBe(false);
+    // Exactly one pair (the opening round) resolved before the pause.
+    expect(events.filter((e) => e.type === "combat_pair_resolved")).toHaveLength(1);
+
+    // The prompt carries the resumable state, awaiting round 1.
+    expect(ns.combatPrompt).toBeDefined();
+    expect(ns.combatPrompt?.round).toBe(1);
+    expect(ns.combatPrompt?.playerId).toBe(ACTIVE);
+    expect(ns.combatPrompt?.attackerId).toBe(ACTIVE);
+    expect(ns.combatPrompt?.defenderId).toBe(OTHER);
+    expect(ns.combatPrompt?.attackerUnitIds).toEqual([attackerId]);
+
+    // AP was spent up front on the initiating attack (not on resume).
+    expect(ns.turn.actionPointsRemaining).toBe(2);
+  });
+
+  it("resumes via resolve_combat_round and eventually completes", () => {
+    const { state, attackerId } = suspendingCombat();
+
+    const first = applyAction(state, { ...attackAction, unitIds: [attackerId] });
+    let cur = first.state as MainGameState;
+    const allEvents: GameEvent[] = [...first.events];
+
+    // Drive resolve_combat_round until the fight terminates. Each resume fights
+    // exactly one more round then re-suspends (seam still on) until a side empties.
+    let guard = 0;
+    while (cur.combatPrompt) {
+      if (guard++ > 10) throw new Error("combat failed to terminate");
+      const r = applyAction(cur, { type: "resolve_combat_round", playerId: ACTIVE });
+      cur = r.state as MainGameState;
+      allEvents.push(...r.events);
+    }
+
+    // Emitted exactly once, at the true end, with the attacker as winner.
+    const resolved = allEvents.filter((e) => e.type === "combat_resolved");
+    expect(resolved).toHaveLength(1);
+    expect(resolved[0]).toMatchObject({ type: "combat_resolved", winnerId: ACTIVE });
+    // combat_started is emitted only once, never on resume.
+    expect(allEvents.filter((e) => e.type === "combat_started")).toHaveLength(1);
+    // All three defenders killed; the attacker holds the cell.
+    expect(cur.grid[0][0].units.map((u) => u.id)).toEqual([attackerId]);
+  });
+
+  it("rejects any non-resolver action while combat is suspended", () => {
+    const { state, attackerId } = suspendingCombat();
+    const { state: next } = applyAction(state, { ...attackAction, unitIds: [attackerId] });
+
+    expect(() =>
+      applyAction(next, { type: "pass", playerId: ACTIVE }),
+    ).toThrow("suspended combat must be resolved first");
+  });
+
+  it("rejects resolve_combat_round from a non-decider", () => {
+    // Construct a suspended combat whose decider is NOT the active player, so the
+    // active player's submit clears the turn-ownership check and reaches the
+    // handler's own decider guard. (In #165 the decider is always the attacker,
+    // i.e. the active player, so this mismatch is only reachable synthetically —
+    // but #166 hands the decision to the defender, where this guard bites.)
+    const state = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.combatPrompt = {
+        playerId: OTHER,
+        row: 0,
+        col: 0,
+        attackerId: ACTIVE,
+        defenderId: OTHER,
+        round: 1,
+        attackerUnitIds: [],
+        defenderUnitIds: [],
+      };
+    });
+
+    expect(() =>
+      applyAction(state, { type: "resolve_combat_round", playerId: ACTIVE }),
+    ).toThrow("pending combat decision is for");
+  });
+
+  it("rejects resolve_combat_round when no combat is suspended", () => {
+    const state = gameWith(() => {});
+    expect(() =>
+      applyAction(state, { type: "resolve_combat_round", playerId: ACTIVE }),
+    ).toThrow("no suspended combat");
+  });
+
+  it("offers only resolve_combat_round to the decider while suspended", () => {
+    const { state, attackerId } = suspendingCombat();
+    const { state: next } = applyAction(state, { ...attackAction, unitIds: [attackerId] });
+
+    expect(getValidActions(next as MainGameState, ACTIVE)).toEqual([
+      { type: "resolve_combat_round", playerId: ACTIVE },
+    ]);
+  });
+
+  it("auto-resolves atomically when the decision seam is off", () => {
+    // Same 1-vs-3 stack, but without the seam: combat must resolve in a single
+    // action with no lingering prompt — the #165 scope guard.
+    const attacker = makeUnit({ ownerId: ACTIVE, strength: 100 });
+    const defenders = [
+      makeUnit({ ownerId: OTHER, strength: 1 }),
+      makeUnit({ ownerId: OTHER, strength: 1 }),
+      makeUnit({ ownerId: OTHER, strength: 1 }),
+    ];
+    const state = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][0].units.push(attacker, ...defenders);
+    });
+
+    const { state: next, events } = applyAction(state, {
+      ...attackAction,
+      unitIds: [attacker.id],
+    });
+    const ns = next as MainGameState;
+
+    expect(ns.combatPrompt).toBeUndefined();
+    expect(events.some((e) => e.type === "combat_resolved")).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // turn lifecycle
 // ---------------------------------------------------------------------------
 

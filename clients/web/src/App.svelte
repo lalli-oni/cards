@@ -18,6 +18,7 @@
   import ContestResultPopup from "./components/ContestResultPopup.svelte";
   import PickPromptOverlay from "./components/PickPromptOverlay.svelte";
   import ViewPromptOverlay from "./components/ViewPromptOverlay.svelte";
+  import CombatPromptOverlay from "./components/CombatPromptOverlay.svelte";
   // TODO: Remove DevPreview import and /#dev route once quick-start variant (#82) lands
   import DevPreview from "./DevPreview.svelte";
 
@@ -78,6 +79,10 @@
 
     {#if vs?.viewPrompt}
       <ViewPromptOverlay />
+    {/if}
+
+    {#if vs?.combatPrompt}
+      <CombatPromptOverlay />
     {/if}
 
     {#if vs}

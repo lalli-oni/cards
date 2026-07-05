@@ -14,14 +14,15 @@
     return delta >= 0 ? `+${delta}` : `${delta}`;
   }
 
-  // Which player owns the unit in an outcome, so the row can align to that
-  // side (attacker/Player 1 → left, defender/Player 2 → right). Names come from
-  // the same resolver as attacker/defenderName, so equality is exact.
+  // Which player owns the unit in an outcome, so the row can align to that side
+  // (attacker/Player 1 → left, defender/Player 2 → right). Compares player ids
+  // (not display names, which can collide). Only combat results carry the side
+  // ids and the multi-pair layout this mirrors.
   function outcomeSide(outcome: ContestOutcome): "attacker" | "defender" | null {
-    if (!result) return null;
+    if (!result || result.source !== "combat") return null;
     if (outcome.type === "injured" || outcome.type === "killed") {
-      if (outcome.ownerName === result.attackerName) return "attacker";
-      if (outcome.ownerName === result.defenderName) return "defender";
+      if (outcome.ownerId === result.attackerId) return "attacker";
+      if (outcome.ownerId === result.defenderId) return "defender";
     }
     return null;
   }
@@ -45,7 +46,9 @@
         <span
           class="rounded bg-surface px-1.5 py-0.5 font-mono {mod.delta > 0
             ? 'text-success'
-            : 'text-error'}"
+            : mod.delta < 0
+              ? 'text-error'
+              : 'text-text-secondary'}"
           title="{mod.source.type}: {mod.source.definitionId}"
         >
           {signed(mod.delta)} {mod.source.definitionId}

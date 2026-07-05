@@ -18,6 +18,7 @@ import {
   buildCombatContestResult,
   buildDslContestResult,
   stepCombatBuffer,
+  type CombatBufferStep,
   type ContestResult,
 } from "./contestResult";
 
@@ -56,8 +57,8 @@ let _contestResult = $state<ContestResult | null>(null);
 // `combat_started` arrives with the `attack`, and the pair/resolution events with
 // the later `resolve_combat_round`. Buffer the fight's events from `combat_started`
 // until `combat_resolved` so the result dialog is built once, from the whole
-// combat, rather than warning on each half-batch. Non-null only mid-combat.
-let _combatEvents: GameEvent[] = [];
+// combat, rather than warning on each half-batch. Non-empty only mid-combat.
+let _combatEvents: readonly GameEvent[] = [];
 
 export function getScreen() {
   return _screen;
@@ -267,6 +268,12 @@ function waitForAction(): Promise<Action> {
   });
 }
 
+/** Compile-time exhaustiveness guard: a new `CombatBatchOutcome` kind that
+ *  isn't handled above becomes a type error here rather than a silent fall-through. */
+function assertNever(x: never): never {
+  throw new Error(`Unhandled combat outcome: ${JSON.stringify(x)}`);
+}
+
 function onEvent(events: GameEvent[], state: GameState): void {
   const baseIndex = _eventLog.length;
   _eventLog = [..._eventLog, ...events];
@@ -283,53 +290,62 @@ function onEvent(events: GameEvent[], state: GameState): void {
   // visible state before the popup renders. Factories live in contestResult.ts
   // so the construction invariants are testable in isolation.
   const resolvers = { card: resolveCardName, player: resolvePlayerName };
-  const combatStart = events.find((e) => e.type === "combat_started");
   const contestEvents = events.filter((e) => e.type === "contest_resolved");
 
   // Fold this batch into the running combat buffer — combat spans multiple
   // batches once the defender assigns matchups (#166). See `stepCombatBuffer`.
-  const combat = stepCombatBuffer(_combatEvents, events);
+  const combat: CombatBufferStep = stepCombatBuffer(_combatEvents, events);
   _combatEvents = combat.buffer;
 
-  // Collision warnings — both fire as their own pushError; the final dialog
-  // wins (combat takes priority over contest), but both warnings stay visible.
-  if (combatStart && contestEvents.length > 0) {
-    pushError("Both combat and a contest resolved in the same batch — only the combat popup is shown.");
-  }
   if (contestEvents.length > 1) {
     pushError("Multiple contest_resolved events in one batch — only the first is shown.");
   }
 
-  if (combat.outcome.kind === "complete") {
-    // The fight finished (atomically, or on the final resume batch). Build the
-    // dialog from the whole accumulated combat.
-    const { result: combatResult, error: combatError } = buildCombatContestResult(
-      combat.outcome.dialogEvents, _visibleState, resolvers,
-    );
-    if (combatError) pushError(combatError);
-    _contestResult = combatResult;
-  } else if (combat.outcome.kind === "suspended") {
-    // Combat paused for the defender's matchup decision — the overlay takes
-    // over. Show no dialog and don't warn about a "missing" resolution.
-  } else if (combat.outcome.kind === "orphan") {
-    _contestResult = null;
-    pushError("Combat pair event arrived without combat_started — popup skipped.");
-  } else {
-    // No combat this batch — handle a DSL stat contest, if any.
-    const contestResolved = contestEvents[0];
-    if (contestResolved && contestResolved.type === "contest_resolved") {
-      const contestIdx = events.indexOf(contestResolved);
-      const { result: contestResult, error: contestError } = buildDslContestResult(
-        contestResolved, contestIdx, events, _visibleState, resolvers,
-      );
-      if (contestResult) {
-        _contestResult = contestResult;
-      } else if (contestError) {
-        // Skip path: clear any stale popup before surfacing the error.
-        _contestResult = null;
-        pushError(contestError);
+  switch (combat.outcome.kind) {
+    case "complete": {
+      // The fight finished (atomically, or on the final resume batch). Build the
+      // dialog from the whole accumulated combat. A co-batched contest loses to
+      // the combat popup, so warn only here — where a dialog is actually shown.
+      if (contestEvents.length > 0) {
+        pushError("Both combat and a contest resolved in the same batch — only the combat popup is shown.");
       }
+      const { result: combatResult, error: combatError } = buildCombatContestResult(
+        combat.outcome.dialogEvents, _visibleState, resolvers,
+      );
+      if (combatError) pushError(combatError);
+      _contestResult = combatResult;
+      break;
     }
+    case "suspended":
+      // Combat paused for the defender's matchup decision — the overlay takes
+      // over. Clear any stale dialog so it can't linger under the overlay.
+      _contestResult = null;
+      break;
+    case "orphan":
+      _contestResult = null;
+      pushError("Combat pair event arrived without combat_started — popup skipped.");
+      break;
+    case "none": {
+      // No combat dialog to build (no combat events, or a multi-round fight
+      // still buffering) — handle a DSL stat contest, if any.
+      const contestResolved = contestEvents[0];
+      if (contestResolved && contestResolved.type === "contest_resolved") {
+        const contestIdx = events.indexOf(contestResolved);
+        const { result: contestResult, error: contestError } = buildDslContestResult(
+          contestResolved, contestIdx, events, _visibleState, resolvers,
+        );
+        if (contestResult) {
+          _contestResult = contestResult;
+        } else if (contestError) {
+          // Skip path: clear any stale popup before surfacing the error.
+          _contestResult = null;
+          pushError(contestError);
+        }
+      }
+      break;
+    }
+    default:
+      assertNever(combat.outcome);
   }
 
   if (state.phase === "ended" && players.length > 0) {
@@ -477,6 +493,18 @@ export async function loadGame(key: string): Promise<void> {
 
   const state = controller.getState();
   _gamePhase = state.phase;
+
+  // If we resumed into a suspended combat, seed the combat buffer with a
+  // synthesized `combat_started` reconstructed from the live `combatPrompt`. The
+  // real `combat_started` lived in the pre-load event log (which we don't
+  // replay), so without this the resume's pair/resolution events would look
+  // orphaned and the result dialog would be skipped.
+  if (state.phase === "main" && state.combatPrompt) {
+    const cp = state.combatPrompt;
+    _combatEvents = [
+      { type: "combat_started", row: cp.row, col: cp.col, attackerId: cp.attackerId, defenderId: cp.defenderId },
+    ];
+  }
 
   if (state.phase === "ended" && players.length > 0) {
     _visibleState = engineGetVisibleState(state, players[0].id);

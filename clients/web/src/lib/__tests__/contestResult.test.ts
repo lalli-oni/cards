@@ -119,6 +119,25 @@ describe("stepCombatBuffer", () => {
     expect(stepCombatBuffer([], [unrelated]).outcome.kind).toBe("none");
     expect(stepCombatBuffer([started], [unrelated]).buffer).toEqual([started]);
   });
+
+  it("a fresh combat_started discards a stale non-empty buffer (no cross-fight leak)", () => {
+    const started2: GameEvent = { type: "combat_started", row: 1, col: 1, attackerId: "p2", defenderId: "p1" };
+    const pair2: GameEvent = makeEvent("kill_attacker");
+    const resolved2: GameEvent = { type: "combat_resolved", row: 1, col: 1, winnerId: "p2" };
+    // Previous fight left [started, pair] buffered; a new atomic fight arrives.
+    const step = stepCombatBuffer([started, pair], [started2, pair2, resolved2]);
+    expect(step.outcome.kind).toBe("complete");
+    if (step.outcome.kind !== "complete") return;
+    // Only the second fight's events — the stale buffer is dropped, not leaked.
+    expect(step.outcome.dialogEvents).toEqual([started2, pair2, resolved2]);
+  });
+
+  it("a resolve with no buffered start is orphan, not a silent empty completion", () => {
+    // Reachable after a save/load mid-suspended-combat that reset the buffer: the
+    // resume batch resolves the fight but carries no combat_started.
+    const step = stepCombatBuffer([], [pair, resolved]);
+    expect(step.outcome.kind).toBe("orphan");
+  });
 });
 
 describe("buildPairDetailFromContest", () => {
@@ -166,6 +185,8 @@ describe("buildDialogView", () => {
       locationName: "Marketplace",
       attackerName: "Alice",
       defenderName: "Bob",
+      attackerId: "p1",
+      defenderId: "p2",
       pairs: [],
       outcomes: [],
       winnerName: null,

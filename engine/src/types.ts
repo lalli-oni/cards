@@ -474,11 +474,11 @@ export interface CombatLoopState {
  *
  * `atkRolls` / `defRolls` are the participating units' revealed rolls for
  * `round` — the greedily-selected top `min` of each side's *living* units this
- * round. Excess units on
- * the larger side sit out lowest-power-first (the auto-resolve default; #167
- * hands that sit-out choice to the larger side). Both lists therefore have equal
- * length, and the defender assigns a bijection between them. Plain `CombatSide`
- * data (no live unit refs) so it survives the `produce()` suspend boundary.
+ * round. Excess units on the larger side sit out lowest-power-first (the
+ * auto-resolve default; #167 hands that sit-out choice to the larger side).
+ * Both lists therefore have equal length, and the defender assigns a bijection
+ * between them. Plain `CombatSide` data (no live unit refs) so it survives the
+ * `produce()` suspend boundary.
  */
 export interface CombatPrompt extends CombatLoopState {
   /** Player expected to submit `resolve_combat_round` (the defender). */
@@ -544,6 +544,16 @@ export function getActivePlayerId(state: GameState): string {
     case "ended":
       throw new Error("No active player in ended phase");
   }
+}
+
+/**
+ * The player who must resolve a suspended combat (the defender / matchup
+ * decider), or `undefined` when no combat is suspended. Single-sources the
+ * "decider is `combatPrompt.playerId`" invariant shared by the dispatch gate
+ * (`apply-action.ts`) and the turn loop (`controller.ts`).
+ */
+export function getDeciderId(state: GameState): string | undefined {
+  return state.phase === "main" ? state.combatPrompt?.playerId : undefined;
 }
 
 // ---------------------------------------------------------------------------

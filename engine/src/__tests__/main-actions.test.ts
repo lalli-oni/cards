@@ -1185,6 +1185,52 @@ describe("defender-assigned matchups (#166)", () => {
     expect(getValidActions(suspended, ACTIVE)).toEqual([]);
   });
 
+  it("enumerates all n! bijections for a 3v3, greedy default first", () => {
+    // Strengths far enough apart that the d6 roll can't reorder the power sort,
+    // so the greedy default (identity permutation) is deterministic.
+    const a100 = makeUnit({ ownerId: ACTIVE, strength: 100 });
+    const a50 = makeUnit({ ownerId: ACTIVE, strength: 50 });
+    const a1 = makeUnit({ ownerId: ACTIVE, strength: 1 });
+    const d100 = makeUnit({ ownerId: OTHER, strength: 100 });
+    const d50 = makeUnit({ ownerId: OTHER, strength: 50 });
+    const d1 = makeUnit({ ownerId: OTHER, strength: 1 });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][0].units.push(a100, a50, a1, d100, d50, d1);
+    });
+    const { state: suspended } = applyAction(state, {
+      type: "attack",
+      playerId: ACTIVE,
+      row: 0,
+      col: 0,
+      unitIds: [a100.id, a50.id, a1.id],
+    });
+    const susp = suspended as MainGameState;
+    expect(susp.combatPrompt).toBeDefined();
+
+    const offered = getValidActions(susp, OTHER);
+    expect(offered).toHaveLength(6); // 3!
+    // Greedy default first: highest-vs-highest by power.
+    expect(offered[0]).toMatchObject({
+      type: "resolve_combat_round",
+      playerId: OTHER,
+      decision: {
+        kind: "assign_matchups",
+        pairs: [
+          { attackerUnitId: a100.id, defenderUnitId: d100.id },
+          { attackerUnitId: a50.id, defenderUnitId: d50.id },
+          { attackerUnitId: a1.id, defenderUnitId: d1.id },
+        ],
+      },
+    });
+    // Every offer is a well-formed 3-pair bijection over the defenders.
+    for (const act of offered) {
+      if (act.type !== "resolve_combat_round") continue;
+      expect(act.decision.pairs).toHaveLength(3);
+      expect(new Set(act.decision.pairs.map((p) => p.defenderUnitId)).size).toBe(3);
+    }
+  });
+
   it("auto-resolves atomically for a trivial pairing (one side has a single unit)", () => {
     // 1-vs-3: min(1,3) = 1, so there is only one possible matching — no defender
     // decision. Combat resolves in a single action with no lingering prompt.

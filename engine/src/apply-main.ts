@@ -1305,11 +1305,13 @@ function resolveAssignedMatchups(
   decision: CombatDecision,
   emit: EmitFn,
 ): void {
-  // Forward-defensive guard for the future `kind`s (#167 sit-out, #168 retreat):
-  // with today's single-variant `CombatDecision`, TS narrows `kind` to the sole
-  // literal so this branch is unreachable — it is intentional, not dead code.
-  if (decision.kind !== "assign_matchups") {
-    throw new Error(`resolve_combat_round rejected: unsupported decision kind "${decision.kind}"`);
+  // Forward-defensive guard for the future `kind`s (#167 sit-out, #168 retreat)
+  // and for a malformed adapter submission: the `decision == null` arm turns a
+  // missing payload into a descriptive rejection rather than a bare TypeError on
+  // `.kind`. With today's single-variant `CombatDecision` the kind check is
+  // otherwise unreachable — intentional, not dead code.
+  if (decision == null || decision.kind !== "assign_matchups") {
+    throw new Error(`resolve_combat_round rejected: unsupported decision kind "${decision?.kind}"`);
   }
 
   const atkById = new Map<string, CombatSide>(prompt.atkRolls.map((s) => [s.unitId, s]));

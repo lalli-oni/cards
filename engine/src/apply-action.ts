@@ -7,7 +7,7 @@ import type {
   MainAction,
   SeedingAction,
 } from "./types";
-import { getActivePlayerId } from "./types";
+import { getActivePlayerId, getDeciderId } from "./types";
 
 export type { ApplyResult };
 
@@ -30,8 +30,7 @@ export function applyAction<S extends GameState>(
   // `handleResolveCombatRound` then re-checks that the id matches the prompt.
   // `getValidActions` mirrors this by keying its combat offer off
   // `combatPrompt.playerId`. Every other action still requires the active player.
-  const combatDecider: string | undefined =
-    state.phase === "main" ? state.combatPrompt?.playerId : undefined;
+  const combatDecider: string | undefined = getDeciderId(state);
   const isCombatDecider: boolean =
     action.type === "resolve_combat_round" && action.playerId === combatDecider;
   if (action.playerId !== activePlayerId && !isCombatDecider) {

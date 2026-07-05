@@ -151,6 +151,12 @@ export function needsLocationTarget(card: EventCard): boolean {
  * explore non-greedy pairings, not just the default. The lists are stored
  * highest-power-first, so the identity permutation — element `[0]` — is the
  * greedy highest-vs-highest auto-resolve default a bot can submit as-is.
+ *
+ * Count is `n!` where `n = min(sides)` participants (the smaller side). This is
+ * bounded in practice by how many units realistically stack and fight in one
+ * cell — a handful — so it stays small; a pathologically large stack (n ≥ 8)
+ * would make this enumeration expensive. If unit stacks can grow that large,
+ * switch to lazily surfacing only the greedy default here.
  */
 function buildCombatResolutions(
   prompt: CombatPrompt,

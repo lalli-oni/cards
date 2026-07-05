@@ -10,7 +10,7 @@ import type {
   PlayerDescriptor,
   Session,
 } from "./types";
-import { getActivePlayerId } from "./types";
+import { getActivePlayerId, getDeciderId } from "./types";
 import { getValidActions } from "./valid-actions";
 import { getVisibleState } from "./visible-state";
 
@@ -117,8 +117,7 @@ export class GameController {
     // ask their adapter and validate against their action set; the idle
     // attacker's valid-action list is empty while suspended, so driving the loop
     // off the active player would reject the defender's legitimate submission.
-    const decider: string | undefined =
-      this.state.phase === "main" ? this.state.combatPrompt?.playerId : undefined;
+    const decider: string | undefined = getDeciderId(this.state);
     const actingPlayerId: string = decider ?? getActivePlayerId(this.state);
     const adapter = this.adapters.get(actingPlayerId);
     if (!adapter) {

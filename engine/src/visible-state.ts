@@ -88,7 +88,9 @@ export function getVisibleState(
         : undefined,
     // combatPrompt is public — combat is fully open information, so it surfaces
     // to every viewer unredacted (unlike pick/view, which are private to the
-    // acting player). The `phase === "main"` guard is for type narrowing.
+    // acting player). The `phase === "main"` guard is domain scoping, not type
+    // narrowing: combatPrompt lives on GameStateBase (so it reads on the whole
+    // union without narrowing), but combat only ever suspends in the main phase.
     combatPrompt: state.phase === "main" ? state.combatPrompt : undefined,
     winner: state.phase === "ended" ? state.winner : undefined,
     scores: state.phase === "ended" ? state.scores : undefined,

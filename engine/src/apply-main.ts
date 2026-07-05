@@ -13,6 +13,7 @@ import {
   isPerimeterCell,
 } from "./grid-helpers";
 import { extractRngState } from "./rng";
+import type { RandomGenerator } from "./rng";
 import { findSoleLeader, shouldEndGame, toEndedState } from "./win-condition";
 import {
   advanceTurn,
@@ -35,6 +36,7 @@ import type {
   CombatPrompt,
   CombatSide,
   GameEvent,
+  GridCell,
   ItemCard,
   MainAction,
   ModifierEntry,
@@ -691,8 +693,9 @@ function handleAttack(
 
   // Hand off to the resumable loop from round 0. In the default (auto-resolve)
   // path this runs the whole combat to completion synchronously and emits
-  // `combat_resolved` — a single `attack` yields `combat_started` +
-  // `combat_resolved` in one events array, exactly as before #165.
+  // `combat_resolved` — a single `attack` yields `combat_started`, the per-pair
+  // `combat_pair_resolved` events, and `combat_resolved` in one events array,
+  // exactly as before #165.
   runCombat(
     draft,
     {
@@ -722,7 +725,13 @@ function handleAttack(
  * suspend/resume machinery end-to-end while the real conditions don't exist yet.
  *
  * `round` is the round the decision would gate (always ≥ 1 — combat never pauses
- * before its opening round). Unused by the seam, but #166–#168 will branch on it.
+ * before its opening round; guaranteed by the sole caller, which passes
+ * `round + 1`). Unused by the seam, but #166–#168 will branch on it.
+ *
+ * The seam reads one global config key, so when set it suspends every
+ * between-round of every combat — there is no per-combat scoping. That is fine
+ * for a test-only seam; #166–#168 replace this body with per-combat decision
+ * logic rather than extending the flag.
  */
 function combatDecisionPending(draft: Draft<MainGameState>, round: number): boolean {
   void round;
@@ -730,10 +739,12 @@ function combatDecisionPending(draft: Draft<MainGameState>, round: number): bool
 }
 
 /**
- * Runs combat rounds from `state.round` onward, resuming an in-progress fight.
- * Either completes the combat (emitting `combat_resolved`) or, if a decision is
- * pending between rounds, sets `draft.combatPrompt` and returns without emitting
- * `combat_resolved` — leaving the fight suspended for `resolve_combat_round`.
+ * Runs combat rounds from `state.round` onward. Shared by both callers: the
+ * fresh run from `handleAttack` (round 0) and every `resolve_combat_round`
+ * resume of an in-progress fight. Either completes the combat (emitting
+ * `combat_resolved`) or, if a decision is pending between rounds, sets
+ * `draft.combatPrompt` and returns without emitting `combat_resolved` — leaving
+ * the fight suspended for `resolve_combat_round`.
  *
  * Living combatants are re-resolved from the cell by id each round rather than
  * held as references: units get killed/removed mid-combat, and on resume the
@@ -747,9 +758,9 @@ function runCombat(
   queries: QueryListener[],
 ): void {
   const { row, col, attackerId, defenderId, attackerUnitIds, defenderUnitIds } = state;
-  const cell = draft.grid[row][col];
+  const cell: Draft<GridCell> = draft.grid[row][col];
 
-  let rng = fromState(draft.rngState);
+  let rng: RandomGenerator = fromState(draft.rngState);
 
   // Auto-resolve combat rounds. Drop-out survivor semantics guarantee the loop
   // terminates regardless of this cap: every matchup removes its loser (killed,
@@ -758,7 +769,7 @@ function runCombat(
   // of N enemies per round takes N rounds — so this cap only bounds combats
   // with unusually large unit stacks; normal combats end well within it. See
   // rules/README.md Combat design note ([var:combat_round_cap:10]).
-  const maxRounds = getConfigNumber(draft, "combat_round_cap", 10);
+  const maxRounds: number = getConfigNumber(draft, "combat_round_cap", 10);
   for (let round = state.round; round < maxRounds; round++) {
     // Drop-out survivor semantics (rules/README.md Combat step 6, "Next round
     // or end"): the first round rolls all committed units, but subsequent
@@ -768,8 +779,8 @@ function runCombat(
     // out next round), the combined fighting pool strictly shrinks each round,
     // guaranteeing termination. Units are re-resolved from the cell by id so
     // this is correct whether the round starts fresh or resumes post-suspend.
-    const livingAttackers = livingCombatants(cell, attackerUnitIds, round);
-    const livingDefenders = livingCombatants(cell, defenderUnitIds, round);
+    const livingAttackers = livingCombatants(cell, attackerUnitIds, { ignoreInjured: round === 0 });
+    const livingDefenders = livingCombatants(cell, defenderUnitIds, { ignoreInjured: round === 0 });
 
     if (livingAttackers.length === 0 || livingDefenders.length === 0) break;
 
@@ -800,20 +811,23 @@ function runCombat(
 
     // Between-rounds suspension point (#165). Checked AFTER the round resolves
     // and only when a further round would actually be fought (both sides still
-    // have uninjured combatants) — so a finished combat falls through to
-    // `combat_resolved` instead of pausing, and a resumed combat fights its
-    // round before it can pause again. `combatDecisionPending` is a cheap
-    // config read that is false in every real game, so the next-round peek
-    // below never runs on the default auto-resolve path.
-    if (combatDecisionPending(draft, round + 1)) {
-      const nextAttackers = livingCombatants(cell, attackerUnitIds, round + 1);
-      const nextDefenders = livingCombatants(cell, defenderUnitIds, round + 1);
+    // have uninjured combatants AND the round cap is not reached) — so a
+    // finished or capped combat falls through to `combat_resolved` instead of
+    // pausing, and a resumed combat fights its round before it can pause again.
+    // The `round + 1 < maxRounds` guard prevents a phantom final suspend that
+    // would resume into a zero-iteration loop and silently finalize a draw.
+    // `combatDecisionPending` is a cheap config read that is false in every real
+    // game, so the next-round peek below never runs on the default auto-resolve
+    // path.
+    if (round + 1 < maxRounds && combatDecisionPending(draft, round + 1)) {
+      const nextAttackers = livingCombatants(cell, attackerUnitIds, { ignoreInjured: false });
+      const nextDefenders = livingCombatants(cell, defenderUnitIds, { ignoreInjured: false });
       if (nextAttackers.length > 0 && nextDefenders.length > 0) {
         // Persist rng so resume continues the same roll stream, then hand
         // control back. `combat_resolved` is deliberately NOT emitted — combat
         // is paused, not over.
         draft.rngState = extractRngState(rng) as number[];
-        draft.combatPrompt = { ...state, round: round + 1 };
+        draft.combatPrompt = castDraft({ ...state, round: round + 1 });
         return;
       }
     }
@@ -821,9 +835,11 @@ function runCombat(
 
   draft.rngState = extractRngState(rng) as number[];
 
-  // Determine winner
-  const remainingAttackers = livingCombatants(cell, attackerUnitIds, 0);
-  const remainingDefenders = livingCombatants(cell, defenderUnitIds, 0);
+  // Determine winner. `ignoreInjured` counts every unit still present in the
+  // cell (injured survivors included) — a side is beaten only when it has no
+  // units left at all.
+  const remainingAttackers = livingCombatants(cell, attackerUnitIds, { ignoreInjured: true });
+  const remainingDefenders = livingCombatants(cell, defenderUnitIds, { ignoreInjured: true });
 
   let winnerId: string | null = null;
   if (remainingAttackers.length > 0 && remainingDefenders.length === 0) {
@@ -836,20 +852,21 @@ function runCombat(
 }
 
 /**
- * The units from `unitIds` still fighting this `round`: present in the cell and,
- * on rounds after the first, not injured (drop-out survivor semantics — see
- * `runCombat`). Passing `round: 0` yields simply the units still present, used
- * for winner determination.
+ * The units from `unitIds` still present in the cell. With
+ * `ignoreInjured: false` (rounds after the first) injured units are dropped —
+ * drop-out survivor semantics, see `runCombat`. With `ignoreInjured: true`
+ * every present unit counts (round 0, and winner determination, where an
+ * injured survivor still holds the cell).
  */
 function livingCombatants(
   cell: Draft<{ units: UnitCard[] }>,
-  unitIds: string[],
-  round: number,
+  unitIds: readonly string[],
+  { ignoreInjured }: { ignoreInjured: boolean },
 ): Draft<UnitCard>[] {
   const living: Draft<UnitCard>[] = [];
   for (const id of unitIds) {
     const unit = cell.units.find((u) => u.id === id);
-    if (unit && (round === 0 || !unit.injured)) living.push(unit);
+    if (unit && (ignoreInjured || !unit.injured)) living.push(unit);
   }
   return living;
 }

@@ -24,6 +24,13 @@ export function applyAction<S extends GameState>(
 ): ApplyResult {
   const activePlayerId = getActivePlayerId(state);
 
+  // TODO(#166): this gate rejects every non-active player, so it will reject a
+  // defender-assigned `resolve_combat_round` (the defender is normally the
+  // non-active player). When #166 hands the combat decision to the defender,
+  // relax this to also admit the pending prompt's decider
+  // (`state.combatPrompt?.playerId === action.playerId`), and mirror the
+  // fall-through in `getValidActions`. Today decider == attacker == active, so
+  // the paths agree and this is inert.
   if (action.playerId !== activePlayerId) {
     throw new Error(
       `Action from player "${action.playerId}" rejected: it is player "${activePlayerId}"'s turn`,

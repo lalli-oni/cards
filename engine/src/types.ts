@@ -455,9 +455,16 @@ export interface ViewPrompt {
  * stored — not live unit references, which cannot survive the `produce()`
  * boundary between suspend and resume.
  *
+ * The duplicated cell coordinates and player ids cannot drift because the
+ * dispatch gate (`applyMainAction`) freezes every other mutation while a
+ * `combatPrompt` is live — do not reuse this type outside that suspend guard.
+ *
  * `playerId` is who must submit `resolve_combat_round`. For #165 (no real
- * decision) that is the attacker; #166 will hand the decision to the defender.
- * Revealed rolls / matchup payloads are deferred to #166–#168.
+ * decision) that is the attacker (also the active player). #166 will hand the
+ * decision to the defender — normally the *non-active* player — which must also
+ * relax the active-player gate in `apply-action.ts` (see the TODO there); today
+ * that gate would reject a non-active decider. Revealed rolls / matchup payloads
+ * are deferred to #166–#168.
  */
 export interface CombatPrompt {
   /** Player expected to submit `resolve_combat_round`. */
@@ -470,10 +477,10 @@ export interface CombatPrompt {
   defenderId: string;
   /** Next round index to run on resume (0-based; `combat_round_cap` bounds it). */
   round: number;
-  /** Committed attacker unit instance ids. */
-  attackerUnitIds: string[];
-  /** Committed defender unit instance ids. */
-  defenderUnitIds: string[];
+  /** Committed attacker unit instance ids (never mutated after suspend). */
+  attackerUnitIds: readonly string[];
+  /** Committed defender unit instance ids (never mutated after suspend). */
+  defenderUnitIds: readonly string[];
 }
 
 export interface MainGameState extends GameStateBase {
@@ -621,9 +628,11 @@ export interface DismissViewAction {
 /**
  * Submitted to resume a combat suspended between rounds (pending
  * `combatPrompt`). For #165 the decision is empty — combat merely resumes its
- * auto-resolve loop. The real payloads (matchup assignment #166, sit-out #167,
- * retreat #168) will extend this interface. AP is not spent here (already spent
- * on the initiating `attack`).
+ * auto-resolve loop. The heterogeneous real payloads (matchup assignment #166,
+ * sit-out #167, retreat #168) should arrive as a discriminated `decision`
+ * sub-union (mirroring `PickPrompt`'s `kind` split) rather than a flat bag of
+ * optional fields, so a retreat payload cannot structurally carry matchup data.
+ * AP is not spent here (already spent on the initiating `attack`).
  */
 export interface ResolveCombatRoundAction {
   type: "resolve_combat_round";

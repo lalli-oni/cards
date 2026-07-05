@@ -17,11 +17,13 @@ import { PASSIVE_EVENTS_NEEDING_LOCATION_TARGET, POLICY_ACTIONS } from "./listen
 import { getModifiedCost, getModifiedAPCost } from "./listeners/query";
 import type {
   Action,
+  CombatPrompt,
   EventCard,
   GameState,
   MainAction,
   MainGameState,
   PickPrompt,
+  ResolveCombatRoundAction,
   SeedingAction,
   SeedingGameState,
 } from "./types";
@@ -37,7 +39,12 @@ export function getValidActions(state: GameState, playerId: string): Action[] {
   }
 
   const activePlayerId = getActivePlayerId(state);
-  if (activePlayerId !== playerId) {
+  // A suspended combat offers its resolution to the prompt's decider (the
+  // defender for #166), normally the non-active player — admit them even though
+  // it isn't their turn. Mirrors the dispatch gate in apply-action.ts.
+  const combatDecider: string | undefined =
+    state.phase === "main" ? state.combatPrompt?.playerId : undefined;
+  if (activePlayerId !== playerId && combatDecider !== playerId) {
     return [];
   }
 
@@ -135,12 +142,52 @@ export function needsLocationTarget(card: EventCard): boolean {
   return false;
 }
 
+/**
+ * Every matchup the defender may assign, as complete `resolve_combat_round`
+ * actions — one per bijection between the equal-length participant lists.
+ * Enumerated by permuting the defenders against the fixed attacker order
+ * (mirrors `scholar_reorder`'s full-permutation enumeration), so consumers that
+ * treat `getValidActions` as the exhaustive action space (bots, search) can
+ * explore non-greedy pairings, not just the default. The lists are stored
+ * highest-power-first, so the identity permutation — element `[0]` — is the
+ * greedy highest-vs-highest auto-resolve default a bot can submit as-is.
+ *
+ * Count is `n!` where `n = min(sides)` participants (the smaller side). This is
+ * bounded in practice by how many units realistically stack and fight in one
+ * cell — a handful — so it stays small; a pathologically large stack (n ≥ 8)
+ * would make this enumeration expensive. If unit stacks can grow that large,
+ * switch to lazily surfacing only the greedy default here.
+ */
+function buildCombatResolutions(
+  prompt: CombatPrompt,
+  playerId: string,
+): ResolveCombatRoundAction[] {
+  const attackerIds: readonly string[] = prompt.atkRolls.map((s) => s.unitId);
+  const defenderIds: readonly string[] = prompt.defRolls.map((s) => s.unitId);
+  return permutationsOf(defenderIds).map((perm) => ({
+    type: "resolve_combat_round",
+    playerId,
+    decision: {
+      kind: "assign_matchups",
+      pairs: attackerIds.map((attackerUnitId, i) => ({
+        attackerUnitId,
+        defenderUnitId: perm[i],
+      })),
+    },
+  }));
+}
+
 function getMainValidActions(
   state: MainGameState,
   playerId: string,
 ): MainAction[] {
-  if (state.combatPrompt && state.combatPrompt.playerId === playerId) {
-    return [{ type: "resolve_combat_round", playerId }];
+  // While a combat is suspended, only its decider may act — and only to resolve
+  // it. Everyone else (including the active attacker waiting on the defender)
+  // gets nothing until the fight resumes.
+  if (state.combatPrompt) {
+    return state.combatPrompt.playerId === playerId
+      ? buildCombatResolutions(state.combatPrompt, playerId)
+      : [];
   }
   if (state.pickPrompt && state.pickPrompt.playerId === playerId) {
     return getResolvePickActions(state.pickPrompt, playerId);

@@ -1,5 +1,5 @@
 import type { Draft } from "immer";
-import { castDraft, produce } from "immer";
+import { castDraft, current, produce } from "immer";
 import { fromState, uniformIntDistribution } from "./rng";
 import { parseCost, spendAP, spendGold } from "./cost-helpers";
 import { drawLocationFromProspect, drawMarketCard, drawOneCard } from "./deck-helpers";
@@ -32,6 +32,8 @@ import type {
   ActionDef,
   ActivePassiveEvent,
   ApplyResult,
+  CombatDecision,
+  CombatLoopState,
   CombatPairOutcome,
   CombatPrompt,
   CombatSide,
@@ -699,7 +701,6 @@ function handleAttack(
   runCombat(
     draft,
     {
-      playerId,
       row,
       col,
       attackerId: playerId,
@@ -714,37 +715,32 @@ function handleAttack(
 }
 
 /**
- * Whether combat must suspend before running `round` to await a player
- * decision. This is the #165 suspension hook.
+ * Whether the defender has a meaningful matchup choice this round (#166).
  *
- * Returns `false` for every real game today: no production ruleset sets the
- * seam config, so combat always auto-resolves and no behaviour changes until a
- * real pause condition lands. #166–#168 replace the body with the actual
- * decision logic (defender-assigned matchups, sit-out, retreat). The
- * `combat_suspend_between_rounds` key is a test-only seam — it exercises the
- * suspend/resume machinery end-to-end while the real conditions don't exist yet.
- *
- * `round` is the round the decision would gate (always ≥ 1 — combat never pauses
- * before its opening round; guaranteed by the sole caller, which passes
- * `round + 1`). Unused by the seam, but #166–#168 will branch on it.
- *
- * The seam reads one global config key, so when set it suspends every
- * between-round of every combat — there is no per-combat scoping. That is fine
- * for a test-only seam; #166–#168 replace this body with per-combat decision
- * logic rather than extending the flag.
+ * The `pairs` count is `min(attackers, defenders)` — the greedy sit-out trims
+ * the larger side to that size lowest-power-first, leaving equal-length
+ * participant lists. A bijection over them offers a real choice only when there
+ * are at least two pairs; a single pair (`min <= 1`) has exactly one matching,
+ * so those rounds auto-resolve. Cases where `min == 1` but the larger side must
+ * pick which unit faces the lone opponent are a *sit-out* choice (#167), not a
+ * pairing choice — deferred, so they auto-resolve greedily here too.
  */
-function combatDecisionPending(draft: Draft<MainGameState>, round: number): boolean {
-  void round;
-  return getConfigNumber(draft, "combat_suspend_between_rounds", 0) === 1;
+function matchupDecisionPending(attackers: number, defenders: number): boolean {
+  return Math.min(attackers, defenders) >= 2;
 }
 
 /**
  * Runs combat rounds from `state.round` onward. Shared by both callers: the
  * fresh run from `handleAttack` (round 0) and every `resolve_combat_round`
  * resume of an in-progress fight. Either completes the combat (emitting
- * `combat_resolved`) or, if a decision is pending between rounds, sets
- * `draft.combatPrompt` and returns without emitting `combat_resolved` — leaving
- * the fight suspended for `resolve_combat_round`.
+ * `combat_resolved`) or, if the defender has a matchup choice this round, sets
+ * `draft.combatPrompt` — after rolling but BEFORE resolving (rules step 4: the
+ * defender pairs "after seeing all rolls") — and returns without emitting
+ * `combat_resolved`, leaving the fight suspended for `resolve_combat_round`.
+ *
+ * On resume the caller (`handleResolveCombatRound`) resolves the just-rolled
+ * round from the assignment, then re-enters here at `round + 1` — so this loop
+ * always starts a *fresh* round: it rolls, then either suspends or auto-resolves.
  *
  * Living combatants are re-resolved from the cell by id each round rather than
  * held as references: units get killed/removed mid-combat, and on resume the
@@ -753,7 +749,7 @@ function combatDecisionPending(draft: Draft<MainGameState>, round: number): bool
  */
 function runCombat(
   draft: Draft<MainGameState>,
-  state: CombatPrompt,
+  state: CombatLoopState,
   emit: EmitFn,
   queries: QueryListener[],
 ): void {
@@ -784,6 +780,7 @@ function runCombat(
 
     if (livingAttackers.length === 0 || livingDefenders.length === 0) break;
 
+    // Rules step 3 — Roll: one die per living unit; attack power = strength+roll.
     const atkRolls: CombatantRoll[] = [];
     for (const u of livingAttackers) {
       const [roll, nextRng] = uniformIntDistribution(1, 6, rng);
@@ -798,38 +795,39 @@ function runCombat(
       defRolls.push(buildCombatantRoll(draft, queries, u, "defender", row, col, roll));
     }
 
-    // Sort by power descending, pair highest vs highest
+    // Greedy sit-out: sort by power descending and trim the larger side to the
+    // pair count, so its lowest-power excess sits out. The trimmed lists are
+    // equal length — the participants the defender pairs (or that auto-resolve
+    // greedily, highest vs highest). #167 hands this sit-out choice to the
+    // larger side; until then it stays lowest-power-first.
     atkRolls.sort((a, b) => b.power - a.power);
     defRolls.sort((a, b) => b.power - a.power);
+    const nPairs = Math.min(atkRolls.length, defRolls.length);
+    const atkParticipants = atkRolls.slice(0, nPairs);
+    const defParticipants = defRolls.slice(0, nPairs);
 
-    const pairs = Math.min(atkRolls.length, defRolls.length);
-    for (let i = 0; i < pairs; i++) {
-      const atk = atkRolls[i];
-      const def = defRolls[i];
-      resolveCombatPair(draft, cell, atk, def, row, col, emit);
+    // Rules step 4 — Matchup: when the defender has a real pairing choice,
+    // suspend AFTER the roll and BEFORE resolving, so the assignment is made
+    // "after seeing all rolls". Persist rng (already advanced past this round's
+    // rolls) so the roll stream is unbroken on resume; `combat_resolved` is
+    // deliberately NOT emitted — combat is paused, not over.
+    if (matchupDecisionPending(livingAttackers.length, livingDefenders.length)) {
+      draft.rngState = extractRngState(rng) as number[];
+      const prompt: CombatPrompt = {
+        playerId: defenderId,
+        row, col, attackerId, defenderId, round,
+        attackerUnitIds, defenderUnitIds,
+        atkRolls: atkParticipants.map(toCombatSide),
+        defRolls: defParticipants.map(toCombatSide),
+      };
+      draft.combatPrompt = castDraft(prompt);
+      return;
     }
 
-    // Between-rounds suspension point (#165). Checked AFTER the round resolves
-    // and only when a further round would actually be fought (both sides still
-    // have uninjured combatants AND the round cap is not reached) — so a
-    // finished or capped combat falls through to `combat_resolved` instead of
-    // pausing, and a resumed combat fights its round before it can pause again.
-    // The `round + 1 < maxRounds` guard prevents a phantom final suspend that
-    // would resume into a zero-iteration loop and silently finalize a draw.
-    // `combatDecisionPending` is a cheap config read that is false in every real
-    // game, so the next-round peek below never runs on the default auto-resolve
-    // path.
-    if (round + 1 < maxRounds && combatDecisionPending(draft, round + 1)) {
-      const nextAttackers = livingCombatants(cell, attackerUnitIds, { ignoreInjured: false });
-      const nextDefenders = livingCombatants(cell, defenderUnitIds, { ignoreInjured: false });
-      if (nextAttackers.length > 0 && nextDefenders.length > 0) {
-        // Persist rng so resume continues the same roll stream, then hand
-        // control back. `combat_resolved` is deliberately NOT emitted — combat
-        // is paused, not over.
-        draft.rngState = extractRngState(rng) as number[];
-        draft.combatPrompt = castDraft({ ...state, round: round + 1 });
-        return;
-      }
+    // Rules step 5 — Resolve: auto-resolve the participants greedily (the sort
+    // above already lined them up highest vs highest).
+    for (let i = 0; i < nPairs; i++) {
+      resolveCombatPair(draft, cell, atkParticipants[i], defParticipants[i], row, col, emit);
     }
   }
 
@@ -930,6 +928,30 @@ function toCombatSide(c: CombatantRoll): CombatSide {
     roll: c.roll,
     power: c.power,
     injuredBefore: c.injuredBefore,
+  };
+}
+
+/**
+ * Rebuild the live `CombatantRoll` for a roll stashed on a suspended prompt:
+ * the plain `CombatSide` data plus the unit re-resolved from the cell by id.
+ * The unit is unchanged since suspend — the dispatch gate freezes the board
+ * while a `combatPrompt` is live — so this reconstructs the exact roll the
+ * defender saw, with no re-roll.
+ */
+function combatantRollFromSide(cell: Draft<GridCell>, side: CombatSide): CombatantRoll {
+  const unit = cell.units.find((u) => u.id === side.unitId);
+  if (!unit) {
+    throw new Error(
+      `resolve_combat_round rejected: participant "${side.unitId}" is no longer at the cell`,
+    );
+  }
+  return {
+    unit,
+    baseStrength: side.baseStrength,
+    modifiers: side.modifiers,
+    roll: side.roll,
+    power: side.power,
+    injuredBefore: side.injuredBefore,
   };
 }
 
@@ -1268,29 +1290,116 @@ function handleDismissView(
   draft.viewPrompt = undefined;
 }
 
+/**
+ * Resolve the round's pairs (rules step 5) from the defender's assignment,
+ * validated against the suspended prompt. Rejects unknown/duplicate ids and the
+ * wrong pair count so a malformed submission fails loud rather than silently
+ * mis-pairing. Because the participant lists are equal length and every id must
+ * be a distinct participant, an exact-count assignment is necessarily a full
+ * bijection — no unit is left unpaired or fought twice.
+ */
+function resolveAssignedMatchups(
+  draft: Draft<MainGameState>,
+  cell: Draft<GridCell>,
+  prompt: CombatPrompt,
+  decision: CombatDecision,
+  emit: EmitFn,
+): void {
+  // Forward-defensive guard for the future `kind`s (#167 sit-out, #168 retreat)
+  // and for a malformed adapter submission: the `decision == null` arm turns a
+  // missing payload into a descriptive rejection rather than a bare TypeError on
+  // `.kind`. With today's single-variant `CombatDecision` the kind check is
+  // otherwise unreachable — intentional, not dead code.
+  if (decision == null || decision.kind !== "assign_matchups") {
+    throw new Error(`resolve_combat_round rejected: unsupported decision kind "${decision?.kind}"`);
+  }
+
+  const atkById = new Map<string, CombatSide>(prompt.atkRolls.map((s) => [s.unitId, s]));
+  const defById = new Map<string, CombatSide>(prompt.defRolls.map((s) => [s.unitId, s]));
+  const expected: number = prompt.atkRolls.length; // == defRolls.length (equal participants)
+  if (decision.pairs.length !== expected) {
+    throw new Error(
+      `resolve_combat_round rejected: expected ${expected} matchup(s), got ${decision.pairs.length}`,
+    );
+  }
+
+  const usedAtk = new Set<string>();
+  const usedDef = new Set<string>();
+  for (const { attackerUnitId, defenderUnitId } of decision.pairs) {
+    const atkSide = atkById.get(attackerUnitId);
+    const defSide = defById.get(defenderUnitId);
+    if (!atkSide) {
+      throw new Error(`resolve_combat_round rejected: attacker "${attackerUnitId}" is not a participant`);
+    }
+    if (!defSide) {
+      throw new Error(`resolve_combat_round rejected: defender "${defenderUnitId}" is not a participant`);
+    }
+    if (usedAtk.has(attackerUnitId)) {
+      throw new Error(`resolve_combat_round rejected: attacker "${attackerUnitId}" is paired more than once`);
+    }
+    if (usedDef.has(defenderUnitId)) {
+      throw new Error(`resolve_combat_round rejected: defender "${defenderUnitId}" is paired more than once`);
+    }
+    usedAtk.add(attackerUnitId);
+    usedDef.add(defenderUnitId);
+    resolveCombatPair(
+      draft, cell,
+      combatantRollFromSide(cell, atkSide),
+      combatantRollFromSide(cell, defSide),
+      prompt.row, prompt.col, emit,
+    );
+  }
+}
+
 function handleResolveCombatRound(
   draft: Draft<MainGameState>,
   playerId: string,
+  decision: CombatDecision,
   emit: EmitFn,
   queries: QueryListener[],
 ): void {
-  const prompt = draft.combatPrompt;
-  if (!prompt) {
+  const promptDraft = draft.combatPrompt;
+  if (!promptDraft) {
     throw new Error(`resolve_combat_round rejected: no suspended combat (by player "${playerId}")`);
   }
-  if (prompt.playerId !== playerId) {
+  if (promptDraft.playerId !== playerId) {
     throw new Error(
-      `resolve_combat_round rejected: pending combat decision is for "${prompt.playerId}", not "${playerId}"`,
+      `resolve_combat_round rejected: pending combat decision is for "${promptDraft.playerId}", not "${playerId}"`,
     );
   }
-  // #165: the decision is empty — nothing to apply, just resume. #166–#168 will
-  // apply the submitted matchup/sit-out/retreat here before resuming.
-  //
-  // Clear the prompt before resuming: `runCombat` re-sets it if the fight
-  // suspends again on a later round, so clearing first keeps a single source of
-  // truth (an unresolved fight always has exactly one live `combatPrompt`).
+
+  // Snapshot the stashed rolls out of the draft before they flow into events.
+  // The prompt's `CombatSide` data is copied into emitted `combat_pair_resolved`
+  // events (via `toCombatSide`); a live draft proxy there — e.g. the `modifiers`
+  // array — would be revoked once this `produce()` finalizes, crashing any later
+  // reader such as the event log. `current` yields a plain deep copy.
+  const prompt: CombatPrompt = current(promptDraft);
+
+  const cell: Draft<GridCell> = draft.grid[prompt.row][prompt.col];
+
+  // Apply the defender's assignment: resolve this round's pairs from the rolls
+  // revealed at suspend (no re-roll, so the outcome matches what the defender
+  // saw), then resume from the next round.
+  resolveAssignedMatchups(draft, cell, prompt, decision, emit);
+
+  // Clear the prompt before resuming: `runCombat` re-sets it if a later round
+  // also needs a decision, so clearing first keeps a single source of truth (an
+  // unresolved fight always has exactly one live `combatPrompt`).
   draft.combatPrompt = undefined;
-  runCombat(draft, prompt, emit, queries);
+  runCombat(
+    draft,
+    {
+      row: prompt.row,
+      col: prompt.col,
+      attackerId: prompt.attackerId,
+      defenderId: prompt.defenderId,
+      round: prompt.round + 1,
+      attackerUnitIds: prompt.attackerUnitIds,
+      defenderUnitIds: prompt.defenderUnitIds,
+    },
+    emit,
+    queries,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -1423,7 +1532,7 @@ export function applyMainAction(
         break;
 
       case "resolve_combat_round":
-        handleResolveCombatRound(draft, action.playerId, emit, queries);
+        handleResolveCombatRound(draft, action.playerId, action.decision, emit, queries);
         break;
 
       default: {

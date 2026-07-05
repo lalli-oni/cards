@@ -22,6 +22,7 @@
     type TurnState,
     type GameConfig,
     type LocationEdges,
+    type Action,
   } from "cards-engine";
   import cardDefsJson from "@library/all.json";
   import GridBoard from "./components/GridBoard.svelte";
@@ -129,6 +130,7 @@
     hq: [p2Units[2]],
     activePolicies: p2Policies,
     activeTraps: [{ targetId: locations[1]?.id, cardId: "preview-trap-1" }],
+    passiveEvents: [],
   };
 
   const turn: TurnState = { activePlayerId: p1, actionPointsRemaining: 2, round: 3 };
@@ -145,12 +147,12 @@
     reveals: { revealedTrapIds: [] },
   };
 
-  const mockActions = [
+  const mockActions: Action[] = [
     { type: "move", playerId: p1, unitId: p1Units[0].id, row: 1, col: 0 },
     { type: "move", playerId: p1, unitId: p1Units[0].id, row: 0, col: 1 },
     { type: "attack", playerId: p1, unitIds: [p1Units[0].id], row: 0, col: 1 },
     { type: "deploy", playerId: p1, cardId: handCards[0].id },
-    { type: "buy", playerId: p1, cardId: marketCards[0]?.id },
+    { type: "buy", playerId: p1, cardId: marketCards[0].id },
     { type: "pass", playerId: p1 },
   ];
 

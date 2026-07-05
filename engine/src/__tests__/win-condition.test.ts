@@ -152,6 +152,8 @@ describe("toEndedState", () => {
         round: 1,
         attackerUnitIds: [],
         defenderUnitIds: [],
+        atkRolls: [],
+        defRolls: [],
       };
     });
 

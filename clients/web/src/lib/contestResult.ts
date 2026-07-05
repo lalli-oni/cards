@@ -42,8 +42,8 @@ export interface NameResolvers {
  *  contests (Cleopatra's diplomacy). Splitting the union by source is what
  *  makes "no controlled in combat" a compile-time fact. */
 export type CombatOutcome =
-  | { type: "injured"; unitName: string; ownerName: string }
-  | { type: "killed"; unitName: string; ownerName: string };
+  | { type: "injured"; unitName: string; ownerName: string; ownerId: string }
+  | { type: "killed"; unitName: string; ownerName: string; ownerId: string };
 
 export type ContestOutcome =
   | CombatOutcome
@@ -74,6 +74,10 @@ export type ContestResult =
       locationName: string;
       attackerName: string;
       defenderName: string;
+      /** Player ids for the two sides, so outcome rows can be aligned by owner
+       *  without relying on (possibly duplicate) display names. */
+      attackerId: string;
+      defenderId: string;
       pairs: PairDetail[];
       outcomes: CombatOutcome[];
       winnerName: string | null;
@@ -210,11 +214,87 @@ export interface ContestResultBuild {
   error: string | null;
 }
 
+/** Combat events the result dialog is built from — accumulated across batches. */
+const COMBAT_DIALOG_EVENT_TYPES: ReadonlySet<GameEvent["type"]> = new Set([
+  "combat_started",
+  "combat_pair_resolved",
+  "unit_injured",
+  "unit_killed",
+  "combat_resolved",
+]);
+
+/** What a freshly-processed event batch means for the combat result dialog. */
+export type CombatBatchOutcome =
+  /** The fight finished this batch — build the dialog from `dialogEvents`. */
+  | { kind: "complete"; dialogEvents: readonly GameEvent[] }
+  /** Combat began but suspended for the defender's matchup decision (#166) —
+   *  the overlay takes over; keep buffering, show nothing yet. */
+  | { kind: "suspended" }
+  /** A combat resolution / pair with no buffered `combat_started` — genuinely
+   *  orphaned (the caller warns and clears any stale dialog). */
+  | { kind: "orphan" }
+  /** Nothing to surface this batch: either no combat events at all, or a
+   *  mid-combat resume round still buffering (pairs resolved, fight not over). */
+  | { kind: "none" };
+
+export interface CombatBufferStep {
+  /** Events to carry into the next batch (empty once a fight completes). */
+  buffer: readonly GameEvent[];
+  outcome: CombatBatchOutcome;
+}
+
+/** Fold a new event batch into the running combat buffer. Combat spans multiple
+ *  batches when the defender assigns matchups (#166): `combat_started` arrives
+ *  with the `attack`, and the pair/resolution events with each later
+ *  `resolve_combat_round`. Accumulate the fight's events from `combat_started`
+ *  until `combat_resolved`, so the dialog is built once from the whole combat
+ *  rather than warning on each half. Pure so the batch-splitting edge cases
+ *  (suspend, multi-round resume, orphan pair) are testable without a store. */
+export function stepCombatBuffer(
+  prevBuffer: readonly GameEvent[],
+  batch: readonly GameEvent[],
+): CombatBufferStep {
+  const started: boolean = batch.some((e) => e.type === "combat_started");
+  const ended: boolean = batch.some((e) => e.type === "combat_resolved");
+
+  // A fresh `combat_started` begins a new fight; otherwise continue the running
+  // one. Only collect while a fight is in flight (started now, or already buffered).
+  const buffer: GameEvent[] = started ? [] : [...prevBuffer];
+  if (started || buffer.length > 0) {
+    for (const e of batch) {
+      if (COMBAT_DIALOG_EVENT_TYPES.has(e.type)) buffer.push(e);
+    }
+  }
+
+  if (ended) {
+    // A completion with no buffered `combat_started` can't build a meaningful
+    // dialog (e.g. a combat resolved right after a save/load that reset the
+    // buffer). Treat it as orphaned so the caller warns rather than silently
+    // dropping the popup. The normal paths — atomic, or a load that re-seeds the
+    // buffer from `combatPrompt` — always carry the start.
+    if (!buffer.some((e) => e.type === "combat_started")) {
+      return { buffer: [], outcome: { kind: "orphan" } };
+    }
+    return { buffer: [], outcome: { kind: "complete", dialogEvents: buffer } };
+  }
+  if (started) {
+    return { buffer, outcome: { kind: "suspended" } };
+  }
+  if (batch.some((e) => e.type === "combat_pair_resolved")) {
+    // A pair with a live buffer is a mid-combat resume round (already collected);
+    // a pair with no buffer is a true orphan.
+    return prevBuffer.length > 0
+      ? { buffer, outcome: { kind: "none" } }
+      : { buffer, outcome: { kind: "orphan" } };
+  }
+  return { buffer, outcome: { kind: "none" } };
+}
+
 /** Build the combat-source dialog state from an event batch containing a
  *  `combat_started` (combat is multi-pair strength). Returns `null` result
  *  if `combat_started` is missing from the batch. */
 export function buildCombatContestResult(
-  events: GameEvent[],
+  events: readonly GameEvent[],
   visibleState: VisibleState | null,
   resolvers: NameResolvers,
 ): ContestResultBuild {
@@ -232,9 +312,9 @@ export function buildCombatContestResult(
   const pairs: PairDetail[] = [];
   for (const e of events) {
     if (e.type === "unit_injured") {
-      outcomes.push({ type: "injured", unitName: resolvers.card(e.unitId), ownerName: resolvers.player(e.controllerId) });
+      outcomes.push({ type: "injured", unitName: resolvers.card(e.unitId), ownerName: resolvers.player(e.controllerId), ownerId: e.controllerId });
     } else if (e.type === "unit_killed") {
-      outcomes.push({ type: "killed", unitName: resolvers.card(e.unitId), ownerName: resolvers.player(e.controllerId) });
+      outcomes.push({ type: "killed", unitName: resolvers.card(e.unitId), ownerName: resolvers.player(e.controllerId), ownerId: e.controllerId });
     } else if (e.type === "combat_pair_resolved") {
       pairs.push(buildPairDetail(e, resolvers));
     }
@@ -250,6 +330,8 @@ export function buildCombatContestResult(
       locationName: cell?.location?.name ?? `(${combatStart.row},${combatStart.col})`,
       attackerName: resolvers.player(combatStart.attackerId),
       defenderName: resolvers.player(combatStart.defenderId),
+      attackerId: combatStart.attackerId,
+      defenderId: combatStart.defenderId,
       pairs,
       outcomes,
       winnerName: combatEnd?.type === "combat_resolved" && combatEnd.winnerId
@@ -300,9 +382,9 @@ export function buildDslContestResult(
   for (let i = contestIdx + 1; i < events.length; i++) {
     const e = events[i];
     if (e.type === "unit_killed" && unitIds.has(e.unitId)) {
-      contestOutcomes.push({ type: "killed", unitName: resolvers.card(e.unitId), ownerName: resolvers.player(e.controllerId) });
+      contestOutcomes.push({ type: "killed", unitName: resolvers.card(e.unitId), ownerName: resolvers.player(e.controllerId), ownerId: e.controllerId });
     } else if (e.type === "unit_injured" && unitIds.has(e.unitId)) {
-      contestOutcomes.push({ type: "injured", unitName: resolvers.card(e.unitId), ownerName: resolvers.player(e.controllerId) });
+      contestOutcomes.push({ type: "injured", unitName: resolvers.card(e.unitId), ownerName: resolvers.player(e.controllerId), ownerId: e.controllerId });
     } else if (e.type === "unit_controlled" && unitIds.has(e.unitId)) {
       contestOutcomes.push({
         type: "controlled",

@@ -5,7 +5,13 @@
   import Modal from "./Modal.svelte";
 
   const vs = $derived(getVisibleState());
-  const prompt = $derived(vs?.pickPrompt);
+  // This overlay is the `deck_pick` "choose N to keep" UI; `scholar_reorder`
+  // (no `count`, needs an ordering UI) is not handled here. Narrow to the
+  // deck_pick variant so `count` is well-typed and a scholar prompt renders
+  // nothing rather than a broken count-less dialog.
+  const prompt = $derived(
+    vs?.pickPrompt?.kind === "deck_pick" ? vs.pickPrompt : undefined,
+  );
   const resolution = $derived(
     prompt && vs ? resolvePickOptions(prompt, vs.self.mainDeck) : null,
   );
@@ -24,7 +30,7 @@
     }
   });
 
-  let selected = $state(new Set<string>());
+  let selected = $state<ReadonlySet<string>>(new Set<string>());
   let submitted = $state(false);
 
   // If the engine surfaces an error while we're mid-submit, unlock the

@@ -7,7 +7,7 @@ import type {
   MainAction,
   SeedingAction,
 } from "./types";
-import { getActivePlayerId } from "./types";
+import { getActivePlayerId, getDeciderId } from "./types";
 
 export type { ApplyResult };
 
@@ -24,14 +24,16 @@ export function applyAction<S extends GameState>(
 ): ApplyResult {
   const activePlayerId = getActivePlayerId(state);
 
-  // TODO(#166): this gate rejects every non-active player, so it will reject a
-  // defender-assigned `resolve_combat_round` (the defender is normally the
-  // non-active player). When #166 hands the combat decision to the defender,
-  // relax this to also admit the pending prompt's decider
-  // (`state.combatPrompt?.playerId === action.playerId`), and mirror the
-  // fall-through in `getValidActions`. Today decider == attacker == active, so
-  // the paths agree and this is inert.
-  if (action.playerId !== activePlayerId) {
+  // A suspended combat hands its decision to the prompt's decider — for #166's
+  // matchup assignment that is the **defender**, normally the *non-active*
+  // player. This gate here already restricts the decider to `resolve_combat_round`;
+  // `handleResolveCombatRound` then re-checks that the id matches the prompt.
+  // `getValidActions` mirrors this by keying its combat offer off
+  // `combatPrompt.playerId`. Every other action still requires the active player.
+  const combatDecider: string | undefined = getDeciderId(state);
+  const isCombatDecider: boolean =
+    action.type === "resolve_combat_round" && action.playerId === combatDecider;
+  if (action.playerId !== activePlayerId && !isCombatDecider) {
     throw new Error(
       `Action from player "${action.playerId}" rejected: it is player "${activePlayerId}"'s turn`,
     );

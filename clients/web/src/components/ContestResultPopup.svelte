@@ -5,7 +5,7 @@
     type ContestResult,
     type PairSideView,
   } from "../lib/gameStore.svelte";
-  import { buildDialogView, type DialogView } from "../lib/contestResult";
+  import { buildDialogView, type ContestOutcome, type DialogView } from "../lib/contestResult";
   import Modal from "./Modal.svelte";
 
   const result: ContestResult | null = $derived(getContestResult());
@@ -14,8 +14,51 @@
     return delta >= 0 ? `+${delta}` : `${delta}`;
   }
 
+  // Which player owns the unit in an outcome, so the row can align to that side
+  // (attacker/Player 1 → left, defender/Player 2 → right). Compares player ids
+  // (not display names, which can collide). Only combat results carry the side
+  // ids and the multi-pair layout this mirrors.
+  function outcomeSide(outcome: ContestOutcome): "attacker" | "defender" | null {
+    if (!result || result.source !== "combat") return null;
+    if (outcome.type === "injured" || outcome.type === "killed") {
+      if (outcome.ownerId === result.attackerId) return "attacker";
+      if (outcome.ownerId === result.defenderId) return "defender";
+    }
+    return null;
+  }
+
   const view: DialogView | null = $derived(result ? buildDialogView(result) : null);
 </script>
+
+{#snippet sideBreakdown(side: PairSideView, isWinner: boolean)}
+  <div
+    class="flex-1 rounded p-2 text-xs {isWinner
+      ? 'bg-highlight/15 ring-1 ring-highlight'
+      : 'bg-surface-raised'}"
+  >
+    <div class="mb-1 font-semibold text-text-primary">
+      {side.unitName}
+      <span class="text-text-muted">({side.ownerName})</span>
+    </div>
+    <div class="flex flex-wrap items-center gap-1 text-text-secondary">
+      <span class="font-mono">{side.baseStat}</span>
+      {#each side.modifiers as mod}
+        <span
+          class="rounded bg-surface px-1.5 py-0.5 font-mono {mod.delta > 0
+            ? 'text-success'
+            : mod.delta < 0
+              ? 'text-error'
+              : 'text-text-secondary'}"
+          title="{mod.source.type}: {mod.source.definitionId}"
+        >
+          {signed(mod.delta)} {mod.source.definitionId}
+        </span>
+      {/each}
+      <span class="font-mono">+ {side.roll}🎲</span>
+      <span class="ml-auto font-mono font-semibold text-text-primary">= {side.power}</span>
+    </div>
+  </div>
+{/snippet}
 
 {#if result && view}
   <Modal>
@@ -32,34 +75,6 @@
         {result.defenderName}
       </span>
     </div>
-
-    {#snippet sideBreakdown(side: PairSideView, isWinner: boolean)}
-      <div
-        class="flex-1 rounded p-2 text-xs {isWinner
-          ? 'bg-highlight/15 ring-1 ring-highlight'
-          : 'bg-surface-raised'}"
-      >
-        <div class="mb-1 font-semibold text-text-primary">
-          {side.unitName}
-          <span class="text-text-muted">({side.ownerName})</span>
-        </div>
-        <div class="flex flex-wrap items-center gap-1 text-text-secondary">
-          <span class="font-mono">{side.baseStat}</span>
-          {#each side.modifiers as mod}
-            <span
-              class="rounded bg-surface px-1.5 py-0.5 font-mono {mod.delta > 0
-                ? 'text-success'
-                : 'text-error'}"
-              title="{mod.source.type}: {mod.source.definitionId}"
-            >
-              {signed(mod.delta)} {mod.source.definitionId}
-            </span>
-          {/each}
-          <span class="font-mono">+ {side.roll}🎲</span>
-          <span class="ml-auto font-mono font-semibold text-text-primary">= {side.power}</span>
-        </div>
-      </div>
-    {/snippet}
 
     {#if result.pairs.length > 0}
       <div class="mb-4 space-y-2">
@@ -81,7 +96,13 @@
     {#if result.outcomes.length > 0}
       <div class="mb-4 space-y-1">
         {#each result.outcomes as outcome}
-          <div class="flex items-center gap-2 rounded bg-surface-raised px-3 py-1.5 text-sm">
+          {@const side = outcomeSide(outcome)}
+          <div
+            class="flex w-fit max-w-[90%] items-center gap-2 rounded bg-surface-raised px-3 py-1.5 text-sm {side ===
+            'defender'
+              ? 'ml-auto flex-row-reverse text-right'
+              : ''}"
+          >
             {#if outcome.type === "injured"}
               <span>🩸</span>
               <span class="text-text-secondary">
@@ -111,15 +132,13 @@
       <p class="mb-4 text-center text-sm text-text-muted">{view.emptyOutcomesMsg}</p>
     {/if}
 
-    <div class="mb-4 text-center text-sm font-semibold">
-      {#if result.winnerName}
+    {#if result.winnerName}
+      <div class="mb-4 text-center text-sm font-semibold">
         <span class="text-highlight">
           {result.winnerName} wins!
         </span>
-      {:else}
-        <span class="text-text-muted">Draw — no clear winner</span>
-      {/if}
-    </div>
+      </div>
+    {/if}
 
     <button
       onclick={dismissContest}

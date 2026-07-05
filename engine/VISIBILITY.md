@@ -38,8 +38,9 @@ Teammates are treated as **self** — they share full visibility (see
 - `winner`, `scores` (ended phase)
 - `middleArea`, `seedingStep` (seeding phase)
 - **`combatPrompt`** — combat is fully open information. When a combat suspends
-  between rounds (#165), *every* viewer sees the full prompt (cell, round,
-  committed unit-id lists, and which player must decide). This is deliberately
+  mid-round for the defender's matchup decision (#166), *every* viewer sees the
+  full prompt (cell, round, committed unit-id lists, revealed rolls, and which
+  player must decide). This is deliberately
   unlike `pickPrompt`/`viewPrompt`. Rationale: the units in the prompt are
   already on the public grid, so nothing new leaks — and both sides watching a
   fight need to see it pause. See #165, and #166–#168 for the decisions that

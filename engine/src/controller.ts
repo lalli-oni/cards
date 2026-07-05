@@ -10,7 +10,7 @@ import type {
   PlayerDescriptor,
   Session,
 } from "./types";
-import { getActivePlayerId } from "./types";
+import { getActivePlayerId, getDeciderId } from "./types";
 import { getValidActions } from "./valid-actions";
 import { getVisibleState } from "./visible-state";
 
@@ -111,14 +111,21 @@ export class GameController {
 
   /** Execute a single turn: get action from adapter, validate, apply. */
   async playTurn(): Promise<GameEvent[]> {
-    const activePlayerId = getActivePlayerId(this.state);
-    const adapter = this.adapters.get(activePlayerId);
+    // While a combat is suspended, the pending decision belongs to the prompt's
+    // decider (the defender — normally NOT the active player), mirroring the
+    // dispatch gate in `apply-action.ts`. Route the turn to that player so we
+    // ask their adapter and validate against their action set; the idle
+    // attacker's valid-action list is empty while suspended, so driving the loop
+    // off the active player would reject the defender's legitimate submission.
+    const decider: string | undefined = getDeciderId(this.state);
+    const actingPlayerId: string = decider ?? getActivePlayerId(this.state);
+    const adapter = this.adapters.get(actingPlayerId);
     if (!adapter) {
-      throw new Error(`No adapter registered for player "${activePlayerId}"`);
+      throw new Error(`No adapter registered for player "${actingPlayerId}"`);
     }
 
-    const visibleState = getVisibleState(this.state, activePlayerId);
-    const validActions = getValidActions(this.state, activePlayerId);
+    const visibleState = getVisibleState(this.state, actingPlayerId);
+    const validActions = getValidActions(this.state, actingPlayerId);
     const action = await adapter.chooseAction(visibleState, validActions);
 
     // Validate the adapter returned a legal action
@@ -127,7 +134,7 @@ export class GameController {
     );
     if (!isValid) {
       throw new Error(
-        `Adapter for player "${activePlayerId}" returned an invalid action: ` +
+        `Adapter for player "${actingPlayerId}" returned an invalid action: ` +
           `${JSON.stringify(action)}`,
       );
     }

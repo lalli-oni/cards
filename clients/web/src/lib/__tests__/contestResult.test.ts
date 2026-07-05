@@ -1,8 +1,10 @@
 import { describe, expect, it } from "bun:test";
+import type { GameEvent } from "cards-engine";
 import {
   buildDialogView,
   buildPairDetail,
   buildPairDetailFromContest,
+  stepCombatBuffer,
   type CombatPairResolved,
   type ContestResolved,
   type ContestResult,
@@ -67,6 +69,77 @@ describe("buildPairDetail", () => {
   });
 });
 
+describe("stepCombatBuffer", () => {
+  const started: GameEvent = { type: "combat_started", row: 0, col: 0, attackerId: "p1", defenderId: "p2" };
+  const resolved: GameEvent = { type: "combat_resolved", row: 0, col: 0, winnerId: "p1" };
+  const pair: GameEvent = makeEvent("kill_defender");
+  const injured: GameEvent = { type: "unit_injured", unitId: "def", controllerId: "p2" };
+  const unrelated: GameEvent = { type: "turn_started", playerId: "p1", round: 1 };
+
+  it("atomic combat (start+pair+resolved in one batch) completes with all events, empty buffer", () => {
+    const step = stepCombatBuffer([], [started, pair, injured, resolved]);
+    expect(step.outcome.kind).toBe("complete");
+    if (step.outcome.kind !== "complete") return;
+    expect(step.outcome.dialogEvents).toEqual([started, pair, injured, resolved]);
+    expect(step.buffer).toEqual([]);
+  });
+
+  it("start with no resolve → suspended, buffering the started context", () => {
+    const step = stepCombatBuffer([], [started]);
+    expect(step.outcome.kind).toBe("suspended");
+    expect(step.buffer).toEqual([started]);
+  });
+
+  it("resume batch completes the fight using the buffered start", () => {
+    const step = stepCombatBuffer([started], [pair, injured, resolved]);
+    expect(step.outcome.kind).toBe("complete");
+    if (step.outcome.kind !== "complete") return;
+    // Whole fight, start (buffered) through resolved (this batch).
+    expect(step.outcome.dialogEvents).toEqual([started, pair, injured, resolved]);
+    expect(step.buffer).toEqual([]);
+  });
+
+  it("multi-round: a resume that resolves a round and suspends again accumulates, no dialog yet", () => {
+    const step = stepCombatBuffer([started], [pair]);
+    expect(step.outcome.kind).toBe("none");
+    expect(step.buffer).toEqual([started, pair]);
+    // The next resume finally resolves — dialog carries both rounds' pairs.
+    const final = stepCombatBuffer(step.buffer, [pair, resolved]);
+    expect(final.outcome.kind).toBe("complete");
+    if (final.outcome.kind !== "complete") return;
+    expect(final.outcome.dialogEvents).toEqual([started, pair, pair, resolved]);
+  });
+
+  it("a pair with no buffered start is a true orphan", () => {
+    const step = stepCombatBuffer([], [pair]);
+    expect(step.outcome.kind).toBe("orphan");
+  });
+
+  it("a batch with no combat activity is 'none' and leaves the buffer untouched", () => {
+    expect(stepCombatBuffer([], [unrelated]).outcome.kind).toBe("none");
+    expect(stepCombatBuffer([started], [unrelated]).buffer).toEqual([started]);
+  });
+
+  it("a fresh combat_started discards a stale non-empty buffer (no cross-fight leak)", () => {
+    const started2: GameEvent = { type: "combat_started", row: 1, col: 1, attackerId: "p2", defenderId: "p1" };
+    const pair2: GameEvent = makeEvent("kill_attacker");
+    const resolved2: GameEvent = { type: "combat_resolved", row: 1, col: 1, winnerId: "p2" };
+    // Previous fight left [started, pair] buffered; a new atomic fight arrives.
+    const step = stepCombatBuffer([started, pair], [started2, pair2, resolved2]);
+    expect(step.outcome.kind).toBe("complete");
+    if (step.outcome.kind !== "complete") return;
+    // Only the second fight's events — the stale buffer is dropped, not leaked.
+    expect(step.outcome.dialogEvents).toEqual([started2, pair2, resolved2]);
+  });
+
+  it("a resolve with no buffered start is orphan, not a silent empty completion", () => {
+    // Reachable after a save/load mid-suspended-combat that reset the buffer: the
+    // resume batch resolves the fight but carries no combat_started.
+    const step = stepCombatBuffer([], [pair, resolved]);
+    expect(step.outcome.kind).toBe("orphan");
+  });
+});
+
 describe("buildPairDetailFromContest", () => {
   function makeContestEvent(winnerSide: "attacker" | "defender"): ContestResolved {
     return {
@@ -112,6 +185,8 @@ describe("buildDialogView", () => {
       locationName: "Marketplace",
       attackerName: "Alice",
       defenderName: "Bob",
+      attackerId: "p1",
+      defenderId: "p2",
       pairs: [],
       outcomes: [],
       winnerName: null,

@@ -144,6 +144,7 @@ describe("toEndedState", () => {
     )!.id;
     const withPrompt = produce(base, (d) => {
       d.combatPrompt = {
+        kind: "assign_matchups",
         playerId: d.turn.activePlayerId,
         row: 0,
         col: 0,

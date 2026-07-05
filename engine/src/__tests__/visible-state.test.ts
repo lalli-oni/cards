@@ -233,6 +233,7 @@ describe("getVisibleState", () => {
 
   describe("combatPrompt (public info)", () => {
     const prompt = {
+      kind: "assign_matchups" as const,
       playerId: "p1",
       row: 0,
       col: 0,

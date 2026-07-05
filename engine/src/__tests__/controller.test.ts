@@ -1,4 +1,6 @@
 import { describe, expect, it } from "bun:test";
+import { produce } from "immer";
+import { applyAction } from "../apply-action";
 import { BotAdapter } from "../bot-adapter";
 import { GameController } from "../controller";
 import type {
@@ -11,7 +13,15 @@ import type {
   Session,
   VisibleState,
 } from "../types";
-import { DEFAULT_CONFIG, SEED, TWO_PLAYERS } from "./helpers";
+import {
+  createTestGame,
+  DEFAULT_CONFIG,
+  makeLocation,
+  makeUnit,
+  resetIds,
+  SEED,
+  TWO_PLAYERS,
+} from "./helpers";
 
 const MAIN_SETUP_INPUT: SetupInput = {
   mode: "main",
@@ -106,6 +116,82 @@ describe("GameController", () => {
       });
 
       await expect(controller.playTurn()).rejects.toThrow("invalid action");
+    });
+  });
+
+  describe("suspended combat routing", () => {
+    // Build a 2v2 combat suspended for the defender's matchup decision.
+    function buildSuspendedCombat(): MainGameState {
+      resetIds();
+      const strongAtk = makeUnit({ ownerId: "p2", strength: 100 });
+      const weakAtk = makeUnit({ ownerId: "p2", strength: 1 });
+      const strongDef = makeUnit({ ownerId: "p1", strength: 100 });
+      const weakDef = makeUnit({ ownerId: "p1", strength: 1 });
+      const base = produce(createTestGame(), (d) => {
+        d.grid[0][0].location = makeLocation({ ownerId: "p2" });
+        d.grid[0][0].units.push(strongAtk, weakAtk, strongDef, weakDef);
+      });
+      const { state } = applyAction(base, {
+        type: "attack",
+        playerId: "p2",
+        row: 0,
+        col: 0,
+        unitIds: [strongAtk.id, weakAtk.id],
+      });
+      const suspended = state as MainGameState;
+      // Precondition: p2 (active attacker) is suspended; p1 (defender) decides.
+      expect(suspended.combatPrompt?.playerId).toBe("p1");
+      expect(suspended.turn.activePlayerId).toBe("p2");
+      return suspended;
+    }
+
+    // Regression for the #179 finding: `playTurn` drove the loop off the active
+    // (attacker) player, whose valid-action list is empty while suspended, so a
+    // legitimate defender submission was rejected as "invalid action" and the
+    // interactive loop crashed. `playTurn` must route the turn to the decider.
+    it("routes a suspended combat's turn to the non-active defender", async () => {
+      const suspended = buildSuspendedCombat();
+
+      const events: GameEvent[] = [];
+      const deciderAdapter: PlayerAdapter = {
+        // Submit the greedy default (getValidActions offers it first).
+        async chooseAction(_vis: VisibleState, valid: Action[]) {
+          expect(valid.length).toBeGreaterThan(0);
+          return valid[0];
+        },
+      };
+      const attackerAdapter: PlayerAdapter = {
+        async chooseAction() {
+          throw new Error("attacker adapter must not be asked while combat is suspended");
+        },
+      };
+
+      const session: Session = {
+        version: "0.1.0",
+        config: DEFAULT_CONFIG,
+        players: TWO_PLAYERS,
+        seed: SEED,
+        actions: [],
+        snapshot: suspended,
+      };
+      const controller = GameController.fromSession(
+        session,
+        MAIN_SETUP_INPUT,
+        new Map<string, PlayerAdapter>([
+          ["p1", deciderAdapter],
+          ["p2", attackerAdapter],
+        ]),
+        (evs) => events.push(...evs),
+      );
+
+      let guard = 0;
+      while ((controller.getState() as MainGameState).combatPrompt) {
+        if (guard++ > 10) throw new Error("combat failed to terminate");
+        await controller.playTurn();
+      }
+
+      expect((controller.getState() as MainGameState).combatPrompt).toBeUndefined();
+      expect(events.filter((e) => e.type === "combat_resolved")).toHaveLength(1);
     });
   });
 

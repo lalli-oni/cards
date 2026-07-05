@@ -223,6 +223,7 @@ describe("getVisibleState", () => {
         scores: {},
         pickPrompt: undefined,
         viewPrompt: undefined,
+        combatPrompt: undefined,
       };
       const vis = getVisibleState(endedState, "p1");
       expect(vis.phase).toBe("ended");

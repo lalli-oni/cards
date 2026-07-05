@@ -32,6 +32,7 @@ import type {
   ActivePassiveEvent,
   ApplyResult,
   CombatPairOutcome,
+  CombatPrompt,
   CombatSide,
   GameEvent,
   ItemCard,
@@ -688,6 +689,66 @@ function handleAttack(
 
   emit({ type: "combat_started", row, col, attackerId: playerId, defenderId });
 
+  // Hand off to the resumable loop from round 0. In the default (auto-resolve)
+  // path this runs the whole combat to completion synchronously and emits
+  // `combat_resolved` — a single `attack` yields `combat_started` +
+  // `combat_resolved` in one events array, exactly as before #165.
+  runCombat(
+    draft,
+    {
+      playerId,
+      row,
+      col,
+      attackerId: playerId,
+      defenderId,
+      round: 0,
+      attackerUnitIds: attackers.map((u) => u.id),
+      defenderUnitIds: defenders.map((u) => u.id),
+    },
+    emit,
+    queries,
+  );
+}
+
+/**
+ * Whether combat must suspend before running `round` to await a player
+ * decision. This is the #165 suspension hook.
+ *
+ * Returns `false` for every real game today: no production ruleset sets the
+ * seam config, so combat always auto-resolves and no behaviour changes until a
+ * real pause condition lands. #166–#168 replace the body with the actual
+ * decision logic (defender-assigned matchups, sit-out, retreat). The
+ * `combat_suspend_between_rounds` key is a test-only seam — it exercises the
+ * suspend/resume machinery end-to-end while the real conditions don't exist yet.
+ *
+ * `round` is the round the decision would gate (always ≥ 1 — combat never pauses
+ * before its opening round). Unused by the seam, but #166–#168 will branch on it.
+ */
+function combatDecisionPending(draft: Draft<MainGameState>, round: number): boolean {
+  void round;
+  return getConfigNumber(draft, "combat_suspend_between_rounds", 0) === 1;
+}
+
+/**
+ * Runs combat rounds from `state.round` onward, resuming an in-progress fight.
+ * Either completes the combat (emitting `combat_resolved`) or, if a decision is
+ * pending between rounds, sets `draft.combatPrompt` and returns without emitting
+ * `combat_resolved` — leaving the fight suspended for `resolve_combat_round`.
+ *
+ * Living combatants are re-resolved from the cell by id each round rather than
+ * held as references: units get killed/removed mid-combat, and on resume the
+ * pre-suspend references are gone (a fresh `produce()` draft). The committed id
+ * lists in `state` are the durable handle.
+ */
+function runCombat(
+  draft: Draft<MainGameState>,
+  state: CombatPrompt,
+  emit: EmitFn,
+  queries: QueryListener[],
+): void {
+  const { row, col, attackerId, defenderId, attackerUnitIds, defenderUnitIds } = state;
+  const cell = draft.grid[row][col];
+
   let rng = fromState(draft.rngState);
 
   // Auto-resolve combat rounds. Drop-out survivor semantics guarantee the loop
@@ -698,16 +759,17 @@ function handleAttack(
   // with unusually large unit stacks; normal combats end well within it. See
   // rules/README.md Combat design note ([var:combat_round_cap:10]).
   const maxRounds = getConfigNumber(draft, "combat_round_cap", 10);
-  for (let round = 0; round < maxRounds; round++) {
+  for (let round = state.round; round < maxRounds; round++) {
     // Drop-out survivor semantics (rules/README.md Combat step 6, "Next round
     // or end"): the first round rolls all committed units, but subsequent
     // rounds continue only "surviving (non-injured, non-killed)" units. An
     // injured unit therefore fights the round in which it is hurt, then leaves
     // the pool. Because every matchup removes its loser (killed, or injured →
     // out next round), the combined fighting pool strictly shrinks each round,
-    // guaranteeing termination.
-    const livingAttackers = attackers.filter((u) => !isDeadOrRemoved(cell, u) && (round === 0 || !u.injured));
-    const livingDefenders = defenders.filter((u) => !isDeadOrRemoved(cell, u) && (round === 0 || !u.injured));
+    // guaranteeing termination. Units are re-resolved from the cell by id so
+    // this is correct whether the round starts fresh or resumes post-suspend.
+    const livingAttackers = livingCombatants(cell, attackerUnitIds, round);
+    const livingDefenders = livingCombatants(cell, defenderUnitIds, round);
 
     if (livingAttackers.length === 0 || livingDefenders.length === 0) break;
 
@@ -735,17 +797,37 @@ function handleAttack(
       const def = defRolls[i];
       resolveCombatPair(draft, cell, atk, def, row, col, emit);
     }
+
+    // Between-rounds suspension point (#165). Checked AFTER the round resolves
+    // and only when a further round would actually be fought (both sides still
+    // have uninjured combatants) — so a finished combat falls through to
+    // `combat_resolved` instead of pausing, and a resumed combat fights its
+    // round before it can pause again. `combatDecisionPending` is a cheap
+    // config read that is false in every real game, so the next-round peek
+    // below never runs on the default auto-resolve path.
+    if (combatDecisionPending(draft, round + 1)) {
+      const nextAttackers = livingCombatants(cell, attackerUnitIds, round + 1);
+      const nextDefenders = livingCombatants(cell, defenderUnitIds, round + 1);
+      if (nextAttackers.length > 0 && nextDefenders.length > 0) {
+        // Persist rng so resume continues the same roll stream, then hand
+        // control back. `combat_resolved` is deliberately NOT emitted — combat
+        // is paused, not over.
+        draft.rngState = extractRngState(rng) as number[];
+        draft.combatPrompt = { ...state, round: round + 1 };
+        return;
+      }
+    }
   }
 
   draft.rngState = extractRngState(rng) as number[];
 
   // Determine winner
-  const remainingAttackers = attackers.filter((u) => !isDeadOrRemoved(cell, u));
-  const remainingDefenders = defenders.filter((u) => !isDeadOrRemoved(cell, u));
+  const remainingAttackers = livingCombatants(cell, attackerUnitIds, 0);
+  const remainingDefenders = livingCombatants(cell, defenderUnitIds, 0);
 
   let winnerId: string | null = null;
   if (remainingAttackers.length > 0 && remainingDefenders.length === 0) {
-    winnerId = playerId;
+    winnerId = attackerId;
   } else if (remainingDefenders.length > 0 && remainingAttackers.length === 0) {
     winnerId = defenderId;
   }
@@ -753,12 +835,23 @@ function handleAttack(
   emit({ type: "combat_resolved", row, col, winnerId });
 }
 
-/** Check if a unit has been removed from the cell (killed/discarded). */
-function isDeadOrRemoved(
+/**
+ * The units from `unitIds` still fighting this `round`: present in the cell and,
+ * on rounds after the first, not injured (drop-out survivor semantics — see
+ * `runCombat`). Passing `round: 0` yields simply the units still present, used
+ * for winner determination.
+ */
+function livingCombatants(
   cell: Draft<{ units: UnitCard[] }>,
-  unit: Draft<UnitCard>,
-): boolean {
-  return !cell.units.some((u) => u.id === unit.id);
+  unitIds: string[],
+  round: number,
+): Draft<UnitCard>[] {
+  const living: Draft<UnitCard>[] = [];
+  for (const id of unitIds) {
+    const unit = cell.units.find((u) => u.id === id);
+    if (unit && (round === 0 || !unit.injured)) living.push(unit);
+  }
+  return living;
 }
 
 interface CombatantRoll {
@@ -1158,6 +1251,31 @@ function handleDismissView(
   draft.viewPrompt = undefined;
 }
 
+function handleResolveCombatRound(
+  draft: Draft<MainGameState>,
+  playerId: string,
+  emit: EmitFn,
+  queries: QueryListener[],
+): void {
+  const prompt = draft.combatPrompt;
+  if (!prompt) {
+    throw new Error(`resolve_combat_round rejected: no suspended combat (by player "${playerId}")`);
+  }
+  if (prompt.playerId !== playerId) {
+    throw new Error(
+      `resolve_combat_round rejected: pending combat decision is for "${prompt.playerId}", not "${playerId}"`,
+    );
+  }
+  // #165: the decision is empty — nothing to apply, just resume. #166–#168 will
+  // apply the submitted matchup/sit-out/retreat here before resuming.
+  //
+  // Clear the prompt before resuming: `runCombat` re-sets it if the fight
+  // suspends again on a later round, so clearing first keeps a single source of
+  // truth (an unresolved fight always has exactly one live `combatPrompt`).
+  draft.combatPrompt = undefined;
+  runCombat(draft, prompt, emit, queries);
+}
+
 // ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
@@ -1169,16 +1287,30 @@ export function applyMainAction(
   const events: GameEvent[] = [];
   let roundIncremented = false;
 
-  // Invariant: pickPrompt and viewPrompt are mutually exclusive. The
-  // executor's suspend guard in `effect-dsl/executor.ts` ensures producers
-  // never co-set them, but assert here so a future producer that bypasses the
-  // executor (e.g. a listener mutating state directly) fails loud instead of
-  // deadlocking the dispatcher.
-  if (state.pickPrompt && state.viewPrompt) {
+  // Invariant: pickPrompt, viewPrompt and combatPrompt are mutually exclusive.
+  // The executor's suspend guard in `effect-dsl/executor.ts` ensures the DSL
+  // producers never co-set pick/view; combat only suspends via `runCombat`,
+  // which never runs while a pick/view is pending (combat spends no AP through
+  // the DSL). Assert here so a future producer that bypasses these paths fails
+  // loud instead of deadlocking the dispatcher.
+  const pending: string[] = [];
+  if (state.pickPrompt) pending.push(`pick(picker="${state.pickPrompt.playerId}")`);
+  if (state.viewPrompt) pending.push(`view(viewer="${state.viewPrompt.playerId}")`);
+  if (state.combatPrompt) pending.push(`combat(decider="${state.combatPrompt.playerId}")`);
+  if (pending.length > 1) {
     throw new Error(
-      `applyMainAction invariant: both pickPrompt and viewPrompt are set ` +
-        `(picker="${state.pickPrompt.playerId}", viewer="${state.viewPrompt.playerId}") — ` +
+      `applyMainAction invariant: multiple prompts are set [${pending.join(", ")}] — ` +
         `at most one prompt may be pending at a time`,
+    );
+  }
+
+  if (state.combatPrompt && action.type !== "resolve_combat_round") {
+    throw new Error(
+      `Action "${action.type}" by "${action.playerId}" rejected: ` +
+        `suspended combat must be resolved first ` +
+        `(decider="${state.combatPrompt.playerId}", ` +
+        `cell=(${state.combatPrompt.row},${state.combatPrompt.col}), ` +
+        `round=${state.combatPrompt.round})`,
     );
   }
 
@@ -1271,6 +1403,10 @@ export function applyMainAction(
 
       case "dismiss_view":
         handleDismissView(draft, action.playerId);
+        break;
+
+      case "resolve_combat_round":
+        handleResolveCombatRound(draft, action.playerId, emit, queries);
         break;
 
       default: {

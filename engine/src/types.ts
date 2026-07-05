@@ -357,6 +357,19 @@ interface GameStateBase {
    * the same surface as main-phase `pick` verbs.
    */
   pickPrompt?: PickPrompt;
+  /**
+   * Set when combat suspends between rounds to await a player decision, cleared
+   * by `resolve_combat_round`. Combat is main-phase only today, but this lives
+   * on the base to mirror the `pickPrompt` precedent (a single suspend surface
+   * shared across phases). The prompt carries the full resumable loop state
+   * inline — the same Option-A pattern `pickPrompt`/`viewPrompt` use.
+   *
+   * Dormant in #165: no production combat ever pauses (see
+   * `combatDecisionPending` in `apply-main.ts`). The real pause conditions —
+   * defender-assigned matchups (#166), sit-out (#167), retreat (#168) — arrive
+   * later.
+   */
+  combatPrompt?: CombatPrompt;
 }
 
 export interface SeedingGameState extends GameStateBase {
@@ -433,6 +446,36 @@ export interface ViewPrompt {
   sourcePlayerId: string;
 }
 
+/**
+ * Set on `GameStateBase.combatPrompt` when a combat suspends between rounds.
+ * Stores the resumable loop state inline so `resolve_combat_round` can pick the
+ * fight back up: which cell, the two sides' committed unit instance ids, and the
+ * next round index. Living combatants are recomputed from the cell each round
+ * (units may have been killed/injured), so only the *committed* id lists are
+ * stored — not live unit references, which cannot survive the `produce()`
+ * boundary between suspend and resume.
+ *
+ * `playerId` is who must submit `resolve_combat_round`. For #165 (no real
+ * decision) that is the attacker; #166 will hand the decision to the defender.
+ * Revealed rolls / matchup payloads are deferred to #166–#168.
+ */
+export interface CombatPrompt {
+  /** Player expected to submit `resolve_combat_round`. */
+  playerId: string;
+  row: number;
+  col: number;
+  /** Attacking player id (the one who issued `attack`). */
+  attackerId: string;
+  /** Defending player id. */
+  defenderId: string;
+  /** Next round index to run on resume (0-based; `combat_round_cap` bounds it). */
+  round: number;
+  /** Committed attacker unit instance ids. */
+  attackerUnitIds: string[];
+  /** Committed defender unit instance ids. */
+  defenderUnitIds: string[];
+}
+
 export interface MainGameState extends GameStateBase {
   phase: "main";
   turn: TurnState;
@@ -456,6 +499,8 @@ export interface EndedGameState extends GameStateBase {
   pickPrompt?: never;
   /** Ended games never carry a pending view either. */
   viewPrompt?: never;
+  /** Ended games never carry a suspended combat either. */
+  combatPrompt?: never;
 }
 
 export type GameState = SeedingGameState | MainGameState | EndedGameState;
@@ -559,7 +604,8 @@ export type MainAction =
   | { type: "attempt_mission"; playerId: string; row: number; col: number }
   | { type: "pass"; playerId: string }
   | ResolvePickAction
-  | DismissViewAction;
+  | DismissViewAction
+  | ResolveCombatRoundAction;
 
 /**
  * Submitted by the viewer to dismiss a pending `viewPrompt`. The view is
@@ -569,6 +615,18 @@ export type MainAction =
  */
 export interface DismissViewAction {
   type: "dismiss_view";
+  playerId: string;
+}
+
+/**
+ * Submitted to resume a combat suspended between rounds (pending
+ * `combatPrompt`). For #165 the decision is empty — combat merely resumes its
+ * auto-resolve loop. The real payloads (matchup assignment #166, sit-out #167,
+ * retreat #168) will extend this interface. AP is not spent here (already spent
+ * on the initiating `attack`).
+ */
+export interface ResolveCombatRoundAction {
+  type: "resolve_combat_round";
   playerId: string;
 }
 
@@ -844,6 +902,8 @@ export interface VisibleState {
   pickPrompt?: PickPrompt;
   /** Set during main phase when this viewer is the active player on a `peek(opponent + hand)`. */
   viewPrompt?: ViewPrompt;
+  /** Set when combat is suspended between rounds. Public — combat is fully open, so surfaced to every viewer unredacted. */
+  combatPrompt?: CombatPrompt;
   winner?: string;
   scores?: Record<string, number>;
   /** Conditional reveals granted by active passives for this viewer. */

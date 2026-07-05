@@ -44,6 +44,7 @@ describe("getValidActions", () => {
         scores: {},
         pickPrompt: undefined,
         viewPrompt: undefined,
+        combatPrompt: undefined,
       };
       const actions = getValidActions(
         endedState,
@@ -78,6 +79,7 @@ describe("getValidActions", () => {
         scores: {},
         pickPrompt: undefined,
         viewPrompt: undefined,
+        combatPrompt: undefined,
       };
       expect(() => getActivePlayerId(endedState)).toThrow(
         "No active player in ended phase",

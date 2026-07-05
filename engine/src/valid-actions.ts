@@ -139,6 +139,9 @@ function getMainValidActions(
   state: MainGameState,
   playerId: string,
 ): MainAction[] {
+  if (state.combatPrompt && state.combatPrompt.playerId === playerId) {
+    return [{ type: "resolve_combat_round", playerId }];
+  }
   if (state.pickPrompt && state.pickPrompt.playerId === playerId) {
     return getResolvePickActions(state.pickPrompt, playerId);
   }

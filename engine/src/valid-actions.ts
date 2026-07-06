@@ -143,25 +143,46 @@ export function needsLocationTarget(card: EventCard): boolean {
 }
 
 /**
- * Every matchup the defender may assign, as complete `resolve_combat_round`
- * actions — one per bijection between the equal-length participant lists.
- * Enumerated by permuting the defenders against the fixed attacker order
- * (mirrors `scholar_reorder`'s full-permutation enumeration), so consumers that
- * treat `getValidActions` as the exhaustive action space (bots, search) can
- * explore non-greedy pairings, not just the default. The lists are stored
- * highest-power-first, so the identity permutation — element `[0]` — is the
- * greedy highest-vs-highest auto-resolve default a bot can submit as-is.
+ * Every legal `resolve_combat_round` action for the pending prompt, branching on
+ * its `kind`. Consumers that treat `getValidActions` as the exhaustive action
+ * space (bots, search) get all choices; element `[0]` is always the greedy
+ * auto-resolve default a bot can submit as-is.
  *
- * Count is `n!` where `n = min(sides)` participants (the smaller side). This is
- * bounded in practice by how many units realistically stack and fight in one
- * cell — a handful — so it stays small; a pathologically large stack (n ≥ 8)
- * would make this enumeration expensive. If unit stacks can grow that large,
+ * - `sit_out` (#167): every way the larger side can drop its `max - min` excess
+ *   units, as `C(max, max-min)` combinations. Ordered so `[0]` is the greedy
+ *   lowest-power default (the larger side's rolls are enumerated power-ascending,
+ *   so the first combination is the weakest `excess` units).
+ * - `assign_matchups` (#166): every bijection between the equal-length
+ *   participant lists — `n!` permutations of the defenders against the fixed
+ *   attacker order (mirrors `scholar_reorder`). The lists are stored
+ *   highest-power-first, so the identity permutation `[0]` is the greedy
+ *   highest-vs-highest default.
+ *
+ * Both counts are bounded in practice by how many units realistically stack and
+ * fight in one cell — a handful — so they stay small; a pathologically large
+ * stack would make either enumeration expensive. If stacks can grow that large,
  * switch to lazily surfacing only the greedy default here.
  */
 function buildCombatResolutions(
   prompt: CombatPrompt,
   playerId: string,
 ): ResolveCombatRoundAction[] {
+  if (prompt.kind === "sit_out") {
+    const attackerLarger: boolean = prompt.atkRolls.length > prompt.defRolls.length;
+    const largerRolls = attackerLarger ? prompt.atkRolls : prompt.defRolls;
+    const excess: number = Math.abs(prompt.atkRolls.length - prompt.defRolls.length);
+    // Ascending power → the first size-`excess` subset is the weakest units,
+    // making element `[0]` the greedy lowest-power sit-out default.
+    const idsByPowerAsc: string[] = [...largerRolls]
+      .sort((a, b) => a.power - b.power)
+      .map((s) => s.unitId);
+    return subsetsOfSize(idsByPowerAsc, excess).map((sitOutUnitIds) => ({
+      type: "resolve_combat_round",
+      playerId,
+      decision: { kind: "sit_out", sitOutUnitIds },
+    }));
+  }
+
   const attackerIds: readonly string[] = prompt.atkRolls.map((s) => s.unitId);
   const defenderIds: readonly string[] = prompt.defRolls.map((s) => s.unitId);
   return permutationsOf(defenderIds).map((perm) => ({

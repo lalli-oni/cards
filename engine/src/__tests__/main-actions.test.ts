@@ -1226,14 +1226,16 @@ describe("defender-assigned matchups (#166)", () => {
     // Every offer is a well-formed 3-pair bijection over the defenders.
     for (const act of offered) {
       if (act.type !== "resolve_combat_round") continue;
+      if (act.decision.kind !== "assign_matchups") continue;
       expect(act.decision.pairs).toHaveLength(3);
       expect(new Set(act.decision.pairs.map((p) => p.defenderUnitId)).size).toBe(3);
     }
   });
 
-  it("auto-resolves atomically for a trivial pairing (one side has a single unit)", () => {
-    // 1-vs-3: min(1,3) = 1, so there is only one possible matching — no defender
-    // decision. Combat resolves in a single action with no lingering prompt.
+  it("suspends for a sit-out choice when one side has excess (1 attacker vs 3 defenders)", () => {
+    // 1-vs-3: min(1,3) = 1, so there is no *pairing* choice — but the defender
+    // (the larger side) must pick which 2 of its 3 units sit out (#167). Combat
+    // suspends for that sit-out decision, then the lone 1-vs-1 resolves.
     const attacker = makeUnit({ ownerId: ACTIVE, strength: 100 });
     const defenders = [
       makeUnit({ ownerId: OTHER, strength: 1 }),
@@ -1245,14 +1247,29 @@ describe("defender-assigned matchups (#166)", () => {
       d.grid[0][0].units.push(attacker, ...defenders);
     });
 
-    const { state: next, events } = applyAction(state, {
+    const { state: suspended } = applyAction(state, {
       ...attackAction,
       unitIds: [attacker.id],
     });
-    const ns = next as MainGameState;
+    let cur = suspended as MainGameState;
 
-    expect(ns.combatPrompt).toBeUndefined();
-    expect(events.some((e) => e.type === "combat_resolved")).toBe(true);
+    // Suspended for the defender's sit-out choice, not resolved.
+    expect(cur.combatPrompt?.kind).toBe("sit_out");
+    expect(cur.combatPrompt?.playerId).toBe(OTHER); // the larger (defending) side decides
+    expect(cur.combatPrompt?.defRolls).toHaveLength(3);
+    expect(cur.combatPrompt?.atkRolls).toHaveLength(1);
+
+    const events: GameEvent[] = [];
+    let guard = 0;
+    while (cur.combatPrompt) {
+      if (guard++ > 10) throw new Error("combat failed to terminate");
+      const r = applyAction(cur, getValidActions(cur, cur.combatPrompt.playerId)[0] as MainAction);
+      cur = r.state as MainGameState;
+      events.push(...r.events);
+    }
+
+    expect(cur.combatPrompt).toBeUndefined();
+    expect(events.filter((e) => e.type === "combat_resolved")).toHaveLength(1);
   });
 
   it("throws if multiple prompts are set at once (mutual-exclusion invariant)", () => {
@@ -1260,6 +1277,7 @@ describe("defender-assigned matchups (#166)", () => {
     // that co-sets two must fail loud at dispatch rather than deadlock.
     const state = gameWith((d) => {
       d.combatPrompt = {
+        kind: "assign_matchups",
         playerId: ACTIVE,
         row: 0,
         col: 0,
@@ -1287,6 +1305,288 @@ describe("defender-assigned matchups (#166)", () => {
         decision: { kind: "assign_matchups", pairs: [] },
       }),
     ).toThrow("multiple prompts are set");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// sit-out selection (#167)
+// ---------------------------------------------------------------------------
+
+describe("sit-out selection (#167)", () => {
+  const attackAction = { type: "attack" as const, playerId: ACTIVE, row: 0, col: 0 };
+
+  /** Drive the fight to completion via the greedy default (`[0]`) at each
+   *  suspend, collecting every event. Returns the terminal state + events. */
+  function runToEnd(suspended: MainGameState): { state: MainGameState; events: GameEvent[] } {
+    let cur = suspended;
+    const events: GameEvent[] = [];
+    let guard = 0;
+    while (cur.combatPrompt) {
+      if (guard++ > 10) throw new Error("combat failed to terminate");
+      const r = applyAction(cur, getValidActions(cur, cur.combatPrompt.playerId)[0] as MainAction);
+      cur = r.state as MainGameState;
+      events.push(...r.events);
+    }
+    return { state: cur, events };
+  }
+
+  it("hands the sit-out choice to the larger (attacking) side and resolves the remainder", () => {
+    // 3 attackers vs 1 defender: the attacker is the larger side and must drop 2
+    // excess units. A non-greedy choice (sit out the two strongest) proves the
+    // engine honors the submitted ids rather than trimming lowest-power itself.
+    const atkStrong = makeUnit({ ownerId: ACTIVE, strength: 100 });
+    const atkMid = makeUnit({ ownerId: ACTIVE, strength: 50 });
+    const atkWeak = makeUnit({ ownerId: ACTIVE, strength: 20 });
+    const defender = makeUnit({ ownerId: OTHER, strength: 1 });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][0].units.push(atkStrong, atkMid, atkWeak, defender);
+    });
+
+    const { state: next } = applyAction(state, {
+      ...attackAction,
+      unitIds: [atkStrong.id, atkMid.id, atkWeak.id],
+    });
+    const suspended = next as MainGameState;
+
+    // Suspended for the attacker's sit-out choice, before any resolution.
+    expect(suspended.combatPrompt?.kind).toBe("sit_out");
+    expect(suspended.combatPrompt?.playerId).toBe(ACTIVE);
+    expect(suspended.combatPrompt?.atkRolls).toHaveLength(3);
+    expect(suspended.combatPrompt?.defRolls).toHaveLength(1);
+
+    // Sit out the two strongest, keeping the weak attacker to fight.
+    const { state: resolved, events } = applyAction(suspended, {
+      type: "resolve_combat_round",
+      playerId: ACTIVE,
+      decision: { kind: "sit_out", sitOutUnitIds: [atkStrong.id, atkMid.id] },
+    });
+    const ns = resolved as MainGameState;
+
+    // One clean resolution, no lingering prompt.
+    expect(ns.combatPrompt).toBeUndefined();
+    expect(events.filter((e) => e.type === "combat_resolved")).toHaveLength(1);
+
+    // The kept (weak) attacker is the one that fought the defender.
+    const pair = events.find((e) => e.type === "combat_pair_resolved");
+    expect(pair && pair.type === "combat_pair_resolved" && pair.attacker.unitId).toBe(atkWeak.id);
+
+    // Both sat-out attackers are untouched and still present.
+    expect(ns.grid[0][0].units.some((u) => u.id === atkStrong.id)).toBe(true);
+    expect(ns.grid[0][0].units.some((u) => u.id === atkMid.id)).toBe(true);
+  });
+
+  it("rejects a sit-out that drops the wrong count or a non-excess unit", () => {
+    const atk1 = makeUnit({ ownerId: ACTIVE, strength: 10 });
+    const atk2 = makeUnit({ ownerId: ACTIVE, strength: 10 });
+    const defender = makeUnit({ ownerId: OTHER, strength: 10 });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][0].units.push(atk1, atk2, defender);
+    });
+    const { state: next } = applyAction(state, {
+      ...attackAction,
+      unitIds: [atk1.id, atk2.id],
+    });
+    const suspended = next as MainGameState;
+    expect(suspended.combatPrompt?.kind).toBe("sit_out");
+
+    // Wrong count: excess is 1, not 2.
+    expect(() =>
+      applyAction(suspended, {
+        type: "resolve_combat_round",
+        playerId: ACTIVE,
+        decision: { kind: "sit_out", sitOutUnitIds: [atk1.id, atk2.id] },
+      }),
+    ).toThrow("expected 1 sit-out");
+
+    // A unit not on the larger side cannot be told to sit out.
+    expect(() =>
+      applyAction(suspended, {
+        type: "resolve_combat_round",
+        playerId: ACTIVE,
+        decision: { kind: "sit_out", sitOutUnitIds: [defender.id] },
+      }),
+    ).toThrow("not an excess unit");
+  });
+
+  it("rejects a sit-out that names the same unit twice", () => {
+    // 3-vs-1 (excess 2): a duplicate id has the right *count*, so it slips past
+    // the count guard and must be caught by the distinctness check — otherwise it
+    // would sit out one unit and leave the round a unit short.
+    const atk1 = makeUnit({ ownerId: ACTIVE, strength: 30 });
+    const atk2 = makeUnit({ ownerId: ACTIVE, strength: 20 });
+    const atk3 = makeUnit({ ownerId: ACTIVE, strength: 10 });
+    const defender = makeUnit({ ownerId: OTHER, strength: 1 });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][0].units.push(atk1, atk2, atk3, defender);
+    });
+    const { state: next } = applyAction(state, {
+      ...attackAction,
+      unitIds: [atk1.id, atk2.id, atk3.id],
+    });
+    const suspended = next as MainGameState;
+
+    expect(() =>
+      applyAction(suspended, {
+        type: "resolve_combat_round",
+        playerId: ACTIVE,
+        decision: { kind: "sit_out", sitOutUnitIds: [atk1.id, atk1.id] },
+      }),
+    ).toThrow("sits out more than once");
+  });
+
+  it("rejects a decision whose kind does not match the pending prompt", () => {
+    // A sit_out prompt must not accept an assign_matchups payload (or vice versa):
+    // the kind guard fails loud rather than routing the wrong payload into the
+    // wrong resolver.
+    const atk1 = makeUnit({ ownerId: ACTIVE, strength: 10 });
+    const atk2 = makeUnit({ ownerId: ACTIVE, strength: 10 });
+    const defender = makeUnit({ ownerId: OTHER, strength: 10 });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][0].units.push(atk1, atk2, defender);
+    });
+    const { state: next } = applyAction(state, {
+      ...attackAction,
+      unitIds: [atk1.id, atk2.id],
+    });
+    const suspended = next as MainGameState;
+    expect(suspended.combatPrompt?.kind).toBe("sit_out");
+
+    expect(() =>
+      applyAction(suspended, {
+        type: "resolve_combat_round",
+        playerId: ACTIVE,
+        decision: { kind: "assign_matchups", pairs: [] },
+      }),
+    ).toThrow('expected a "sit_out" decision');
+  });
+
+  it("suspends twice in one round: sit-out first, then the matchup decision (3v2)", () => {
+    // 3 attackers vs 2 defenders. The attacker drops 1 excess (sit-out), leaving
+    // 2v2 — which then needs the defender's matchup pairing. Both decisions fire
+    // within the SAME round before any pair resolves.
+    const atkA = makeUnit({ ownerId: ACTIVE, strength: 100 });
+    const atkB = makeUnit({ ownerId: ACTIVE, strength: 50 });
+    const atkC = makeUnit({ ownerId: ACTIVE, strength: 10 });
+    const defA = makeUnit({ ownerId: OTHER, strength: 100 });
+    const defB = makeUnit({ ownerId: OTHER, strength: 50 });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][0].units.push(atkA, atkB, atkC, defA, defB);
+    });
+
+    // First suspend: sit-out, decided by the larger (attacking) side.
+    const { state: s1, events: e1 } = applyAction(state, {
+      ...attackAction,
+      unitIds: [atkA.id, atkB.id, atkC.id],
+    });
+    const susp1 = s1 as MainGameState;
+    expect(susp1.combatPrompt?.kind).toBe("sit_out");
+    expect(susp1.combatPrompt?.playerId).toBe(ACTIVE);
+    expect(e1.some((e) => e.type === "combat_pair_resolved")).toBe(false); // nothing resolved yet
+
+    // Drop one attacker → 2v2, which must re-suspend for the matchup decision.
+    const { state: s2, events: e2 } = applyAction(susp1, {
+      type: "resolve_combat_round",
+      playerId: ACTIVE,
+      decision: { kind: "sit_out", sitOutUnitIds: [atkC.id] },
+    });
+    const susp2 = s2 as MainGameState;
+    expect(susp2.combatPrompt?.kind).toBe("assign_matchups");
+    expect(susp2.combatPrompt?.playerId).toBe(OTHER); // the defender pairs
+    expect(susp2.combatPrompt?.round).toBe(0); // still the same round
+    expect(susp2.combatPrompt?.atkRolls).toHaveLength(2);
+    expect(susp2.combatPrompt?.defRolls).toHaveLength(2);
+    expect(e2.some((e) => e.type === "combat_pair_resolved")).toBe(false); // still nothing resolved
+
+    // Submit the matchup and let the fight finish.
+    const { state: done, events: e3 } = runToEnd(susp2);
+    expect(done.combatPrompt).toBeUndefined();
+    expect(e3.some((e) => e.type === "combat_pair_resolved")).toBe(true);
+    expect(e3.filter((e) => e.type === "combat_resolved")).toHaveLength(1);
+  });
+
+  it("enumerates every sit-out combination, greedy-weakest first, decider-only", () => {
+    // 3-vs-1 (excess 2): the larger (attacking) side may drop any 2 of 3, so
+    // `getValidActions` offers C(3,2) = 3 sit-outs. Strength gaps > 6 make power
+    // order track strength order regardless of the d6, so `[0]` (weakest-first)
+    // sits out the two weakest, keeping the strongest to fight.
+    const atkStrong = makeUnit({ ownerId: ACTIVE, strength: 100 });
+    const atkMid = makeUnit({ ownerId: ACTIVE, strength: 50 });
+    const atkWeak = makeUnit({ ownerId: ACTIVE, strength: 10 });
+    const defender = makeUnit({ ownerId: OTHER, strength: 1 });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][0].units.push(atkStrong, atkMid, atkWeak, defender);
+    });
+    const { state: next } = applyAction(state, {
+      ...attackAction,
+      unitIds: [atkStrong.id, atkMid.id, atkWeak.id],
+    });
+    const susp = next as MainGameState;
+
+    const offered = getValidActions(susp, ACTIVE);
+    expect(offered).toHaveLength(3); // C(3, 2)
+    for (const act of offered) {
+      if (act.type !== "resolve_combat_round") continue;
+      if (act.decision.kind !== "sit_out") throw new Error("expected sit_out decisions");
+      expect(act.decision.sitOutUnitIds).toHaveLength(2);
+      expect(new Set(act.decision.sitOutUnitIds).size).toBe(2); // distinct
+    }
+    // Greedy default `[0]`: the two weakest sit out (mid + weak), strongest fights.
+    const greedy = offered[0];
+    if (greedy.type !== "resolve_combat_round" || greedy.decision.kind !== "sit_out") {
+      throw new Error("expected a sit_out action at [0]");
+    }
+    expect(new Set(greedy.decision.sitOutUnitIds)).toEqual(new Set([atkMid.id, atkWeak.id]));
+
+    // Only the decider (the larger side) is offered anything.
+    expect(getValidActions(susp, OTHER)).toHaveLength(0);
+  });
+
+  it("carries the shown rolls unchanged across both suspends and does not re-roll", () => {
+    // The rolls revealed at the sit_out suspend must be the exact rolls used at
+    // the later matchup suspend and at resolution — no re-roll, no rng advance
+    // across the sit-out step (sit-out consumes no randomness).
+    const atkA = makeUnit({ ownerId: ACTIVE, strength: 100 });
+    const atkB = makeUnit({ ownerId: ACTIVE, strength: 50 });
+    const atkC = makeUnit({ ownerId: ACTIVE, strength: 10 });
+    const defA = makeUnit({ ownerId: OTHER, strength: 100 });
+    const defB = makeUnit({ ownerId: OTHER, strength: 50 });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][0].units.push(atkA, atkB, atkC, defA, defB);
+    });
+
+    const { state: s1 } = applyAction(state, {
+      ...attackAction,
+      unitIds: [atkA.id, atkB.id, atkC.id],
+    });
+    const susp1 = s1 as MainGameState;
+    const rollAtSuspend1 = new Map<string, number>();
+    for (const side of [...susp1.combatPrompt!.atkRolls, ...susp1.combatPrompt!.defRolls]) {
+      rollAtSuspend1.set(side.unitId, side.roll);
+    }
+
+    const { state: s2 } = applyAction(susp1, {
+      type: "resolve_combat_round",
+      playerId: ACTIVE,
+      decision: { kind: "sit_out", sitOutUnitIds: [atkC.id] },
+    });
+    const susp2 = s2 as MainGameState;
+
+    // rng must not advance across the sit-out resolution — resolution and sit-out
+    // consume no randomness, so the stream resumes unbroken.
+    expect(susp2.rngState).toEqual(susp1.rngState);
+
+    // Every surviving participant keeps the roll it was shown at the first suspend.
+    for (const side of [...susp2.combatPrompt!.atkRolls, ...susp2.combatPrompt!.defRolls]) {
+      expect(rollAtSuspend1.has(side.unitId)).toBe(true);
+      expect(side.roll).toBe(rollAtSuspend1.get(side.unitId)!);
+    }
   });
 });
 
@@ -1694,19 +1994,34 @@ describe("combat details", () => {
       d.grid[0][0].units.push(atk1, atk2, defender);
     });
 
-    const { state: next, events } = applyAction(state, {
+    // 2-vs-1: the attacker is the larger side, so combat suspends for a sit-out
+    // choice (#167) before resolving. Drive the greedy default (`[0]`) to sit one
+    // attacker out, leaving a 1-vs-1 that resolves.
+    const { state: suspended, events: startEvents } = applyAction(state, {
       type: "attack",
       playerId: ACTIVE,
       unitIds: [atk1.id, atk2.id],
       row: 0,
       col: 0,
     });
-    const ns = next as MainGameState;
+    let cur = suspended as MainGameState;
+    expect(cur.combatPrompt?.kind).toBe("sit_out");
+    expect(cur.combatPrompt?.playerId).toBe(ACTIVE); // the larger (attacking) side decides
+
+    const events: GameEvent[] = [...startEvents];
+    let guard = 0;
+    while (cur.combatPrompt) {
+      if (guard++ > 10) throw new Error("combat failed to terminate");
+      const r = applyAction(cur, getValidActions(cur, cur.combatPrompt.playerId)[0] as MainAction);
+      cur = r.state as MainGameState;
+      events.push(...r.events);
+    }
+    const ns = cur;
 
     expect(events.some((e) => e.type === "combat_resolved")).toBe(true);
-    // Defender should be dead (2 strong attackers vs 1 weak defender)
+    // Defender should be dead (a strong attacker vs 1 weak defender)
     expect(ns.grid[0][0].units.every((u) => u.id !== defender.id)).toBe(true);
-    // Attackers should survive
+    // Both attackers should survive — the one that fought and the one that sat out
     expect(ns.grid[0][0].units.some((u) => u.id === atk1.id)).toBe(true);
     expect(ns.grid[0][0].units.some((u) => u.id === atk2.id)).toBe(true);
   });

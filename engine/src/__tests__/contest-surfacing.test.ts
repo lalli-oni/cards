@@ -58,6 +58,29 @@ function findAllPairs(events: readonly GameEvent[]): Extract<GameEvent, { type: 
   return events.filter((e): e is Extract<GameEvent, { type: "combat_pair_resolved" }> => e.type === "combat_pair_resolved");
 }
 
+/**
+ * Attack, then drive any combat suspensions (#167 sit-out, #166 matchup) to
+ * completion via the greedy default (`getValidActions[0]`), accumulating every
+ * event. Lets tests that only care about the drop-out / round-cap end state stay
+ * agnostic to how many interactive decisions the fight now interleaves.
+ */
+function attackToEnd(
+  state: MainGameState,
+  attack: MainAction,
+): { state: MainGameState; events: GameEvent[] } {
+  const first = applyAction(state, attack);
+  let cur = first.state as MainGameState;
+  const events: GameEvent[] = [...first.events];
+  let guard = 0;
+  while (cur.combatPrompt) {
+    if (guard++ > 40) throw new Error("combat failed to terminate");
+    const r = applyAction(cur, getValidActions(cur, cur.combatPrompt.playerId)[0] as MainAction);
+    cur = r.state as MainGameState;
+    events.push(...r.events);
+  }
+  return { state: cur, events };
+}
+
 function findContest(events: readonly GameEvent[]): Extract<GameEvent, { type: "contest_resolved" }> {
   const ev = events.find((e) => e.type === "contest_resolved");
   if (!ev || ev.type !== "contest_resolved") {
@@ -325,14 +348,16 @@ describe("combat drop-out survivor semantics", () => {
       d.grid[0][0].units.push(attacker, ...defenders);
     });
 
-    const { state: next, events } = applyAction(state, {
+    // 1-vs-2: the defender (larger side) picks which unit sits out (#167); the
+    // greedy default drops one, leaving the 1-vs-1 this test pins.
+    const { state: next, events } = attackToEnd(state, {
       type: "attack",
       playerId: ACTIVE,
       unitIds: [attacker.id],
       row: 0,
       col: 0,
     });
-    const ns = next as MainGameState;
+    const ns = next;
 
     // Round 0 ran (pre-injured attacker participated, killing one defender);
     // round 1 did not (attacker excluded, no attackers left to roll).
@@ -373,14 +398,14 @@ describe("combat drop-out survivor semantics", () => {
       },
     );
 
-    const { state: next, events } = applyAction(state, {
+    const { state: next, events } = attackToEnd(state, {
       type: "attack",
       playerId: ACTIVE,
       unitIds: [attacker.id],
       row: 0,
       col: 0,
     });
-    const ns = next as MainGameState;
+    const ns = next;
 
     // Only one round ran → exactly one matchup resolved.
     expect(findAllPairs(events)).toHaveLength(1);
@@ -409,14 +434,14 @@ describe("combat drop-out survivor semantics", () => {
       d.grid[0][0].units.push(attacker, ...defenders);
     });
 
-    const { state: next, events } = applyAction(state, {
+    const { state: next, events } = attackToEnd(state, {
       type: "attack",
       playerId: ACTIVE,
       unitIds: [attacker.id],
       row: 0,
       col: 0,
     });
-    const ns = next as MainGameState;
+    const ns = next;
 
     // Three rounds, three kills — all defenders cleared, attacker takes the cell.
     expect(findAllPairs(events)).toHaveLength(3);

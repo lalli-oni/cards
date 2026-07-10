@@ -237,26 +237,26 @@ be present.
   resolves combat against each opponent in turn (attacker chooses
   order). Surviving attacker units carry over between resolutions.
 
-[design: The multi-unit *tactical* layer above is landing incrementally
-with #164. **Defender-assigned matchups (the Matchup step) are now
-implemented** (#166): after a round's rolls are revealed, if the defender
-has a real pairing choice, combat pauses and the defender assigns which
-attacker faces which defender before the pairs resolve. Two pieces of the
-Matchup / Next round steps remain **not yet implemented**: the larger side
-choosing which excess units **sit out** (#167), and per-round **retreat**
-(#168). Until those land, excess units on the larger side sit out greedily
-lowest-power-first (rather than by the controller's choice), and no side
-can retreat. The injure/kill consequences, the tie-to-defender rule, and
+[design: The multi-unit *tactical* layer above landed incrementally with
+#164 and is now fully implemented. **Defender-assigned matchups** (#166):
+after a round's rolls are revealed, if the defender has a real pairing
+choice, combat pauses and the defender assigns which attacker faces which
+defender before the pairs resolve. **Sit-out selection** (#167): when one
+side commits more units than the other, that side's controller chooses
+which excess units sit out the round (decided after seeing all rolls),
+rather than a greedy lowest-power default. **Per-round retreat** (#168):
+before each round after the first, either side may withdraw its *whole*
+remaining committed force to HQ — the attacker decides first, then, if it
+stays, the defender; a full retreat hands the win to the side that holds
+the location. The injure/kill consequences, the tie-to-defender rule, and
 the drop-out survivor semantics (injured units leave the fighting pool
-between rounds, per the Next round or end step) *are* implemented and match
+between rounds, per the Next round or end step) are implemented and match
 this text. As a safety limit, combat resolution is capped at
 [var:combat_round_cap:10] rounds — drop-out guarantees termination
 regardless (each round removes every matchup's loser), and normal combats
 finish in far fewer rounds; the cap only bounds combats with unusually
 large unit stacks (worst case scales with the larger committed side's
-size). Until #164 fully lands, do not build card designs on the
-still-unimplemented pieces (sit-out, per-round retreat) — validate such
-designs against engine behavior.]
+size).]
 
 > See [Market and Economy Rules](market.md) for details on the Buy action.
 

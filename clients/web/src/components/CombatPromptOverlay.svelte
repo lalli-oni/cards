@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { CombatSide } from "cards-engine";
+  import type { CombatSide, RetreatUnitDisplay } from "cards-engine";
   import {
     getError,
     getVisibleState,
@@ -15,15 +15,9 @@
   const isRetreat = $derived(prompt?.kind === "retreat");
 
   // The units the deciding side would pull back on a retreat (#168). A retreat
-  // prompt is blind (raised before the round rolls), so its sides carry identity
-  // and strength but no dice — shown without a roll line.
-  const retreatingSide = $derived<CombatSide[]>(
-    !prompt
-      ? []
-      : prompt.playerId === prompt.attackerId
-        ? prompt.atkRolls
-        : prompt.defRolls,
-  );
+  // prompt is blind (raised before the round rolls), so it carries identity,
+  // strength, and injured status but no dice — shown without a roll line.
+  const retreatingSide = $derived<readonly RetreatUnitDisplay[]>(prompt?.retreatUnits ?? []);
 
   function signed(delta: number): string {
     return delta >= 0 ? `+${delta}` : `${delta}`;
@@ -53,7 +47,7 @@
   const attackerLarger = $derived(
     !!prompt && prompt.atkRolls.length > prompt.defRolls.length,
   );
-  const largerRolls = $derived<CombatSide[]>(
+  const largerRolls = $derived<readonly CombatSide[]>(
     !prompt ? [] : attackerLarger ? prompt.atkRolls : prompt.defRolls,
   );
   const excess = $derived(
@@ -214,7 +208,7 @@
         1
           ? ""
           : "s"} back to HQ. Retreating units leave this combat and heal at HQ; the
-        opponent holds the location.
+        opponent wins this combat.
       </p>
 
       <div class="mb-4 space-y-2">
@@ -222,8 +216,8 @@
           <div class="rounded border border-border bg-surface p-2">
             <div class="flex flex-wrap items-center gap-1 text-xs text-text-secondary">
               <span class="font-semibold text-text-primary">{resolveCardName(side.unitId)}</span>
-              <span class="font-mono">strength {side.baseStrength}</span>
-              {#if side.injuredBefore}
+              <span class="font-mono">strength {side.strength}</span>
+              {#if side.injured}
                 <span class="rounded bg-surface px-1.5 py-0.5 font-mono text-error">injured</span>
               {/if}
             </div>

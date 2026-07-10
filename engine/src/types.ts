@@ -460,6 +460,16 @@ export interface CombatLoopState {
   attackerUnitIds: readonly string[];
   /** Committed defender unit instance ids (never mutated after suspend). */
   defenderUnitIds: readonly string[];
+  /**
+   * Transient resume marker (#168), NOT durable committed state: the round for
+   * which the pre-roll retreat offer has already been made and declined by both
+   * sides. `runCombat` skips re-offering retreat when this equals the round it is
+   * about to roll — so the "both sides declined → roll this same round" resume
+   * path proceeds to the dice instead of looping back into another retreat offer.
+   * Absent on a fresh combat and after any round advance (retreat is offered
+   * afresh each new round).
+   */
+  retreatSettledRound?: number;
 }
 
 /**
@@ -470,7 +480,14 @@ export interface CombatLoopState {
  * prompt first (larger side drops its excess), then, if `min >= 2` participants
  * remain, an `assign_matchups` prompt.
  *
- * `kind` discriminates the two decisions:
+ * `kind` discriminates the decisions:
+ * - `"retreat"` (#168): raised at a round boundary (round >= 1) **before** the
+ *   roll — the attacker decides first, then, if it stays, the defender.
+ *   `playerId` is the deciding side's owner. `atkRolls` / `defRolls` list each
+ *   side's remaining committed units for display only — **the fight has not been
+ *   rolled yet, so their `roll` is `0` and `power` is base strength** (a retreat
+ *   is committed blind). All-or-nothing: the decider withdraws its whole side or
+ *   stays.
  * - `"sit_out"` (#167): the larger side removes `max - min` excess units.
  *   `playerId` is the **larger side's** owner (attacker or defender), and
  *   `atkRolls` / `defRolls` are the *full* living rolls — so the lists have
@@ -518,8 +535,9 @@ export interface MainGameState extends GameStateBase {
    * inline — the same Option-A pattern `pickPrompt`/`viewPrompt` use.
    *
    * Live as of #166: combat pauses whenever the defender has a real pairing
-   * choice (`matchupDecisionPending` in `apply-main.ts`). Sit-out (#167) and
-   * retreat (#168) will add further pause conditions later.
+   * choice (`matchupDecisionPending` in `apply-main.ts`). #167 added the sit-out
+   * pause (larger side drops excess units); #168 added the per-round retreat
+   * pause, raised before each round >= 1 rolls (attacker then defender).
    */
   combatPrompt?: CombatPrompt;
 }
@@ -695,6 +713,18 @@ export type CombatDecision =
        * decision (the 3v2 double-suspend case).
        */
       sitOutUnitIds: string[];
+    }
+  | {
+      kind: "retreat";
+      /**
+       * Per-round retreat (#168), all-or-nothing for the deciding side (the
+       * prompt's `playerId`). `true` withdraws *every* remaining committed unit
+       * of that side to its owner's HQ and ends its part in the combat (the other
+       * side wins if it still holds the cell); `false` stays and fights the round.
+       * Raised at a round boundary *before* the roll — the attacker decides first,
+       * then, if it stays, the defender.
+       */
+      retreat: boolean;
     };
 
 /**

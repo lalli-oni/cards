@@ -167,6 +167,15 @@ function buildCombatResolutions(
   prompt: CombatPrompt,
   playerId: string,
 ): ResolveCombatRoundAction[] {
+  if (prompt.kind === "retreat") {
+    // Stay vs. withdraw the whole side (#168). `stay` first so element `[0]` is
+    // the non-disruptive default a bot submits to keep the fight progressing.
+    return [
+      { type: "resolve_combat_round", playerId, decision: { kind: "retreat", retreat: false } },
+      { type: "resolve_combat_round", playerId, decision: { kind: "retreat", retreat: true } },
+    ];
+  }
+
   if (prompt.kind === "sit_out") {
     const attackerLarger: boolean = prompt.atkRolls.length > prompt.defRolls.length;
     const largerRolls = attackerLarger ? prompt.atkRolls : prompt.defRolls;

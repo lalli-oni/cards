@@ -12,6 +12,18 @@
   const vs = $derived(getVisibleState());
   const prompt = $derived(vs?.combatPrompt);
   const isSitOut = $derived(prompt?.kind === "sit_out");
+  const isRetreat = $derived(prompt?.kind === "retreat");
+
+  // The units the deciding side would pull back on a retreat (#168). A retreat
+  // prompt is blind (raised before the round rolls), so its sides carry identity
+  // and strength but no dice — shown without a roll line.
+  const retreatingSide = $derived<CombatSide[]>(
+    !prompt
+      ? []
+      : prompt.playerId === prompt.attackerId
+        ? prompt.atkRolls
+        : prompt.defRolls,
+  );
 
   function signed(delta: number): string {
     return delta >= 0 ? `+${delta}` : `${delta}`;
@@ -56,6 +68,10 @@
     if (!prompt) return;
     void prompt.atkRolls.map((r) => r.unitId).join(",");
     submitted = false;
+
+    // Retreat is a blind all-or-nothing choice — no seeding, and its side lists
+    // can differ in length (both sides' survivors), so skip the matchup checks.
+    if (prompt.kind === "retreat") return;
 
     if (prompt.kind === "sit_out") {
       // Greedy default: the lowest-power `excess` units on the larger side.
@@ -124,6 +140,19 @@
     }
   }
 
+  // Retreat (#168): all-or-nothing, so submit directly from the chosen button
+  // rather than via the shared confirm gate.
+  function submitRetreat(retreat: boolean): void {
+    if (!prompt || submitted) return;
+    errorAtSubmit = error;
+    submitted = true;
+    selectAction({
+      type: "resolve_combat_round",
+      playerId: prompt.playerId,
+      decision: { kind: "retreat", retreat },
+    });
+  }
+
   function confirm(): void {
     if (!prompt || submitted || !canConfirm) return;
     errorAtSubmit = error;
@@ -175,9 +204,55 @@
   {@const defenderName = resolvePlayerName(prompt.defenderId)}
   {@const attackerName = resolvePlayerName(prompt.attackerId)}
   <Modal width="w-auto max-w-2xl">
-    {#if isSitOut}
+    {#if isRetreat}
       {@const deciderName = resolvePlayerName(prompt.playerId)}
-      {@const smallerRolls = attackerLarger ? prompt.defRolls : prompt.atkRolls}
+      <h3 class="mb-1 text-center text-lg font-bold text-text-primary">
+        Retreat to HQ — before round {prompt.round + 1}
+      </h3>
+      <p class="mb-4 text-center text-sm text-text-muted">
+        {deciderName} may pull all {retreatingSide.length} remaining unit{retreatingSide.length ===
+        1
+          ? ""
+          : "s"} back to HQ. Retreating units leave this combat and heal at HQ; the
+        opponent holds the location.
+      </p>
+
+      <div class="mb-4 space-y-2">
+        {#each retreatingSide as side (side.unitId)}
+          <div class="rounded border border-border bg-surface p-2">
+            <div class="flex flex-wrap items-center gap-1 text-xs text-text-secondary">
+              <span class="font-semibold text-text-primary">{resolveCardName(side.unitId)}</span>
+              <span class="font-mono">strength {side.baseStrength}</span>
+              {#if side.injuredBefore}
+                <span class="rounded bg-surface px-1.5 py-0.5 font-mono text-error">injured</span>
+              {/if}
+            </div>
+          </div>
+        {/each}
+      </div>
+
+      <div class="flex gap-2">
+        <button
+          type="button"
+          onclick={() => submitRetreat(false)}
+          disabled={submitted}
+          class="flex-1 rounded border border-border bg-surface-raised py-2 font-semibold text-text-primary hover:bg-surface disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {submitted ? "…" : "Stay and fight"}
+        </button>
+        <button
+          type="button"
+          onclick={() => submitRetreat(true)}
+          disabled={submitted}
+          class="flex-1 rounded bg-amber-600 py-2 font-semibold text-white hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {submitted ? "Retreating…" : "Retreat all to HQ"}
+        </button>
+      </div>
+    {:else}
+      {#if isSitOut}
+        {@const deciderName = resolvePlayerName(prompt.playerId)}
+        {@const smallerRolls = attackerLarger ? prompt.defRolls : prompt.atkRolls}
       <h3 class="mb-1 text-center text-lg font-bold text-text-primary">
         Choose units to sit out — round {prompt.round + 1}
       </h3>
@@ -260,5 +335,6 @@
     >
       {submitted ? "Resolving…" : isSitOut ? "Confirm sit-out" : "Confirm matchups"}
     </button>
+    {/if}
   </Modal>
 {/if}

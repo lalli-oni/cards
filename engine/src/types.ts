@@ -148,6 +148,21 @@ export interface CombatSide extends ResolutionSide {
   injuredBefore: boolean;
 }
 
+/**
+ * Display-only unit info for a `retreat` prompt (#168). A retreat is offered
+ * *before* the round rolls, so — unlike `CombatSide` — there is no roll or
+ * power: just the identity, strength, and injured status the client needs to
+ * list the units the deciding side would pull back to HQ. Modelling it as its
+ * own type (rather than reusing `CombatSide` with `roll: 0` / `power: base`
+ * placeholders) keeps the prompt from carrying fields that would lie about an
+ * unrolled round.
+ */
+export interface RetreatUnitDisplay {
+  unitId: string;
+  strength: number;
+  injured: boolean;
+}
+
 /** Mirrors `CombatSide` minus combat-specific fields. Contests do not
  *  apply an injury penalty today, so `injuredBefore` is omitted by
  *  design — a future debuff-aware contest can re-derive from the unit. */
@@ -460,34 +475,24 @@ export interface CombatLoopState {
   attackerUnitIds: readonly string[];
   /** Committed defender unit instance ids (never mutated after suspend). */
   defenderUnitIds: readonly string[];
-  /**
-   * Transient resume marker (#168), NOT durable committed state: the round for
-   * which the pre-roll retreat offer has already been made and declined by both
-   * sides. `runCombat` skips re-offering retreat when this equals the round it is
-   * about to roll — so the "both sides declined → roll this same round" resume
-   * path proceeds to the dice instead of looping back into another retreat offer.
-   * Absent on a fresh combat and after any round advance (retreat is offered
-   * afresh each new round).
-   */
-  retreatSettledRound?: number;
 }
 
 /**
- * A combat suspended mid-round awaiting a player decision. Per the rules
- * (README.md Combat step 4 — Matchup) decisions land *within* a round — after
- * the step-3 roll, before resolution — carrying that round's revealed rolls
- * inline. A single round can suspend twice (`kind` transitions): a `sit_out`
- * prompt first (larger side drops its excess), then, if `min >= 2` participants
- * remain, an `assign_matchups` prompt.
+ * A combat suspended awaiting a player decision. The `sit_out` / `assign_matchups`
+ * decisions land *within* a round (README.md Combat step 4 — Matchup) — after the
+ * step-3 roll, before resolution — carrying that round's revealed rolls inline; a
+ * single such round can suspend twice (`kind` transitions): a `sit_out` prompt
+ * first (larger side drops its excess), then, if `min >= 2` participants remain,
+ * an `assign_matchups` prompt. `retreat` is the exception: it is raised at a round
+ * *boundary* **before** the roll, so it carries no rolls (see `retreatUnits`).
  *
  * `kind` discriminates the decisions:
  * - `"retreat"` (#168): raised at a round boundary (round >= 1) **before** the
  *   roll — the attacker decides first, then, if it stays, the defender.
- *   `playerId` is the deciding side's owner. `atkRolls` / `defRolls` list each
- *   side's remaining committed units for display only — **the fight has not been
- *   rolled yet, so their `roll` is `0` and `power` is base strength** (a retreat
- *   is committed blind). All-or-nothing: the decider withdraws its whole side or
- *   stays.
+ *   `playerId` is the deciding side's owner. The round is unrolled, so `atkRolls`
+ *   / `defRolls` are **empty**; the deciding side's remaining committed units are
+ *   carried in `retreatUnits` (identity + strength + injured, no dice). All-or-
+ *   nothing: the decider withdraws its whole side or stays.
  * - `"sit_out"` (#167): the larger side removes `max - min` excess units.
  *   `playerId` is the **larger side's** owner (attacker or defender), and
  *   `atkRolls` / `defRolls` are the *full* living rolls — so the lists have
@@ -509,10 +514,16 @@ export interface CombatPrompt extends CombatLoopState {
   /** Player expected to submit `resolve_combat_round`. */
   playerId: string;
   /** Revealed rolls of the attacker units for `round` (full living set for
-   *  `sit_out`; equal-length participants for `assign_matchups`). */
-  atkRolls: CombatSide[];
+   *  `sit_out`; equal-length participants for `assign_matchups`). **Empty for
+   *  `retreat`** — that decision is pre-roll; see `retreatUnits`. */
+  atkRolls: readonly CombatSide[];
   /** Revealed rolls of the defender units for `round` (see `atkRolls`). */
-  defRolls: CombatSide[];
+  defRolls: readonly CombatSide[];
+  /** For a `retreat` prompt only: the deciding side's remaining committed units
+   *  (injured included), for the client to list. Absent for `sit_out` /
+   *  `assign_matchups`. The round is unrolled at a retreat offer, so these carry
+   *  no roll/power (see `RetreatUnitDisplay`). */
+  retreatUnits?: readonly RetreatUnitDisplay[];
 }
 
 export interface MainGameState extends GameStateBase {
@@ -528,8 +539,8 @@ export interface MainGameState extends GameStateBase {
    */
   viewPrompt?: ViewPrompt;
   /**
-   * Set when combat suspends mid-round for the defender's matchup assignment,
-   * cleared by `resolve_combat_round`. Main-phase only — placed here (not on
+   * Set when combat suspends for a player decision (matchup, sit-out, or
+   * retreat), cleared by `resolve_combat_round`. Main-phase only — placed here (not on
    * `GameStateBase`) so a seeding or ended state cannot structurally carry one,
    * mirroring `viewPrompt`. The prompt carries the full resumable loop state
    * inline — the same Option-A pattern `pickPrompt`/`viewPrompt` use.
@@ -701,7 +712,7 @@ export type CombatDecision =
   | {
       kind: "assign_matchups";
       /** A bijection over the prompt's participating units; length = min(sides). */
-      pairs: CombatMatchup[];
+      pairs: readonly CombatMatchup[];
     }
   | {
       kind: "sit_out";
@@ -712,7 +723,7 @@ export type CombatDecision =
        * participants, which then either auto-resolve or trigger a matchup
        * decision (the 3v2 double-suspend case).
        */
-      sitOutUnitIds: string[];
+      sitOutUnitIds: readonly string[];
     }
   | {
       kind: "retreat";

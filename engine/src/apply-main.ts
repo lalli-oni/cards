@@ -44,6 +44,7 @@ import type {
   ModifierEntry,
   ModifierSource,
   MainGameState,
+  RetreatUnitDisplay,
   UnitCard,
 } from "./types";
 import { POLICY_ACTIONS } from "./listeners/effects";
@@ -738,15 +739,17 @@ function makeCombatPrompt(
  * A retreat prompt (#168), raised at a round boundary *before* the roll. Unlike
  * `makeCombatPrompt`, `kind`/`playerId` are not derived from roll lengths — the
  * caller names the deciding side explicitly (attacker first, then defender). The
- * two side lists are for display only: they enumerate each side's remaining
- * committed units, but the round is unrolled, so `roll`/`power` are placeholders
- * (see `buildRetreatSides`).
+ * round is unrolled, so `atkRolls`/`defRolls` are empty; the deciding side's
+ * remaining units go in `retreatUnits` for the client to list (see
+ * `buildRetreatUnits`).
  */
 function makeRetreatPrompt(
   base: CombatLoopState,
   deciderId: string,
   cell: Draft<GridCell>,
 ): CombatPrompt {
+  const deciderUnitIds: readonly string[] =
+    deciderId === base.attackerId ? base.attackerUnitIds : base.defenderUnitIds;
   return {
     kind: "retreat",
     playerId: deciderId,
@@ -757,25 +760,23 @@ function makeRetreatPrompt(
     round: base.round,
     attackerUnitIds: base.attackerUnitIds,
     defenderUnitIds: base.defenderUnitIds,
-    atkRolls: buildRetreatSides(cell, base.attackerUnitIds),
-    defRolls: buildRetreatSides(cell, base.defenderUnitIds),
+    atkRolls: [],
+    defRolls: [],
+    retreatUnits: buildRetreatUnits(cell, deciderUnitIds),
   };
 }
 
 /**
- * The `CombatSide` list for a retreat prompt: every committed unit of a side
- * still present in the cell (injured included — they retreat and heal at HQ
- * too). The round is unrolled, so `roll` is `0` and `power` is base strength;
- * these carry unit identity/strength for the client, not a rolled outcome.
+ * The display list for a retreat prompt: every committed unit of the deciding
+ * side still present in the cell (injured included — they retreat and heal at HQ
+ * too). The round is unrolled, so this carries only identity, strength, and
+ * injured status — no roll or power (see `RetreatUnitDisplay`).
  */
-function buildRetreatSides(cell: Draft<GridCell>, unitIds: readonly string[]): CombatSide[] {
+function buildRetreatUnits(cell: Draft<GridCell>, unitIds: readonly string[]): RetreatUnitDisplay[] {
   return livingCombatants(cell, unitIds, { ignoreInjured: true }).map((unit) => ({
     unitId: unit.id,
-    baseStrength: unit.strength,
-    modifiers: [],
-    roll: 0,
-    power: unit.strength,
-    injuredBefore: unit.injured,
+    strength: unit.strength,
+    injured: unit.injured,
   }));
 }
 
@@ -898,15 +899,35 @@ function resolveOrSuspendMatchup(
  * held as references: units get killed/removed mid-combat, and on resume the
  * pre-suspend references are gone (a fresh `produce()` draft). The committed id
  * lists in `state` are the durable handle.
+ *
+ * `settledRound` (#168) is the transient resume marker — NOT part of the durable
+ * `CombatLoopState` — for the "both sides declined the retreat → roll this same
+ * round" path: when it equals the round about to roll, the pre-roll retreat offer
+ * is skipped so the resume proceeds to the dice instead of re-offering. Passed
+ * only on that resume; absent on a fresh combat and after any round advance
+ * (retreat is offered afresh each new round). The loop advances `round` past it,
+ * so it suppresses the re-offer for exactly the round it names.
  */
 function runCombat(
   draft: Draft<MainGameState>,
   state: CombatLoopState,
   emit: EmitFn,
   queries: QueryListener[],
+  settledRound?: number,
 ): void {
   const { row, col, attackerId, defenderId, attackerUnitIds, defenderUnitIds } = state;
   const cell: Draft<GridCell> = draft.grid[row][col];
+
+  // `settledRound`, if given, must be the round we're about to start — it only
+  // ever suppresses the retreat re-offer for the round the caller just resumed.
+  // Enforcing it here turns the "== current round" construction discipline into a
+  // runtime guard, so a future miswired caller fails loud instead of silently
+  // skipping a legitimate retreat offer.
+  if (settledRound !== undefined && settledRound !== state.round) {
+    throw new Error(
+      `runCombat invariant: settledRound=${settledRound} must equal start round ${state.round}`,
+    );
+  }
 
   let rng: RandomGenerator = fromState(draft.rngState);
 
@@ -936,9 +957,9 @@ function runCombat(
     // round begins." Before rolling any round after the first, offer a whole-side
     // withdrawal — attacker first. `handleResolveCombatRound` chains the
     // defender's offer and, once both decline, re-enters here with
-    // `retreatSettledRound === round` so we fall through to the roll below. Round
-    // 0 is the initial commit (no prior round to retreat between) and is exempt.
-    if (round >= 1 && state.retreatSettledRound !== round) {
+    // `settledRound === round` so we fall through to the roll below. Round 0 is
+    // the first fighting round (no prior round to retreat between) and is exempt.
+    if (round >= 1 && settledRound !== round) {
       draft.combatPrompt = castDraft(makeRetreatPrompt({ ...state, round }, attackerId, cell));
       return;
     }
@@ -1513,7 +1534,7 @@ function resolveSitOut(
     throw new Error(`resolve_combat_round rejected: sit_out on balanced sides (${atkLen} vs ${defLen})`);
   }
   const attackerLarger: boolean = atkLen > defLen;
-  const largerSides: CombatSide[] = attackerLarger ? prompt.atkRolls : prompt.defRolls;
+  const largerSides: readonly CombatSide[] = attackerLarger ? prompt.atkRolls : prompt.defRolls;
   const excess: number = Math.abs(atkLen - defLen);
 
   if (decision.sitOutUnitIds.length !== excess) {
@@ -1534,9 +1555,9 @@ function resolveSitOut(
     sittingOut.add(id);
   }
 
-  const remainingLarger: CombatSide[] = largerSides.filter((s) => !sittingOut.has(s.unitId));
-  const atkSides: CombatSide[] = attackerLarger ? remainingLarger : prompt.atkRolls;
-  const defSides: CombatSide[] = attackerLarger ? prompt.defRolls : remainingLarger;
+  const remainingLarger: readonly CombatSide[] = largerSides.filter((s) => !sittingOut.has(s.unitId));
+  const atkSides: readonly CombatSide[] = attackerLarger ? remainingLarger : prompt.atkRolls;
+  const defSides: readonly CombatSide[] = attackerLarger ? prompt.defRolls : remainingLarger;
   return {
     atkParticipants: atkSides.map((s) => combatantRollFromSide(cell, s)),
     defParticipants: defSides.map((s) => combatantRollFromSide(cell, s)),
@@ -1585,6 +1606,19 @@ function handleResolveCombatRound(
   };
 
   if (decision.kind === "retreat") {
+    // Validate the payload's `retreat` flag explicitly — unlike `sit_out` /
+    // `assign_matchups`, which validate their id lists, a plain boolean would
+    // otherwise be silently coerced (an omitted/mistyped field read as a decline,
+    // any truthy non-boolean as a full withdrawal). Fail loud on a malformed
+    // submission so a client bug can't produce a wrong-but-plausible outcome.
+    if (typeof decision.retreat !== "boolean") {
+      throw new Error(
+        `resolve_combat_round rejected: retreat decision requires a boolean "retreat", got ${JSON.stringify(
+          decision.retreat,
+        )}`,
+      );
+    }
+
     // Clear the prompt first: whatever comes next (combat ends, the defender's
     // offer, or the roll) becomes the sole writer of any successor prompt.
     draft.combatPrompt = undefined;
@@ -1595,12 +1629,14 @@ function handleResolveCombatRound(
       // then resume the SAME round. The deciding side is now empty there, so
       // runCombat breaks immediately and emits combat_resolved with the other
       // side as winner — identical to a dice wipeout, so on-combat-win effects
-      // fire just the same.
+      // fire just the same. Pass `prompt.round` as the settled round too: the
+      // emptied side makes runCombat break before the retreat check, so it is
+      // moot today, but it keeps the safety independent of that coincidence.
       const retreatingIds: readonly string[] = deciderIsAttacker
         ? prompt.attackerUnitIds
         : prompt.defenderUnitIds;
       retreatUnitsToHQ(draft, cell, playerId, retreatingIds, prompt.row, prompt.col, emit);
-      runCombat(draft, base, emit, queries);
+      runCombat(draft, base, emit, queries, prompt.round);
       return;
     }
 
@@ -1611,9 +1647,9 @@ function handleResolveCombatRound(
       return;
     }
 
-    // Both sides have now declined — roll this round. `retreatSettledRound` stops
+    // Both sides have now declined — roll this round. `settledRound` stops
     // runCombat from re-offering the retreat it just resolved.
-    runCombat(draft, { ...base, retreatSettledRound: prompt.round }, emit, queries);
+    runCombat(draft, base, emit, queries, prompt.round);
     return;
   }
 

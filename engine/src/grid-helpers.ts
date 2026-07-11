@@ -23,7 +23,14 @@ export function findUnitOnGrid(
 
 /** Find an item on the grid by instance ID. Returns its position or null.
  *  Used to resolve an item's cell when it is the acting card of an activate
- *  (a stored or equipped item running a positional effect). */
+ *  (a stored or equipped item running a positional effect).
+ *
+ *  Deliberately grid-only: an HQ item resolves to null here so its positional
+ *  verbs no-op (contrast `findItemPosition` in position-helpers.ts, which spans
+ *  HQ *and* grid). Equipped items are located via their cell: this assumes an
+ *  equipped item stays listed in its bearer's cell `items` array (how equip
+ *  models storage today) — if that ever changes, positional equipped-item
+ *  effects would silently no-op and this lookup would need the bearer's cell. */
 export function findItemOnGrid(
   grid: Grid,
   itemId: string,

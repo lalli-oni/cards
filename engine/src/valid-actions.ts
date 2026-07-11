@@ -3,7 +3,7 @@ import type { Primitive } from "./effect-dsl/types";
 import { tryParseCost } from "./cost-helpers";
 import { checkMissionRequirements, parseRequirements } from "./mission-helpers";
 import type { BoardPosition } from "./position-helpers";
-import { getItemsAtPosition, getUnitsAtPosition } from "./position-helpers";
+import { getItemsAtPosition, getUnitsAtPosition, hasControllingUnitAt } from "./position-helpers";
 import {
   areFacingEdgesOpen,
   getAdjacentCells,
@@ -503,14 +503,15 @@ function getMainValidActions(
     }
 
     // Item actions (e.g. Philosopher's Stone). Items are operated by units, so
-    // an action surfaces only when a controlling unit is co-located — `units`
-    // above already filtered to the player's units at this position, so a
-    // non-empty list is exactly that gate. Equipped items pass automatically
-    // (their unit travels with them); a lone/stored item with no friendly unit
-    // present offers nothing.
-    if (units.length > 0) {
+    // an action surfaces only while a unit the player controls shares the item's
+    // cell (hasControllingUnitAt — the same gate handleActivate enforces). An
+    // equipped item satisfies this via its own bearer, who is by construction a
+    // friendly unit in the cell; a lone/stored item with no friendly unit present
+    // offers nothing. Unlike units, an item's controllerId can diverge from where
+    // it sits, so filter items by controllerId even in HQ (no ownerFilter shortcut).
+    if (hasControllingUnitAt(state.players, state.grid, pos, playerId)) {
       const items = getItemsAtPosition(state.players, state.grid, pos)
-        .filter((i) => ownerFilter || i.controllerId === playerId);
+        .filter((i) => i.controllerId === playerId);
       for (const item of items) {
         if (!item.actions) continue;
         for (const actionDef of item.actions) {

@@ -475,6 +475,7 @@ describe("instantiateCard", () => {
 
   test("item card without actions leaves actions undefined", () => {
     const card = instantiateCard(VALID_ITEM, "player-1", counter);
+    expect(card.type).toBe("item");
     if (card.type === "item") {
       expect(card.actions).toBeUndefined();
     }

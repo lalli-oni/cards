@@ -40,7 +40,9 @@ export interface ExecutionContext {
  *  acting card is usually a unit, but an item can activate too (Philosopher's
  *  Stone, Siege Engine) — for a grid item the id is an item id, so fall back to
  *  the item grid so positional item effects target the item's own cell. HQ
- *  cards resolve to neither and stay position-less (their effects are HQ-safe). */
+ *  cards resolve to neither and stay position-less, so positional verbs no-op
+ *  cleanly (HQ-safety of *enumerated* actions is enforced upstream in
+ *  valid-actions.ts's isHqSafeVerb gate; this function does not itself filter). */
 function getActingPosition(ctx: ExecutionContext): { row: number; col: number } | undefined {
   if (!ctx.actingUnitId) return undefined;
   const unit = findUnitOnGrid(ctx.draft.grid, ctx.actingUnitId);

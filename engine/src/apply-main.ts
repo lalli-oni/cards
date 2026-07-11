@@ -4,7 +4,7 @@ import { fromState, uniformIntDistribution } from "./rng";
 import { parseCost, spendAP, spendGold } from "./cost-helpers";
 import { drawLocationFromProspect, drawMarketCard, drawOneCard } from "./deck-helpers";
 import { checkMissionRequirements, parseRequirements, parseRewards } from "./mission-helpers";
-import { findItemPosition, findUnitPosition, getUnitsAtPosition, samePosition } from "./position-helpers";
+import { findItemPosition, findUnitPosition, getUnitsAtPosition, hasControllingUnitAt, samePosition } from "./position-helpers";
 import {
   areFacingEdgesOpen,
   findUnitOnGrid,
@@ -1308,14 +1308,13 @@ function handleActivate(
   } else if (locatedItem) {
     // Item action (e.g. Philosopher's Stone). Operated by a unit, so it requires
     // a controlling unit co-located with the item — the same gate getValidActions
-    // enumerates under. `actingUnitId` stays the item id: the executor resolves an
-    // item's grid cell for positional verbs; on grid it stays with the item.
+    // enumerates under (hasControllingUnitAt is the shared definition). `actingUnitId`
+    // stays the item id so the executor resolves the item's own grid cell for
+    // positional verbs.
     const card = locatedItem.item as Draft<ItemCard>;
     if (!card.actions) throw new Error(`Card "${cardId}" has no actions`);
     if (card.controllerId !== playerId) throw new Error(`Card "${cardId}" not owned by "${playerId}"`);
-    const hasCoLocatedUnit = getUnitsAtPosition(draft.players, draft.grid, locatedItem.position)
-      .some((u) => u.controllerId === playerId);
-    if (!hasCoLocatedUnit) {
+    if (!hasControllingUnitAt(draft.players, draft.grid, locatedItem.position, playerId)) {
       throw new Error(`Item "${cardId}" has no controlling unit co-located to activate it`);
     }
     actionDef = card.actions.find((a) => a.name === actionName);

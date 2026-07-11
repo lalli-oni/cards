@@ -1010,7 +1010,7 @@ function runCombat(
     winnerId = defenderId;
   }
 
-  emit({ type: "combat_resolved", row, col, winnerId });
+  emit({ type: "combat_resolved", row, col, winnerId, attackerId, defenderId });
 }
 
 /**

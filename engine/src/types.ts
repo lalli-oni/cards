@@ -904,6 +904,11 @@ export type GameEvent =
       row: number;
       col: number;
       winnerId: string | null;
+      /** The two sides, so the event log can categorize the conclusion with the
+       *  rest of the fight (a bare `winnerId` — null on a draw — otherwise makes
+       *  it uncategorizable and it falls through to a hidden "system" row). */
+      attackerId: string;
+      defenderId: string;
     }
   | {
       /** A side withdrew its whole remaining committed force to HQ before a

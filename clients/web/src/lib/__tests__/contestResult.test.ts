@@ -73,7 +73,7 @@ describe("buildPairDetail", () => {
 
 describe("stepCombatBuffer", () => {
   const started: GameEvent = { type: "combat_started", row: 0, col: 0, attackerId: "p1", defenderId: "p2" };
-  const resolved: GameEvent = { type: "combat_resolved", row: 0, col: 0, winnerId: "p1" };
+  const resolved: GameEvent = { type: "combat_resolved", row: 0, col: 0, winnerId: "p1", attackerId: "p1", defenderId: "p2" };
   const pair: GameEvent = makeEvent("kill_defender");
   const injured: GameEvent = { type: "unit_injured", unitId: "def", controllerId: "p2" };
   const unrelated: GameEvent = { type: "turn_started", playerId: "p1", round: 1 };
@@ -135,7 +135,7 @@ describe("stepCombatBuffer", () => {
   it("a fresh combat_started discards a stale non-empty buffer (no cross-fight leak)", () => {
     const started2: GameEvent = { type: "combat_started", row: 1, col: 1, attackerId: "p2", defenderId: "p1" };
     const pair2: GameEvent = makeEvent("kill_attacker");
-    const resolved2: GameEvent = { type: "combat_resolved", row: 1, col: 1, winnerId: "p2" };
+    const resolved2: GameEvent = { type: "combat_resolved", row: 1, col: 1, winnerId: "p2", attackerId: "p2", defenderId: "p1" };
     // Previous fight left [started, pair] buffered; a new atomic fight arrives.
     const step = stepCombatBuffer([started, pair], [started2, pair2, resolved2]);
     expect(step.outcome.kind).toBe("complete");

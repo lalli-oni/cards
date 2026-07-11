@@ -229,6 +229,17 @@ describe("describeEvent", () => {
       expect(categorizeEvent(event, "p1")).toBe("player");
       expect(categorizeEvent(event, "p2")).toBe("opponent");
     });
+
+    it("routes combat_resolved by attackerId — keeps the winner line out of the hidden System bucket", () => {
+      const event: GameEvent = {
+        type: "combat_resolved",
+        row: 0, col: 0,
+        winnerId: "p2",
+        attackerId: "p1", defenderId: "p2",
+      };
+      expect(categorizeEvent(event, "p1")).toBe("player");
+      expect(categorizeEvent(event, "p2")).toBe("opponent");
+    });
   });
 
   describe("card_drawn", () => {

@@ -132,6 +132,12 @@
       <p class="mb-4 text-center text-sm text-text-muted">{view.emptyOutcomesMsg}</p>
     {/if}
 
+    {#if result.source === "combat" && result.retreatedName}
+      <p class="mb-4 text-center text-sm font-semibold text-text-secondary">
+        🏳️ {result.retreatedName} retreated to HQ
+      </p>
+    {/if}
+
     {#if result.winnerName}
       <div class="mb-4 text-center text-sm font-semibold">
         <span class="text-highlight">

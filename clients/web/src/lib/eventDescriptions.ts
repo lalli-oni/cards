@@ -159,6 +159,8 @@ export function describeEvent(event: GameEvent, r?: NameResolvers): string {
       return `Combat at ${cell(event.row, event.col, r)}: ${p(event.attackerId, r)} vs ${p(event.defenderId, r)}`;
     case "combat_resolved":
       return `Combat resolved at ${cell(event.row, event.col, r)}: ${event.winnerId ? `winner ${p(event.winnerId, r)}` : "draw"}`;
+    case "combat_retreated":
+      return `${p(event.playerId, r)} retreated to HQ from ${cell(event.row, event.col, r)}`;
     case "combat_pair_resolved": {
       const left = formatCombatSide(event.attacker, r);
       const right = formatCombatSide(event.defender, r);

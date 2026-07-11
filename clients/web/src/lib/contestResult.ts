@@ -81,6 +81,9 @@ export type ContestResult =
       pairs: PairDetail[];
       outcomes: CombatOutcome[];
       winnerName: string | null;
+      /** Name of the side that retreated its whole force to HQ (#168), or `null`
+       *  if the combat was decided by dice. Drives the retreat line in the dialog. */
+      retreatedName: string | null;
     }
   | {
       source: "dsl";
@@ -191,7 +194,9 @@ export function buildDialogView(result: ContestResult): DialogView {
     return {
       title: `Combat at ${result.locationName}`,
       showPairCaption: true,
-      emptyOutcomesMsg: "No casualties — draw!",
+      // A retreat is not a draw — its own line plus the winner footer describe it,
+      // so suppress the no-casualties message when a side withdrew.
+      emptyOutcomesMsg: result.retreatedName ? null : "No casualties — draw!",
     };
   }
   return {
@@ -220,6 +225,7 @@ const COMBAT_DIALOG_EVENT_TYPES: ReadonlySet<GameEvent["type"]> = new Set([
   "combat_pair_resolved",
   "unit_injured",
   "unit_killed",
+  "combat_retreated",
   "combat_resolved",
 ]);
 
@@ -320,6 +326,7 @@ export function buildCombatContestResult(
     }
   }
 
+  const retreat = events.find((e) => e.type === "combat_retreated");
   const cell = visibleState?.grid[combatStart.row]?.[combatStart.col];
   return {
     result: {
@@ -336,6 +343,9 @@ export function buildCombatContestResult(
       outcomes,
       winnerName: combatEnd?.type === "combat_resolved" && combatEnd.winnerId
         ? resolvers.player(combatEnd.winnerId)
+        : null,
+      retreatedName: retreat?.type === "combat_retreated"
+        ? resolvers.player(retreat.playerId)
         : null,
     },
     error: errors.length > 0 ? errors.join("\n") : null,

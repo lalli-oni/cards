@@ -115,6 +115,16 @@ describe("stepCombatBuffer", () => {
     expect(step.outcome.kind).toBe("orphan");
   });
 
+  it("a resume that ends via retreat carries the combat_retreated event into the dialog", () => {
+    const retreated: GameEvent = { type: "combat_retreated", row: 0, col: 0, playerId: "p1" };
+    // Round 0 rolled and suspended; the retreat batch resolves the fight.
+    const step = stepCombatBuffer([started, pair], [retreated, resolved]);
+    expect(step.outcome.kind).toBe("complete");
+    if (step.outcome.kind !== "complete") return;
+    expect(step.outcome.dialogEvents).toEqual([started, pair, retreated, resolved]);
+    expect(step.buffer).toEqual([]);
+  });
+
   it("a batch with no combat activity is 'none' and leaves the buffer untouched", () => {
     expect(stepCombatBuffer([], [unrelated]).outcome.kind).toBe("none");
     expect(stepCombatBuffer([started], [unrelated]).buffer).toEqual([started]);
@@ -190,6 +200,7 @@ describe("buildDialogView", () => {
       pairs: [],
       outcomes: [],
       winnerName: null,
+      retreatedName: null,
       ...overrides,
     };
   }
@@ -213,6 +224,11 @@ describe("buildDialogView", () => {
     expect(view.title).toBe("Combat at Marketplace");
     expect(view.showPairCaption).toBe(true);
     expect(view.emptyOutcomesMsg).toBe("No casualties — draw!");
+  });
+
+  it("combat with a retreat suppresses the no-casualties draw copy", () => {
+    const view = buildDialogView(combatResult({ retreatedName: "Alice", winnerName: "Bob" }));
+    expect(view.emptyOutcomesMsg).toBe(null);
   });
 
   it("dsl with winner → '{Stat} contest at {loc}' title, no caption, null empty-msg (footer carries it)", () => {

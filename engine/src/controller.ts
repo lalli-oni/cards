@@ -39,11 +39,12 @@ export interface ControllerOptions {
 const DEFAULT_MAX_ACTIONS = 10_000;
 
 /**
- * Upper bound on consecutive rejected submissions for a single decider before
- * `run()` gives up and throws. Not a gameplay limit — a human re-prompts and
- * fixes their input (≤1 rejection in practice) and a bot submits a legal
- * action outright, so this only ever trips on a broken client or a
- * getValidActions/applyAction desync, turning an infinite re-prompt into a
+ * Default upper bound on consecutive rejected submissions before `run()` gives
+ * up and throws — the default for its `maxConsecutiveRejections` parameter, the
+ * rejection-side counterpart to `DEFAULT_MAX_ACTIONS`. Not a gameplay limit — a
+ * human re-prompts and fixes their input (≤1 rejection in practice) and a bot
+ * submits a legal action outright, so this only ever trips on a broken client
+ * or a getValidActions/applyAction desync, turning an infinite re-prompt into a
  * clean terminal error.
  */
 export const MAX_CONSECUTIVE_REJECTIONS = 100;
@@ -136,8 +137,20 @@ export class GameController {
     return controller;
   }
 
-  /** Run the game loop until the game ends. */
-  async run(maxActions = DEFAULT_MAX_ACTIONS): Promise<Session> {
+  /**
+   * Run the game loop until the game ends.
+   *
+   * @param maxActions upper bound on *applied* actions before the loop throws
+   *   (guards against a non-terminating game).
+   * @param maxConsecutiveRejections upper bound on consecutive rejected
+   *   submissions before the loop gives up and throws (guards against a broken
+   *   client / desync). Injectable like `maxActions`; defaults to
+   *   {@link MAX_CONSECUTIVE_REJECTIONS}.
+   */
+  async run(
+    maxActions = DEFAULT_MAX_ACTIONS,
+    maxConsecutiveRejections = MAX_CONSECUTIVE_REJECTIONS,
+  ): Promise<Session> {
     // Counts *applied* actions only — a rejected submission never reaches
     // applyAction, so it must not draw down the budget meant to bound real
     // progress. Runaway re-prompts are caught by MAX_CONSECUTIVE_REJECTIONS.
@@ -169,9 +182,9 @@ export class GameController {
         // immediately followed by a fatal throw. On give-up, wrap the last
         // rejection with the count + context so the terminal error is
         // self-explanatory (the raw InvalidActionError is kept as `cause`).
-        if (++consecutiveRejections > MAX_CONSECUTIVE_REJECTIONS) {
+        if (++consecutiveRejections > maxConsecutiveRejections) {
           throw new Error(
-            `Game loop gave up after ${MAX_CONSECUTIVE_REJECTIONS} consecutive ` +
+            `Game loop gave up after ${maxConsecutiveRejections} consecutive ` +
               `rejected submissions from player "${err.actingPlayerId}". ` +
               `Last invalid action (${err.reason}): ${JSON.stringify(err.action)}`,
             { cause: err },

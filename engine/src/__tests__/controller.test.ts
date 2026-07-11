@@ -366,6 +366,38 @@ describe("GameController", () => {
       // to but excluding the give-up iteration.
       expect(rejections).toBe(MAX_CONSECUTIVE_REJECTIONS);
     });
+
+    // The rejection cap is injectable like maxActions — a caller can tighten it.
+    it("run() honors a custom maxConsecutiveRejections cap", async () => {
+      let rejections = 0;
+      const alwaysInvalid: PlayerAdapter = {
+        async chooseAction() {
+          return { type: "deploy", playerId: "p1", cardId: "fake" };
+        },
+      };
+      const controller = new GameController({
+        config: DEFAULT_CONFIG,
+        players: TWO_PLAYERS,
+        seed: SEED,
+        setupInput: MAIN_SETUP_INPUT,
+        adapters: new Map<string, PlayerAdapter>([
+          ["p1", alwaysInvalid],
+          ["p2", alwaysInvalid],
+        ]),
+        onInvalidAction: () => {
+          rejections++;
+        },
+      });
+
+      const err = await controller.run(undefined, 3).then(
+        () => {
+          throw new Error("expected run() to reject");
+        },
+        (e: unknown) => e as Error,
+      );
+      expect(err.message).toMatch(/gave up after 3 consecutive/);
+      expect(rejections).toBe(3); // gave up at the custom cap, not the default
+    });
   });
 
   describe("run", () => {

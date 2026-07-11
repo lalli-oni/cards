@@ -223,9 +223,12 @@ be present.
 6. **Next round or end**: After all pairs resolve, if both sides still
    have surviving (non-injured, non-killed) units at the location,
    combat continues — return to step 3 (re-roll all surviving units).
-   Either side may **retreat** before the next round begins: all
-   retreating units return to their owner's HQ. If one side has no
-   remaining units (or retreats entirely), combat ends.
+   Before that next round's roll, either side may **retreat** — the
+   **attacker decides first**, then (if it stays) the defender. A retreat
+   is all-or-nothing: the deciding side withdraws its **whole** remaining
+   committed force (injured units included) to their owner's HQ, and combat
+   ends with the side still holding the location as the winner. Combat also
+   ends if a side has no remaining units.
 
 **Notes:**
 - The attacker controls commitment size; the defender controls matchup
@@ -237,26 +240,12 @@ be present.
   resolves combat against each opponent in turn (attacker chooses
   order). Surviving attacker units carry over between resolutions.
 
-[design: The multi-unit *tactical* layer above landed incrementally with
-#164 and is now fully implemented. **Defender-assigned matchups** (#166):
-after a round's rolls are revealed, if the defender has a real pairing
-choice, combat pauses and the defender assigns which attacker faces which
-defender before the pairs resolve. **Sit-out selection** (#167): when one
-side commits more units than the other, that side's controller chooses
-which excess units sit out the round (decided after seeing all rolls),
-rather than a greedy lowest-power default. **Per-round retreat** (#168):
-before each round after the first, either side may withdraw its *whole*
-remaining committed force to HQ — the attacker decides first, then, if it
-stays, the defender; a full retreat hands the win to the side that holds
-the location. The injure/kill consequences, the tie-to-defender rule, and
-the drop-out survivor semantics (injured units leave the fighting pool
-between rounds, per the Next round or end step) are implemented and match
-this text. As a safety limit, combat resolution is capped at
-[var:combat_round_cap:10] rounds — drop-out guarantees termination
-regardless (each round removes every matchup's loser), and normal combats
-finish in far fewer rounds; the cap only bounds combats with unusually
-large unit stacks (worst case scales with the larger committed side's
-size).]
+[design: As a safety limit, combat resolution is capped at
+[var:combat_round_cap:10] rounds — the drop-out survivor semantics (each
+round removes every matchup's loser, so the fighting pool strictly shrinks)
+guarantee termination regardless, and normal combats finish in far fewer
+rounds; the cap only bounds combats with unusually large unit stacks (worst
+case scales with the larger committed side's size).]
 
 > See [Market and Economy Rules](market.md) for details on the Buy action.
 

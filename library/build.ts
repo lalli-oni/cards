@@ -199,6 +199,17 @@ export function validate(type: CardType, card: Record<string, unknown>): Validat
     errors.push({ card: id, field: "rarity", message: `invalid rarity: ${card.rarity}` });
   }
 
+  // Cost is a required gold amount (or `|`-separated alternatives, stored as a
+  // list post-transform). Each option must be a non-negative integer; a blank or
+  // non-numeric cost would otherwise coerce to a null `gold-cost` downstream in
+  // the analysis toolkit, silently masking the bad data instead of failing here.
+  const costs = Array.isArray(card.cost) ? card.cost : [card.cost];
+  for (const c of costs) {
+    if (!/^\d+$/.test(String(c ?? "").trim())) {
+      errors.push({ card: id, field: "cost", message: `invalid cost: ${JSON.stringify(card.cost)}` });
+    }
+  }
+
   if (type === "events" && !EVENT_TIMINGS.includes(card.timing as any)) {
     errors.push({ card: id, field: "timing", message: `invalid timing: ${card.timing}` });
   }

@@ -1,0 +1,60 @@
+[
+  {
+    "id": "polymath-a",
+    "name": "Polymath A",
+    "set": "mini-clean",
+    "type": "unit",
+    "rarity": "common",
+    "cost": "3",
+    "text": null,
+    "flavor": null,
+    "abilities": [],
+    "attributes": [
+      "Knowledge", "Military", "Diplomacy", "Commerce", "Politics",
+      "Spirituality", "Engineering", "Exploration", "Espionage", "Culture"
+    ],
+    "strength": 3,
+    "cunning": 3,
+    "charisma": 3,
+    "actions": [
+      { "name": "omni", "apCost": 1, "effect": "gold vp draw buy move peek pick buff contest injure kill control raze to remove" }
+    ]
+  },
+  {
+    "id": "polymath-b",
+    "name": "Polymath B",
+    "set": "mini-clean",
+    "type": "unit",
+    "rarity": "uncommon",
+    "cost": "4",
+    "text": null,
+    "flavor": null,
+    "abilities": [],
+    "attributes": [
+      "Knowledge", "Military", "Diplomacy", "Commerce", "Politics",
+      "Spirituality", "Engineering", "Exploration", "Espionage", "Culture"
+    ],
+    "strength": 2,
+    "cunning": 2,
+    "charisma": 2,
+    "actions": [
+      { "name": "earn", "apCost": 1, "effect": "gold[1]" }
+    ]
+  },
+  {
+    "id": "grand-mission",
+    "name": "Grand Mission",
+    "set": "mini-clean",
+    "type": "location",
+    "rarity": "rare",
+    "cost": "0",
+    "text": null,
+    "flavor": null,
+    "abilities": [],
+    "attributes": [],
+    "requirements": "knowledge_1;military_1;diplomacy_1;commerce_1;politics_1;spirituality_1;engineering_1;exploration_1;espionage_1;culture_1",
+    "rewards": "5vp",
+    "passive": null,
+    "locationType": "Nexus"
+  }
+]

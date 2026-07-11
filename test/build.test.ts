@@ -77,3 +77,26 @@ describe("build validation — governed vocabularies", () => {
     expect(check("events", { timing: "instant", attributes: "Nonsense" }).some((e) => e.field === "attributes")).toBe(true);
   });
 });
+
+describe("build validation — cost is a numeric gold amount", () => {
+  test("accepts an integer cost and `|`-separated integer alternatives", () => {
+    expect(check("units", { cost: "3", attributes: "Military" })).toEqual([]);
+    expect(check("units", { cost: "4|2", attributes: "Military" })).toEqual([]);
+    expect(check("locations", { cost: "0", location_type: "Market" })).toEqual([]);
+  });
+
+  test("rejects a non-numeric cost", () => {
+    const errors = check("units", { cost: "3g", attributes: "Military" });
+    expect(errors.some((e) => e.field === "cost")).toBe(true);
+  });
+
+  test("rejects a blank cost", () => {
+    const errors = check("units", { cost: "", attributes: "Military" });
+    expect(errors.some((e) => e.field === "cost")).toBe(true);
+  });
+
+  test("rejects when any alternative-cost option is non-numeric", () => {
+    const errors = check("units", { cost: "4|X", attributes: "Military" });
+    expect(errors.some((e) => e.field === "cost")).toBe(true);
+  });
+});

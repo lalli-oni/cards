@@ -28,9 +28,9 @@ export interface ControllerOptions {
    * pre-apply legality gate. Lets an interactive client surface the rejection
    * (and re-prompt the same decider) instead of the loop tearing down. Not
    * invoked on the direct `playTurn()` path — that throws for programmatic
-   * callers.
+   * callers. The offending player is `error.actingPlayerId`.
    */
-  onInvalidAction?: (error: InvalidActionError, actingPlayerId: string) => void;
+  onInvalidAction?: (error: InvalidActionError) => void;
 }
 
 const DEFAULT_MAX_ACTIONS = 10_000;
@@ -43,7 +43,7 @@ const DEFAULT_MAX_ACTIONS = 10_000;
  * getValidActions/applyAction desync, turning an infinite re-prompt into a
  * clean terminal error.
  */
-const MAX_CONSECUTIVE_REJECTIONS = 100;
+export const MAX_CONSECUTIVE_REJECTIONS = 100;
 
 /**
  * Thrown by `playTurn()` when an adapter returns an action outside the legal
@@ -71,10 +71,7 @@ export class GameController {
   private state: GameState;
   private adapters: Map<string, PlayerAdapter>;
   private onEvent?: (events: GameEvent[], state: GameState) => void;
-  private onInvalidAction?: (
-    error: InvalidActionError,
-    actingPlayerId: string,
-  ) => void;
+  private onInvalidAction?: (error: InvalidActionError) => void;
   private readonly seed: string;
   private readonly playerDescriptors: PlayerDescriptor[];
 
@@ -98,10 +95,7 @@ export class GameController {
     setupInput: SetupInput,
     adapters: Map<string, PlayerAdapter>,
     onEvent?: (events: GameEvent[], state: GameState) => void,
-    onInvalidAction?: (
-      error: InvalidActionError,
-      actingPlayerId: string,
-    ) => void,
+    onInvalidAction?: (error: InvalidActionError) => void,
   ): GameController {
     const controller = new GameController({
       config: session.config,
@@ -129,6 +123,7 @@ export class GameController {
             `Session replay failed at action ${i + 1}/${session.actions.length} ` +
               `(type: "${action.type}", player: "${action.playerId}"): ` +
               `${err instanceof Error ? err.message : err}`,
+            { cause: err },
           );
         }
       }
@@ -139,10 +134,13 @@ export class GameController {
 
   /** Run the game loop until the game ends. */
   async run(maxActions = DEFAULT_MAX_ACTIONS): Promise<Session> {
+    // Counts *applied* actions only — a rejected submission never reaches
+    // applyAction, so it must not draw down the budget meant to bound real
+    // progress. Runaway re-prompts are caught by MAX_CONSECUTIVE_REJECTIONS.
     let actionCount = 0;
     let consecutiveRejections = 0;
     while (this.state.phase !== "ended") {
-      if (++actionCount > maxActions) {
+      if (actionCount >= maxActions) {
         const activePlayer = getActivePlayerId(this.state);
         const round =
           this.state.phase === "main" ? this.state.turn.round : "N/A";
@@ -155,14 +153,27 @@ export class GameController {
       try {
         await this.playTurn();
         consecutiveRejections = 0;
+        actionCount++;
       } catch (err) {
         // A rejected submission is recoverable: surface it and re-prompt the
         // same decider on the next iteration (applyAction never ran, so state
         // is unchanged and re-deriving valid actions is sound). Any other error
         // is a genuine engine fault — propagate it unchanged.
         if (!(err instanceof InvalidActionError)) throw err;
-        this.onInvalidAction?.(err, err.actingPlayerId);
-        if (++consecutiveRejections > MAX_CONSECUTIVE_REJECTIONS) throw err;
+        // Check the backstop *before* surfacing the rejection, so a terminal
+        // give-up doesn't emit a "choose again" re-prompt to the client
+        // immediately followed by a fatal throw. On give-up, wrap the last
+        // rejection with the count + context so the terminal error is
+        // self-explanatory (the raw InvalidActionError is kept as `cause`).
+        if (++consecutiveRejections > MAX_CONSECUTIVE_REJECTIONS) {
+          throw new Error(
+            `Game loop gave up after ${MAX_CONSECUTIVE_REJECTIONS} consecutive ` +
+              `rejected submissions from player "${err.actingPlayerId}". ` +
+              `Last invalid action: ${JSON.stringify(err.action)}`,
+            { cause: err },
+          );
+        }
+        this.onInvalidAction?.(err);
       }
     }
     return this.toSession();

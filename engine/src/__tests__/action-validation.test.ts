@@ -123,6 +123,33 @@ describe("isLegalAction", () => {
     expect(isLegalAction(pick(["c2", "c3"]), valid)).toBe(false);
   });
 
+  it("rejects a resolve_pick superset of an enumerated entry", () => {
+    // The mirror of the subset case: submitting MORE ids than any enumerated
+    // entry must fail too — canonicalization is length-sensitive, so sorting
+    // collapses permutations only, never grows or shrinks the set.
+    const valid = [pick(["c1", "c2"]), pick(["c1", "c3"])];
+    expect(isLegalAction(pick(["c1", "c2", "c3"]), valid)).toBe(false);
+  });
+
+  it("rejects a scholar_reorder multiset outside the enumerated orbit", () => {
+    // The order-safety proof rests on the WHOLE permutation orbit being
+    // enumerated (so collapsing orderings can't admit an illegal action). A
+    // submission whose multiset isn't in the orbit — a duplicated id, or an
+    // id the prompt never offered — must still be rejected even though it has
+    // the orbit's length. This isolates the claim the reject side otherwise
+    // only exercises via plain subsets.
+    const orbit = [
+      pick(["c1", "c2", "c3"]),
+      pick(["c1", "c3", "c2"]),
+      pick(["c2", "c1", "c3"]),
+      pick(["c2", "c3", "c1"]),
+      pick(["c3", "c1", "c2"]),
+      pick(["c3", "c2", "c1"]),
+    ];
+    expect(isLegalAction(pick(["c1", "c1", "c2"]), orbit)).toBe(false); // duplicate
+    expect(isLegalAction(pick(["c1", "c2", "c4"]), orbit)).toBe(false); // out-of-orbit id
+  });
+
   it("returns false against an empty valid set", () => {
     expect(isLegalAction(sitOut(["u1"]), [])).toBe(false);
   });
@@ -155,6 +182,29 @@ describe("isLegalAction", () => {
       exposeIds: [],
     };
     expect(isLegalAction(wrongPlayer, valid)).toBe(false);
+  });
+
+  it("shallow-rejects a template-style action against an empty valid set", () => {
+    // The shallow branch is a distinct code path from the deep branch's
+    // empty-set reject — guard it directly.
+    const filled: Action = {
+      type: "seed_keep",
+      playerId: "p1",
+      keepIds: ["c1"],
+      exposeIds: [],
+    };
+    expect(isLegalAction(filled, [])).toBe(false);
+  });
+
+  it("shallow-rejects when only a different action type is enumerated", () => {
+    const valid: Action[] = [{ type: "pass", playerId: "p1" }];
+    const filled: Action = {
+      type: "seed_keep",
+      playerId: "p1",
+      keepIds: [],
+      exposeIds: [],
+    };
+    expect(isLegalAction(filled, valid)).toBe(false);
   });
 });
 
@@ -192,5 +242,34 @@ describe("canonicalActionKey", () => {
     const subset = canonicalActionKey(pick(["c1", "c2"]));
     expect(reordered).toBe(full); // permutation-invariant
     expect(subset).not.toBe(full); // subset-sensitive
+  });
+
+  it("drops an undefined field nested inside a decision payload", () => {
+    // The undefined-dropping recurses to any depth, not just the top level.
+    const withUndef = {
+      type: "resolve_combat_round",
+      playerId: "p1",
+      decision: { kind: "retreat", retreat: true, extra: undefined },
+    } as unknown as Action;
+    const without = {
+      type: "resolve_combat_round",
+      playerId: "p1",
+      decision: { kind: "retreat", retreat: true },
+    } as unknown as Action;
+    expect(canonicalActionKey(withUndef)).toBe(canonicalActionKey(without));
+  });
+
+  it("sorts an array of objects order-insensitively", () => {
+    // Exercises the array-of-objects comparator (each element canonicalized
+    // then stringified) directly, not just via assign_matchups.
+    const a = matchups([
+      ["a1", "d1"],
+      ["a2", "d2"],
+    ]);
+    const b = matchups([
+      ["a2", "d2"],
+      ["a1", "d1"],
+    ]);
+    expect(canonicalActionKey(a)).toBe(canonicalActionKey(b));
   });
 });

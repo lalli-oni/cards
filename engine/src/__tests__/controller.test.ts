@@ -2,7 +2,11 @@ import { describe, expect, it } from "bun:test";
 import { produce } from "immer";
 import { applyAction } from "../apply-action";
 import { BotAdapter } from "../bot-adapter";
-import { GameController, InvalidActionError } from "../controller";
+import {
+  GameController,
+  InvalidActionError,
+  MAX_CONSECUTIVE_REJECTIONS,
+} from "../controller";
 import type {
   Action,
   GameEvent,
@@ -251,9 +255,11 @@ describe("GameController", () => {
       const rejected: string[] = [];
 
       let deciderCalls = 0;
+      const deciderViewers: string[] = [];
       const deciderAdapter: PlayerAdapter = {
-        async chooseAction(_vis: VisibleState, valid: Action[]) {
+        async chooseAction(vis: VisibleState, valid: Action[]) {
           deciderCalls++;
+          deciderViewers.push(vis.playerId);
           if (deciderCalls === 1) {
             // Structurally-typed but illegal — rejected at the gate.
             return {
@@ -293,7 +299,7 @@ describe("GameController", () => {
           ["p2", passAdapter],
         ]),
         (evs) => events.push(...evs),
-        (_err, playerId) => rejected.push(playerId),
+        (err) => rejected.push(err.actingPlayerId),
       );
 
       // The loop survives the rejection and keeps running; with only passes the
@@ -302,6 +308,10 @@ describe("GameController", () => {
 
       expect(rejected).toEqual(["p1"]); // re-prompted exactly once, same decider
       expect(deciderCalls).toBeGreaterThanOrEqual(2);
+      // The re-prompt routed back to the SAME decider (p1), not the active
+      // player: both of the first two prompts projected p1's view. Guards
+      // against an accidental p2 turn slipping between the reject and re-prompt.
+      expect(deciderViewers.slice(0, 2)).toEqual(["p1", "p1"]);
       expect(events.filter((e) => e.type === "combat_resolved")).toHaveLength(
         1,
       );
@@ -333,10 +343,21 @@ describe("GameController", () => {
         },
       });
 
-      await expect(controller.run()).rejects.toBeInstanceOf(InvalidActionError);
-      // It re-prompted many times before giving up, rather than throwing on the
-      // first rejection or looping forever.
-      expect(rejections).toBeGreaterThan(1);
+      // Giving up wraps the last rejection in an annotated terminal error
+      // (with the raw InvalidActionError as `cause`), rather than re-throwing
+      // the bare InvalidActionError or looping forever.
+      const err = await controller.run().then(
+        () => {
+          throw new Error("expected run() to reject");
+        },
+        (e: unknown) => e as Error,
+      );
+      expect(err.message).toMatch(/gave up after \d+ consecutive/);
+      expect(err.cause).toBeInstanceOf(InvalidActionError);
+      // It gave up at the *consecutive-rejection* boundary (100), not the
+      // max-actions guard (10,000) — the callback fires once per rejection up
+      // to but excluding the give-up iteration.
+      expect(rejections).toBe(MAX_CONSECUTIVE_REJECTIONS);
     });
   });
 

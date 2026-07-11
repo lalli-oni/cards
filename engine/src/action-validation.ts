@@ -13,10 +13,9 @@ import type { Action } from "./types";
  * Those keep the shallow type+playerId check (unchanged behavior); applyAction
  * remains their payload validator.
  */
-const DEEP_VALIDATED_ACTION_TYPES: ReadonlySet<string> = new Set([
-  "resolve_combat_round",
-  "resolve_pick",
-]);
+const DEEP_VALIDATED_ACTION_TYPES: ReadonlySet<Action["type"]> = new Set<
+  Action["type"]
+>(["resolve_combat_round", "resolve_pick"]);
 
 /**
  * Legality check for an adapter-submitted action against the enumerated set.
@@ -61,6 +60,11 @@ export function canonicalActionKey(action: Action): string {
 
 function canonicalize(value: unknown): unknown {
   if (Array.isArray(value)) {
+    // The `?? ""` guards the case where an element serializes to `undefined`
+    // (a bare `undefined`/function element). Current deep-validated `Action`
+    // payloads only hold string ids and plain pair objects, which always
+    // stringify to a defined value — so the guard is defensive, not
+    // load-bearing today.
     return value.map(canonicalize).sort((a, b) => {
       const sa = JSON.stringify(a) ?? "";
       const sb = JSON.stringify(b) ?? "";

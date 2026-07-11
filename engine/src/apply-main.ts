@@ -1635,6 +1635,10 @@ function handleResolveCombatRound(
       const retreatingIds: readonly string[] = deciderIsAttacker
         ? prompt.attackerUnitIds
         : prompt.defenderUnitIds;
+      // Announce the retreat before the withdrawal + combat_resolved, so the
+      // result dialog can name who pulled out (it is otherwise invisible — a
+      // retreat rolls no dice and produces no combat_pair_resolved).
+      emit({ type: "combat_retreated", row: prompt.row, col: prompt.col, playerId });
       retreatUnitsToHQ(draft, cell, playerId, retreatingIds, prompt.row, prompt.col, emit);
       runCombat(draft, base, emit, queries, prompt.round);
       return;

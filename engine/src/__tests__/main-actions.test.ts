@@ -1703,6 +1703,10 @@ describe("per-round retreat (#168)", () => {
     const resolved = events.find((e) => e.type === "combat_resolved");
     expect(resolved && resolved.type === "combat_resolved" && resolved.winnerId).toBe(OTHER);
 
+    // The retreat is announced so the result dialog can name who withdrew.
+    const retreated = events.find((e) => e.type === "combat_retreated");
+    expect(retreated && retreated.type === "combat_retreated" && retreated.playerId).toBe(ACTIVE);
+
     // The per-round combat retreat is a between-rounds decision, not a Move —
     // it costs no AP (unlike the 1-AP Move-action retreat).
     expect(ns.turn.actionPointsRemaining).toBe(suspended.turn.actionPointsRemaining);
@@ -1753,6 +1757,10 @@ describe("per-round retreat (#168)", () => {
     expect(ns.grid[0][0].units.some((u) => u.id === aWin)).toBe(true);
     const resolved = events.find((e) => e.type === "combat_resolved");
     expect(resolved && resolved.type === "combat_resolved" && resolved.winnerId).toBe(ACTIVE);
+
+    // The retreating side (defender) is named in a combat_retreated event.
+    const retreated = events.find((e) => e.type === "combat_retreated");
+    expect(retreated && retreated.type === "combat_retreated" && retreated.playerId).toBe(OTHER);
   });
 
   it("both sides declining rolls the round instead of re-offering retreat", () => {

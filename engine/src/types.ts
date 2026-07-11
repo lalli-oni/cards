@@ -906,6 +906,16 @@ export type GameEvent =
       winnerId: string | null;
     }
   | {
+      /** A side withdrew its whole remaining committed force to HQ before a
+       *  round rolled (#168). Emitted just before the withdrawal and the
+       *  ensuing `combat_resolved`, so the result dialog can name the retreat. */
+      type: "combat_retreated";
+      row: number;
+      col: number;
+      /** The side (player id) that retreated. */
+      playerId: string;
+    }
+  | {
       type: "combat_pair_resolved";
       row: number;
       col: number;

@@ -57,14 +57,21 @@ reports gaps/violations with a `pass` flag:
   authoritative source of card mechanics), not the `abilities` column. The verb
   list (`DSL_VERBS`) mirrors the engine.
 - **No blended value number.** `gold-out`/`vp-out`/`ap-cost`/`gold-cost` are kept
-  separate — gold ≠ vp, AP ≠ gold. A real value/EV rating model is intentionally
-  out of scope for this toolkit (deferred to #193).
+  separate — gold ≠ vp, AP ≠ gold. This toolkit emits no single value verdict.
 - **`gold-out`/`vp-out` are partial** — only literal `gold[N]`/`vp[N]` emissions,
   not the indirect value of contests/buffs/control/tempo. The `negative-value`
   screen is a *review list*, not a balance verdict.
-- **Archetype ≡ attribute.** A mechanics-derived gameplay/strategy archetype
-  taxonomy is deferred post-v0.1 (#192).
+- **Archetype ≡ attribute.** The toolkit uses a card's attribute as its archetype axis.
 - **`ATTRIBUTES` mirrors `engine/src/attributes.ts`** — keep in sync; a test pins it.
+
+## Roadmap (deferred post-v0.1)
+
+- **Value/EV rating model** ([#193](https://github.com/lalli-oni/cards/issues/193)) —
+  a real card power estimate accounting for indirect value (contests, buffs,
+  control, tempo), not just literal `gold[N]`/`vp[N]` payout. Would upgrade
+  `negative-value` from an advisory screen into a gating check.
+- **Gameplay/strategy archetype taxonomy** ([#192](https://github.com/lalli-oni/cards/issues/192)) —
+  a mechanics-derived archetype axis distinct from the attribute axis used today.
 
 ## Tests
 

@@ -201,14 +201,12 @@
     {#if isRetreat}
       {@const deciderName = resolvePlayerName(prompt.playerId)}
       <h3 class="mb-1 text-center text-lg font-bold text-text-primary">
-        Retreat to HQ — before round {prompt.round + 1}
+        Retreat to HQ, or fight on?
       </h3>
       <p class="mb-4 text-center text-sm text-text-muted">
-        {deciderName} may pull all {retreatingSide.length} remaining unit{retreatingSide.length ===
-        1
-          ? ""
-          : "s"} back to HQ. Retreating units leave this combat and heal at HQ; the
-        opponent wins this combat.
+        Before round {prompt.round + 1} rolls, {deciderName} may pull all {retreatingSide.length}
+        remaining unit{retreatingSide.length === 1 ? "" : "s"} back to HQ, or stay and fight the
+        round. Retreating units leave this combat and heal at HQ; the opponent wins this combat.
       </p>
 
       <div class="mb-4 space-y-2">

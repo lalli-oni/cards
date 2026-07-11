@@ -364,6 +364,7 @@ export function instantiateCard(
           def.itemType && def.itemType.length > 0
             ? (def.itemType as ItemType[])
             : undefined,
+        actions: def.actions ?? undefined,
       } satisfies ItemCard;
 
     case "event": {

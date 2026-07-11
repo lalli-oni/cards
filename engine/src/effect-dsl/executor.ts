@@ -7,7 +7,7 @@ import type { QueryListener, EmitFn } from "../listeners/types";
 import { getPlayerById, getConfigNumber } from "../state-helpers";
 import { drawOneCard } from "../deck-helpers";
 import { killUnit, injureUnit, decideKillVsInjure, computeContestPower } from "../unit-helpers";
-import { findUnitOnGrid } from "../grid-helpers";
+import { findItemOnGrid, findUnitOnGrid } from "../grid-helpers";
 import { getModifiedStatWithSources } from "../listeners/query";
 
 // ---------------------------------------------------------------------------
@@ -36,11 +36,17 @@ export interface ExecutionContext {
   _razedLocation?: Draft<LocationCard>;
 }
 
-/** Resolve the acting unit's current position from the grid (lazy, always fresh). */
+/** Resolve the acting card's current grid position (lazy, always fresh). The
+ *  acting card is usually a unit, but an item can activate too (Philosopher's
+ *  Stone, Siege Engine) — for a grid item the id is an item id, so fall back to
+ *  the item grid so positional item effects target the item's own cell. HQ
+ *  cards resolve to neither and stay position-less (their effects are HQ-safe). */
 function getActingPosition(ctx: ExecutionContext): { row: number; col: number } | undefined {
   if (!ctx.actingUnitId) return undefined;
-  const found = findUnitOnGrid(ctx.draft.grid, ctx.actingUnitId);
-  return found ? { row: found.row, col: found.col } : undefined;
+  const unit = findUnitOnGrid(ctx.draft.grid, ctx.actingUnitId);
+  if (unit) return { row: unit.row, col: unit.col };
+  const item = findItemOnGrid(ctx.draft.grid, ctx.actingUnitId);
+  return item ? { row: item.row, col: item.col } : undefined;
 }
 
 // ---------------------------------------------------------------------------

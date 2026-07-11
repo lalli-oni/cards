@@ -501,6 +501,39 @@ function getMainValidActions(
         }
       }
     }
+
+    // Item actions (e.g. Philosopher's Stone). Items are operated by units, so
+    // an action surfaces only when a controlling unit is co-located — `units`
+    // above already filtered to the player's units at this position, so a
+    // non-empty list is exactly that gate. Equipped items pass automatically
+    // (their unit travels with them); a lone/stored item with no friendly unit
+    // present offers nothing.
+    if (units.length > 0) {
+      const items = getItemsAtPosition(state.players, state.grid, pos)
+        .filter((i) => ownerFilter || i.controllerId === playerId);
+      for (const item of items) {
+        if (!item.actions) continue;
+        for (const actionDef of item.actions) {
+          if (ap < actionDef.apCost) continue;
+          const targets = inferActivateTargets(
+            state,
+            item.id,
+            actionDef.effect,
+            pos,
+            playerId,
+          );
+          for (const t of targets) {
+            actions.push({
+              type: "activate",
+              playerId,
+              cardId: item.id,
+              actionName: actionDef.name,
+              ...t,
+            });
+          }
+        }
+      }
+    }
   }
 
   // activate — policy actions (HQ-origin: no grid position)

@@ -1295,6 +1295,8 @@ function handleActivate(
   let cardName: string;
   let actingCardSource: ModifierSource;
 
+  const locatedItem = located ? null : findItemPosition(draft.players, draft.grid, cardId);
+
   if (located) {
     const card = located.unit as Draft<UnitCard>;
     if (!card.actions) throw new Error(`Card "${cardId}" has no actions`);
@@ -1303,8 +1305,25 @@ function handleActivate(
     if (!actionDef) throw new Error(`Action "${actionName}" not found on unit "${cardId}"`);
     cardName = card.name;
     actingCardSource = { type: "unit", cardId: card.id, definitionId: card.definitionId };
+  } else if (locatedItem) {
+    // Item action (e.g. Philosopher's Stone). Operated by a unit, so it requires
+    // a controlling unit co-located with the item — the same gate getValidActions
+    // enumerates under. `actingUnitId` stays the item id: the executor resolves an
+    // item's grid cell for positional verbs; on grid it stays with the item.
+    const card = locatedItem.item as Draft<ItemCard>;
+    if (!card.actions) throw new Error(`Card "${cardId}" has no actions`);
+    if (card.controllerId !== playerId) throw new Error(`Card "${cardId}" not owned by "${playerId}"`);
+    const hasCoLocatedUnit = getUnitsAtPosition(draft.players, draft.grid, locatedItem.position)
+      .some((u) => u.controllerId === playerId);
+    if (!hasCoLocatedUnit) {
+      throw new Error(`Item "${cardId}" has no controlling unit co-located to activate it`);
+    }
+    actionDef = card.actions.find((a) => a.name === actionName);
+    if (!actionDef) throw new Error(`Action "${actionName}" not found on item "${cardId}"`);
+    cardName = card.name;
+    actingCardSource = { type: "item", cardId: card.id, definitionId: card.definitionId };
   } else {
-    // Not a unit — try active policies.
+    // Not a unit or item — try active policies.
     const owner = draft.players.find((p) => p.id === playerId);
     const policy = owner?.activePolicies.find((p) => p.id === cardId);
     if (!policy) throw new Error(`Card "${cardId}" not found on grid, HQ, or active policies`);

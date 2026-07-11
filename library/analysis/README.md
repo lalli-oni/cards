@@ -58,7 +58,7 @@ reports gaps/violations with a `pass` flag:
   list (`DSL_VERBS`) mirrors the engine.
 - **No blended value number.** `gold-out`/`vp-out`/`ap-cost`/`gold-cost` are kept
   separate — gold ≠ vp, AP ≠ gold. A real value/EV rating model is intentionally
-  out of scope for this toolkit.
+  out of scope for this toolkit (deferred to #193).
 - **`gold-out`/`vp-out` are partial** — only literal `gold[N]`/`vp[N]` emissions,
   not the indirect value of contests/buffs/control/tempo. The `negative-value`
   screen is a *review list*, not a balance verdict.

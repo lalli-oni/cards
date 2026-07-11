@@ -5,7 +5,7 @@
 #   economy — cards that emit gold but cost more gold than they return
 #   objective — cards that emit vp (cost per vp), listed for review
 # Never fails the audit. A real value/EV rating model is intentionally out of
-# scope for this toolkit (no blended value number is emitted).
+# scope for this toolkit (no blended value number is emitted) — deferred to #193.
 
 use selectors.nu *
 

@@ -73,6 +73,19 @@ export function getUnitsAtPosition(
   return grid[position.row]?.[position.col]?.units ?? [];
 }
 
+/** True if a unit controlled by `playerId` shares `position`. This is the single
+ *  definition of the "item can be operated here" gate — items are operated by a
+ *  co-located friendly unit, so both enumeration (valid-actions.ts) and execution
+ *  (apply-main.ts's handleActivate) gate on this predicate. */
+export function hasControllingUnitAt(
+  players: readonly PlayerState[],
+  grid: Grid,
+  position: BoardPosition,
+  playerId: string,
+): boolean {
+  return getUnitsAtPosition(players, grid, position).some((u) => u.controllerId === playerId);
+}
+
 /** Get all items at a position. */
 export function getItemsAtPosition(
   players: readonly PlayerState[],

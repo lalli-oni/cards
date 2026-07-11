@@ -4,7 +4,7 @@ import { fromState, uniformIntDistribution } from "./rng";
 import { parseCost, spendAP, spendGold } from "./cost-helpers";
 import { drawLocationFromProspect, drawMarketCard, drawOneCard } from "./deck-helpers";
 import { checkMissionRequirements, parseRequirements, parseRewards } from "./mission-helpers";
-import { findItemPosition, findUnitPosition, getUnitsAtPosition, samePosition } from "./position-helpers";
+import { findItemPosition, findUnitPosition, getUnitsAtPosition, hasControllingUnitAt, samePosition } from "./position-helpers";
 import {
   areFacingEdgesOpen,
   findUnitOnGrid,
@@ -1295,6 +1295,8 @@ function handleActivate(
   let cardName: string;
   let actingCardSource: ModifierSource;
 
+  const locatedItem = located ? null : findItemPosition(draft.players, draft.grid, cardId);
+
   if (located) {
     const card = located.unit as Draft<UnitCard>;
     if (!card.actions) throw new Error(`Card "${cardId}" has no actions`);
@@ -1303,8 +1305,24 @@ function handleActivate(
     if (!actionDef) throw new Error(`Action "${actionName}" not found on unit "${cardId}"`);
     cardName = card.name;
     actingCardSource = { type: "unit", cardId: card.id, definitionId: card.definitionId };
+  } else if (locatedItem) {
+    // Item action (e.g. Philosopher's Stone). Operated by a unit, so it requires
+    // a controlling unit co-located with the item — the same gate getValidActions
+    // enumerates under (hasControllingUnitAt is the shared definition). `actingUnitId`
+    // stays the item id so the executor resolves the item's own grid cell for
+    // positional verbs.
+    const card = locatedItem.item as Draft<ItemCard>;
+    if (!card.actions) throw new Error(`Card "${cardId}" has no actions`);
+    if (card.controllerId !== playerId) throw new Error(`Card "${cardId}" not owned by "${playerId}"`);
+    if (!hasControllingUnitAt(draft.players, draft.grid, locatedItem.position, playerId)) {
+      throw new Error(`Item "${cardId}" has no controlling unit co-located to activate it`);
+    }
+    actionDef = card.actions.find((a) => a.name === actionName);
+    if (!actionDef) throw new Error(`Action "${actionName}" not found on item "${cardId}"`);
+    cardName = card.name;
+    actingCardSource = { type: "item", cardId: card.id, definitionId: card.definitionId };
   } else {
-    // Not a unit — try active policies.
+    // Not a unit or item — try active policies.
     const owner = draft.players.find((p) => p.id === playerId);
     const policy = owner?.activePolicies.find((p) => p.id === cardId);
     if (!policy) throw new Error(`Card "${cardId}" not found on grid, HQ, or active policies`);

@@ -1,4 +1,4 @@
-import type { Grid, UnitCard } from "./types";
+import type { Grid, ItemCard, UnitCard } from "./types";
 
 /** True if every cell on the grid has a location. */
 export function isFull(grid: Grid): boolean {
@@ -16,6 +16,29 @@ export function findUnitOnGrid(
     for (let c = 0; c < grid[r].length; c++) {
       const unit = grid[r][c].units.find((u) => u.id === unitId);
       if (unit) return { row: r, col: c, unit };
+    }
+  }
+  return null;
+}
+
+/** Find an item on the grid by instance ID. Returns its position or null.
+ *  Used to resolve an item's cell when it is the acting card of an activate
+ *  (a stored or equipped item running a positional effect).
+ *
+ *  Deliberately grid-only: an HQ item resolves to null here so its positional
+ *  verbs no-op (contrast `findItemPosition` in position-helpers.ts, which spans
+ *  HQ *and* grid). Equipped items are located via their cell: this assumes an
+ *  equipped item stays listed in its bearer's cell `items` array (how equip
+ *  models storage today) — if that ever changes, positional equipped-item
+ *  effects would silently no-op and this lookup would need the bearer's cell. */
+export function findItemOnGrid(
+  grid: Grid,
+  itemId: string,
+): { row: number; col: number; item: ItemCard } | null {
+  for (let r = 0; r < grid.length; r++) {
+    for (let c = 0; c < grid[r].length; c++) {
+      const item = grid[r][c].items.find((i) => i.id === itemId);
+      if (item) return { row: r, col: c, item };
     }
   }
   return null;

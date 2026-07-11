@@ -457,6 +457,30 @@ describe("instantiateCard", () => {
     }
   });
 
+  test("creates item card carrying its parsed actions (#130)", () => {
+    const stone: CardDefinition = {
+      ...VALID_ITEM,
+      id: "philosophers-stone",
+      name: "Philosopher's Stone",
+      actions: [{ name: "transmute", apCost: 1, effect: "gold[3]" }],
+    };
+    const card = instantiateCard(stone, "player-1", counter);
+    expect(card.type).toBe("item");
+    if (card.type === "item") {
+      expect(card.actions).toEqual([
+        { name: "transmute", apCost: 1, effect: "gold[3]" },
+      ]);
+    }
+  });
+
+  test("item card without actions leaves actions undefined", () => {
+    const card = instantiateCard(VALID_ITEM, "player-1", counter);
+    expect(card.type).toBe("item");
+    if (card.type === "item") {
+      expect(card.actions).toBeUndefined();
+    }
+  });
+
   test("creates event card", () => {
     const card = instantiateCard(VALID_EVENT, "player-1", counter);
     expect(card.type).toBe("event");

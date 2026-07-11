@@ -229,6 +229,10 @@ export interface ItemCard extends CardBase {
    *  Named `itemType` to avoid colliding with the `type` discriminant. The
    *  militarist policy discount keys off this (see effects.ts). */
   itemType?: ItemType[];
+  /** Activatable actions (e.g. Philosopher's Stone's `transmute`). Enumerated
+   *  by `getValidActions` and run by `handleActivate` only when a controlling
+   *  unit is co-located with the item (items are operated by units). */
+  actions?: ActionDef[];
 }
 
 interface EventCardBase extends CardBase {

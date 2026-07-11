@@ -242,9 +242,16 @@ describe("GameController", () => {
         ]),
       );
 
-      await expect(controller.playTurn()).rejects.toBeInstanceOf(
-        InvalidActionError,
+      const err = await controller.playTurn().then(
+        () => {
+          throw new Error("expected playTurn() to reject");
+        },
+        (e: unknown) => e as InvalidActionError,
       );
+      expect(err).toBeInstanceOf(InvalidActionError);
+      // The bogus matchup has the right type + player, so it's specifically a
+      // payload-level rejection — the reason the deep gate exists to catch.
+      expect(err.reason).toBe("payload_mismatch");
     });
 
     // Loop survival (#182 B): a rejected submission must not tear down run().

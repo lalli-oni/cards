@@ -443,7 +443,11 @@ function handleGameLoopError(err: unknown): void {
  * unlock.
  */
 function handleInvalidAction(err: InvalidActionError): void {
-  console.error("Engine rejected submitted action:", err);
+  console.error(
+    `Engine rejected submitted action (${err.reason}):`,
+    err.action,
+    err,
+  );
   const playerId = err.actingPlayerId;
   const name = players.find((p) => p.id === playerId)?.name ?? playerId;
   _rejectionNonce++;

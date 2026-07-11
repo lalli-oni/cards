@@ -18,11 +18,35 @@ const DEEP_VALIDATED_ACTION_TYPES: ReadonlySet<Action["type"]> = new Set<
 >(["resolve_combat_round", "resolve_pick"]);
 
 /**
- * Legality check for an adapter-submitted action against the enumerated set.
+ * Why an adapter-submitted action failed the legality gate. Distinguishing these
+ * lets a rejection be logged with its cause instead of a bare "not legal":
+ * - `type_not_offered`: no enumerated action of this type for the player to act
+ *   (e.g. a `deploy` when only `pass`/`activate` are available).
+ * - `wrong_player`: the type is offered, but the submitted `playerId` isn't the
+ *   player to act — `getValidActions` enumerates only that player's actions, so
+ *   this means the adapter addressed the action to the wrong player.
+ * - `payload_mismatch`: a deep-validated decision action (see
+ *   `DEEP_VALIDATED_ACTION_TYPES`) whose type+player are offered but whose
+ *   decision payload isn't in the enumerated legal set (bad sit-out ids, wrong
+ *   matchup pairs, an unoffered kind, …).
+ */
+export type ActionRejectionReason =
+  | "type_not_offered"
+  | "wrong_player"
+  | "payload_mismatch";
+
+/** Result of {@link checkActionLegality}: legal, or illegal with a reason. */
+export type ActionLegality =
+  | { legal: true }
+  | { legal: false; reason: ActionRejectionReason };
+
+/**
+ * Legality check for an adapter-submitted action against the enumerated set,
+ * returning *why* on rejection (see {@link ActionRejectionReason}).
  *
- * For exhaustively-enumerated decision actions (see above) this is structural
- * membership of `action` in `validActions`, compared via canonical keys. For
- * everything else it falls back to the shallow type+playerId match.
+ * For exhaustively-enumerated decision actions (see above) legality is
+ * structural membership of `action` in `validActions`, compared via canonical
+ * keys. For everything else it falls back to the shallow type+playerId match.
  *
  * Order-insensitivity: the canonical key sorts every array, because several
  * payloads are set-semantic and the client builds them in a different order
@@ -36,17 +60,35 @@ const DEEP_VALIDATED_ACTION_TYPES: ReadonlySet<Action["type"]> = new Set<
  * Sorting collapses *permutations* only, never subsets, so a submitted subset
  * of a larger enumerated set still fails to match.
  */
+export function checkActionLegality(
+  action: Action,
+  validActions: readonly Action[],
+): ActionLegality {
+  const typeMatches = validActions.filter((va) => va.type === action.type);
+  if (typeMatches.length === 0) {
+    return { legal: false, reason: "type_not_offered" };
+  }
+  if (!typeMatches.some((va) => va.playerId === action.playerId)) {
+    return { legal: false, reason: "wrong_player" };
+  }
+  // Shallow types are legal on type+player alone — their payload is an
+  // adapter-filled template, so applyAction remains the payload validator.
+  if (!DEEP_VALIDATED_ACTION_TYPES.has(action.type)) {
+    return { legal: true };
+  }
+  const key = canonicalActionKey(action);
+  if (validActions.some((va) => canonicalActionKey(va) === key)) {
+    return { legal: true };
+  }
+  return { legal: false, reason: "payload_mismatch" };
+}
+
+/** Boolean convenience wrapper over {@link checkActionLegality}. */
 export function isLegalAction(
   action: Action,
   validActions: readonly Action[],
 ): boolean {
-  if (!DEEP_VALIDATED_ACTION_TYPES.has(action.type)) {
-    return validActions.some(
-      (va) => va.type === action.type && va.playerId === action.playerId,
-    );
-  }
-  const key = canonicalActionKey(action);
-  return validActions.some((va) => canonicalActionKey(va) === key);
+  return checkActionLegality(action, validActions).legal;
 }
 
 /**

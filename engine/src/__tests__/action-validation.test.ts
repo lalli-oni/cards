@@ -1,5 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import { canonicalActionKey, isLegalAction } from "../action-validation";
+import {
+  canonicalActionKey,
+  checkActionLegality,
+  isLegalAction,
+} from "../action-validation";
 import type { Action } from "../types";
 
 // Helpers to build the payloads the enumerator emits, as plain literals — this
@@ -205,6 +209,57 @@ describe("isLegalAction", () => {
       exposeIds: [],
     };
     expect(isLegalAction(filled, valid)).toBe(false);
+  });
+});
+
+describe("checkActionLegality", () => {
+  it("returns { legal: true } for an enumerated action", () => {
+    const valid = [sitOut(["u1", "u2"])];
+    expect(checkActionLegality(sitOut(["u2", "u1"]), valid)).toEqual({
+      legal: true,
+    });
+  });
+
+  it("reports type_not_offered when no valid action shares the type", () => {
+    const valid: Action[] = [{ type: "pass", playerId: "p1" }];
+    const filled: Action = {
+      type: "seed_keep",
+      playerId: "p1",
+      keepIds: [],
+      exposeIds: [],
+    };
+    expect(checkActionLegality(filled, valid)).toEqual({
+      legal: false,
+      reason: "type_not_offered",
+    });
+  });
+
+  it("reports wrong_player when the type is offered but the playerId isn't", () => {
+    // getValidActions enumerates only the acting player's actions, so a
+    // matching type addressed to a different player is a wrong-player rejection.
+    const valid: Action[] = [
+      { type: "seed_keep", playerId: "p1", keepIds: [], exposeIds: [] },
+    ];
+    const wrongPlayer: Action = {
+      type: "seed_keep",
+      playerId: "p2",
+      keepIds: [],
+      exposeIds: [],
+    };
+    expect(checkActionLegality(wrongPlayer, valid)).toEqual({
+      legal: false,
+      reason: "wrong_player",
+    });
+  });
+
+  it("reports payload_mismatch for a deep-validated action with a bad payload", () => {
+    // type + player are offered, but the sit-out ids aren't in the enumerated
+    // legal set — the distinctively deep-validation failure.
+    const valid = [sitOut(["u1", "u2"]), sitOut(["u1", "u3"])];
+    expect(checkActionLegality(sitOut(["u1", "u9"]), valid)).toEqual({
+      legal: false,
+      reason: "payload_mismatch",
+    });
   });
 });
 

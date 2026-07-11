@@ -1,4 +1,7 @@
-import { isLegalAction } from "./action-validation";
+import {
+  type ActionRejectionReason,
+  checkActionLegality,
+} from "./action-validation";
 import { applyAction } from "./apply-action";
 import { createGame } from "./create-game";
 import type {
@@ -54,10 +57,11 @@ export class InvalidActionError extends Error {
   constructor(
     readonly actingPlayerId: string,
     readonly action: Action,
+    readonly reason: ActionRejectionReason,
   ) {
     super(
-      `Adapter for player "${actingPlayerId}" returned an invalid action: ` +
-        `${JSON.stringify(action)}`,
+      `Adapter for player "${actingPlayerId}" returned an invalid action ` +
+        `(${reason}): ${JSON.stringify(action)}`,
     );
     this.name = "InvalidActionError";
   }
@@ -169,7 +173,7 @@ export class GameController {
           throw new Error(
             `Game loop gave up after ${MAX_CONSECUTIVE_REJECTIONS} consecutive ` +
               `rejected submissions from player "${err.actingPlayerId}". ` +
-              `Last invalid action: ${JSON.stringify(err.action)}`,
+              `Last invalid action (${err.reason}): ${JSON.stringify(err.action)}`,
             { cause: err },
           );
         }
@@ -202,9 +206,10 @@ export class GameController {
     // type + playerId — a malformed decision payload (bad sit-out ids, wrong
     // matchup pairs, an unoffered kind) must be caught here rather than relied
     // upon applyAction to throw. `run()` treats this as recoverable; direct
-    // callers get the throw.
-    if (!isLegalAction(action, validActions)) {
-      throw new InvalidActionError(actingPlayerId, action);
+    // callers get the throw. The reason is carried on the error for logging.
+    const legality = checkActionLegality(action, validActions);
+    if (!legality.legal) {
+      throw new InvalidActionError(actingPlayerId, action, legality.reason);
     }
 
     return this.applyAction(action);

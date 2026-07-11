@@ -16,6 +16,12 @@ export {
   loadCardDefinitions,
   loadCardDefinitionsFromBuild,
 } from "./card-loader";
+// Action legality gate
+export type {
+  ActionLegality,
+  ActionRejectionReason,
+} from "./action-validation";
+export { checkActionLegality, isLegalAction } from "./action-validation";
 export type { ControllerOptions } from "./controller";
 // Controller
 export { GameController, InvalidActionError } from "./controller";

@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { getError, getVisibleState, selectAction, setError } from "../lib/gameStore.svelte";
+  import { getRejectionNonce, getVisibleState, selectAction, setError } from "../lib/gameStore.svelte";
   import { resolvePickOptions, togglePickSelection } from "../lib/pickPrompt";
+  import { shouldReenableAfterRejection } from "../lib/promptRecovery";
   import CardView from "./CardView.svelte";
   import Modal from "./Modal.svelte";
 
@@ -32,14 +33,19 @@
 
   let selected = $state<ReadonlySet<string>>(new Set<string>());
   let submitted = $state(false);
+  // The rejection-nonce value captured at submit; the effect below unlocks
+  // Confirm when it advances (this submission was rejected).
+  let nonceAtSubmit = $state(0);
 
-  // If the engine surfaces an error while we're mid-submit, unlock the
-  // button so the user can try again (retry may or may not succeed
-  // depending on whether the controller is recoverable, but the button
-  // shouldn't be permanently stuck).
-  const error = $derived(getError());
+  // If the engine rejects THIS submission mid-submit, unlock the button so the
+  // user can try again. Keys off the monotonic rejection nonce (shared with
+  // CombatPromptOverlay) rather than any error being present, so an unrelated
+  // banner can't leave Confirm stuck or unlock it spuriously.
+  const rejectionNonce = $derived(getRejectionNonce());
   $effect(() => {
-    if (error && submitted) submitted = false;
+    if (shouldReenableAfterRejection(submitted, rejectionNonce, nonceAtSubmit)) {
+      submitted = false;
+    }
   });
 
   // Reset local picker state when the prompt changes content. Today the
@@ -59,6 +65,7 @@
 
   function confirm(): void {
     if (!prompt || selected.size !== prompt.count || submitted) return;
+    nonceAtSubmit = rejectionNonce;
     submitted = true;
     selectAction({
       type: "resolve_pick",

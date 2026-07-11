@@ -1,28 +1,40 @@
 import {
-  GameController,
-  getVisibleEvent,
-  getVisibleState as engineGetVisibleState,
   type Action,
   type ActionDef,
   type Card,
+  getVisibleState as engineGetVisibleState,
+  GameController,
   type GameEvent,
   type GameState,
+  getVisibleEvent,
+  type InvalidActionError,
   type PlayerDescriptor,
+  setAutoFreeze,
   type VisibleState,
 } from "cards-engine";
-import { setAutoFreeze } from "cards-engine";
-import { HotseatAdapter } from "./HotseatAdapter";
-import { DEFAULT_CONFIG, buildSeedingSetup, buildMainSetup } from "./gameSetup";
-import { autoSave, listSessions, loadSession, saveSession } from "./persistence";
 import {
   buildCombatContestResult,
   buildDslContestResult,
-  stepCombatBuffer,
   type CombatBufferStep,
   type ContestResult,
+  stepCombatBuffer,
 } from "./contestResult";
+import { buildMainSetup, buildSeedingSetup, DEFAULT_CONFIG } from "./gameSetup";
+import { HotseatAdapter } from "./HotseatAdapter";
+import {
+  autoSave,
+  listSessions,
+  loadSession,
+  saveSession,
+} from "./persistence";
+import { appendBanner } from "./promptRecovery";
 
-export type { ContestOutcome, ContestResult, PairDetail, PairSideView } from "./contestResult";
+export type {
+  ContestOutcome,
+  ContestResult,
+  PairDetail,
+  PairSideView,
+} from "./contestResult";
 
 // Immer auto-freezes produce() output. Svelte 5's $state uses deep proxies.
 // Frozen objects passed into $state (and proxied objects passed back to immer)
@@ -43,6 +55,11 @@ let _currentPlayerName = $state("");
 let _savedSessions = $state<string[]>([]);
 let _gamePhase = $state<"seeding" | "main" | "ended" | null>(null);
 let _error = $state<string | null>(null);
+// Monotonic counter bumped every time the engine rejects a submitted action
+// (#182). The combat/pick overlays watch this — not the error-banner string —
+// to re-enable their Confirm button after a rejection, so the banner is free
+// to dedupe/replace without the unlock silently breaking.
+let _rejectionNonce = $state(0);
 let _prevTurnStartIndex = $state(0);
 let _lastTurnStartIndex = $state(0);
 // Pending viewer for the pass-device overlay. Set in onBeforeTurn (when the
@@ -97,7 +114,7 @@ export function dismissContest() {
 // Derived card name lookup — rebuilt when visible state changes.
 // Covers grid, hand, HQ, policies, decks, discard, removed, market,
 // middle area, and opponent public zones.
-let _cardNameMap = $derived.by(() => {
+const _cardNameMap = $derived.by(() => {
   const vs = _visibleState;
   if (!vs) return new Map<string, string>();
   const map = new Map<string, string>();
@@ -109,9 +126,14 @@ let _cardNameMap = $derived.by(() => {
     }
   }
   const selfZones = [
-    vs.self.hand, vs.self.hq, vs.self.activePolicies,
-    vs.self.discardPile, vs.self.removedFromGame,
-    vs.self.seedingDeck, vs.self.prospectDeck, vs.self.policyPool,
+    vs.self.hand,
+    vs.self.hq,
+    vs.self.activePolicies,
+    vs.self.discardPile,
+    vs.self.removedFromGame,
+    vs.self.seedingDeck,
+    vs.self.prospectDeck,
+    vs.self.policyPool,
   ];
   for (const zone of selfZones) {
     for (const c of zone) map.set(c.id, c.name);
@@ -180,6 +202,11 @@ export function resolvePlayerName(id: string): string {
 export function getError() {
   return _error;
 }
+/** Monotonic count of engine action-rejections this session — the signal the
+ *  combat/pick overlays use to unlock Confirm after a rejected submission. */
+export function getRejectionNonce(): number {
+  return _rejectionNonce;
+}
 /** Events from the previous turn — shown on the pass-device overlay.
  *  Projected for the INCOMING player (who is about to read the recap),
  *  not `_visibleState.playerId` which still holds the outgoing player's
@@ -202,10 +229,11 @@ export function setError(message: string): void {
 
 /** Append a message to the current error banner, separated by a newline if
  *  another message is already showing. Replaces the old pattern of
- *  `_error = "..."` which silently clobbered prior warnings — see
- *  Finding #1 in the /review-pr findings. */
+ *  `_error = "..."` which silently clobbered prior warnings. Consecutive
+ *  identical messages are deduped so a repeated rejection re-prompt can't grow
+ *  the banner without bound. */
 function pushError(message: string): void {
-  _error = _error ? `${_error}\n${message}` : message;
+  _error = appendBanner(_error, message);
 }
 
 // ---------------------------------------------------------------------------
@@ -298,7 +326,9 @@ function onEvent(events: GameEvent[], state: GameState): void {
   _combatEvents = combat.buffer;
 
   if (contestEvents.length > 1) {
-    pushError("Multiple contest_resolved events in one batch — only the first is shown.");
+    pushError(
+      "Multiple contest_resolved events in one batch — only the first is shown.",
+    );
   }
 
   switch (combat.outcome.kind) {
@@ -307,11 +337,16 @@ function onEvent(events: GameEvent[], state: GameState): void {
       // dialog from the whole accumulated combat. A co-batched contest loses to
       // the combat popup, so warn only here — where a dialog is actually shown.
       if (contestEvents.length > 0) {
-        pushError("Both combat and a contest resolved in the same batch — only the combat popup is shown.");
+        pushError(
+          "Both combat and a contest resolved in the same batch — only the combat popup is shown.",
+        );
       }
-      const { result: combatResult, error: combatError } = buildCombatContestResult(
-        combat.outcome.dialogEvents, _visibleState, resolvers,
-      );
+      const { result: combatResult, error: combatError } =
+        buildCombatContestResult(
+          combat.outcome.dialogEvents,
+          _visibleState,
+          resolvers,
+        );
       if (combatError) pushError(combatError);
       _contestResult = combatResult;
       break;
@@ -323,7 +358,9 @@ function onEvent(events: GameEvent[], state: GameState): void {
       break;
     case "orphan":
       _contestResult = null;
-      pushError("Combat pair event arrived without combat_started — popup skipped.");
+      pushError(
+        "Combat pair event arrived without combat_started — popup skipped.",
+      );
       break;
     case "none": {
       // No combat dialog to build (no combat events, or a multi-round fight
@@ -331,9 +368,14 @@ function onEvent(events: GameEvent[], state: GameState): void {
       const contestResolved = contestEvents[0];
       if (contestResolved && contestResolved.type === "contest_resolved") {
         const contestIdx = events.indexOf(contestResolved);
-        const { result: contestResult, error: contestError } = buildDslContestResult(
-          contestResolved, contestIdx, events, _visibleState, resolvers,
-        );
+        const { result: contestResult, error: contestError } =
+          buildDslContestResult(
+            contestResolved,
+            contestIdx,
+            events,
+            _visibleState,
+            resolvers,
+          );
         if (contestResult) {
           _contestResult = contestResult;
         } else if (contestError) {
@@ -366,15 +408,17 @@ function onEvent(events: GameEvent[], state: GameState): void {
           console.error("Auto-save failed:", err);
           autoSaveFailCount++;
           if (autoSaveFailCount >= 3) {
-            _error =
-              "Auto-save is failing. Your progress may not be saved. Try saving manually.";
+            pushError(
+              "Auto-save is failing. Your progress may not be saved. Try saving manually.",
+            );
           }
         });
     } catch (err) {
       console.error("Failed to serialize session for auto-save:", err);
       autoSaveFailCount++;
       if (autoSaveFailCount >= 3) {
-        _error = "Auto-save is failing. Your progress may not be saved. Try saving manually.";
+        _error =
+          "Auto-save is failing. Your progress may not be saved. Try saving manually.";
       }
     }
   }
@@ -385,6 +429,29 @@ function handleGameLoopError(err: unknown): void {
   console.error("Game loop error:", err);
   _error = `The game encountered an error: ${err instanceof Error ? err.message : String(err)}`;
   _screen = "playing";
+}
+
+/**
+ * The engine rejected a submitted action at the pre-apply gate (#182). The loop
+ * will re-prompt the same decider on its next iteration (re-arming
+ * `resolveAction`), so here we only surface the rejection: log the offending
+ * action for debugging (a repeat rejection of a *legal* move signals a
+ * getValidActions/applyAction desync, not user error), and bump
+ * `_rejectionNonce` — the signal the combat/pick overlays watch to re-enable
+ * their Confirm button. The banner itself is just user-facing text and is
+ * deduped, so it no longer needs to differ on each rejection to drive the
+ * unlock.
+ */
+function handleInvalidAction(err: InvalidActionError): void {
+  console.error(
+    `Engine rejected submitted action (${err.reason}):`,
+    err.action,
+    err,
+  );
+  const playerId = err.actingPlayerId;
+  const name = players.find((p) => p.id === playerId)?.name ?? playerId;
+  _rejectionNonce++;
+  pushError(`That move wasn't legal — please choose again (${name}).`);
 }
 
 // ---------------------------------------------------------------------------
@@ -409,7 +476,11 @@ export function startNewGame(
 
   const adapters = new Map<string, HotseatAdapter>();
   for (const p of players) {
-    const adapter: HotseatAdapter = new HotseatAdapter(onBeforeTurn, onTurnStart, waitForAction);
+    const adapter: HotseatAdapter = new HotseatAdapter(
+      onBeforeTurn,
+      onTurnStart,
+      waitForAction,
+    );
     if (skipSeeding) adapter.autoSeeding = true;
     adapters.set(p.id, adapter);
   }
@@ -431,6 +502,7 @@ export function startNewGame(
     setupInput,
     adapters,
     onEvent,
+    onInvalidAction: handleInvalidAction,
   });
 
   controller.run().catch(handleGameLoopError);
@@ -456,7 +528,8 @@ export async function loadGame(key: string): Promise<void> {
   try {
     setupInput = buildSeedingSetup(players);
   } catch (err) {
-    _error = "Failed to initialize card data. Run 'bun library/build.ts' first.";
+    _error =
+      "Failed to initialize card data. Run 'bun library/build.ts' first.";
     console.error("buildSeedingSetup failed:", err);
     return;
   }
@@ -484,6 +557,7 @@ export async function loadGame(key: string): Promise<void> {
       setupInput,
       adapters,
       onEvent,
+      handleInvalidAction,
     );
   } catch (err) {
     _error = `Failed to resume game: ${err instanceof Error ? err.message : String(err)}`;
@@ -502,7 +576,13 @@ export async function loadGame(key: string): Promise<void> {
   if (state.phase === "main" && state.combatPrompt) {
     const cp = state.combatPrompt;
     _combatEvents = [
-      { type: "combat_started", row: cp.row, col: cp.col, attackerId: cp.attackerId, defenderId: cp.defenderId },
+      {
+        type: "combat_started",
+        row: cp.row,
+        col: cp.col,
+        attackerId: cp.attackerId,
+        defenderId: cp.defenderId,
+      },
     ];
   }
 
@@ -524,7 +604,9 @@ export function selectAction(action: Action): void {
       "selectAction called with no pending resolver — action dropped",
       { actionType: action.type, actionPlayerId: action.playerId },
     );
-    _error = "Action dropped — please try again.";
+    pushError(
+      "That action couldn't be applied — it may already be your opponent's turn.",
+    );
     return;
   }
   const resolve = resolveAction;

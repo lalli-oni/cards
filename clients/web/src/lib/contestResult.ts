@@ -93,6 +93,10 @@ export type ContestResult =
       locationName: string;
       attackerName: string;
       defenderName: string;
+      /** Player ids for the two sides (caster / target's controller), so outcome
+       *  rows align to the owning side — same contract as the combat arm. */
+      attackerId: string;
+      defenderId: string;
       pairs: PairDetail[];
       outcomes: ContestOutcome[];
       winnerName: string;
@@ -209,6 +213,23 @@ export function buildDialogView(result: ContestResult): DialogView {
     // win/lose effect land here.
     emptyOutcomesMsg: result.winnerName ? null : "No effect.",
   };
+}
+
+/** Which side an outcome row belongs to, so the popup can align it (attacker →
+ *  left, defender → right). Both result sources carry `attackerId`/`defenderId`
+ *  (combat: the two players; DSL: caster / target's controller), so injured and
+ *  killed rows align by owner for either. `controlled` and any owner that matches
+ *  neither side return `null` (centered/left default). Pure so it's testable
+ *  without the component. */
+export function outcomeSide(
+  result: ContestResult,
+  outcome: ContestOutcome,
+): "attacker" | "defender" | null {
+  if (outcome.type === "injured" || outcome.type === "killed") {
+    if (outcome.ownerId === result.attackerId) return "attacker";
+    if (outcome.ownerId === result.defenderId) return "defender";
+  }
+  return null;
 }
 
 /** Factory result. `result` is non-null on success; `error` is non-null on
@@ -408,14 +429,17 @@ export function buildDslContestResult(
 
   // Guard against same-batch controller swaps changing the defender's owner
   // before our lookup — scan PRECEDING events for a unit_controlled on the
-  // defender; if found, use the previousControllerId from that event.
-  let safeDefenderOwnerName = defenderOwnerName;
+  // defender; if found, use the previousControllerId from that event. Track the
+  // id (not just the name) so the result's `defenderId` aligns outcome rows to
+  // the same owner the name shows.
+  let safeDefenderOwnerId = defenderUnit.controllerId;
   for (let i = 0; i < contestIdx; i++) {
     const e = events[i];
     if (e.type === "unit_controlled" && e.unitId === contestEvent.defenderId) {
-      safeDefenderOwnerName = resolvers.player(e.previousControllerId);
+      safeDefenderOwnerId = e.previousControllerId;
     }
   }
+  const safeDefenderOwnerName = resolvers.player(safeDefenderOwnerId);
   if (safeDefenderOwnerName !== defenderOwnerName) {
     detail.defender.ownerName = safeDefenderOwnerName;
   }
@@ -430,6 +454,8 @@ export function buildDslContestResult(
       locationName: attackerCell?.location?.name ?? `(${attackerLoc.row},${attackerLoc.col})`,
       attackerName: detail.attacker.ownerName,
       defenderName: detail.defender.ownerName,
+      attackerId: contestEvent.casterPlayerId,
+      defenderId: safeDefenderOwnerId,
       pairs: [detail],
       outcomes: contestOutcomes,
       winnerName: detail.winnerSide === "attacker"

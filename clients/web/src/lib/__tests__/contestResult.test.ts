@@ -4,8 +4,10 @@ import {
   buildDialogView,
   buildPairDetail,
   buildPairDetailFromContest,
+  outcomeSide,
   stepCombatBuffer,
   type CombatPairResolved,
+  type ContestOutcome,
   type ContestResolved,
   type ContestResult,
 } from "../contestResult";
@@ -212,6 +214,8 @@ describe("buildDialogView", () => {
       locationName: "Palace",
       attackerName: "Cleopatra-owner",
       defenderName: "Tank-owner",
+      attackerId: "p1",
+      defenderId: "p2",
       pairs: [],
       outcomes: [],
       winnerName: "Cleopatra-owner",
@@ -246,5 +250,45 @@ describe("buildDialogView", () => {
   it("dsl cunning contest capitalizes stat in title", () => {
     const view = buildDialogView(dslResult({ stat: "cunning" }));
     expect(view.title).toBe("Cunning contest at Palace");
+  });
+});
+
+describe("outcomeSide", () => {
+  const base = {
+    stat: "strength" as const,
+    row: 0, col: 0,
+    locationName: "X",
+    attackerName: "A", defenderName: "B",
+    attackerId: "p1", defenderId: "p2",
+    pairs: [],
+    outcomes: [],
+  };
+  const combat: ContestResult = { source: "combat", ...base, winnerName: null, retreatedName: null };
+  const dsl: ContestResult = { source: "dsl", ...base, winnerName: "A" };
+  const injured = (ownerId: string): ContestOutcome => ({ type: "injured", unitName: "u", ownerName: "o", ownerId });
+
+  it("combat: aligns injured/killed to the owning side, null for an outsider", () => {
+    expect(outcomeSide(combat, injured("p1"))).toBe("attacker");
+    expect(outcomeSide(combat, injured("p2"))).toBe("defender");
+    expect(outcomeSide(combat, { type: "killed", unitName: "u", ownerName: "o", ownerId: "p1" })).toBe("attacker");
+    expect(outcomeSide(combat, injured("p3"))).toBeNull();
+  });
+
+  it("dsl: aligns injured/killed to the owning side too (regression — was always left)", () => {
+    // A DSL contest's defender-owned injury must align right, not fall through to
+    // the left default (the bug: outcomeSide used to bail for source !== 'combat').
+    expect(outcomeSide(dsl, injured("p2"))).toBe("defender");
+    expect(outcomeSide(dsl, injured("p1"))).toBe("attacker");
+  });
+
+  it("controlled outcomes belong to no side", () => {
+    const controlled: ContestOutcome = {
+      type: "controlled",
+      unitName: "u",
+      previousControllerName: "a",
+      newControllerName: "b",
+      durationTurns: 1,
+    };
+    expect(outcomeSide(dsl, controlled)).toBeNull();
   });
 });

@@ -428,12 +428,17 @@ describe("move", () => {
     expect((next as MainGameState).turn.actionPointsRemaining).toBe(1); // 3 - 2
   });
 
-  it("allows retreat to HQ from perimeter with open boundary edge", () => {
+  it("allows retreat to HQ from perimeter with open boundary edge, carrying equipped items", () => {
     const unit = makeUnit({ ownerId: ACTIVE });
+    // Equipped item exercises the shared `retreatUnitsToHQ` item-move loop on the
+    // Move-action (single-unit) path — the combat retreat covers it separately.
+    const sword = makeItem({ ownerId: ACTIVE, equippedTo: unit.id });
     const state = gameWith((d) => {
       d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
       d.grid[0][0].units.push(unit);
+      d.grid[0][0].items.push(sword);
     });
+    const apBefore = (state as MainGameState).turn.actionPointsRemaining;
 
     const { state: next } = applyAction(state, {
       type: "move",
@@ -445,7 +450,12 @@ describe("move", () => {
     const ns = next as MainGameState;
 
     expect(ns.grid[0][0].units).toHaveLength(0);
+    expect(ns.grid[0][0].items).toHaveLength(0);
     expect(ns.players[ACTIVE_IDX].hq.some((c) => c.id === unit.id)).toBe(true);
+    // The item travels to HQ with its unit.
+    expect(ns.players[ACTIVE_IDX].hq.some((c) => c.id === sword.id)).toBe(true);
+    // Unlike the combat retreat, the Move-action retreat costs 1 AP.
+    expect(ns.turn.actionPointsRemaining).toBe(apBefore - 1);
   });
 });
 
@@ -1587,6 +1597,426 @@ describe("sit-out selection (#167)", () => {
       expect(rollAtSuspend1.has(side.unitId)).toBe(true);
       expect(side.roll).toBe(rollAtSuspend1.get(side.unitId)!);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// per-round retreat (#168)
+// ---------------------------------------------------------------------------
+
+describe("per-round retreat (#168)", () => {
+  const attackAction = { type: "attack" as const, playerId: ACTIVE, row: 0, col: 0 };
+
+  /**
+   * Reach the round-1 retreat offer. A 2v2 whose round 0 is cross-paired so each
+   * side's strong unit kills the other side's weak unit (100 vs 1 → always a
+   * kill), leaving one healthy unit per side to face off in round 1 — which is
+   * where the pre-roll retreat offer is raised (attacker first). Strength gaps
+   * make every outcome roll-independent, so the scenario is deterministic without
+   * pinning dice.
+   */
+  function reachRound1Retreat(): {
+    state: MainGameState;
+    events: GameEvent[];
+    aWin: string;
+    aLose: string;
+    dWin: string;
+  } {
+    const aWin = makeUnit({ ownerId: ACTIVE, strength: 100 });
+    const aLose = makeUnit({ ownerId: ACTIVE, strength: 1 });
+    const dWin = makeUnit({ ownerId: OTHER, strength: 100 });
+    const dLose = makeUnit({ ownerId: OTHER, strength: 1 });
+    const start = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][0].units.push(aWin, aLose, dWin, dLose);
+    });
+
+    // Round 0: 2v2 → defender assigns matchups (no retreat is offered at round 0).
+    const { state: afterAttack } = applyAction(start, {
+      ...attackAction,
+      unitIds: [aWin.id, aLose.id],
+    });
+    const matchup = afterAttack as MainGameState;
+    expect(matchup.combatPrompt?.kind).toBe("assign_matchups");
+
+    const { state: afterRound0, events } = applyAction(matchup, {
+      type: "resolve_combat_round",
+      playerId: OTHER,
+      decision: {
+        kind: "assign_matchups",
+        pairs: [
+          { attackerUnitId: aWin.id, defenderUnitId: dLose.id },
+          { attackerUnitId: aLose.id, defenderUnitId: dWin.id },
+        ],
+      },
+    });
+    return { state: afterRound0 as MainGameState, events, aWin: aWin.id, aLose: aLose.id, dWin: dWin.id };
+  }
+
+  it("offers retreat to the attacker before round 1 rolls, not at round 0", () => {
+    const { state, events, aWin } = reachRound1Retreat();
+
+    // Round 0 resolved its two pairs; the round-1 fight has NOT been rolled yet.
+    expect(events.filter((e) => e.type === "combat_pair_resolved")).toHaveLength(2);
+    expect(events.some((e) => e.type === "combat_resolved")).toBe(false);
+
+    // Suspended for the attacker's retreat choice, at round 1, before the roll.
+    expect(state.combatPrompt?.kind).toBe("retreat");
+    expect(state.combatPrompt?.playerId).toBe(ACTIVE);
+    expect(state.combatPrompt?.round).toBe(1);
+
+    // The deciding side (attacker) lists its one surviving unit, blind — the
+    // slim retreat shape carries identity + strength + injured, no dice/power.
+    expect(state.combatPrompt?.retreatUnits?.map((s) => s.unitId)).toEqual([aWin]);
+    expect(state.combatPrompt?.retreatUnits?.[0].strength).toBe(100);
+    expect(state.combatPrompt?.retreatUnits?.[0].injured).toBe(false);
+    // A retreat prompt is pre-roll, so the rolled lists are empty.
+    expect(state.combatPrompt?.atkRolls).toEqual([]);
+    expect(state.combatPrompt?.defRolls).toEqual([]);
+  });
+
+  it("attacker retreat withdraws the side to HQ and hands the win to the defender", () => {
+    const { state: suspended, aWin, aLose, dWin } = reachRound1Retreat();
+
+    const { state: next, events } = applyAction(suspended, {
+      type: "resolve_combat_round",
+      playerId: ACTIVE,
+      decision: { kind: "retreat", retreat: true },
+    });
+    const ns = next as MainGameState;
+
+    // Combat over, no lingering prompt.
+    expect(ns.combatPrompt).toBeUndefined();
+
+    // The retreating attacker is back in its HQ, gone from the cell.
+    expect(ns.players[ACTIVE_IDX].hq.some((c) => c.id === aWin)).toBe(true);
+    expect(ns.grid[0][0].units.some((u) => u.id === aWin)).toBe(false);
+
+    // aLose was committed but killed in round 0, so it is in `attackerUnitIds`
+    // yet no longer at the cell — `retreatUnitsToHQ` skips such ids rather than
+    // resurrecting them to HQ (it stays in the discard pile from its round-0 kill).
+    expect(ns.players[ACTIVE_IDX].hq.some((c) => c.id === aLose)).toBe(false);
+    expect(ns.players[ACTIVE_IDX].discardPile.some((c) => c.id === aLose)).toBe(true);
+
+    // The defender stayed and holds the cell — and wins the combat.
+    expect(ns.grid[0][0].units.some((u) => u.id === dWin)).toBe(true);
+    const resolved = events.find((e) => e.type === "combat_resolved");
+    expect(resolved && resolved.type === "combat_resolved" && resolved.winnerId).toBe(OTHER);
+
+    // The retreat is announced so the result dialog can name who withdrew.
+    const retreated = events.find((e) => e.type === "combat_retreated");
+    expect(retreated && retreated.type === "combat_retreated" && retreated.playerId).toBe(ACTIVE);
+
+    // The per-round combat retreat is a between-rounds decision, not a Move —
+    // it costs no AP (unlike the 1-AP Move-action retreat).
+    expect(ns.turn.actionPointsRemaining).toBe(suspended.turn.actionPointsRemaining);
+
+    // The withdrawal is surfaced as a to-HQ unit_moved (toRow/toCol === -1) for
+    // the sole surviving attacker (aLose died in round 0).
+    const toHq = events.filter(
+      (e) => e.type === "unit_moved" && e.toRow === -1 && e.toCol === -1,
+    );
+    expect(toHq).toHaveLength(1);
+    expect(toHq[0].type === "unit_moved" && toHq[0].unitId).toBe(aWin);
+  });
+
+  it("attacker declining hands the same choice to the defender (a second suspend)", () => {
+    const { state: suspended } = reachRound1Retreat();
+
+    const { state: next } = applyAction(suspended, {
+      type: "resolve_combat_round",
+      playerId: ACTIVE,
+      decision: { kind: "retreat", retreat: false },
+    });
+    const ns = next as MainGameState;
+
+    // Same round, now the defender's retreat decision.
+    expect(ns.combatPrompt?.kind).toBe("retreat");
+    expect(ns.combatPrompt?.playerId).toBe(OTHER);
+    expect(ns.combatPrompt?.round).toBe(1);
+  });
+
+  it("defender retreat (after attacker stays) hands the win to the attacker", () => {
+    const { state: suspended, aWin, dWin } = reachRound1Retreat();
+
+    const { state: afterAtk } = applyAction(suspended, {
+      type: "resolve_combat_round",
+      playerId: ACTIVE,
+      decision: { kind: "retreat", retreat: false },
+    });
+    const { state: next, events } = applyAction(afterAtk as MainGameState, {
+      type: "resolve_combat_round",
+      playerId: OTHER,
+      decision: { kind: "retreat", retreat: true },
+    });
+    const ns = next as MainGameState;
+
+    expect(ns.combatPrompt).toBeUndefined();
+    expect(ns.players[OTHER_IDX].hq.some((c) => c.id === dWin)).toBe(true);
+    expect(ns.grid[0][0].units.some((u) => u.id === dWin)).toBe(false);
+    expect(ns.grid[0][0].units.some((u) => u.id === aWin)).toBe(true);
+    const resolved = events.find((e) => e.type === "combat_resolved");
+    expect(resolved && resolved.type === "combat_resolved" && resolved.winnerId).toBe(ACTIVE);
+
+    // The retreating side (defender) is named in a combat_retreated event.
+    const retreated = events.find((e) => e.type === "combat_retreated");
+    expect(retreated && retreated.type === "combat_retreated" && retreated.playerId).toBe(OTHER);
+  });
+
+  it("both sides declining rolls the round instead of re-offering retreat", () => {
+    const { state: suspended } = reachRound1Retreat();
+
+    const { state: afterAtk } = applyAction(suspended, {
+      type: "resolve_combat_round",
+      playerId: ACTIVE,
+      decision: { kind: "retreat", retreat: false },
+    });
+    const { state: next, events } = applyAction(afterAtk as MainGameState, {
+      type: "resolve_combat_round",
+      playerId: OTHER,
+      decision: { kind: "retreat", retreat: false },
+    });
+    const ns = next as MainGameState;
+
+    // The round-1 pair was rolled and resolved (proving no retreat re-offer loop),
+    // and combat reached a terminal state.
+    expect(events.some((e) => e.type === "combat_pair_resolved")).toBe(true);
+    const resolved = events.find((e) => e.type === "combat_resolved");
+    expect(resolved).toBeDefined();
+    expect(ns.combatPrompt).toBeUndefined();
+    // The two str-100 units injure exactly one side in round 1 (no 2x kill); the
+    // injured loser stays at the cell (drop-out, not removed), so BOTH sides still
+    // hold a unit there and the combat ends with no winner — deterministic
+    // regardless of which side rolled higher.
+    const winnerId = resolved?.type === "combat_resolved" ? resolved.winnerId : undefined;
+    expect(winnerId).toBeNull();
+  });
+
+  it("retreats every committed unit still at the cell — injured ones too, with their items", () => {
+    // Round 0 cross-pairing: the attacker keeps a healthy unit AND an injured one
+    // (str 11 loses to str 17 but never by the 2x kill margin, so it survives
+    // injured), while the defender keeps a healthy unit. All roll-independent.
+    const aHealthy = makeUnit({ ownerId: ACTIVE, strength: 100 });
+    const aInjured = makeUnit({ ownerId: ACTIVE, strength: 11 });
+    const dDies = makeUnit({ ownerId: OTHER, strength: 1 });
+    const dStrong = makeUnit({ ownerId: OTHER, strength: 17 });
+    // Equipped to the healthy survivor: an injured unit drops its items in combat
+    // (dropEquippedItems), so only a still-equipped unit carries gear on retreat.
+    const sword = makeItem({ ownerId: ACTIVE, equippedTo: aHealthy.id });
+    const start = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][0].units.push(aHealthy, aInjured, dStrong, dDies);
+      d.grid[0][0].items.push(sword);
+    });
+
+    const { state: afterAttack } = applyAction(start, {
+      ...attackAction,
+      unitIds: [aHealthy.id, aInjured.id],
+    });
+    const { state: afterRound0 } = applyAction(afterAttack as MainGameState, {
+      type: "resolve_combat_round",
+      playerId: OTHER,
+      decision: {
+        kind: "assign_matchups",
+        pairs: [
+          { attackerUnitId: aHealthy.id, defenderUnitId: dDies.id },
+          { attackerUnitId: aInjured.id, defenderUnitId: dStrong.id },
+        ],
+      },
+    });
+    const suspended = afterRound0 as MainGameState;
+
+    // Round 1 retreat offer: only the healthy attacker fights, but the injured one
+    // is still at the cell.
+    expect(suspended.combatPrompt?.kind).toBe("retreat");
+    expect(suspended.grid[0][0].units.some((u) => u.id === aInjured.id && u.injured)).toBe(true);
+
+    // The blind retreat list enumerates BOTH the healthy fighter and the injured
+    // survivor (injured units retreat too), the injured one flagged as such.
+    const listed = suspended.combatPrompt?.retreatUnits ?? [];
+    expect(listed.map((s) => s.unitId).sort()).toEqual([aHealthy.id, aInjured.id].sort());
+    expect(listed.find((s) => s.unitId === aInjured.id)?.injured).toBe(true);
+    expect(listed.find((s) => s.unitId === aHealthy.id)?.injured).toBe(false);
+
+    const { state: next } = applyAction(suspended, {
+      type: "resolve_combat_round",
+      playerId: ACTIVE,
+      decision: { kind: "retreat", retreat: true },
+    });
+    const ns = next as MainGameState;
+    const hq = ns.players[ACTIVE_IDX].hq;
+
+    // Both attacker units — healthy and injured — retreated to HQ, with the item.
+    expect(hq.some((c) => c.id === aHealthy.id)).toBe(true);
+    expect(hq.some((c) => c.id === aInjured.id)).toBe(true);
+    expect(hq.some((c) => c.id === sword.id)).toBe(true);
+    expect(ns.grid[0][0].units.some((u) => u.ownerId === ACTIVE)).toBe(false);
+    expect(ns.grid[0][0].items.some((c) => c.id === sword.id)).toBe(false);
+  });
+
+  it("enumerates exactly stay + retreat for the decider, nothing for the opponent", () => {
+    const { state } = reachRound1Retreat();
+
+    const offered = getValidActions(state, ACTIVE);
+    expect(offered).toHaveLength(2);
+    for (const act of offered) {
+      expect(act.type).toBe("resolve_combat_round");
+      if (act.type !== "resolve_combat_round") continue;
+      expect(act.decision.kind).toBe("retreat");
+    }
+    // Element [0] is the non-disruptive "stay" default a bot submits.
+    const first = offered[0];
+    const second = offered[1];
+    expect(first.type === "resolve_combat_round" && first.decision.kind === "retreat" && first.decision.retreat).toBe(false);
+    expect(second.type === "resolve_combat_round" && second.decision.kind === "retreat" && second.decision.retreat).toBe(true);
+
+    // The non-decider (defender) gets nothing while the attacker decides.
+    expect(getValidActions(state, OTHER)).toHaveLength(0);
+  });
+
+  it("rejects non-resolver actions and a mismatched decision kind", () => {
+    const { state } = reachRound1Retreat();
+
+    // No other action may run while combat is suspended.
+    expect(() => applyAction(state, { type: "pass", playerId: ACTIVE })).toThrow(
+      "suspended combat must be resolved first",
+    );
+
+    // A retreat prompt must not accept a different decision kind.
+    expect(() =>
+      applyAction(state, {
+        type: "resolve_combat_round",
+        playerId: ACTIVE,
+        decision: { kind: "sit_out", sitOutUnitIds: [] },
+      }),
+    ).toThrow('expected a "retreat" decision');
+  });
+
+  it("rejects a resolve from someone other than the prompt's decider", () => {
+    // Advance to the DEFENDER's retreat prompt (decider = the non-active p1). The
+    // active player p2 is admitted past the turn gate but is not the decider, so
+    // the retreat handler's decider check rejects it.
+    const { state: suspended } = reachRound1Retreat();
+    const { state: afterAtk } = applyAction(suspended, {
+      type: "resolve_combat_round",
+      playerId: ACTIVE,
+      decision: { kind: "retreat", retreat: false },
+    });
+    const defenderPrompt = afterAtk as MainGameState;
+    expect(defenderPrompt.combatPrompt?.playerId).toBe(OTHER);
+
+    expect(() =>
+      applyAction(defenderPrompt, {
+        type: "resolve_combat_round",
+        playerId: ACTIVE,
+        decision: { kind: "retreat", retreat: true },
+      }),
+    ).toThrow('pending combat decision is for "p1", not "p2"');
+  });
+
+  it("never offers retreat in a single-round combat that ends at round 0", () => {
+    // A 1-vs-1 wipeout resolves entirely within round 0 — no next round begins, so
+    // no retreat is ever offered.
+    const attacker = makeUnit({ ownerId: ACTIVE, strength: 100 });
+    const defender = makeUnit({ ownerId: OTHER, strength: 1 });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][0].units.push(attacker, defender);
+    });
+
+    const { state: next, events } = applyAction(state, { ...attackAction, unitIds: [attacker.id] });
+    const ns = next as MainGameState;
+
+    expect(ns.combatPrompt).toBeUndefined();
+    expect(events.some((e) => e.type === "combat_resolved")).toBe(true);
+  });
+
+  it("re-offers retreat afresh at round 2 once both sides declined at round 1", () => {
+    // Reaching a round-2 retreat offer needs a healthy fighter on BOTH sides at
+    // the top of round 2 — so the settled-round marker must reset per round rather
+    // than suppressing all future offers. A 4v4 of two str-100/str-60 "keepers"
+    // per side plus two str-1 throwaways: round 0 kills every throwaway (keepers
+    // win their pairs and stay healthy), round 1 cross-pairs a str-100 keeper vs
+    // the enemy str-60 keeper (100 beats 60 without the 2x kill margin → injures),
+    // leaving one healthy keeper per side to face off at round 2. All outcomes are
+    // roll-independent (gaps > 6, kill margins strictly < or > 2x).
+    const aHi = makeUnit({ ownerId: ACTIVE, strength: 100 });
+    const aLo = makeUnit({ ownerId: ACTIVE, strength: 60 });
+    const aX1 = makeUnit({ ownerId: ACTIVE, strength: 1 });
+    const aX2 = makeUnit({ ownerId: ACTIVE, strength: 1 });
+    const dHi = makeUnit({ ownerId: OTHER, strength: 100 });
+    const dLo = makeUnit({ ownerId: OTHER, strength: 60 });
+    const dX1 = makeUnit({ ownerId: OTHER, strength: 1 });
+    const dX2 = makeUnit({ ownerId: OTHER, strength: 1 });
+    const start = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][0].units.push(aHi, aLo, aX1, aX2, dHi, dLo, dX1, dX2);
+    });
+
+    // Round 0: 4v4 → defender assigns matchups. Each keeper beats an enemy
+    // throwaway (killed); each throwaway is killed by an enemy keeper.
+    const { state: afterAttack } = applyAction(start, {
+      ...attackAction,
+      unitIds: [aHi.id, aLo.id, aX1.id, aX2.id],
+    });
+    const { state: afterRound0 } = applyAction(afterAttack as MainGameState, {
+      type: "resolve_combat_round",
+      playerId: OTHER,
+      decision: {
+        kind: "assign_matchups",
+        pairs: [
+          { attackerUnitId: aHi.id, defenderUnitId: dX1.id },
+          { attackerUnitId: aLo.id, defenderUnitId: dX2.id },
+          { attackerUnitId: aX1.id, defenderUnitId: dHi.id },
+          { attackerUnitId: aX2.id, defenderUnitId: dLo.id },
+        ],
+      },
+    });
+
+    // Round 1 retreat offer (attacker) — both sides now have two healthy keepers.
+    const round1Atk = afterRound0 as MainGameState;
+    expect(round1Atk.combatPrompt?.kind).toBe("retreat");
+    expect(round1Atk.combatPrompt?.round).toBe(1);
+
+    // Both decline → round 1 rolls → 2v2 → matchup suspend at round 1.
+    const { state: r1AtkDeclined } = applyAction(round1Atk, {
+      type: "resolve_combat_round",
+      playerId: ACTIVE,
+      decision: { kind: "retreat", retreat: false },
+    });
+    const { state: r1BothDeclined } = applyAction(r1AtkDeclined as MainGameState, {
+      type: "resolve_combat_round",
+      playerId: OTHER,
+      decision: { kind: "retreat", retreat: false },
+    });
+    const round1Matchup = r1BothDeclined as MainGameState;
+    expect(round1Matchup.combatPrompt?.kind).toBe("assign_matchups");
+    expect(round1Matchup.combatPrompt?.round).toBe(1);
+
+    // Cross-pair keepers so each side keeps exactly one healthy survivor.
+    const { state: afterRound1 } = applyAction(round1Matchup, {
+      type: "resolve_combat_round",
+      playerId: OTHER,
+      decision: {
+        kind: "assign_matchups",
+        pairs: [
+          { attackerUnitId: aHi.id, defenderUnitId: dLo.id },
+          { attackerUnitId: aLo.id, defenderUnitId: dHi.id },
+        ],
+      },
+    });
+    const round2Atk = afterRound1 as MainGameState;
+
+    // Round 2 raises a FRESH retreat offer (the round-1 settle did not leak).
+    expect(round2Atk.combatPrompt?.kind).toBe("retreat");
+    expect(round2Atk.combatPrompt?.round).toBe(2);
+    expect(round2Atk.combatPrompt?.playerId).toBe(ACTIVE);
+    // The list carries the healthy survivor AND the injured keeper (injured units
+    // retreat too), the injured one flagged.
+    const listed = round2Atk.combatPrompt?.retreatUnits ?? [];
+    expect(listed.map((s) => s.unitId).sort()).toEqual([aHi.id, aLo.id].sort());
+    expect(listed.find((s) => s.unitId === aHi.id)?.injured).toBe(false);
+    expect(listed.find((s) => s.unitId === aLo.id)?.injured).toBe(true);
   });
 });
 

@@ -73,6 +73,7 @@ export type {
   PolicyCard,
   Rarity,
   ResolutionSide,
+  RetreatUnitDisplay,
   Reveals,
   SeedingGameState,
   Session,

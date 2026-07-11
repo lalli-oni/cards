@@ -5,26 +5,13 @@
     type ContestResult,
     type PairSideView,
   } from "../lib/gameStore.svelte";
-  import { buildDialogView, type ContestOutcome, type DialogView } from "../lib/contestResult";
+  import { buildDialogView, outcomeSide, type DialogView } from "../lib/contestResult";
   import Modal from "./Modal.svelte";
 
   const result: ContestResult | null = $derived(getContestResult());
 
   function signed(delta: number): string {
     return delta >= 0 ? `+${delta}` : `${delta}`;
-  }
-
-  // Which player owns the unit in an outcome, so the row can align to that side
-  // (attacker/Player 1 → left, defender/Player 2 → right). Compares player ids
-  // (not display names, which can collide). Only combat results carry the side
-  // ids and the multi-pair layout this mirrors.
-  function outcomeSide(outcome: ContestOutcome): "attacker" | "defender" | null {
-    if (!result || result.source !== "combat") return null;
-    if (outcome.type === "injured" || outcome.type === "killed") {
-      if (outcome.ownerId === result.attackerId) return "attacker";
-      if (outcome.ownerId === result.defenderId) return "defender";
-    }
-    return null;
   }
 
   const view: DialogView | null = $derived(result ? buildDialogView(result) : null);
@@ -96,7 +83,7 @@
     {#if result.outcomes.length > 0}
       <div class="mb-4 space-y-1">
         {#each result.outcomes as outcome}
-          {@const side = outcomeSide(outcome)}
+          {@const side = outcomeSide(result, outcome)}
           <div
             class="flex w-fit max-w-[90%] items-center gap-2 rounded bg-surface-raised px-3 py-1.5 text-sm {side ===
             'defender'
@@ -130,6 +117,12 @@
       </div>
     {:else if view.emptyOutcomesMsg}
       <p class="mb-4 text-center text-sm text-text-muted">{view.emptyOutcomesMsg}</p>
+    {/if}
+
+    {#if result.source === "combat" && result.retreatedName}
+      <p class="mb-4 text-center text-sm font-semibold text-text-secondary">
+        🏳️ {result.retreatedName} retreated to HQ
+      </p>
     {/if}
 
     {#if result.winnerName}

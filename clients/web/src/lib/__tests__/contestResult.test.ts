@@ -4,8 +4,10 @@ import {
   buildDialogView,
   buildPairDetail,
   buildPairDetailFromContest,
+  outcomeSide,
   stepCombatBuffer,
   type CombatPairResolved,
+  type ContestOutcome,
   type ContestResolved,
   type ContestResult,
 } from "../contestResult";
@@ -71,7 +73,7 @@ describe("buildPairDetail", () => {
 
 describe("stepCombatBuffer", () => {
   const started: GameEvent = { type: "combat_started", row: 0, col: 0, attackerId: "p1", defenderId: "p2" };
-  const resolved: GameEvent = { type: "combat_resolved", row: 0, col: 0, winnerId: "p1" };
+  const resolved: GameEvent = { type: "combat_resolved", row: 0, col: 0, winnerId: "p1", attackerId: "p1", defenderId: "p2" };
   const pair: GameEvent = makeEvent("kill_defender");
   const injured: GameEvent = { type: "unit_injured", unitId: "def", controllerId: "p2" };
   const unrelated: GameEvent = { type: "turn_started", playerId: "p1", round: 1 };
@@ -115,6 +117,16 @@ describe("stepCombatBuffer", () => {
     expect(step.outcome.kind).toBe("orphan");
   });
 
+  it("a resume that ends via retreat carries the combat_retreated event into the dialog", () => {
+    const retreated: GameEvent = { type: "combat_retreated", row: 0, col: 0, playerId: "p1" };
+    // Round 0 rolled and suspended; the retreat batch resolves the fight.
+    const step = stepCombatBuffer([started, pair], [retreated, resolved]);
+    expect(step.outcome.kind).toBe("complete");
+    if (step.outcome.kind !== "complete") return;
+    expect(step.outcome.dialogEvents).toEqual([started, pair, retreated, resolved]);
+    expect(step.buffer).toEqual([]);
+  });
+
   it("a batch with no combat activity is 'none' and leaves the buffer untouched", () => {
     expect(stepCombatBuffer([], [unrelated]).outcome.kind).toBe("none");
     expect(stepCombatBuffer([started], [unrelated]).buffer).toEqual([started]);
@@ -123,7 +135,7 @@ describe("stepCombatBuffer", () => {
   it("a fresh combat_started discards a stale non-empty buffer (no cross-fight leak)", () => {
     const started2: GameEvent = { type: "combat_started", row: 1, col: 1, attackerId: "p2", defenderId: "p1" };
     const pair2: GameEvent = makeEvent("kill_attacker");
-    const resolved2: GameEvent = { type: "combat_resolved", row: 1, col: 1, winnerId: "p2" };
+    const resolved2: GameEvent = { type: "combat_resolved", row: 1, col: 1, winnerId: "p2", attackerId: "p2", defenderId: "p1" };
     // Previous fight left [started, pair] buffered; a new atomic fight arrives.
     const step = stepCombatBuffer([started, pair], [started2, pair2, resolved2]);
     expect(step.outcome.kind).toBe("complete");
@@ -190,6 +202,7 @@ describe("buildDialogView", () => {
       pairs: [],
       outcomes: [],
       winnerName: null,
+      retreatedName: null,
       ...overrides,
     };
   }
@@ -201,6 +214,8 @@ describe("buildDialogView", () => {
       locationName: "Palace",
       attackerName: "Cleopatra-owner",
       defenderName: "Tank-owner",
+      attackerId: "p1",
+      defenderId: "p2",
       pairs: [],
       outcomes: [],
       winnerName: "Cleopatra-owner",
@@ -213,6 +228,11 @@ describe("buildDialogView", () => {
     expect(view.title).toBe("Combat at Marketplace");
     expect(view.showPairCaption).toBe(true);
     expect(view.emptyOutcomesMsg).toBe("No casualties — draw!");
+  });
+
+  it("combat with a retreat suppresses the no-casualties draw copy", () => {
+    const view = buildDialogView(combatResult({ retreatedName: "Alice", winnerName: "Bob" }));
+    expect(view.emptyOutcomesMsg).toBe(null);
   });
 
   it("dsl with winner → '{Stat} contest at {loc}' title, no caption, null empty-msg (footer carries it)", () => {
@@ -230,5 +250,45 @@ describe("buildDialogView", () => {
   it("dsl cunning contest capitalizes stat in title", () => {
     const view = buildDialogView(dslResult({ stat: "cunning" }));
     expect(view.title).toBe("Cunning contest at Palace");
+  });
+});
+
+describe("outcomeSide", () => {
+  const base = {
+    stat: "strength" as const,
+    row: 0, col: 0,
+    locationName: "X",
+    attackerName: "A", defenderName: "B",
+    attackerId: "p1", defenderId: "p2",
+    pairs: [],
+    outcomes: [],
+  };
+  const combat: ContestResult = { source: "combat", ...base, winnerName: null, retreatedName: null };
+  const dsl: ContestResult = { source: "dsl", ...base, winnerName: "A" };
+  const injured = (ownerId: string): ContestOutcome => ({ type: "injured", unitName: "u", ownerName: "o", ownerId });
+
+  it("combat: aligns injured/killed to the owning side, null for an outsider", () => {
+    expect(outcomeSide(combat, injured("p1"))).toBe("attacker");
+    expect(outcomeSide(combat, injured("p2"))).toBe("defender");
+    expect(outcomeSide(combat, { type: "killed", unitName: "u", ownerName: "o", ownerId: "p1" })).toBe("attacker");
+    expect(outcomeSide(combat, injured("p3"))).toBeNull();
+  });
+
+  it("dsl: aligns injured/killed to the owning side too (regression — was always left)", () => {
+    // A DSL contest's defender-owned injury must align right, not fall through to
+    // the left default (the bug: outcomeSide used to bail for source !== 'combat').
+    expect(outcomeSide(dsl, injured("p2"))).toBe("defender");
+    expect(outcomeSide(dsl, injured("p1"))).toBe("attacker");
+  });
+
+  it("controlled outcomes belong to no side", () => {
+    const controlled: ContestOutcome = {
+      type: "controlled",
+      unitName: "u",
+      previousControllerName: "a",
+      newControllerName: "b",
+      durationTurns: 1,
+    };
+    expect(outcomeSide(dsl, controlled)).toBeNull();
   });
 });

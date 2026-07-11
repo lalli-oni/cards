@@ -1,28 +1,38 @@
 import {
-  GameController,
-  getVisibleEvent,
-  getVisibleState as engineGetVisibleState,
   type Action,
   type ActionDef,
   type Card,
+  getVisibleState as engineGetVisibleState,
+  GameController,
   type GameEvent,
   type GameState,
+  getVisibleEvent,
   type PlayerDescriptor,
+  setAutoFreeze,
   type VisibleState,
 } from "cards-engine";
-import { setAutoFreeze } from "cards-engine";
-import { HotseatAdapter } from "./HotseatAdapter";
-import { DEFAULT_CONFIG, buildSeedingSetup, buildMainSetup } from "./gameSetup";
-import { autoSave, listSessions, loadSession, saveSession } from "./persistence";
 import {
   buildCombatContestResult,
   buildDslContestResult,
-  stepCombatBuffer,
   type CombatBufferStep,
   type ContestResult,
+  stepCombatBuffer,
 } from "./contestResult";
+import { buildMainSetup, buildSeedingSetup, DEFAULT_CONFIG } from "./gameSetup";
+import { HotseatAdapter } from "./HotseatAdapter";
+import {
+  autoSave,
+  listSessions,
+  loadSession,
+  saveSession,
+} from "./persistence";
 
-export type { ContestOutcome, ContestResult, PairDetail, PairSideView } from "./contestResult";
+export type {
+  ContestOutcome,
+  ContestResult,
+  PairDetail,
+  PairSideView,
+} from "./contestResult";
 
 // Immer auto-freezes produce() output. Svelte 5's $state uses deep proxies.
 // Frozen objects passed into $state (and proxied objects passed back to immer)
@@ -97,7 +107,7 @@ export function dismissContest() {
 // Derived card name lookup — rebuilt when visible state changes.
 // Covers grid, hand, HQ, policies, decks, discard, removed, market,
 // middle area, and opponent public zones.
-let _cardNameMap = $derived.by(() => {
+const _cardNameMap = $derived.by(() => {
   const vs = _visibleState;
   if (!vs) return new Map<string, string>();
   const map = new Map<string, string>();
@@ -109,9 +119,14 @@ let _cardNameMap = $derived.by(() => {
     }
   }
   const selfZones = [
-    vs.self.hand, vs.self.hq, vs.self.activePolicies,
-    vs.self.discardPile, vs.self.removedFromGame,
-    vs.self.seedingDeck, vs.self.prospectDeck, vs.self.policyPool,
+    vs.self.hand,
+    vs.self.hq,
+    vs.self.activePolicies,
+    vs.self.discardPile,
+    vs.self.removedFromGame,
+    vs.self.seedingDeck,
+    vs.self.prospectDeck,
+    vs.self.policyPool,
   ];
   for (const zone of selfZones) {
     for (const c of zone) map.set(c.id, c.name);
@@ -298,7 +313,9 @@ function onEvent(events: GameEvent[], state: GameState): void {
   _combatEvents = combat.buffer;
 
   if (contestEvents.length > 1) {
-    pushError("Multiple contest_resolved events in one batch — only the first is shown.");
+    pushError(
+      "Multiple contest_resolved events in one batch — only the first is shown.",
+    );
   }
 
   switch (combat.outcome.kind) {
@@ -307,11 +324,16 @@ function onEvent(events: GameEvent[], state: GameState): void {
       // dialog from the whole accumulated combat. A co-batched contest loses to
       // the combat popup, so warn only here — where a dialog is actually shown.
       if (contestEvents.length > 0) {
-        pushError("Both combat and a contest resolved in the same batch — only the combat popup is shown.");
+        pushError(
+          "Both combat and a contest resolved in the same batch — only the combat popup is shown.",
+        );
       }
-      const { result: combatResult, error: combatError } = buildCombatContestResult(
-        combat.outcome.dialogEvents, _visibleState, resolvers,
-      );
+      const { result: combatResult, error: combatError } =
+        buildCombatContestResult(
+          combat.outcome.dialogEvents,
+          _visibleState,
+          resolvers,
+        );
       if (combatError) pushError(combatError);
       _contestResult = combatResult;
       break;
@@ -323,7 +345,9 @@ function onEvent(events: GameEvent[], state: GameState): void {
       break;
     case "orphan":
       _contestResult = null;
-      pushError("Combat pair event arrived without combat_started — popup skipped.");
+      pushError(
+        "Combat pair event arrived without combat_started — popup skipped.",
+      );
       break;
     case "none": {
       // No combat dialog to build (no combat events, or a multi-round fight
@@ -331,9 +355,14 @@ function onEvent(events: GameEvent[], state: GameState): void {
       const contestResolved = contestEvents[0];
       if (contestResolved && contestResolved.type === "contest_resolved") {
         const contestIdx = events.indexOf(contestResolved);
-        const { result: contestResult, error: contestError } = buildDslContestResult(
-          contestResolved, contestIdx, events, _visibleState, resolvers,
-        );
+        const { result: contestResult, error: contestError } =
+          buildDslContestResult(
+            contestResolved,
+            contestIdx,
+            events,
+            _visibleState,
+            resolvers,
+          );
         if (contestResult) {
           _contestResult = contestResult;
         } else if (contestError) {
@@ -374,7 +403,8 @@ function onEvent(events: GameEvent[], state: GameState): void {
       console.error("Failed to serialize session for auto-save:", err);
       autoSaveFailCount++;
       if (autoSaveFailCount >= 3) {
-        _error = "Auto-save is failing. Your progress may not be saved. Try saving manually.";
+        _error =
+          "Auto-save is failing. Your progress may not be saved. Try saving manually.";
       }
     }
   }
@@ -385,6 +415,19 @@ function handleGameLoopError(err: unknown): void {
   console.error("Game loop error:", err);
   _error = `The game encountered an error: ${err instanceof Error ? err.message : String(err)}`;
   _screen = "playing";
+}
+
+/**
+ * The engine rejected a submitted action at the pre-apply gate (#182). The loop
+ * has already re-prompted the same decider, so `resolveAction` is freshly armed
+ * — we only need to surface the rejection. Setting the banner is what the combat
+ * / pick overlay recovery `$effect`s watch (`error !== errorAtSubmit`) to
+ * re-enable their Confirm button. `pushError` appends so a fresh message always
+ * differs from the prior banner, guaranteeing the overlay unlocks.
+ */
+function handleInvalidAction(_err: unknown, playerId: string): void {
+  const name = players.find((p) => p.id === playerId)?.name ?? playerId;
+  pushError(`That move wasn't legal — please choose again (${name}).`);
 }
 
 // ---------------------------------------------------------------------------
@@ -409,7 +452,11 @@ export function startNewGame(
 
   const adapters = new Map<string, HotseatAdapter>();
   for (const p of players) {
-    const adapter: HotseatAdapter = new HotseatAdapter(onBeforeTurn, onTurnStart, waitForAction);
+    const adapter: HotseatAdapter = new HotseatAdapter(
+      onBeforeTurn,
+      onTurnStart,
+      waitForAction,
+    );
     if (skipSeeding) adapter.autoSeeding = true;
     adapters.set(p.id, adapter);
   }
@@ -431,6 +478,7 @@ export function startNewGame(
     setupInput,
     adapters,
     onEvent,
+    onInvalidAction: handleInvalidAction,
   });
 
   controller.run().catch(handleGameLoopError);
@@ -456,7 +504,8 @@ export async function loadGame(key: string): Promise<void> {
   try {
     setupInput = buildSeedingSetup(players);
   } catch (err) {
-    _error = "Failed to initialize card data. Run 'bun library/build.ts' first.";
+    _error =
+      "Failed to initialize card data. Run 'bun library/build.ts' first.";
     console.error("buildSeedingSetup failed:", err);
     return;
   }
@@ -484,6 +533,7 @@ export async function loadGame(key: string): Promise<void> {
       setupInput,
       adapters,
       onEvent,
+      handleInvalidAction,
     );
   } catch (err) {
     _error = `Failed to resume game: ${err instanceof Error ? err.message : String(err)}`;
@@ -502,7 +552,13 @@ export async function loadGame(key: string): Promise<void> {
   if (state.phase === "main" && state.combatPrompt) {
     const cp = state.combatPrompt;
     _combatEvents = [
-      { type: "combat_started", row: cp.row, col: cp.col, attackerId: cp.attackerId, defenderId: cp.defenderId },
+      {
+        type: "combat_started",
+        row: cp.row,
+        col: cp.col,
+        attackerId: cp.attackerId,
+        defenderId: cp.defenderId,
+      },
     ];
   }
 

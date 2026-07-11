@@ -2,15 +2,15 @@ import { describe, expect, it } from "bun:test";
 import { produce } from "immer";
 import { applyAction } from "../apply-action";
 import { BotAdapter } from "../bot-adapter";
-import { GameController } from "../controller";
+import { GameController, InvalidActionError } from "../controller";
 import type {
   Action,
-  SetupInput,
   GameEvent,
   GameState,
   MainGameState,
   PlayerAdapter,
   Session,
+  SetupInput,
   VisibleState,
 } from "../types";
 import {
@@ -115,7 +115,11 @@ describe("GameController", () => {
         ]),
       });
 
-      await expect(controller.playTurn()).rejects.toThrow("invalid action");
+      // playTurn keeps its throw-based contract for programmatic callers, and
+      // the throw is now the typed InvalidActionError that run() keys off of.
+      await expect(controller.playTurn()).rejects.toBeInstanceOf(
+        InvalidActionError,
+      );
     });
   });
 
@@ -162,7 +166,9 @@ describe("GameController", () => {
       };
       const attackerAdapter: PlayerAdapter = {
         async chooseAction() {
-          throw new Error("attacker adapter must not be asked while combat is suspended");
+          throw new Error(
+            "attacker adapter must not be asked while combat is suspended",
+          );
         },
       };
 
@@ -190,8 +196,147 @@ describe("GameController", () => {
         await controller.playTurn();
       }
 
-      expect((controller.getState() as MainGameState).combatPrompt).toBeUndefined();
-      expect(events.filter((e) => e.type === "combat_resolved")).toHaveLength(1);
+      expect(
+        (controller.getState() as MainGameState).combatPrompt,
+      ).toBeUndefined();
+      expect(events.filter((e) => e.type === "combat_resolved")).toHaveLength(
+        1,
+      );
+    });
+
+    // Deep-validation gate (#182 A): a resolve_combat_round with the right type
+    // and playerId but a bogus matchup payload passed the old shallow gate and
+    // was left for applyAction to throw. It must now be rejected at playTurn.
+    it("deep-rejects a malformed combat decision at the playTurn gate", async () => {
+      const suspended = buildSuspendedCombat();
+      const malformedAdapter: PlayerAdapter = {
+        async chooseAction() {
+          return {
+            type: "resolve_combat_round",
+            playerId: "p1",
+            decision: {
+              kind: "assign_matchups",
+              pairs: [{ attackerUnitId: "nope", defenderUnitId: "nope" }],
+            },
+          };
+        },
+      };
+      const session: Session = {
+        version: "0.1.0",
+        config: DEFAULT_CONFIG,
+        players: TWO_PLAYERS,
+        seed: SEED,
+        actions: [],
+        snapshot: suspended,
+      };
+      const controller = GameController.fromSession(
+        session,
+        MAIN_SETUP_INPUT,
+        new Map<string, PlayerAdapter>([
+          ["p1", malformedAdapter],
+          ["p2", malformedAdapter],
+        ]),
+      );
+
+      await expect(controller.playTurn()).rejects.toBeInstanceOf(
+        InvalidActionError,
+      );
+    });
+
+    // Loop survival (#182 B): a rejected submission must not tear down run().
+    // The decider is re-prompted and a subsequent legal action is applied.
+    it("run() survives a rejected action and re-prompts the same decider", async () => {
+      const suspended = buildSuspendedCombat();
+      const events: GameEvent[] = [];
+      const rejected: string[] = [];
+
+      let deciderCalls = 0;
+      const deciderAdapter: PlayerAdapter = {
+        async chooseAction(_vis: VisibleState, valid: Action[]) {
+          deciderCalls++;
+          if (deciderCalls === 1) {
+            // Structurally-typed but illegal — rejected at the gate.
+            return {
+              type: "resolve_combat_round",
+              playerId: "p1",
+              decision: {
+                kind: "assign_matchups",
+                pairs: [{ attackerUnitId: "nope", defenderUnitId: "nope" }],
+              },
+            };
+          }
+          return valid[0]; // greedy default on the re-prompt
+        },
+      };
+      // After the fight resolves the attacker resumes; keep the loop cheap with
+      // passes so it winds down to the max-actions guard (the game never ends on
+      // passes alone).
+      const passAdapter: PlayerAdapter = {
+        async chooseAction(_vis: VisibleState, valid: Action[]) {
+          return valid.find((a) => a.type === "pass") ?? valid[0];
+        },
+      };
+
+      const session: Session = {
+        version: "0.1.0",
+        config: DEFAULT_CONFIG,
+        players: TWO_PLAYERS,
+        seed: SEED,
+        actions: [],
+        snapshot: suspended,
+      };
+      const controller = GameController.fromSession(
+        session,
+        MAIN_SETUP_INPUT,
+        new Map<string, PlayerAdapter>([
+          ["p1", deciderAdapter],
+          ["p2", passAdapter],
+        ]),
+        (evs) => events.push(...evs),
+        (_err, playerId) => rejected.push(playerId),
+      );
+
+      // The loop survives the rejection and keeps running; with only passes the
+      // game never ends, so the max-actions guard is the terminal signal.
+      await expect(controller.run(20)).rejects.toThrow("exceeded 20 actions");
+
+      expect(rejected).toEqual(["p1"]); // re-prompted exactly once, same decider
+      expect(deciderCalls).toBeGreaterThanOrEqual(2);
+      expect(events.filter((e) => e.type === "combat_resolved")).toHaveLength(
+        1,
+      );
+      expect(
+        (controller.getState() as MainGameState).combatPrompt,
+      ).toBeUndefined();
+    });
+
+    // A persistently-broken adapter must not spin forever — the consecutive
+    // rejection guard converts it into a clean terminal throw.
+    it("run() gives up after too many consecutive rejected submissions", async () => {
+      let rejections = 0;
+      const alwaysInvalid: PlayerAdapter = {
+        async chooseAction() {
+          return { type: "deploy", playerId: "p1", cardId: "fake" };
+        },
+      };
+      const controller = new GameController({
+        config: DEFAULT_CONFIG,
+        players: TWO_PLAYERS,
+        seed: SEED,
+        setupInput: MAIN_SETUP_INPUT,
+        adapters: new Map<string, PlayerAdapter>([
+          ["p1", alwaysInvalid],
+          ["p2", alwaysInvalid],
+        ]),
+        onInvalidAction: () => {
+          rejections++;
+        },
+      });
+
+      await expect(controller.run()).rejects.toBeInstanceOf(InvalidActionError);
+      // It re-prompted many times before giving up, rather than throwing on the
+      // first rejection or looping forever.
+      expect(rejections).toBeGreaterThan(1);
     });
   });
 

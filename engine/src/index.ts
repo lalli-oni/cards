@@ -18,7 +18,7 @@ export {
 } from "./card-loader";
 export type { ControllerOptions } from "./controller";
 // Controller
-export { GameController } from "./controller";
+export { GameController, InvalidActionError } from "./controller";
 export { createGame } from "./create-game";
 export { deriveCombatOutcome } from "./apply-main";
 export { decideKillVsInjure } from "./unit-helpers";

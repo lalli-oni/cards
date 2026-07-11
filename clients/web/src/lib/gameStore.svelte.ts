@@ -7,6 +7,7 @@ import {
   type GameEvent,
   type GameState,
   getVisibleEvent,
+  type InvalidActionError,
   type PlayerDescriptor,
   setAutoFreeze,
   type VisibleState,
@@ -26,6 +27,7 @@ import {
   loadSession,
   saveSession,
 } from "./persistence";
+import { appendBanner } from "./promptRecovery";
 
 export type {
   ContestOutcome,
@@ -53,6 +55,11 @@ let _currentPlayerName = $state("");
 let _savedSessions = $state<string[]>([]);
 let _gamePhase = $state<"seeding" | "main" | "ended" | null>(null);
 let _error = $state<string | null>(null);
+// Monotonic counter bumped every time the engine rejects a submitted action
+// (#182). The combat/pick overlays watch this — not the error-banner string —
+// to re-enable their Confirm button after a rejection, so the banner is free
+// to dedupe/replace without the unlock silently breaking.
+let _rejectionNonce = $state(0);
 let _prevTurnStartIndex = $state(0);
 let _lastTurnStartIndex = $state(0);
 // Pending viewer for the pass-device overlay. Set in onBeforeTurn (when the
@@ -195,6 +202,11 @@ export function resolvePlayerName(id: string): string {
 export function getError() {
   return _error;
 }
+/** Monotonic count of engine action-rejections this session — the signal the
+ *  combat/pick overlays use to unlock Confirm after a rejected submission. */
+export function getRejectionNonce(): number {
+  return _rejectionNonce;
+}
 /** Events from the previous turn — shown on the pass-device overlay.
  *  Projected for the INCOMING player (who is about to read the recap),
  *  not `_visibleState.playerId` which still holds the outgoing player's
@@ -217,10 +229,11 @@ export function setError(message: string): void {
 
 /** Append a message to the current error banner, separated by a newline if
  *  another message is already showing. Replaces the old pattern of
- *  `_error = "..."` which silently clobbered prior warnings — see
- *  Finding #1 in the /review-pr findings. */
+ *  `_error = "..."` which silently clobbered prior warnings. Consecutive
+ *  identical messages are deduped so a repeated rejection re-prompt can't grow
+ *  the banner without bound. */
 function pushError(message: string): void {
-  _error = _error ? `${_error}\n${message}` : message;
+  _error = appendBanner(_error, message);
 }
 
 // ---------------------------------------------------------------------------
@@ -395,8 +408,9 @@ function onEvent(events: GameEvent[], state: GameState): void {
           console.error("Auto-save failed:", err);
           autoSaveFailCount++;
           if (autoSaveFailCount >= 3) {
-            _error =
-              "Auto-save is failing. Your progress may not be saved. Try saving manually.";
+            pushError(
+              "Auto-save is failing. Your progress may not be saved. Try saving manually.",
+            );
           }
         });
     } catch (err) {
@@ -419,14 +433,20 @@ function handleGameLoopError(err: unknown): void {
 
 /**
  * The engine rejected a submitted action at the pre-apply gate (#182). The loop
- * has already re-prompted the same decider, so `resolveAction` is freshly armed
- * — we only need to surface the rejection. Setting the banner is what the combat
- * / pick overlay recovery `$effect`s watch (`error !== errorAtSubmit`) to
- * re-enable their Confirm button. `pushError` appends so a fresh message always
- * differs from the prior banner, guaranteeing the overlay unlocks.
+ * will re-prompt the same decider on its next iteration (re-arming
+ * `resolveAction`), so here we only surface the rejection: log the offending
+ * action for debugging (a repeat rejection of a *legal* move signals a
+ * getValidActions/applyAction desync, not user error), and bump
+ * `_rejectionNonce` — the signal the combat/pick overlays watch to re-enable
+ * their Confirm button. The banner itself is just user-facing text and is
+ * deduped, so it no longer needs to differ on each rejection to drive the
+ * unlock.
  */
-function handleInvalidAction(_err: unknown, playerId: string): void {
+function handleInvalidAction(err: InvalidActionError): void {
+  console.error("Engine rejected submitted action:", err);
+  const playerId = err.actingPlayerId;
   const name = players.find((p) => p.id === playerId)?.name ?? playerId;
+  _rejectionNonce++;
   pushError(`That move wasn't legal — please choose again (${name}).`);
 }
 
@@ -580,7 +600,9 @@ export function selectAction(action: Action): void {
       "selectAction called with no pending resolver — action dropped",
       { actionType: action.type, actionPlayerId: action.playerId },
     );
-    _error = "Action dropped — please try again.";
+    pushError(
+      "That action couldn't be applied — it may already be your opponent's turn.",
+    );
     return;
   }
   const resolve = resolveAction;

@@ -1,12 +1,13 @@
 <script lang="ts">
   import type { CombatSide, RetreatUnitDisplay } from "cards-engine";
   import {
-    getError,
+    getRejectionNonce,
     getVisibleState,
     resolveCardName,
     resolvePlayerName,
     selectAction,
   } from "../lib/gameStore.svelte";
+  import { shouldReenableAfterRejection } from "../lib/promptRecovery";
   import Modal from "./Modal.svelte";
 
   const vs = $derived(getVisibleState());
@@ -37,10 +38,11 @@
   let sitOut = $state<string[]>([]);
 
   let submitted = $state(false);
-  // The error banner present at submit time, so the recovery effect below can
-  // tell a NEW mid-submit error (which should re-enable Confirm) from a stale,
-  // unrelated banner (which must not).
-  let errorAtSubmit = $state<string | null>(null);
+  // The rejection-nonce value captured at submit time. The recovery effect below
+  // re-enables Confirm when the nonce advances past this — i.e. the engine
+  // rejected *this* submission — rather than keying off the error-banner string
+  // (which an unrelated banner change could spuriously trip).
+  let nonceAtSubmit = $state(0);
 
   // For a sit-out prompt the larger side is the longer roll list; that side's
   // owner (prompt.playerId) picks exactly `excess` units to remove.
@@ -91,13 +93,15 @@
     assignment = seed;
   });
 
-  // Unlock the confirm button if the engine surfaces a NEW error mid-submit, so
-  // the decider can retry. Gating on a fresh error (not merely any error present)
-  // avoids a stale banner re-enabling Confirm and inviting a second, dropped
-  // click. Mirrors PickPromptOverlay's recovery pattern.
-  const error = $derived(getError());
+  // Unlock the confirm button when the engine rejects THIS submission, so the
+  // decider can retry. Keys off the monotonic rejection nonce advancing past the
+  // value captured at submit — not the error-banner string — so an unrelated
+  // banner change can't spuriously re-enable Confirm. Mirrors PickPromptOverlay.
+  const rejectionNonce = $derived(getRejectionNonce());
   $effect(() => {
-    if (submitted && error && error !== errorAtSubmit) submitted = false;
+    if (shouldReenableAfterRejection(submitted, rejectionNonce, nonceAtSubmit)) {
+      submitted = false;
+    }
   });
 
   // A valid assignment is a bijection: every defender participant used exactly
@@ -138,7 +142,7 @@
   // rather than via the shared confirm gate.
   function submitRetreat(retreat: boolean): void {
     if (!prompt || submitted) return;
-    errorAtSubmit = error;
+    nonceAtSubmit = rejectionNonce;
     submitted = true;
     selectAction({
       type: "resolve_combat_round",
@@ -149,7 +153,7 @@
 
   function confirm(): void {
     if (!prompt || submitted || !canConfirm) return;
-    errorAtSubmit = error;
+    nonceAtSubmit = rejectionNonce;
     submitted = true;
     if (prompt.kind === "sit_out") {
       selectAction({

@@ -43,10 +43,30 @@ export def main [] {
 
   # --- filters compose and drop rows only ---
   assert equal (cards | of-type unit | length) 7
-  assert equal (cards | of-type location | length) 3
+  assert equal (cards | of-type location | length) 5
   assert equal (cards | of-type unit | has-attribute Military | get id) [gold-sink warrior general]
   assert equal (cards | has-keyword contest | get id) [warrior]
   assert equal (cards | of-rarity common | length) 6
+
+  # --- multi-action card: ap-cost is a LIST, keywords collects ALL verbs ---
+  let multi = [{
+    type: "unit",
+    actions: [
+      { name: "a", apCost: 1, effect: "gold[2]" }
+      { name: "b", apCost: 3, effect: "draw[1]" }
+    ]
+  }]
+  assert equal ($multi | with-ap-cost | get 0.ap-cost) [1 3]
+  assert equal ($multi | with-keywords | get 0.keywords) [gold draw]
+
+  # --- negative emissions sum with sign; economy lens (gold-out > 0) excludes them ---
+  let neg = [{ type: "unit", actions: [{ name: "drain", apCost: 1, effect: "gold[-2]" }] }]
+  assert equal ($neg | with-payout | get 0.gold-out) (-2)
+  let mixed = [{ type: "unit", actions: [{ name: "swing", apCost: 1, effect: "gold[5] gold[-2]" }] }]
+  assert equal ($mixed | with-payout | get 0.gold-out) 3
+
+  # --- unit with no stats at all → stat-total null (not a spurious 0) ---
+  assert equal ([{ type: "unit" }] | with-stat-total | get 0.stat-total) null
 
   # --- constants ---
   assert equal ($DSL_VERBS | length) 15

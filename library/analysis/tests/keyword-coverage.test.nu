@@ -14,5 +14,10 @@ export def main [] {
   assert equal ($counts | where verb == "contest" | get 0.count) 1
   assert equal ($counts | where verb == "raze" | get 0.count) 0
   assert equal ($counts | where verb == "raze" | get 0.status) "GAP"
+  # pin the full gap SET, not just its size — a swap of one uncovered verb for
+  # another (same count) would otherwise slip through
+  assert equal ($counts | where count == 0 | get verb | sort) (
+    [buy peek pick injure kill control raze to remove] | sort
+  )
   print "keyword-coverage.test.nu: OK"
 }

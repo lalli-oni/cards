@@ -4,14 +4,15 @@
 # value that this cannot measure). Two honest lenses, kept separate:
 #   economy — cards that emit gold but cost more gold than they return
 #   objective — cards that emit vp (cost per vp), listed for review
-# Never fails the audit. A real value/EV rating model is a deferred follow-up.
+# Never fails the audit. A real value/EV rating model is intentionally out of
+# scope for this toolkit (no blended value number is emitted).
 
 use selectors.nu *
 
 export def run [--set: string = "alpha-1", --build-dir: string = ""] {
   let cards = (load-set $set --build-dir $build_dir | with-payout)
   let economy = ($cards
-    | where { |c| $c.gold-out > 0 and $c.gold-cost > $c.gold-out }
+    | where { |c| ($c.gold-out > 0) and ($c.gold-cost != null) and ($c.gold-cost > $c.gold-out) }
     | select id type gold-cost gold-out)
   let objective = ($cards
     | where vp-out > 0

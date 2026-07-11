@@ -3,6 +3,7 @@ use std assert
 use ../audit.nu
 
 const FIX = (path self | path dirname | path join fixtures)
+const AUDIT_NU = (path self | path dirname | path join .. audit.nu | path expand)
 
 export def main [] {
   let results = (audit run --set mini --build-dir $FIX)
@@ -33,6 +34,20 @@ export def main [] {
     { check: mission-vp, pass: true }
   ]
   assert equal (audit hard-failures $synth | length) 0
+
+  # --- PASS branch: a clean fixture where every hard check passes ---
+  let clean = (audit run --set mini-clean --build-dir $FIX)
+  let hard_clean = (audit hard-failures $clean)
+  assert equal ($hard_clean | length) 0
+  for c in ($clean | where check != "negative-value") {
+    assert $c.pass $"expected ($c.check) to PASS on mini-clean"
+  }
+
+  # --- main's exit code: non-zero on hard failures, zero when all green ---
+  let fail_run = (do { ^nu $AUDIT_NU --set mini --build-dir $FIX } | complete)
+  assert equal $fail_run.exit_code 1
+  let pass_run = (do { ^nu $AUDIT_NU --set mini-clean --build-dir $FIX } | complete)
+  assert equal $pass_run.exit_code 0
 
   print "audit.test.nu: OK"
 }

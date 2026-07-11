@@ -7,9 +7,12 @@ use selectors.nu *
 
 export def run [--set: string = "alpha-1", --build-dir: string = ""] {
   let cards = (load-set $set --build-dir $build_dir)
+  if ($cards | is-empty) {
+    error make { msg: $"($set): empty card set — nothing to analyze (rarity-distribution)" }
+  }
 
   let dist = ($cards | group-by type | transpose type rows | each { |g|
-    $g.rows | group-by rarity | transpose rarity rs | each { |r|
+    $g.rows | group-by { |c| $c.rarity? | default "unknown" } | transpose rarity rs | each { |r|
       { type: $g.type, rarity: $r.rarity, count: ($r.rs | length) }
     }
   } | flatten)

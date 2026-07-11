@@ -14,8 +14,9 @@
 # rather than erroring, so a mixed-type table still flows through.
 
 # Canonical DSL verb vocabulary — the verbs the engine implements (see
-# library/schema.md "Effect DSL"). Keyword coverage is measured against this
-# because the `abilities` column is currently empty across the set.
+# library/schema.md "Effect DSL"). Keyword coverage is measured against the
+# effect DSL — the authoritative source of card mechanics — rather than the
+# `abilities` column.
 export const DSL_VERBS = [
   gold vp draw buy move peek pick buff contest injure kill control raze to remove
 ]
@@ -97,12 +98,20 @@ export def with-payout [] {
 
 # Numeric gold cost: the scalar cost, or the MIN of an alternative-cost list
 # (`a|b`, stored as a list post-build). Assumes gold currency — revisit if
-# non-gold costs are introduced.
+# non-gold costs are introduced. A non-numeric cost (either the scalar or any
+# alternative-cost element) coerces to null rather than crashing load-set, so a
+# malformed cost degrades one card's `gold-cost` instead of aborting the set.
 def gold-cost-of [card: record] {
   let c = ($card.cost? | default null)
   let t = ($c | describe)
   if ($t | str starts-with "list") {
-    $c | each { |v| $v | into int } | math min
+    let ints = ($c | each { |v| try { $v | into int } catch { null } })
+    # any unparseable element ⇒ the whole cost is untrustworthy ⇒ null
+    if (($ints | is-empty) or ($ints | any { |x| $x == null })) {
+      null
+    } else {
+      $ints | math min
+    }
   } else if $t == "string" {
     try { $c | into int } catch { null }
   } else if $t == "int" {
@@ -114,7 +123,14 @@ def gold-cost-of [card: record] {
 
 def stat-total-of [c: record] {
   if ($c.type? == "unit") {
-    [($c.strength? | default 0) ($c.cunning? | default 0) ($c.charisma? | default 0)] | math sum
+    let stats = [$c.strength? $c.cunning? $c.charisma?]
+    # A unit with no stats at all stays null (not a spurious 0); a unit with
+    # some stats sums the present ones, treating absent as 0.
+    if ($stats | all { |x| $x == null }) {
+      null
+    } else {
+      $stats | each { |x| $x | default 0 } | math sum
+    }
   } else {
     null
   }

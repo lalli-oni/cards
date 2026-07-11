@@ -53,11 +53,12 @@ reports gaps/violations with a `pass` flag:
 
 ## Heuristics & caveats
 
-- **Keyword coverage is measured against DSL verbs**, not the `abilities` column
-  (which is empty across alpha-1). The verb list (`DSL_VERBS`) mirrors the engine.
+- **Keyword coverage is measured against DSL verbs** (the effect DSL is the
+  authoritative source of card mechanics), not the `abilities` column. The verb
+  list (`DSL_VERBS`) mirrors the engine.
 - **No blended value number.** `gold-out`/`vp-out`/`ap-cost`/`gold-cost` are kept
-  separate — gold ≠ vp, AP ≠ gold. A real value/EV rating model is deferred
-  (see the value-rating follow-up).
+  separate — gold ≠ vp, AP ≠ gold. A real value/EV rating model is intentionally
+  out of scope for this toolkit.
 - **`gold-out`/`vp-out` are partial** — only literal `gold[N]`/`vp[N]` emissions,
   not the indirect value of contests/buffs/control/tempo. The `negative-value`
   screen is a *review list*, not a balance verdict.

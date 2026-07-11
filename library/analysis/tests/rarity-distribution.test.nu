@@ -16,5 +16,10 @@ export def main [] {
   # dup group is the two identical spirituality_1 => 3vp shrines
   assert equal ($r.detail.duplicates | length) 1
   assert equal ($r.detail.duplicates | get 0.ids | sort) [twin-shrine-a twin-shrine-b]
+  # the two identical reward-less outposts share a signature but are NOT flagged:
+  # dup detection is mission-only (rewards != ""), so non-mission locations that
+  # legitimately share (empty) requirements don't false-flag.
+  let flagged = ($r.detail.duplicates | get ids | flatten)
+  assert equal ($flagged | where { |id| $id in [outpost-a outpost-b] } | length) 0
   print "rarity-distribution.test.nu: OK"
 }

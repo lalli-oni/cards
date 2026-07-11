@@ -10,6 +10,10 @@ export def main [] {
   assert equal $r.pass false
   # Knowledge (archive) and Spirituality (shrines) have mission paths;
   # Military / Commerce / Politics have cards but no mission demand.
+  # The archive's requirement is the compound "knowledge_2;units_3": Knowledge
+  # has-path true depends on the `;` split extracting `knowledge_2`, while the
+  # stat/unit token `units_3` is parsed but dropped (not an attribute), so it
+  # grants no spurious path.
   let rows = $r.detail
   assert equal ($rows | where archetype == "Knowledge" | get 0.has-path) true
   assert equal ($rows | where archetype == "Spirituality" | get 0.has-path) true

@@ -4,13 +4,16 @@
 # that attribute. Flags archetypes with cards but no mission demand.
 #
 # Mission requirements use lowercase attribute tokens (`knowledge_2`,
-# `military_1`); stat/unit checks (`strength_15`, `units_3`) don't name an
-# attribute and are ignored here.
+# `military_1`). Stat/unit checks (`strength_15`, `units_3`) parse into tokens
+# too, but are dropped downstream because their name isn't in ATTRIBUTES.
 
 use selectors.nu *
 
 export def run [--set: string = "alpha-1", --build-dir: string = ""] {
   let cards = (load-set $set --build-dir $build_dir)
+  if ($cards | is-empty) {
+    error make { msg: $"($set): empty card set — nothing to analyze (mission-vp)" }
+  }
 
   let missions = ($cards | where type == "location" | where { |l| ($l.rewards? | default "") != "" })
   let mission_attrs = ($missions | each { |m|

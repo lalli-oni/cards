@@ -1,7 +1,7 @@
 #!/usr/bin/env nu
 # keyword-coverage.nu — assert ≥1 card per DSL verb; list unused verbs as gaps.
-# Coverage is measured against DSL_VERBS (the engine's verb vocabulary), because
-# the `abilities` column is empty across the set.
+# Coverage is measured against DSL_VERBS (the engine's verb vocabulary) — the
+# authoritative source of card mechanics — rather than the `abilities` column.
 
 use selectors.nu *
 

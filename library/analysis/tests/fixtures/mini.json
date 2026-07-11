@@ -122,7 +122,7 @@
     "flavor": null,
     "abilities": [],
     "attributes": [],
-    "requirements": "knowledge_2",
+    "requirements": "knowledge_2;units_3",
     "rewards": "5vp",
     "passive": null,
     "locationType": "Archive"
@@ -158,5 +158,37 @@
     "rewards": "3vp",
     "passive": null,
     "locationType": "Sanctuary"
+  },
+  {
+    "id": "outpost-a",
+    "name": "Outpost A",
+    "set": "mini",
+    "type": "location",
+    "rarity": "rare",
+    "cost": "0",
+    "text": null,
+    "flavor": null,
+    "abilities": [],
+    "attributes": [],
+    "requirements": "",
+    "rewards": "",
+    "passive": null,
+    "locationType": "Outpost"
+  },
+  {
+    "id": "outpost-b",
+    "name": "Outpost B",
+    "set": "mini",
+    "type": "location",
+    "rarity": "rare",
+    "cost": "0",
+    "text": null,
+    "flavor": null,
+    "abilities": [],
+    "attributes": [],
+    "requirements": "",
+    "rewards": "",
+    "passive": null,
+    "locationType": "Outpost"
   }
 ]

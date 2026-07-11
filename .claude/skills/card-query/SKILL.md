@@ -91,8 +91,8 @@ gaps, rarity spread, payout screen), don't hand-roll — use the Layer 2 scripts
 the full audit:
 
 ```nu
-nu library/analysis/audit.nu --set alpha-1          # all checks, pass/fail table
-nu library/analysis/archetype-distribution.nu       # one check standalone
+nu library/analysis/audit.nu --set alpha-1                  # all checks, pass/fail table
+nu library/analysis/archetype-distribution.nu --set alpha-1 # one check standalone
 ```
 
 See `library/analysis/README.md` for the full toolkit.

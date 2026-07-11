@@ -15,7 +15,10 @@ export def main [] {
   for t in $tests {
     let name = ($t | path basename)
     let res = (do { ^nu $t } | complete)
-    if $res.exit_code == 0 {
+    # A test file must both exit 0 AND print its ": OK" sentinel — guards against
+    # a file whose `main` is missing/unwired (exits 0 with no assertions run),
+    # which would otherwise be a silent green.
+    if $res.exit_code == 0 and ($res.stdout | str contains ": OK") {
       print $"  PASS  ($name)"
     } else {
       print $"  FAIL  ($name)"

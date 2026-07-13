@@ -41,9 +41,12 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 FRAME_NAME = "Unit Card MT"
 DEFAULT_CSV = os.path.join(SCRIPT_DIR, "..", "library", "sets", "alpha-1", "units.csv")
 
-# --- Fonts (Google Fonts; Penpot bundles the GF library) --------------------
-SG = {"font_family": "spacegrotesk", "font_id": "gfont-space-grotesk"}
-JB = {"font_family": "jetbrainsmono", "font_id": "gfont-jetbrains-mono"}
+# --- Fonts ------------------------------------------------------------------
+# family names match the vendored TTFs in design/fonts/, mounted into the
+# exporter's system font path (see docker-compose.yaml). The exporter renders
+# text by these family names via fontconfig — no external Google Fonts fetch.
+SG = {"font_family": "Space Grotesk", "font_id": "gfont-space-grotesk"}
+JB = {"font_family": "JetBrains Mono", "font_id": "gfont-jetbrains-mono"}
 
 # --- Palette (from card-spec.json) ------------------------------------------
 C = {

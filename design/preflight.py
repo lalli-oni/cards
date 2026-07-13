@@ -13,31 +13,40 @@ run. It checks the failure modes we've hit for real:
 
 Usage:
     python3 preflight.py         # diagnose only; exits non-zero if any check FAILs
-    python3 preflight.py --fix   # also apply safe repairs (secret key, restart, file)
+    python3 preflight.py --fix   # also apply safe repairs (secret key, start/recreate
+                                 # services, create file)
 
 --fix only performs safe, reversible repairs. It never invents credentials.
+When PENPOT_URL points at a remote Penpot, the local Docker/stack checks are
+skipped and only the remote instance is probed.
 """
 
 import argparse
 import http.cookiejar
 import json
 import os
+import re
 import secrets
 import subprocess
 import sys
 import time
 import urllib.error
 import urllib.request
+from datetime import datetime
 
 try:
     from penpot import FEATURES
-except Exception:  # pragma: no cover - penpot.py should always import
+except ImportError:
+    # Narrow to ImportError: a real error inside penpot.py (syntax/refactor)
+    # should surface loudly rather than silently fall back to a stale list.
     FEATURES = ["fdata/objects-map", "components/v2", "styles/v2"]
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ENV_PATH = os.path.join(SCRIPT_DIR, ".env")
 COMPOSE_PATH = os.path.join(SCRIPT_DIR, "docker-compose.yaml")
 
+# The services required for rendering. penpot-mailcatch is intentionally
+# excluded — it is a dev mail sink and not needed by the render pipeline.
 EXPECTED_SERVICES = [
     "penpot-postgres", "penpot-valkey",
     "penpot-backend", "penpot-exporter", "penpot-frontend",
@@ -78,13 +87,29 @@ def read_env_values():
     return values
 
 
+def _line_key(line):
+    """The env key a line defines, ignoring a leading `export `. '' if none/comment."""
+    if line.lstrip().startswith("#") or "=" not in line:
+        return ""
+    key = line.split("=", 1)[0].strip()
+    if key.startswith("export "):
+        key = key[len("export "):].strip()
+    return key
+
+
 def set_env_value(key, value):
-    """Update or append KEY=value in design/.env, preserving other lines."""
+    """Update or append KEY=value in design/.env, preserving other lines.
+
+    Values are written unquoted, so callers must only pass shell/compose-safe
+    values (docker compose --env-file treats surrounding quotes literally, so
+    quoting here would corrupt the value). Current callers write url-safe
+    tokens and UUIDs, which are safe. Raises OSError if .env cannot be written.
+    """
     lines, found = [], False
     if os.path.isfile(ENV_PATH):
         with open(ENV_PATH) as f:
             for line in f:
-                if line.split("=", 1)[0].strip() == key and not line.lstrip().startswith("#"):
+                if _line_key(line) == key:
                     lines.append(f"{key}={value}\n")
                     found = True
                 else:
@@ -95,6 +120,16 @@ def set_env_value(key, value):
         lines.append(f"{key}={value}\n")
     with open(ENV_PATH, "w") as f:
         f.writelines(lines)
+
+
+def try_set_env(key, value):
+    """set_env_value with an OSError guard. Returns True on success."""
+    try:
+        set_env_value(key, value)
+        return True
+    except OSError as e:
+        report(FAIL, f"Could not write {key} to design/.env", str(e))
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -117,10 +152,14 @@ def compose(*args, timeout=120):
 
 
 def running_services():
-    """Return {service: state} for compose services, tolerant of format differences."""
-    code, out, _ = compose("ps", "--format", "json")
+    """Return {service: state} for compose services, or None if the query failed.
+
+    None (command error) is deliberately distinct from {} (command succeeded,
+    no containers) so callers don't mistake "couldn't tell" for "nothing runs".
+    """
+    code, out, err = compose("ps", "--format", "json")
     if code != 0:
-        return {}
+        return None
     states = {}
     out = out.strip()
     if not out:
@@ -152,6 +191,26 @@ def container_started_at(service):
     return out.strip() if code == 0 and out.strip() else None
 
 
+def parse_docker_ts(s):
+    """Parse Docker's RFC3339Nano StartedAt into a datetime, or None.
+
+    Docker emits variable-precision fractional seconds (up to 9 digits) with a
+    Z suffix; truncate to microseconds so datetime.fromisoformat accepts it.
+    Parsing (rather than string comparison) avoids misordering timestamps whose
+    fractional-digit counts differ.
+    """
+    if not s:
+        return None
+    s = s.strip().replace("Z", "+00:00")
+    m = re.match(r"(.*\.\d{6})\d*(.*)", s)  # keep 6 fractional digits, drop the rest
+    if m:
+        s = m.group(1) + m.group(2)
+    try:
+        return datetime.fromisoformat(s)
+    except ValueError:
+        return None
+
+
 # ---------------------------------------------------------------------------
 # HTTP / Penpot helpers
 # ---------------------------------------------------------------------------
@@ -175,7 +234,10 @@ def http_status(url, timeout=8):
 
 
 def rpc(base, cmd, payload, timeout=12):
-    """POST an RPC command. Returns (status_code, parsed_body_or_none)."""
+    """POST an RPC command. Returns (status_code, parsed_body_or_none).
+
+    status_code is 0 for a connection-level failure (no HTTP response).
+    """
     url = f"{base}/api/rpc/command/{cmd}"
     req = urllib.request.Request(
         url, data=json.dumps(payload).encode("utf-8"),
@@ -187,14 +249,15 @@ def rpc(base, cmd, payload, timeout=12):
     except urllib.error.HTTPError as e:
         try:
             return e.code, json.loads(e.read().decode("utf-8"))
-        except Exception:
+        except (ValueError, UnicodeDecodeError):
             return e.code, None
     except (urllib.error.URLError, OSError):
         return 0, None
 
 
 def wait_for_backend(base, timeout=180):
-    """Poll until the backend API answers (any HTTP status, not a 502/connection error)."""
+    """Poll until the backend API is reachable (answers any HTTP status, not a
+    502 / connection error). Reachable means "not crash-looping" — not "healthy"."""
     deadline = time.time() + timeout
     while time.time() < deadline:
         code, _ = rpc(base, "get-profile", {}, timeout=5)
@@ -204,6 +267,28 @@ def wait_for_backend(base, timeout=180):
     return False
 
 
+def _create_file(base):
+    """Create a Penpot project + file (requires an active login). Returns the
+    file id, or None (reporting which RPC failed) so callers don't fail silently."""
+    code, profile = rpc(base, "get-profile", {})
+    team_id = (profile or {}).get("defaultTeamId")
+    if not team_id:
+        report(WARN, f"create-file: get-profile failed (HTTP {code or 'no response'})")
+        return None
+    code, project = rpc(base, "create-project", {"team-id": team_id, "name": "Card Game"})
+    pid = (project or {}).get("id")
+    if not pid:
+        report(WARN, f"create-file: create-project failed (HTTP {code or 'no response'})")
+        return None
+    code, file_resp = rpc(base, "create-file", {"project-id": pid, "name": "Card Templates"})
+    fid = (file_resp or {}).get("id")
+    if not fid:
+        report(WARN, f"create-file: create-file failed (HTTP {code or 'no response'}); "
+                     f"orphan project {pid} left behind")
+        return None
+    return fid
+
+
 # ---------------------------------------------------------------------------
 # Checks
 # ---------------------------------------------------------------------------
@@ -211,7 +296,7 @@ def wait_for_backend(base, timeout=180):
 def main():
     parser = argparse.ArgumentParser(description="Penpot rendering environment doctor")
     parser.add_argument("--fix", action="store_true",
-                        help="apply safe repairs (secret key, restart services, create file)")
+                        help="apply safe repairs (secret key, start/recreate services, create file)")
     args = parser.parse_args()
 
     print("Penpot rendering environment preflight\n" + "-" * 38)
@@ -232,85 +317,107 @@ def main():
     if _had_fail:
         return 1
 
-    # 3. PENPOT_SECRET_KEY (backend asserts on empty -> crash-loop)
-    restart_needed = False
-    if not env.get("PENPOT_SECRET_KEY"):
-        if args.fix:
-            key = secrets.token_urlsafe(48)
-            set_env_value("PENPOT_SECRET_KEY", key)
-            env["PENPOT_SECRET_KEY"] = key
-            restart_needed = True
-            report(FIX, "PENPOT_SECRET_KEY was empty — generated one and wrote it to .env")
-        else:
-            report(FAIL, "PENPOT_SECRET_KEY is empty",
-                   "The backend crash-loops without it. Re-run with --fix to generate one.")
-            return 1
-    else:
-        report(OK, "PENPOT_SECRET_KEY set")
-
-    # 4. Docker daemon
-    code, _, _ = run(["docker", "info"], timeout=20)
-    if code != 0:
-        report(FAIL, "Docker daemon not reachable", "Start Docker Desktop and re-run.")
-        return 1
-    report(OK, "Docker daemon reachable")
-
-    # 5. Services up
-    states = running_services()
-    down = [s for s in EXPECTED_SERVICES if states.get(s) != "running"]
-    if down or restart_needed:
-        if args.fix:
-            why = "applying new secret" if restart_needed else f"starting: {', '.join(down)}"
-            report(FIX, f"Bringing up the Penpot stack ({why})...")
-            compose("up", "-d", timeout=240)
-        elif down:
-            report(FAIL, f"Services not running: {', '.join(down)}",
-                   "docker compose -f design/docker-compose.yaml --env-file design/.env up -d")
-            return 1
-    else:
-        report(OK, "All Penpot services running")
-
     base = base_url(env)
+    url = env.get("PENPOT_URL", "")
+    is_remote = bool(url) and not any(h in url for h in ("localhost", "127.0.0.1"))
+    restart_needed = False
+
+    if is_remote:
+        report(OK, f"PENPOT_URL is remote ({url}) — skipping local Docker/stack checks")
+    else:
+        # 3. PENPOT_SECRET_KEY (backend asserts on empty -> crash-loop)
+        if not env.get("PENPOT_SECRET_KEY"):
+            if args.fix:
+                key = secrets.token_urlsafe(64)
+                if not try_set_env("PENPOT_SECRET_KEY", key):
+                    return 1
+                env["PENPOT_SECRET_KEY"] = key
+                restart_needed = True
+                report(FIX, "PENPOT_SECRET_KEY was empty — generated one and wrote it to .env")
+            else:
+                report(FAIL, "PENPOT_SECRET_KEY is empty",
+                       "The backend crash-loops without it. Re-run with --fix to generate one.")
+                return 1
+        else:
+            report(OK, "PENPOT_SECRET_KEY set")
+
+        # 4. Docker daemon
+        code, _, _ = run(["docker", "info"], timeout=20)
+        if code != 0:
+            report(FAIL, "Docker daemon not reachable", "Start Docker Desktop and re-run.")
+            return 1
+        report(OK, "Docker daemon reachable")
+
+        # 5. Services up
+        states = running_services()
+        if states is None:
+            report(FAIL, "Could not query compose services",
+                   "`docker compose ps` failed — check Docker and the compose file.")
+            return 1
+        down = [s for s in EXPECTED_SERVICES if states.get(s) != "running"]
+        if down or restart_needed:
+            if args.fix:
+                why = "applying new secret" if restart_needed else f"starting: {', '.join(down)}"
+                report(FIX, f"Bringing up the Penpot stack ({why})...")
+                code, _, err = compose("up", "-d", timeout=240)
+                if code != 0:
+                    report(FAIL, "docker compose up -d failed", (err or "").strip()[:500])
+                    return 1
+                if not wait_for_backend(base):
+                    report(FAIL, "Backend did not become ready after start",
+                           "Check: docker compose -f design/docker-compose.yaml logs penpot-backend")
+                    return 1
+                report(OK, "Stack started; backend reachable")
+            else:
+                report(FAIL, f"Services not running: {', '.join(down)}",
+                       "docker compose -f design/docker-compose.yaml --env-file design/.env up -d")
+                return 1
+        else:
+            report(OK, "All Penpot services running")
 
     # 6. Frontend
     fe = http_status(base)
     if fe == 200:
         report(OK, f"Frontend responds ({base})")
     else:
-        report(WARN if args.fix else FAIL, f"Frontend not healthy at {base} (HTTP {fe or 'no response'})")
+        report(FAIL, f"Frontend not healthy at {base} (HTTP {fe or 'no response'})",
+               "The frontend/proxy is not serving — start or check it.")
+        return 1
 
-    # 7. Backend API (this is where the crash-loop shows up as 502)
+    # 7. Backend API (this is where a crash-loop shows up as 502 / no response)
     code, _ = rpc(base, "get-profile", {})
     if code not in (200, 400, 401, 403):
-        if args.fix:
-            report(FIX, f"Backend not ready (got {code or 'no response'}) — waiting for it...")
-            if not wait_for_backend(base):
-                report(FAIL, "Backend did not become ready",
-                       "Check: docker compose -f design/docker-compose.yaml logs penpot-backend")
-                return 1
-            report(OK, "Backend became ready")
-        else:
-            report(FAIL, f"Backend API not answering (HTTP {code or 'no response'})",
-                   "Often a missing PENPOT_SECRET_KEY. Re-run with --fix, or check the backend logs.")
-            return 1
-    else:
-        report(OK, "Backend API answering")
+        report(FAIL, f"Backend API not answering (HTTP {code or 'no response'})",
+               "Often a missing PENPOT_SECRET_KEY. Re-run with --fix, or check the backend logs.")
+        return 1
+    report(OK, "Backend API answering")
 
-    # 8. Exporter freshness — if it started before the backend it may hold a stale
-    #    secret and 403 on export. Soft signal only.
-    be_t, ex_t = container_started_at("penpot-backend"), container_started_at("penpot-exporter")
-    if be_t and ex_t and ex_t < be_t and not restart_needed:
-        report(WARN, "Exporter started before the backend — it may hold a stale secret",
-               "If PNG export 403s, recreate it:\n"
-               "  docker compose -f design/docker-compose.yaml --env-file design/.env up -d "
-               "penpot-exporter penpot-frontend")
+    # 8. Exporter freshness — if it started before the backend it may hold a
+    #    stale secret and 403 on export. Local stacks only; skipped right after
+    #    a --fix restart (everything came up together). Soft signal.
+    if not is_remote and not restart_needed:
+        be_t = parse_docker_ts(container_started_at("penpot-backend"))
+        ex_t = parse_docker_ts(container_started_at("penpot-exporter"))
+        if be_t and ex_t:
+            if ex_t < be_t:
+                report(WARN, "Exporter started before the backend — it may hold a stale secret",
+                       "If PNG export 403s, recreate it:\n"
+                       "  docker compose -f design/docker-compose.yaml --env-file design/.env up -d "
+                       "penpot-exporter penpot-frontend")
+        else:
+            report(WARN, "Could not determine backend/exporter start order",
+                   "Skipping the stale-secret check (docker inspect unavailable).")
 
     # 9. Login
     code, body = rpc(base, "login-with-password",
                      {"email": env["PENPOT_EMAIL"], "password": env["PENPOT_PASSWORD"]})
     if not (code == 200 and isinstance(body, dict) and body.get("id")):
-        report(FAIL, "Login failed",
-               "Check PENPOT_EMAIL / PENPOT_PASSWORD in design/.env.")
+        if code in (400, 401, 403):
+            hint = "Check PENPOT_EMAIL / PENPOT_PASSWORD in design/.env."
+        else:
+            hint = (f"Backend returned HTTP {code or 'no response'} — a server fault, "
+                    "not necessarily bad credentials.")
+        report(FAIL, "Login failed", hint)
         return 1
     report(OK, "Login succeeds")
 
@@ -323,8 +430,7 @@ def main():
         elif code == 404:
             if args.fix:
                 new_id = _create_file(base)
-                if new_id:
-                    set_env_value("PENPOT_FILE_ID", new_id)
+                if new_id and try_set_env("PENPOT_FILE_ID", new_id):
                     report(FIX, f"Stale PENPOT_FILE_ID — created a fresh file {new_id} and wrote it to .env")
                 else:
                     report(FAIL, "Could not create a replacement file")
@@ -333,15 +439,18 @@ def main():
                 report(WARN, "PENPOT_FILE_ID points at a missing file (404)",
                        "The render scripts will create a new one, or run --fix to set it now.")
         else:
-            report(WARN, f"Could not verify PENPOT_FILE_ID (HTTP {code})")
+            report(WARN, f"Could not verify PENPOT_FILE_ID (HTTP {code or 'no response'})")
     else:
-        report(WARN, "PENPOT_FILE_ID not set",
-               "The render scripts create one on first run (or run --fix to set it now).")
         if args.fix:
             new_id = _create_file(base)
-            if new_id:
-                set_env_value("PENPOT_FILE_ID", new_id)
+            if new_id and try_set_env("PENPOT_FILE_ID", new_id):
                 report(FIX, f"Created file {new_id} and wrote it to .env")
+            else:
+                report(FAIL, "Could not create a Penpot file")
+                return 1
+        else:
+            report(WARN, "PENPOT_FILE_ID not set",
+                   "The render scripts create one on first run (or run --fix to set it now).")
 
     print("-" * 38)
     if _had_fail:
@@ -349,20 +458,6 @@ def main():
         return 1
     print("Preflight passed — environment is ready.")
     return 0
-
-
-def _create_file(base):
-    """Create a Penpot project + file (requires an active login). Returns file id or None."""
-    _, profile = rpc(base, "get-profile", {})
-    team_id = (profile or {}).get("defaultTeamId")
-    if not team_id:
-        return None
-    _, project = rpc(base, "create-project", {"team-id": team_id, "name": "Card Game"})
-    pid = (project or {}).get("id")
-    if not pid:
-        return None
-    _, file_resp = rpc(base, "create-file", {"project-id": pid, "name": "Card Templates"})
-    return (file_resp or {}).get("id")
 
 
 if __name__ == "__main__":

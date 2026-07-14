@@ -13,6 +13,8 @@ __pycache__/
 
 # Generated design exports
 design/exports/
+# Generated gallery (published to the gh-pages branch, not main)
+design/gallery/
 
 # Claude Code local settings
 .claude/settings.local.json

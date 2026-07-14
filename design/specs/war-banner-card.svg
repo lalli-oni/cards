@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="750" height="1050" viewBox="0 0 750 1050">
+  
+  
+  <defs>
+    <clipPath id="it-clip"><rect x="0" y="0" width="750" height="1050" rx="14"></rect></clipPath>
+    <pattern id="it-hatch" width="16" height="16" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)">
+      <rect width="2" height="16" fill="#ffffff" opacity="0.05"></rect>
+    </pattern>
+    <radialGradient id="it-coin" cx="35%" cy="30%" r="95%">
+      <stop offset="0" stop-color="#ffe9a8"></stop>
+      <stop offset="0.55" stop-color="#f4c24a"></stop>
+      <stop offset="1" stop-color="#a3761a"></stop>
+    </radialGradient>
+  </defs>
+
+  <g clip-path="url(#it-clip)">
+    <rect x="0" y="0" width="750" height="1050" rx="14" fill="#0a1220"></rect>
+    <rect x="0" y="0" width="750" height="1050" fill="url(#it-hatch)"></rect>
+
+    
+    <g transform="translate(195, 303) scale(15)" stroke="#7a8aa6" opacity="0.15" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6 3 V21 M6 4 H18 L15 8 L18 12 H6"></path>
+    </g>
+    <text x="375" y="650.5" text-anchor="middle" font-family="JetBrains Mono" font-size="10" letter-spacing="3" fill="#7a8aa6" opacity="0.7">ITEM ART</text>
+
+    
+    <rect x="40" y="38" width="574" height="85.6" rx="10" fill="#060c18" fill-opacity="0.78" stroke="#1a2540" stroke-width="1"></rect>
+    <text x="59" y="79" font-family="Space Grotesk" font-size="32" font-weight="700" letter-spacing="-0.32" fill="#e6ecf6">War Banner</text>
+    <g transform="translate(59, 92.6) scale(0.6667)" stroke="#c8f562" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6 3 V21 M6 4 H18 L15 8 L18 12 H6"></path>
+    </g>
+    <text x="82" y="104.5" font-family="JetBrains Mono" font-size="11" font-weight="600" letter-spacing="2.42" fill="#7a8aa6">BANNER</text>
+
+    
+    <rect x="626" y="38" width="84" height="85.6" rx="10" fill="#060c18" fill-opacity="0.78" stroke="#1a2540" stroke-width="1"></rect>
+    <circle cx="668" cy="80.8" r="31" fill="url(#it-coin)" stroke="#8a6522" stroke-width="2"></circle>
+    <circle cx="668" cy="80.8" r="28.5" fill="none" stroke="#ffe9a8" stroke-opacity="0.33" stroke-width="3"></circle>
+    <text x="668" y="90.8" text-anchor="middle" font-family="Space Grotesk" font-size="28.5" font-weight="800" fill="#3a2205">3</text>
+
+    
+    <rect x="40" y="824.1" width="670" height="187.9" rx="10" fill="#060c18" fill-opacity="0.78" stroke="#1a2540" stroke-width="1"></rect>
+
+    
+    <rect x="61" y="841.1" width="34" height="34" rx="8" fill="#000000" fill-opacity="0.25" stroke="#c8f562" stroke-width="1.5"></rect>
+    <g transform="translate(68.5, 848.6) scale(0.7917)" stroke="#c8f562" fill="none" stroke-width="1.6" stroke-linecap="round">
+      <circle cx="12" cy="7" r="3.4"></circle>
+      <path d="M5 21 C5 15.5 8 13 12 13 C16 13 19 15.5 19 21"></path>
+    </g>
+    <text x="106" y="851.1" font-family="JetBrains Mono" font-size="10" font-weight="700" letter-spacing="2.4" fill="#c8f562">EQUIP — ON A UNIT</text>
+    <text x="106" y="873" font-family="Space Grotesk" font-size="15.5" fill="#e6ecf6">All friendly units at this location get +1 strength.</text>
+
+    
+    <rect x="61" y="892.5" width="34" height="34" rx="8" fill="#000000" fill-opacity="0.25" stroke="#7a8aa6" stroke-width="1.5"></rect>
+    <g transform="translate(68.5, 900) scale(0.7917)" stroke="#7a8aa6" fill="none" stroke-width="1.6" stroke-linejoin="round">
+      <path d="M4 8 L12 4 L20 8 V17 L12 21 L4 17 Z M4 8 L12 12 L20 8 M12 12 V21"></path>
+    </g>
+    <text x="106" y="902.5" font-family="JetBrains Mono" font-size="10" font-weight="700" letter-spacing="2.4" fill="#7a8aa6">STORED — AT A LOCATION</text>
+    <text x="106" y="924.5" font-family="Space Grotesk" font-size="15.5" fill="#e6ecf6">Units initiating a strength contest at this location get +2 strength.</text>
+
+    
+    <text x="61" y="956.5" font-family="Space Grotesk" font-size="12.5" font-style="italic" fill="#7a8aa6">&#34;It flew above a hundred fields.&#34;</text>
+
+    
+    <line x1="61" y1="975" x2="689" y2="975" stroke="#1a2540" stroke-width="1"></line>
+    <text x="61" y="992.5" font-family="JetBrains Mono" font-size="9" font-weight="700" letter-spacing="1.98" fill="#c8f562">◇ UNCOMMON</text>
+    <text x="689" y="992.5" text-anchor="end" font-family="JetBrains Mono" font-size="9" letter-spacing="1.98" fill="#7a8aa6">ITEM · BANNER // ALPHA-1 · I02</text>
+  </g>
+</svg>

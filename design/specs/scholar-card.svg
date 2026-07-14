@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="750" height="1050" viewBox="0 0 750 1050">
+  
+  
+  <defs>
+    <clipPath id="pol-clip"><rect x="0" y="0" width="750" height="1050" rx="14"></rect></clipPath>
+    <pattern id="pol-hatch" width="16" height="16" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)">
+      <rect width="2" height="16" fill="#ffffff" opacity="0.05"></rect>
+    </pattern>
+  </defs>
+
+  <g clip-path="url(#pol-clip)">
+    <rect x="0" y="0" width="750" height="1050" rx="14" fill="#0a1220"></rect>
+    <rect x="0" y="0" width="750" height="1050" fill="url(#pol-hatch)"></rect>
+
+    
+    <g transform="translate(195, 282) scale(15)" stroke="#7a8aa6" opacity="0.15" fill="none" stroke-width="1.8" stroke-linejoin="round">
+      <path d="M9 3 V9 L4 19 Q4 21 6 21 H18 Q20 21 20 19 L15 9 V3"></path>
+      <path d="M8 3 H16" stroke-linecap="round"></path>
+    </g>
+    <text x="375" y="620" text-anchor="middle" font-family="JetBrains Mono" font-size="11" letter-spacing="3.3" fill="#7a8aa6" opacity="0.7">POLICY ART</text>
+
+    
+    <rect x="40" y="38" width="576" height="87.1" rx="10" fill="#060c18" fill-opacity="0.78" stroke="#1a2540" stroke-width="1"></rect>
+    <text x="59" y="79" font-family="Space Grotesk" font-size="32" font-weight="700" letter-spacing="-0.32" fill="#e6ecf6">Scholar</text>
+    <text x="59" y="106" font-family="JetBrains Mono" font-size="13" font-weight="600" letter-spacing="3.38" fill="#7a8aa6">POLICY · KNOWLEDGE</text>
+
+    
+    <rect x="628" y="38" width="82" height="87.1" rx="10" fill="#060c18" fill-opacity="0.78" stroke="#1a2540" stroke-width="1"></rect>
+    <circle cx="669" cy="81.5" r="30" fill="#000000" fill-opacity="0.3" stroke="#c8f562" stroke-width="2"></circle>
+    <g transform="translate(653.4, 65.9) scale(1.3)" stroke="#c8f562" fill="none" stroke-width="1.8" stroke-linejoin="round">
+      <path d="M9 3 V9 L4 19 Q4 21 6 21 H18 Q20 21 20 19 L15 9 V3"></path>
+      <path d="M8 3 H16" stroke-linecap="round"></path>
+    </g>
+
+    
+    <rect x="40" y="755.2" width="670" height="256.8" rx="10" fill="#060c18" fill-opacity="0.78" stroke="#1a2540" stroke-width="1"></rect>
+
+    
+    <text x="61" y="786" font-family="JetBrains Mono" font-size="12" font-weight="700" letter-spacing="2.64" fill="#c8f562">DOCTRINE</text>
+    <text x="176" y="791.5" font-family="Space Grotesk" font-size="18" fill="#e6ecf6">Draw +1 card at start of turn.</text>
+
+    
+    <text x="61" y="825" font-family="JetBrains Mono" font-size="12" font-weight="700" letter-spacing="2.64" fill="#7a8aa6">SEEDING</text>
+    <text x="176" y="830.5" font-family="Space Grotesk" font-size="18" fill="#e6ecf6">After deck construction look at the top 5 cards of</text>
+    <text x="176" y="857.5" font-family="Space Grotesk" font-size="18" fill="#e6ecf6">your main deck and reorder them.</text>
+
+    
+    <rect x="61" y="879.2" width="175.5" height="23.5" rx="3" fill="#c8f562"></rect>
+    <text x="148.8" y="895" text-anchor="middle" font-family="JetBrains Mono" font-size="12" font-weight="800" letter-spacing="1.44" fill="#0a1220">INVESTIGATE · 1 AP</text>
+    <text x="246.5" y="895.5" font-family="Space Grotesk" font-size="17" fill="#e6ecf6">Look at one face-down dilemma at any mission</text>
+    <text x="246.5" y="920" font-family="Space Grotesk" font-size="17" fill="#e6ecf6">location.</text>
+
+    
+    <text x="61" y="953.5" font-family="Space Grotesk" font-size="15" font-style="italic" fill="#7a8aa6">&#34;The pen outlasts the sword.&#34;</text>
+
+    
+    <line x1="61" y1="972" x2="689" y2="972" stroke="#1a2540" stroke-width="1"></line>
+    <text x="61" y="991" font-family="JetBrains Mono" font-size="9" font-weight="700" letter-spacing="1.98" fill="#c8f562">◆ EPIC</text>
+    <text x="689" y="991.5" text-anchor="end" font-family="JetBrains Mono" font-size="11" letter-spacing="2.42" fill="#7a8aa6">POLICY // ALPHA-1 · P03</text>
+  </g>
+</svg>

@@ -1,0 +1,77 @@
+{
+  "meta": {
+    "name": "cords CCG — Event card, layout 'Gate', V2 'Modern Trek'",
+    "example": "Ambush (ALPHA-1 · E03, uncommon, TRAP, cost 2)",
+    "note": "Only event-specific values. Shares with unit/location cards: palette, fonts, gold cost coin, glass panels (#060c18 @78%, 1px #1a2540, r10, backdrop-blur 6px), full-bleed hatch ('\\' 45°, 2px/16px, #fff @5%), rarity footer. Measured from live DOM at 1:1.",
+    "canvas": { "width": 750, "height": 1050, "cardCornerRadius": 14, "background": "#0a1220" }
+  },
+
+  "timingSemantics": {
+    "note": "timing drives the accent color and top-edge treatment",
+    "instant": { "color": "#c8f562 (accent)", "topEdge": "solid 12px bar full width", "badge": "solid fill, ink #0a1220" },
+    "passive": { "color": "#7a8aa6 (mute — no accent2 in trek)", "topEdge": "solid 12px bar", "badge": "solid fill + label 'PASSIVE · N TURNS' + duration pips (10px circles, gap 5, glow 0 0 6px col@40%)" },
+    "trap": { "color": "#ff6b6b (hazard)", "topEdge": "hazard stripes 12px on/12px off at 45°, height 12, opacity .9", "badge": "outlined 2px, transparent fill, text in hazard color + 40×8 hazard swatch (8/8 stripes, r2, opacity .8) to the right" }
+  },
+
+  "header": {
+    "nameBox": { "x": 40, "y": 38, "w": 574, "h": 98, "r": 10, "note": "height content-driven; taller than item/policy because of the badge row" },
+    "name": { "x": 59, "baseline": 79, "font": "Space Grotesk", "size": 32, "weight": 700, "letterSpacing": -0.32, "lineHeight": 33.6, "color": "#e6ecf6" },
+    "timingBadge": {
+      "box": { "x": 59, "y": 92.6, "w": 60, "h": 28.5, "r": 4 },
+      "text": { "font": "JetBrains Mono", "size": 11, "weight": 800, "letterSpacing": "0.22em", "padding": "5px 10px" },
+      "trapVariant": "2px border #ff6b6b, transparent fill, text #ff6b6b",
+      "hazardSwatch": { "x": 127, "y": 102.8, "w": 40, "h": 8, "r": 2 },
+      "typeTag": "optional eventType (Catastrophe/Prosperity) tag to the right: 16px icon + mono 11/600 ls .22em uppercase #7a8aa6"
+    },
+    "costBox": { "x": 626, "y": 38, "w": 84, "h": 98, "r": 10 },
+    "costCoin": { "center": [668, 87], "diameter": 62, "gradient": "same gold as unit cost coin", "number": { "font": "Space Grotesk", "size": 28.5, "weight": 800, "color": "#3a2205" }, "note": "no 'VP' sublabel — plain cost number" }
+  },
+
+  "art": {
+    "watermark": "eventType glyph 380×380 centered at (375, 483) @ opacity .15 — absent when eventType is null (as on Ambush)",
+    "artLabel": { "text": "EVENT ART", "y-top": 651, "font": "JetBrains Mono 10/400", "letterSpacing": 3, "color": "#7a8aa6 @ .7", "centered": true }
+  },
+
+  "footerGlass": {
+    "box": { "x": 40, "y": 827.9, "w": 670, "h": 184.1, "r": 10 },
+    "note": "bottom-anchored at y = 1050 − 38 − height; padding 16/20, rows gap 10. Row order: trigger (traps only) → rules text → attribute chips → flavor → rarity/set line.",
+    "triggerRow": {
+      "label": { "text": "TRIGGER", "x": 61, "baseline": 859.5, "font": "JetBrains Mono", "size": 10, "weight": 700, "letterSpacing": "0.22em", "color": "timing color (#ff6b6b)" },
+      "body": { "x": 127.4, "baseline": 859.5, "font": "Space Grotesk", "size": 14, "style": "italic", "lineHeight": 19.6, "color": "#e6ecf6" }
+    },
+    "rulesText": { "x": 61, "baseline": 892.5, "font": "Space Grotesk", "size": 17, "lineHeight": 25.5, "color": "#e6ecf6" },
+    "attrChip": {
+      "box": { "x": 61, "y": 910, "w": 112.6, "h": 27, "r": 4 },
+      "fill": "#000 @ 25%", "border": "1px solid #c8f562 @ 40%", "padding": "5px 10px", "gapBetweenChips": 8,
+      "icon": { "x": 72, "y": 916, "size": 15, "color": "#c8f562" },
+      "label": { "x": 94, "baseline": 927.5, "font": "JetBrains Mono", "size": 11, "weight": 600, "letterSpacing": "0.18em", "transform": "uppercase", "color": "#e6ecf6" }
+    },
+    "flavor": { "x": 61, "baseline": 959.5, "font": "Space Grotesk", "size": 12.5, "style": "italic", "lineHeight": 17.5, "color": "#7a8aa6", "quoted": true },
+    "footerLine": {
+      "divider": { "x1": 61, "x2": 689, "y": 975, "stroke": "1px #1a2540" },
+      "rarity": { "text": "◇ UNCOMMON", "x": 61, "baseline": 992.5, "font": "JetBrains Mono 9/700", "letterSpacing": "0.22em", "color": "#c8f562", "note": "◇ hollow for uncommon, ◆ solid for epic+ — same as unit footer" },
+      "setId": { "text": "EVENT · TRAP // ALPHA-1 · E03", "rightAlignedTo": 689, "baseline": 992.5, "font": "JetBrains Mono 9/400", "letterSpacing": "0.22em", "color": "#7a8aa6", "pattern": "EVENT · {TIMING} // {SET} · E##" }
+    }
+  },
+
+  "layout": [
+    { "element": "card",              "x": 0,     "y": 0,     "w": 750,   "h": 1050, "r": 14 },
+    { "element": "trap top hazard",   "x": 0,     "y": 0,     "w": 750,   "h": 12 },
+    { "element": "header name box",   "x": 40,    "y": 38,    "w": 574,   "h": 98,   "r": 10 },
+    { "element": "card name",         "x": 59,    "y": 53,    "w": 536,   "h": 33.6 },
+    { "element": "TRAP badge",        "x": 59,    "y": 92.6,  "w": 60,    "h": 28.5, "r": 4 },
+    { "element": "hazard swatch",     "x": 127,   "y": 102.8, "w": 40,    "h": 8,    "r": 2 },
+    { "element": "cost box",          "x": 626,   "y": 38,    "w": 84,    "h": 98,   "r": 10 },
+    { "element": "cost coin",         "x": 637,   "y": 56,    "w": 62,    "h": 62,   "r": 31 },
+    { "element": "art label",         "x": 334.5, "y": 651,   "w": 81,    "h": 13 },
+    { "element": "footer glass",      "x": 40,    "y": 827.9, "w": 670,   "h": 184.1,"r": 10 },
+    { "element": "TRIGGER label",     "x": 61,    "y": 849.4, "w": 57.4,  "h": 13 },
+    { "element": "trigger text",      "x": 127.4, "y": 844.9, "w": 232.7, "h": 19.6 },
+    { "element": "rules text",        "x": 61,    "y": 874.5, "w": 628,   "h": 25.5 },
+    { "element": "attr chip MILITARY","x": 61,    "y": 910,   "w": 112.6, "h": 27,   "r": 4 },
+    { "element": "flavor",            "x": 61,    "y": 947,   "w": 628,   "h": 17.5 },
+    { "element": "footer divider",    "x": 61,    "y": 975,   "w": 628,   "h": 1 },
+    { "element": "rarity tag",        "x": 61,    "y": 983.5, "w": 72.5,  "h": 11.5 },
+    { "element": "set id",            "x": 475,   "y": 983.5, "w": 214,   "h": 11.5 }
+  ]
+}

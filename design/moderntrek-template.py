@@ -571,6 +571,293 @@ def build_location_shapes(page_id, frame_id, card, glossary):
 
 
 # ---------------------------------------------------------------------------
+# Item / Event / Policy — portrait 750x1050 "Gate" layout
+# ---------------------------------------------------------------------------
+
+def _gold_coin():
+    return make_radial_gradient_fill(0.35, 0.3, 0.35, 1.1, 1, [
+        {"color": "#ffe9a8", "offset": 0, "opacity": 1},
+        {"color": "#f4c24a", "offset": 0.55, "opacity": 1},
+        {"color": "#a3761a", "offset": 1, "opacity": 1}])
+
+
+def _parse_actions(row):
+    out = []
+    for a in [x.strip() for x in row.get("actions", "").split(";") if x.strip()]:
+        name, _, rest = a.partition(":")
+        ap, _, effect = rest.partition(":")
+        out.append({"name": name.strip(), "ap": ap.strip(), "body": effect.strip()})
+    return out
+
+
+def parse_item(row, index):
+    return {
+        "id": row["id"], "name": row["name"], "number": f"I{index + 1:02d}",
+        "set": row.get("set", ""), "rarity": (row.get("rarity") or "common").lower(),
+        "type": (row.get("type") or "ITEM").strip(),
+        "cost": (row.get("cost") or "").replace("|", " / "),
+        "equip": (row.get("equip") or "").strip(),
+        "stored": (row.get("stored") or "").strip(),
+        "actions": _parse_actions(row), "flavor": (row.get("flavor") or "").strip(),
+    }
+
+
+def parse_event(row, index):
+    return {
+        "id": row["id"], "name": row["name"], "number": f"E{index + 1:02d}",
+        "set": row.get("set", ""), "rarity": (row.get("rarity") or "common").lower(),
+        "timing": (row.get("timing") or "instant").lower().strip(),
+        "duration": (row.get("duration") or "").strip(),
+        "trigger": (row.get("trigger") or "").strip(),
+        "event_type": (row.get("event_type") or "").strip(),
+        "cost": (row.get("cost") or "").replace("|", " / "),
+        "attributes": [a.strip() for a in row.get("attributes", "").split(";") if a.strip()],
+        "text": (row.get("text") or "").strip(), "flavor": (row.get("flavor") or "").strip(),
+    }
+
+
+def parse_policy(row, index):
+    attrs = [a.strip() for a in row.get("attributes", "").split(";") if a.strip()]
+    return {
+        "id": row["id"], "name": row["name"], "number": f"P{index + 1:02d}",
+        "set": row.get("set", ""), "rarity": (row.get("rarity") or "epic").lower(),
+        "attribute": attrs[0] if attrs else "",
+        "effect": (row.get("effect") or "").strip(),
+        "seeding": (row.get("seeding_effect") or "").strip(),
+        "actions": _parse_actions(row), "flavor": (row.get("flavor") or "").strip(),
+    }
+
+
+def _mk_closures(page_id, frame_id, ch):
+    def rect(name, x, y, w, h, **kw):
+        _, c = make_rect(name, x, y, w, h, kw.pop("fills", _fill(C["card_bg"])),
+                         page_id, frame_id, frame_id, **kw)
+        ch.append(c)
+
+    def circle(name, x, y, w, h, fills, **kw):
+        _, c = make_circle(name, x, y, w, h, fills, page_id, frame_id, frame_id, **kw)
+        ch.append(c)
+
+    def text(name, x, y, w, h, s, font, size, weight="400", color=C["text"],
+             align=None, style=None, ls=None, shadow=None):
+        _, c = make_text(name, x, y, w, h, s, page_id, frame_id, frame_id,
+                         font_size=size, font_weight=weight, fill_color=color,
+                         text_align=align, font_style=style, letter_spacing=ls,
+                         shadow=shadow, **font)
+        ch.append(c)
+
+    return rect, circle, text
+
+
+# portrait Gate footer glass
+PF_L, PF_R, PF_PAD, PF_LINE = 61, 689, 16, 20
+
+
+def _portrait_footer(rect, text, rows, gap, flavor, rarity, setid):
+    """rows = [(height, render(cursor))]. Draws a bottom-anchored glass box with
+    the rows, an optional flavor line, and the divider + rarity + set-id line."""
+    flav_h = 20 if flavor else 0
+    content = sum(h for h, _ in rows) + gap * max(0, len(rows) - 1)
+    total = PF_PAD + content + gap + (flav_h + gap if flavor else 0) + PF_LINE + PF_PAD
+    gy = 1050 - 38 - total
+    rect("Footer Glass", 40, gy, 670, total, fills=_fill(C["glass"], 0.78),
+         r1=10, r2=10, r3=10, r4=10, strokes=_stroke(C["hairline"], 1))
+    cur = gy + PF_PAD
+    for h, render in rows:
+        render(cur)
+        cur += h + gap
+    if flavor:
+        text("Flavor", PF_L, cur, PF_R - PF_L, 20, f'"{flavor}"', SG, "12.5",
+             "400", C["muted"], style="italic")
+    div_y = gy + total - PF_PAD - PF_LINE + 6
+    rect("Footer Divider", PF_L, div_y, PF_R - PF_L, 1, fills=_fill(C["hairline"]))
+    text("Footer Rarity", PF_L, div_y + 7, 300, 14,
+         f"{RARITY_GEM.get(rarity, '◆')} {rarity.upper()}", JB, "9", "700",
+         C["lime"], ls=1.8)
+    text("Footer Set", PF_R - 300, div_y + 7, 300, 14, setid, JB, "9", "400",
+         C["muted"], align="right", ls=1.8)
+
+
+def _name_box(rect, text, name, box_h=86):
+    rect("Name Box", 40, 38, 574, box_h, fills=_fill(C["glass"], 0.78),
+         r1=10, r2=10, r3=10, r4=10, strokes=_stroke(C["hairline"], 1))
+    text("Card Name", 59, 50, 536, 40, name, SG, "32", "700", C["text"], ls=-0.32)
+
+
+def _cost_box(rect, circle, text, cost, box_h=86, coin_cy=80):
+    rect("Cost Box", 626, 38, 84, box_h, fills=_fill(C["glass"], 0.78),
+         r1=10, r2=10, r3=10, r4=10, strokes=_stroke(C["hairline"], 1))
+    circle("Cost Coin", 637, coin_cy - 31, 62, 62, [_gold_coin()],
+           strokes=_stroke(C["coin_border"], 2), shadow=[make_shadow("#f4c24a", 16, 0.3)])
+    circle("Cost Ring", 640, coin_cy - 28, 56, 56, [], strokes=_stroke("#ffe9a8", 3, 0.33))
+    text("Cost Value", 626, coin_cy - 15, 84, 36, cost, SG, "28", "800",
+         C["coin_text"], align="center")
+
+
+def _wrapc(s, w, fs=15):
+    return max(1, len(_wrap_lines(s, w, fs, CHAR_ADVANCE)))
+
+
+def build_item_shapes(page_id, frame_id, card, glossary):
+    ch = []
+    rect, circle, text = _mk_closures(page_id, frame_id, ch)
+    rect("Card Background", 0, 0, 750, 1050, fills=_fill(C["card_bg"]), r1=14, r2=14, r3=14, r4=14)
+    text("Art Label", 285, 640, 180, 16, "ITEM ART", JB, "10", "400", C["muted"], align="center", ls=3)
+    _name_box(rect, text, card["name"])
+    text("Type Label", 59, 94, 260, 14, card["type"].upper(), JB, "11", "600", C["muted"], ls=2.4)
+    _cost_box(rect, circle, text, card["cost"])
+
+    def mode(idx, label, color, body):
+        n = _wrapc(body, 560)
+        h = max(34, 18 + n * 22)
+
+        def render(cur):
+            rect(f"Mode {idx} Box", 61, cur, 34, 34, fills=_fill("#000000", 0.25),
+                 r1=8, r2=8, r3=8, r4=8, strokes=_stroke(color, 1.5))
+            text(f"Mode {idx} Label", 106, cur, 400, 13, label, JB, "10", "700", color, ls=2.4)
+            text(f"Mode {idx} Body", 106, cur + 18, 560, n * 22, body, SG, "15", "400", C["text"])
+        return (h, render)
+
+    def action(idx, a):
+        pill = f"{a['name'].upper()} · {a['ap']} AP"
+        pw = int(len(pill) * 12 * 0.62) + 20
+        n = _wrapc(a["body"], PF_R - PF_L - pw - 12, 16) if a["body"] else 1
+        h = max(23, n * 24)
+
+        def render(cur):
+            rect(f"Act {idx} Pill", 61, cur, pw, 23, fills=_fill(C["lime"]), r1=3, r2=3, r3=3, r4=3)
+            text(f"Act {idx} Tag", 61, cur + 5, pw, 15, pill, JB, "12", "800", C["card_bg"],
+                 align="center", ls=1.2)
+            if a["body"]:
+                text(f"Act {idx} Body", 61 + pw + 12, cur, PF_R - 61 - pw - 12, n * 24,
+                     a["body"], SG, "16", "400", C["text"])
+        return (h, render)
+
+    rows = []
+    if card["equip"]:
+        rows.append(mode(0, "EQUIP — ON A UNIT", C["lime"], card["equip"]))
+    if card["stored"]:
+        rows.append(mode(1, "STORED — AT A LOCATION", C["muted"], card["stored"]))
+    for i, a in enumerate(card["actions"]):
+        rows.append(action(i, a))
+    setid = f"ITEM · {card['type'].upper()} // {card['set'].upper()} · {card['number']}"
+    _portrait_footer(rect, text, rows, 13, card["flavor"], card["rarity"], setid)
+    return ch
+
+
+def build_event_shapes(page_id, frame_id, card, glossary):
+    ch = []
+    rect, circle, text = _mk_closures(page_id, frame_id, ch)
+    timing = card["timing"]
+    accent = {"instant": C["lime"], "passive": C["muted"], "trap": "#ff6b6b"}.get(timing, C["lime"])
+
+    rect("Card Background", 0, 0, 750, 1050, fills=_fill(C["card_bg"]), r1=14, r2=14, r3=14, r4=14)
+    rect("Timing Top Edge", 0, 0, 750, 12, fills=_fill(accent))     # hazard stripes -> solid for v1
+    text("Art Label", 285, 651, 180, 16, "EVENT ART", JB, "10", "400", C["muted"], align="center", ls=3)
+    _name_box(rect, text, card["name"], box_h=98)
+    _cost_box(rect, circle, text, card["cost"], box_h=98, coin_cy=87)
+
+    # timing badge
+    badge = timing.upper()
+    if timing == "passive" and card["duration"]:
+        badge = f"PASSIVE · {card['duration']} TURNS"
+    bw = int(len(badge) * 11 * 0.62) + 20
+    if timing == "trap":
+        rect("Timing Badge", 59, 92, bw, 28, fills=[], r1=4, r2=4, r3=4, r4=4, strokes=_stroke(accent, 2))
+        text("Timing Label", 59, 96, bw, 18, badge, JB, "11", "800", accent, align="center", ls=2.2)
+    else:
+        rect("Timing Badge", 59, 92, bw, 28, fills=_fill(accent), r1=4, r2=4, r3=4, r4=4)
+        text("Timing Label", 59, 96, bw, 18, badge, JB, "11", "800", C["card_bg"], align="center", ls=2.2)
+
+    rows = []
+    if timing == "trap" and card["trigger"]:
+        trig = card["trigger"].replace("_", " ").strip().capitalize()
+        n = _wrapc(trig, PF_R - 127, 14)
+        h = max(16, n * 20)
+
+        def r_trig(cur):
+            text("Trigger Label", 61, cur, 66, 14, "TRIGGER", JB, "10", "700", accent, ls=2.2)
+            text("Trigger Body", 127, cur - 2, PF_R - 127, n * 20, trig, SG, "14", "400",
+                 C["text"], style="italic")
+        rows.append((h, r_trig))
+    if card["text"]:
+        n = _wrapc(card["text"], PF_R - PF_L, 17)
+        h = n * 25
+
+        def r_rules(cur, _n=n, _h=h):
+            text("Rules Text", 61, cur, PF_R - PF_L, _h, card["text"], SG, "16", "400", C["text"])
+        rows.append((h, r_rules))
+    if card["attributes"]:
+        def r_attrs(cur):
+            cx = 61
+            for j, at in enumerate(card["attributes"]):
+                w = int(len(at) * 11 * 0.62) + 24
+                rect(f"Attr Chip {j}", cx, cur, w, 27, fills=_fill("#000000", 0.25),
+                     r1=4, r2=4, r3=4, r4=4, strokes=_stroke(C["lime"], 1, 0.4))
+                text(f"Attr {j}", cx, cur + 6, w, 15, at.upper(), JB, "11", "600",
+                     C["text"], align="center", ls=1.6)
+                cx += w + 8
+        rows.append((27, r_attrs))
+
+    setid = f"EVENT · {timing.upper()} // {card['set'].upper()} · {card['number']}"
+    _portrait_footer(rect, text, rows, 10, card["flavor"], card["rarity"], setid)
+    return ch
+
+
+def build_policy_shapes(page_id, frame_id, card, glossary):
+    ch = []
+    rect, circle, text = _mk_closures(page_id, frame_id, ch)
+    rect("Card Background", 0, 0, 750, 1050, fills=_fill(C["card_bg"]), r1=14, r2=14, r3=14, r4=14)
+    text("Art Label", 285, 609, 180, 16, "POLICY ART", JB, "11", "400", C["muted"], align="center", ls=3)
+    _name_box(rect, text, card["name"], box_h=87)
+    subtitle = "POLICY" + (f" · {card['attribute'].upper()}" if card["attribute"] else "")
+    text("Subtitle", 59, 94, 538, 16, subtitle, JB, "13", "600", C["muted"], ls=3.4)
+
+    # attribute badge (no cost coin on policies)
+    rect("Attr Badge Box", 628, 38, 82, 87, fills=_fill(C["glass"], 0.78),
+         r1=10, r2=10, r3=10, r4=10, strokes=_stroke(C["hairline"], 1))
+    circle("Attr Badge", 639, 51, 60, 60, [_fill("#000000", 0.3)[0]], strokes=_stroke(C["lime"], 2))
+    text("Attr Badge Label", 628, 70, 82, 18,
+         (card["attribute"].upper() if card["attribute"] else "ANY"), JB, "9", "700",
+         C["lime"], align="center", ls=1.4)
+
+    def labeled(idx, label, color, body):
+        n = _wrapc(body, 513, 18)
+        h = max(20, n * 27)
+
+        def render(cur):
+            text(f"LB {idx} Label", 61, cur + 3, 104, 18, label, JB, "12", "700", color, ls=2.2)
+            text(f"LB {idx} Body", 176, cur, 513, n * 27, body, SG, "18", "400", C["text"])
+        return (h, render)
+
+    def action(idx, a):
+        pill = f"{a['name'].upper()} · {a['ap']} AP"
+        pw = int(len(pill) * 12 * 0.62) + 20
+        n = _wrapc(a["body"], PF_R - 246, 17) if a["body"] else 1
+        h = max(24, n * 25)
+
+        def render(cur):
+            rect(f"PAct {idx} Pill", 61, cur, pw, 24, fills=_fill(C["lime"]), r1=3, r2=3, r3=3, r4=3)
+            text(f"PAct {idx} Tag", 61, cur + 5, pw, 15, pill, JB, "12", "800", C["card_bg"],
+                 align="center", ls=1.2)
+            if a["body"]:
+                text(f"PAct {idx} Body", 246, cur, PF_R - 246, n * 25, a["body"], SG, "17",
+                     "400", C["text"])
+        return (h, render)
+
+    rows = []
+    if card["effect"]:
+        rows.append(labeled(0, "DOCTRINE", C["lime"], card["effect"]))
+    if card["seeding"]:
+        rows.append(labeled(1, "SEEDING", C["muted"], card["seeding"]))
+    for i, a in enumerate(card["actions"]):
+        rows.append(action(i, a))
+    setid = f"POLICY // {card['set'].upper()} · {card['number']}"
+    _portrait_footer(rect, text, rows, 12, card["flavor"], card["rarity"], setid)
+    return ch
+
+
+# ---------------------------------------------------------------------------
 # Card-type dispatch
 # ---------------------------------------------------------------------------
 
@@ -579,8 +866,15 @@ TYPES = {
                  "parse": parse_card, "build": build_shapes},
     "location": {"frame": "Location Card MT", "w": 750, "h": 750,
                  "parse": parse_location, "build": build_location_shapes},
+    "item":     {"frame": "Item Card MT", "w": 750, "h": 1050,
+                 "parse": parse_item, "build": build_item_shapes},
+    "event":    {"frame": "Event Card MT", "w": 750, "h": 1050,
+                 "parse": parse_event, "build": build_event_shapes},
+    "policy":   {"frame": "Policy Card MT", "w": 750, "h": 1050,
+                 "parse": parse_policy, "build": build_policy_shapes},
 }
-FILENAME_TYPE = {"units": "unit", "locations": "location"}
+FILENAME_TYPE = {"units": "unit", "locations": "location", "items": "item",
+                 "events": "event", "policies": "policy"}
 
 
 # ---------------------------------------------------------------------------

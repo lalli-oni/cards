@@ -1,0 +1,203 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="750" height="1050" viewBox="0 0 750 1050" font-family="&#39;Space Grotesk&#39;, system-ui, sans-serif">
+  
+  <defs>
+    
+    <linearGradient id="sideLegendary" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#8a6515"></stop>
+      <stop offset="1" stop-color="#f4c24a"></stop>
+    </linearGradient>
+
+    
+    <linearGradient id="headerBg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0a1220" stop-opacity="0.92"></stop>
+      <stop offset="1" stop-color="#0a1220" stop-opacity="0.7"></stop>
+    </linearGradient>
+
+    
+    <radialGradient id="artBg" cx="0.5" cy="0.4" rx="0.62" ry="0.62">
+      <stop offset="0" stop-color="#1c2a48"></stop>
+      <stop offset="0.78" stop-color="#0a1220"></stop>
+    </radialGradient>
+
+    
+    <radialGradient id="costCoin" cx="0.35" cy="0.3" r="0.8">
+      <stop offset="0" stop-color="#ffe9a8"></stop>
+      <stop offset="0.55" stop-color="#f4c24a"></stop>
+      <stop offset="1" stop-color="#a3761a"></stop>
+    </radialGradient>
+
+    
+    <radialGradient id="orbStr" cx="0.3" cy="0.3" r="0.85">
+      <stop offset="0" stop-color="#ffffff"></stop>
+      <stop offset="0.55" stop-color="#ff6b6b"></stop>
+      <stop offset="1" stop-color="#0a1220"></stop>
+    </radialGradient>
+    <radialGradient id="orbCun" cx="0.3" cy="0.3" r="0.85">
+      <stop offset="0" stop-color="#ffffff"></stop>
+      <stop offset="0.55" stop-color="#6bb6ff"></stop>
+      <stop offset="1" stop-color="#0a1220"></stop>
+    </radialGradient>
+    <radialGradient id="orbCha" cx="0.3" cy="0.3" r="0.85">
+      <stop offset="0" stop-color="#ffffff"></stop>
+      <stop offset="0.55" stop-color="#c8f562"></stop>
+      <stop offset="1" stop-color="#0a1220"></stop>
+    </radialGradient>
+
+    
+    <pattern id="artGrid" width="38" height="38" patternUnits="userSpaceOnUse">
+      <path d="M 0 0 H 38" stroke="#c8f562" stroke-opacity="0.06" stroke-width="1"></path>
+      <path d="M 0 0 V 38" stroke="#c8f562" stroke-opacity="0.06" stroke-width="1"></path>
+    </pattern>
+    
+    <radialGradient id="gridFadeGrad" cx="375" cy="198" r="330" gradientUnits="userSpaceOnUse">
+      <stop offset="0.2" stop-color="#ffffff"></stop>
+      <stop offset="0.75" stop-color="#ffffff" stop-opacity="0"></stop>
+    </radialGradient>
+    <mask id="gridFade">
+      <rect x="0" y="0" width="750" height="440" fill="url(#gridFadeGrad)"></rect>
+    </mask>
+
+    
+    <filter id="glowCost" x="-60%" y="-60%" width="220%" height="220%">
+      <feDropShadow dx="0" dy="0" stdDeviation="10" flood-color="#f4c24a" flood-opacity="0.33"></feDropShadow>
+    </filter>
+    <filter id="glowLime" x="-60%" y="-60%" width="220%" height="220%">
+      <feDropShadow dx="0" dy="0" stdDeviation="10" flood-color="#c8f562" flood-opacity="0.27"></feDropShadow>
+    </filter>
+    <filter id="glowBlueText" x="-60%" y="-60%" width="220%" height="220%">
+      <feDropShadow dx="0" dy="0" stdDeviation="10" flood-color="#8fb0ff" flood-opacity="0.27"></feDropShadow>
+    </filter>
+    <filter id="glowPillLime" x="-60%" y="-60%" width="220%" height="220%">
+      <feDropShadow dx="0" dy="0" stdDeviation="5" flood-color="#c8f562" flood-opacity="0.33"></feDropShadow>
+    </filter>
+    <filter id="glowOrbStr" x="-120%" y="-120%" width="340%" height="340%">
+      <feDropShadow dx="0" dy="0" stdDeviation="5" flood-color="#ff3636" flood-opacity="0.67"></feDropShadow>
+    </filter>
+    <filter id="glowOrbCun" x="-120%" y="-120%" width="340%" height="340%">
+      <feDropShadow dx="0" dy="0" stdDeviation="5" flood-color="#2e7bd6" flood-opacity="0.67"></feDropShadow>
+    </filter>
+    <filter id="glowOrbCha" x="-120%" y="-120%" width="340%" height="340%">
+      <feDropShadow dx="0" dy="0" stdDeviation="5" flood-color="#c8f562" flood-opacity="0.67"></feDropShadow>
+    </filter>
+    <filter id="glowValStr" x="-60%" y="-60%" width="220%" height="220%">
+      <feDropShadow dx="0" dy="0" stdDeviation="6" flood-color="#ff3636" flood-opacity="0.53"></feDropShadow>
+    </filter>
+    <filter id="glowValCun" x="-60%" y="-60%" width="220%" height="220%">
+      <feDropShadow dx="0" dy="0" stdDeviation="6" flood-color="#2e7bd6" flood-opacity="0.53"></feDropShadow>
+    </filter>
+    <filter id="glowValCha" x="-60%" y="-60%" width="220%" height="220%">
+      <feDropShadow dx="0" dy="0" stdDeviation="6" flood-color="#c8f562" flood-opacity="0.53"></feDropShadow>
+    </filter>
+
+    <clipPath id="cardClip">
+      <rect width="750" height="1050" rx="14" ry="14"></rect>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#cardClip)">
+    
+    <rect width="750" height="1050" fill="#0a1220"></rect>
+
+    
+    <rect x="0" y="0" width="750" height="440" fill="url(#artBg)"></rect>
+    <rect x="0" y="0" width="750" height="440" fill="url(#artGrid)" mask="url(#gridFade)"></rect>
+    
+    <svg x="135" y="61.6" width="480" height="325.6" viewBox="0 0 400 320" opacity="0.9">
+      <g fill="#e6ecf6">
+        <path d="M 200 40 L 240 60 Q 260 80 258 110 L 252 140 Q 260 155 255 175 Q 270 200 265 230 L 250 280 L 150 280 L 135 230 Q 130 200 145 175 Q 140 155 148 140 L 142 110 Q 140 80 160 60 Z"></path>
+        <path d="M 200 40 L 200 18" stroke="#e6ecf6" stroke-width="6" fill="none"></path>
+        <circle cx="200" cy="14" r="6"></circle>
+      </g>
+    </svg>
+
+    
+    <rect x="0" y="0" width="750" height="76" fill="url(#headerBg)"></rect>
+    <line x1="0" y1="76" x2="750" y2="76" stroke="#c8f562" stroke-opacity="0.2" stroke-width="1"></line>
+
+    
+    <rect x="26" y="27" width="44" height="22" rx="2" fill="none" stroke="#c8f562" stroke-opacity="0.4" stroke-width="1"></rect>
+    <text x="48" y="42" text-anchor="middle" font-family="&#39;JetBrains Mono&#39;, monospace" font-size="10" letter-spacing="2" fill="#c8f562">005</text>
+
+    
+    <text x="84" y="48" font-size="30" font-weight="600" letter-spacing="-0.3" fill="#e6ecf6">Genghis Khan</text>
+
+    
+    <circle cx="698" cy="38" r="30" fill="url(#costCoin)" stroke="#8a6522" stroke-width="2" filter="url(#glowCost)"></circle>
+    <circle cx="698" cy="38" r="27" fill="none" stroke="#ffe9a8" stroke-opacity="0.33" stroke-width="3"></circle>
+    <text x="698" y="48" text-anchor="middle" font-size="28" font-weight="800" fill="#3a2205">7</text>
+
+    
+    <rect x="0" y="440" width="750" height="62" fill="#060c18"></rect>
+    <line x1="0" y1="440" x2="750" y2="440" stroke="#c8f562" stroke-opacity="0.2" stroke-width="1"></line>
+    <line x1="0" y1="502" x2="750" y2="502" stroke="#1a2540" stroke-width="1"></line>
+    <text x="26" y="475" font-family="&#39;JetBrains Mono&#39;, monospace" font-size="10" letter-spacing="2" fill="#7a8aa6">CLASS</text>
+
+    
+    <rect x="84" y="455" width="118" height="32" rx="4" fill="#0f1a2e" stroke="#c8f562" stroke-opacity="0.27" stroke-width="1"></rect>
+    <svg x="96" y="462" width="18" height="18" viewBox="0 0 24 24">
+      <path d="M4 20 L14 10 M8 16 L4 20 L8 20 M14 10 L20 4 L20 8 L14 10 Z" stroke="#c8f562" stroke-width="1.8" fill="none" stroke-linejoin="round"></path>
+    </svg>
+    <text x="122" y="476" font-size="13" font-weight="500" letter-spacing="1.8" fill="#e6ecf6">WARRIOR</text>
+
+    
+    <rect x="216" y="455" width="146" height="32" rx="4" fill="#0f1a2e" stroke="#c8f562" stroke-opacity="0.27" stroke-width="1"></rect>
+    <svg x="228" y="462" width="18" height="18" viewBox="0 0 24 24">
+      <path d="M12 3 L20 8 V12 Q20 18 12 21 Q4 18 4 12 V8 Z" stroke="#c8f562" stroke-width="1.8" fill="none" stroke-linejoin="round"></path>
+      <circle cx="12" cy="12" r="2.5" fill="#c8f562"></circle>
+    </svg>
+    <text x="254" y="476" font-size="13" font-weight="500" letter-spacing="1.8" fill="#e6ecf6">POLITICIAN</text>
+
+    
+    <rect x="0" y="502" width="750" height="410" fill="#0f1a2e"></rect>
+
+    
+    <rect x="26" y="520" width="126" height="25" rx="2" fill="#c8f562"></rect>
+    <text x="89" y="537" text-anchor="middle" font-size="11" font-weight="700" letter-spacing="2" fill="#0a1220">COMMANDER 1</text>
+    <text x="162" y="537" font-size="12.5" font-style="italic" fill="#7a8aa6">Friendly units at this location get +1 Strength.</text>
+
+    
+    <rect x="26" y="555" width="698" height="66" rx="6" fill="#0a1220" fill-opacity="0.67" stroke="#c8f562" stroke-opacity="0.27" stroke-width="1"></rect>
+    <text x="36" y="585" font-size="22" font-weight="700" letter-spacing="-0.22" fill="#c8f562" filter="url(#glowLime)">Conquer</text>
+    <rect x="140" y="568" width="47" height="21" rx="3" fill="#c8f562" filter="url(#glowPillLime)"></rect>
+    <text x="163" y="583" text-anchor="middle" font-family="&#39;JetBrains Mono&#39;, monospace" font-size="11" font-weight="800" letter-spacing="1.5" fill="#0a1220">3 AP</text>
+    <text x="36" y="610" font-size="14" fill="#e6ecf6">Raze target location. Place it in your HQ instead of discarding. Mission VP is not awarded.</text>
+
+    
+    <rect x="26" y="635" width="698" height="66" rx="6" fill="none" stroke="#8fb0ff" stroke-opacity="0.4" stroke-width="1.5" stroke-dasharray="1.5 3"></rect>
+    <text x="36" y="665" font-size="22" font-weight="700" letter-spacing="-0.22" fill="#8fb0ff" filter="url(#glowBlueText)">Horselord</text>
+    <rect x="152" y="648" width="72" height="21" rx="3" fill="none" stroke="#8fb0ff" stroke-opacity="0.53" stroke-width="1"></rect>
+    <text x="188" y="663" text-anchor="middle" font-family="&#39;JetBrains Mono&#39;, monospace" font-size="11" font-weight="800" letter-spacing="1.5" fill="#8fb0ff">PASSIVE</text>
+    <text x="36" y="690" font-size="14" fill="#e6ecf6">Your Equip actions involving a Mount cost 0 AP.</text>
+
+    
+    <line x1="26" y1="869" x2="724" y2="869" stroke="#c8f562" stroke-opacity="0.13" stroke-width="1"></line>
+    <text x="26" y="890" font-size="12" font-style="italic" fill="#7a8aa6">&#34;He did not build. He took.&#34;</text>
+
+    
+    <rect x="0" y="938" width="750" height="74" fill="#060c18"></rect>
+    <line x1="0" y1="938" x2="750" y2="938" stroke="#c8f562" stroke-opacity="0.27" stroke-width="1"></line>
+    <line x1="0" y1="1012" x2="750" y2="1012" stroke="#c8f562" stroke-opacity="0.13" stroke-width="1"></line>
+    <line x1="250" y1="938" x2="250" y2="1012" stroke="#1a2540" stroke-width="1"></line>
+    <line x1="500" y1="938" x2="500" y2="1012" stroke="#1a2540" stroke-width="1"></line>
+
+    
+    <circle cx="100" cy="975" r="7" fill="url(#orbStr)" filter="url(#glowOrbStr)"></circle>
+    <text x="121" y="961" font-family="&#39;JetBrains Mono&#39;, monospace" font-size="10" letter-spacing="2" fill="#ff6b6b">STR</text>
+    <text x="121" y="998" font-size="36" font-weight="700" fill="#ffffff" filter="url(#glowValStr)">8</text>
+    
+    <circle cx="350" cy="975" r="7" fill="url(#orbCun)" filter="url(#glowOrbCun)"></circle>
+    <text x="371" y="961" font-family="&#39;JetBrains Mono&#39;, monospace" font-size="10" letter-spacing="2" fill="#6bb6ff">CUN</text>
+    <text x="371" y="998" font-size="36" font-weight="700" fill="#ffffff" filter="url(#glowValCun)">7</text>
+    
+    <circle cx="600" cy="975" r="7" fill="url(#orbCha)" filter="url(#glowOrbCha)"></circle>
+    <text x="621" y="961" font-family="&#39;JetBrains Mono&#39;, monospace" font-size="10" letter-spacing="2" fill="#c8f562">CHA</text>
+    <text x="621" y="998" font-size="36" font-weight="700" fill="#ffffff" filter="url(#glowValCha)">6</text>
+
+    
+    <text x="26" y="1034" font-family="&#39;JetBrains Mono&#39;, monospace" font-size="9" font-weight="700" letter-spacing="1.8" fill="#c8f562">◆ LEGENDARY</text>
+    <text x="724" y="1034" text-anchor="end" font-family="&#39;JetBrains Mono&#39;, monospace" font-size="9" letter-spacing="1.8" fill="#7a8aa6">UNIT // ALPHA-1 · 005</text>
+
+    
+    <rect x="0" y="0" width="6" height="1050" fill="url(#sideLegendary)"></rect>
+  </g>
+</svg>

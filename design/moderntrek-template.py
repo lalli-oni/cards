@@ -63,9 +63,13 @@ C = {
     "str": "#ff6b6b", "str_glow": "#ff3636",
     "cun": "#6bb6ff", "cun_glow": "#2e7bd6",
     "cha": "#c8f562", "cha_glow": "#c8f562",
+    "glass": "#060c18",       # header/footer glass boxes (locations)
+    "edge_blocked": "#ff5a4e",
+    "edge_open": "#7a8aa6",
 }
 
-# Rarity -> (side-bar gradient start, bright end / footer accent)
+# Rarity -> (side-bar gradient start, bright end). Footer rarity text is always
+# lime; rarity is conveyed by the gem symbol (+ the unit side-bar gradient).
 RARITY = {
     "legendary": ("#8a6515", "#f4c24a"),
     "epic":      ("#5b2a8a", "#b07cf1"),
@@ -73,6 +77,7 @@ RARITY = {
     "uncommon":  ("#1e4a7a", "#4a8fd1"),
     "common":    ("#4a5263", "#6c7486"),
 }
+RARITY_GEM = {"common": "●", "uncommon": "◇", "rare": "◈", "epic": "◆", "legendary": "★"}
 
 
 def _fill(color, opacity=1):
@@ -280,8 +285,9 @@ def build_shapes(page_id, frame_id, card, glossary):
              shadow=[make_shadow(glow, 12, 0.53)])
 
     # 5. Footer + rarity side bar
-    text("Footer Rarity", 26, 1019, 300, 14, f"◆ {rarity.upper()}", JB, "9",
-         "700", r_bright, ls=1.8)
+    text("Footer Rarity", 26, 1019, 300, 14,
+         f"{RARITY_GEM.get(rarity, '◆')} {rarity.upper()}", JB, "9", "700",
+         C["lime"], ls=1.8)
     text("Footer Set", 424, 1019, 300, 14,
          f"UNIT // {card['set'].upper()} · {card['number']}", JB, "9", "400",
          C["muted"], align="right", ls=1.8)
@@ -349,6 +355,235 @@ def _render_block(rect, text, i, b, cursor):
 
 
 # ---------------------------------------------------------------------------
+# Locations (square 750x750; compass edges, VP coin, mission/passive/action)
+# ---------------------------------------------------------------------------
+
+def parse_location(row, index):
+    def split(field):
+        return [x.strip() for x in row.get(field, "").split(";") if x.strip()]
+
+    reqs, vp = [], None
+    mission = row.get("mission", "").strip()
+    if mission:
+        req_part, _, vp_part = mission.partition(">")
+        vp = vp_part.strip() or None
+        for r in req_part.split(";"):
+            r = r.strip()
+            if r:
+                key, _, n = r.rpartition("_")
+                reqs.append((key.upper(), n))
+
+    actions = []
+    for a in split("actions"):
+        name, _, rest = a.partition(":")
+        ap, _, effect = rest.partition(":")
+        actions.append({"name": name.strip(), "ap": ap.strip(), "effect": effect.strip()})
+
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "number": f"L{index + 1:02d}",
+        "set": row.get("set", ""),
+        "rarity": (row.get("rarity") or "common").lower(),
+        "location_type": (row.get("location_type") or "").strip(),
+        "reqs": reqs,
+        "vp": vp,
+        "passive": (row.get("passive") or "").strip(),
+        "edges": [e.strip().upper() for e in row.get("edges", "").split(";") if e.strip()],
+        "actions": actions,
+        "text": (row.get("text") or "").strip(),
+        "flavor": (row.get("flavor") or "").strip(),
+    }
+
+
+# footer-glass layout
+GL_X, GL_W = 40, 670
+GL_L, GL_R = 59, 691           # content left / right
+GL_PAD_T, GL_PAD_B, GL_GAP = 15, 15, 11
+GL_LINE_H = 20                 # rarity/set-id line
+LOC_BODY_FS, LOC_BODY_LH = 14, 20
+
+
+def _draw_edge(rect, text, side, blocked):
+    """One compass edge. Blocked = red bar + plate; open = grey line with a gate gap."""
+    red, grey = C["edge_blocked"], C["edge_open"]
+    horiz = side in ("N", "S")
+    pos = 9 if side in ("N", "W") else 741   # centerline, 9px inset
+
+    if horiz:
+        if blocked:
+            rect(f"Edge {side}", 9, pos - 7, 732, 14, fills=_fill(red))
+            py = -0.5 if side == "N" else 731.5
+            rect(f"Edge {side} Plate", 360, py, 30, 19, fills=_fill(red), r1=2, r2=2, r3=2, r4=2)
+            text(f"Edge {side} L", 360, pos - 9, 30, 16, side, JB, "13", "700",
+                 C["card_bg"], align="center", ls=1)
+        else:
+            rect(f"Edge {side} A", 9, pos - 1, 296, 2, fills=_fill(grey, 0.4))
+            rect(f"Edge {side} B", 445, pos - 1, 296, 2, fills=_fill(grey, 0.4))
+            rect(f"Edge {side} T1", 304, pos - 7, 2, 14, fills=_fill(grey, 0.4))
+            rect(f"Edge {side} T2", 444, pos - 7, 2, 14, fills=_fill(grey, 0.4))
+            text(f"Edge {side} L", 360, pos - 9, 30, 16, side, JB, "13", "700",
+                 grey, align="center", ls=1)
+    else:
+        if blocked:
+            rect(f"Edge {side}", pos - 7, 9, 14, 732, fills=_fill(red))
+            rect(f"Edge {side} Plate", pos - 9, 360, 19, 30, fills=_fill(red), r1=2, r2=2, r3=2, r4=2)
+            text(f"Edge {side} L", pos - 15, 366, 30, 16, side, JB, "13", "700",
+                 C["card_bg"], align="center", ls=1)
+        else:
+            rect(f"Edge {side} A", pos - 1, 9, 2, 296, fills=_fill(grey, 0.4))
+            rect(f"Edge {side} B", pos - 1, 445, 2, 296, fills=_fill(grey, 0.4))
+            rect(f"Edge {side} T1", pos - 7, 304, 14, 2, fills=_fill(grey, 0.4))
+            rect(f"Edge {side} T2", pos - 7, 444, 14, 2, fills=_fill(grey, 0.4))
+            text(f"Edge {side} L", pos - 15, 366, 30, 16, side, JB, "13", "700",
+                 grey, align="center", ls=1)
+
+
+def _loc_rows(card):
+    """Footer rows [(kind, data, height)] in order: mission, passive, action."""
+    rows = []
+    if card["reqs"]:
+        rows.append(("mission", card, 31))
+    if card["passive"]:
+        n = max(1, len(_wrap_lines(card["passive"], 560, LOC_BODY_FS, CHAR_ADVANCE)))
+        rows.append(("passive", card["passive"], n * LOC_BODY_LH))
+    if card["actions"]:
+        a = card["actions"][0]
+        pill = f"{a['name'].upper()} · {a['ap']} AP"
+        pill_w = int(len(pill) * 10 * 0.62) + 14
+        body = card["text"]
+        n = max(1, len(_wrap_lines(body, GL_R - GL_L - pill_w - 12, LOC_BODY_FS, CHAR_ADVANCE))) if body else 1
+        rows.append(("action", (pill, pill_w, body), n * LOC_BODY_LH))
+    return rows
+
+
+def build_location_shapes(page_id, frame_id, card, glossary):
+    ch = []
+
+    def rect(name, x, y, w, h, **kw):
+        _, c = make_rect(name, x, y, w, h, kw.pop("fills", _fill(C["card_bg"])),
+                         page_id, frame_id, frame_id, **kw)
+        ch.append(c)
+
+    def circle(name, x, y, w, h, fills, **kw):
+        _, c = make_circle(name, x, y, w, h, fills, page_id, frame_id, frame_id, **kw)
+        ch.append(c)
+
+    def text(name, x, y, w, h, s, font, size, weight="400", color=C["text"],
+             align=None, style=None, ls=None, shadow=None):
+        _, c = make_text(name, x, y, w, h, s, page_id, frame_id, frame_id,
+                         font_size=size, font_weight=weight, fill_color=color,
+                         text_align=align, font_style=style, letter_spacing=ls,
+                         shadow=shadow, **font)
+        ch.append(c)
+
+    rarity = card["rarity"]
+
+    # 1. Card background (hatch texture dropped for v1)
+    rect("Card Background", 0, 0, 750, 750, fills=_fill(C["card_bg"]),
+         r1=14, r2=14, r3=14, r4=14)
+
+    # 2. Art placeholder label (type-glyph watermark dropped — icon asset, #204)
+    text("Art Label", 285, 414, 180, 16, "LOCATION ART", JB, "10", "400",
+         C["muted"], align="center", ls=3)
+
+    # 3. Compass edges (blocked from `edges`; the rest open)
+    for side in ("N", "S", "W", "E"):
+        _draw_edge(rect, text, side, side in card["edges"])
+
+    # 4. Header: name/type box + (mission) VP box
+    rect("Name Box", 40, 34, 572, 86, fills=_fill(C["glass"], 0.78),
+         r1=10, r2=10, r3=10, r4=10, strokes=_stroke(C["hairline"], 1))
+    text("Card Name", 59, 46, 534, 40, card["name"], SG, "30", "700", C["text"], ls=-0.3)
+    if card["location_type"]:
+        # icon slot deferred (#204); label sits at the content edge for now
+        text("Type Label", 59, 86, 300, 16, card["location_type"].upper(), JB,
+             "11", "600", C["muted"], ls=2.4)
+
+    if card["vp"]:
+        rect("VP Box", 624, 34, 86, 86, fills=_fill(C["glass"], 0.78),
+             r1=10, r2=10, r3=10, r4=10, strokes=_stroke(C["hairline"], 1))
+        coin = make_radial_gradient_fill(0.35, 0.3, 0.35, 1.1, 1, [
+            {"color": "#ffe9a8", "offset": 0, "opacity": 1},
+            {"color": "#f4c24a", "offset": 0.55, "opacity": 1},
+            {"color": "#a3761a", "offset": 1, "opacity": 1}])
+        circle("VP Coin", 635, 45, 64, 64, [coin], strokes=_stroke(C["coin_border"], 2),
+               shadow=[make_shadow("#f4c24a", 16, 0.3)])
+        circle("VP Ring", 638, 48, 58, 58, [], strokes=_stroke("#ffe9a8", 3, 0.33))
+        text("VP Number", 635, 56, 64, 34, card["vp"], SG, "26", "800", C["coin_text"],
+             align="center")
+        text("VP Label", 635, 87, 64, 12, "VP", JB, "8", "700", C["coin_text"],
+             align="center", ls=1.8)
+
+    # 5. Footer glass — content-driven height, bottom-anchored
+    rows = _loc_rows(card)
+    content_h = sum(h for _, _, h in rows) + GL_GAP * max(0, len(rows) - 1)
+    total_h = GL_PAD_T + content_h + GL_GAP + GL_LINE_H + GL_PAD_B
+    glass_y = 750 - 34 - total_h
+    rect("Footer Glass", GL_X, glass_y, GL_W, total_h, fills=_fill(C["glass"], 0.78),
+         r1=10, r2=10, r3=10, r4=10, strokes=_stroke(C["hairline"], 1))
+
+    cursor = glass_y + GL_PAD_T
+    for kind, data, h in rows:
+        if kind == "mission":
+            text("Mission Label", GL_L, cursor + 8, 60, 14, "MISSION", JB, "10",
+                 "700", C["lime"], ls=2.4)
+            cx = GL_L + 70
+            for j, (key, n) in enumerate(data["reqs"]):
+                label = f"{key} ×{n}"
+                w = int(len(label) * 12 * 0.62) + 20
+                rect(f"Req Chip {j}", cx, cursor, w, 30, fills=_fill("#000000", 0.25),
+                     r1=4, r2=4, r3=4, r4=4, strokes=_stroke(C["lime"], 1.5))
+                text(f"Req {j}", cx, cursor + 7, w, 16, label, JB, "12", "700",
+                     C["text"], align="center", ls=1.2)
+                cx += w + 8
+            if data["vp"]:
+                text("Mission VP", cx + 4, cursor + 8, 130, 14, f"→ {data['vp']} VP",
+                     JB, "11", "700", C["muted"], ls=1.2)
+        elif kind == "passive":
+            text("Passive Label", GL_L, cursor, 66, 16, "PASSIVE", JB, "10", "700",
+                 C["muted"], ls=2.4)
+            text("Passive Body", GL_L + 72, cursor - 2, 560, h, data, SG, "14",
+                 "400", C["text"])
+        elif kind == "action":
+            pill, pill_w, body = data
+            rect("Action Pill", GL_L, cursor, pill_w, 17, fills=_fill(C["lime"]),
+                 r1=3, r2=3, r3=3, r4=3)
+            text("Action Tag", GL_L, cursor + 3, pill_w, 13, pill, JB, "10", "800",
+                 C["card_bg"], align="center", ls=1.2)
+            if body:
+                text("Action Body", GL_L + pill_w + 12, cursor - 2,
+                     GL_R - GL_L - pill_w - 12, h, body, SG, "14", "400", C["text"])
+        cursor += h + GL_GAP
+
+    # Footer line: divider + rarity + set id
+    div_y = glass_y + total_h - GL_PAD_B - GL_LINE_H + 6
+    rect("Footer Divider", GL_L, div_y, GL_R - GL_L, 1, fills=_fill(C["hairline"]))
+    text("Footer Rarity", GL_L, div_y + 7, 300, 14,
+         f"{RARITY_GEM.get(rarity, '◆')} {rarity.upper()}", JB, "9", "700",
+         C["lime"], ls=1.8)
+    prefix = "MISSION" if card["reqs"] else "LOCATION"
+    text("Footer Set", GL_R - 300, div_y + 7, 300, 14,
+         f"{prefix} // {card['set'].upper()} · {card['number']}", JB, "9",
+         "400", C["muted"], align="right", ls=1.8)
+
+    return ch
+
+
+# ---------------------------------------------------------------------------
+# Card-type dispatch
+# ---------------------------------------------------------------------------
+
+TYPES = {
+    "unit":     {"frame": "Unit Card MT", "w": 750, "h": 1050,
+                 "parse": parse_card, "build": build_shapes},
+    "location": {"frame": "Location Card MT", "w": 750, "h": 750,
+                 "parse": parse_location, "build": build_location_shapes},
+}
+FILENAME_TYPE = {"units": "unit", "locations": "location"}
+
+
+# ---------------------------------------------------------------------------
 # Penpot file plumbing
 # ---------------------------------------------------------------------------
 
@@ -385,10 +620,10 @@ def _persist_file_id(file_id):
         f.writelines(lines)
 
 
-def _delete_frame_changes(objects, page_id):
+def _delete_frame_changes(objects, page_id, frame_name):
     changes = []
     for oid, obj in objects.items():
-        if obj.get("name") == FRAME_NAME and obj.get("type") == "frame":
+        if obj.get("name") == frame_name and obj.get("type") == "frame":
             for cid, cobj in objects.items():
                 if cobj.get("frame-id", cobj.get("frameId")) == oid and cid != oid:
                     changes.append(del_obj_change(page_id, cid))
@@ -402,9 +637,17 @@ def main():
     file_id = os.environ.get("PENPOT_FILE_ID")
     page_id = os.environ.get("PENPOT_PAGE_ID")
 
+    stem = os.path.splitext(os.path.basename(csv_path))[0]
+    ctype = FILENAME_TYPE.get(stem)
+    if not ctype:
+        print(f"ERROR: cannot detect card type from '{stem}.csv' "
+              f"(expected one of {list(FILENAME_TYPE)})", file=sys.stderr)
+        sys.exit(1)
+    cfg = TYPES[ctype]
+
     with open(csv_path, newline="") as f:
         rows = list(csv.DictReader(f))
-    print(f"Loaded {len(rows)} units from {csv_path}")
+    print(f"Loaded {len(rows)} {ctype}s from {csv_path}")
 
     client = PenpotClient()
     print("Logging in...")
@@ -426,19 +669,19 @@ def main():
     os.makedirs(out_dir, exist_ok=True)
 
     for i, row in enumerate(rows):
-        card = parse_card(row, i)
+        card = cfg["parse"](row, i)
         file_data = client.get_file(file_id)
         if not page_id:
             page_id = file_data["data"]["pages"][0]
         objects = client.get_page_objects(file_data, page_id)
         root_id = file_data["data"]["pagesIndex"][page_id].get("id", list(objects.keys())[0])
 
-        changes = _delete_frame_changes(objects, page_id)
-        frame_id, frame_change = make_frame(FRAME_NAME, 0, 0, 750, 1050,
+        changes = _delete_frame_changes(objects, page_id, cfg["frame"])
+        frame_id, frame_change = make_frame(cfg["frame"], 0, 0, cfg["w"], cfg["h"],
                                             page_id, root_id, root_id,
                                             fills=[{"fill-color": "#0a1220", "fill-opacity": 0}])
         changes.append(frame_change)
-        changes.extend(build_shapes(page_id, frame_id, card, glossary))
+        changes.extend(cfg["build"](page_id, frame_id, card, glossary))
         client.update_file(file_id, changes, file_data["revn"], file_data.get("vern", 0))
 
         data = client.export_png(file_id, page_id, frame_id)
@@ -448,7 +691,7 @@ def main():
         print(f"[{i + 1}/{len(rows)}] {card['name']} -> {os.path.basename(out_path)} "
               f"({len(data)} bytes)")
 
-    print(f"\nDone. {len(rows)} unit PNGs in {out_dir}")
+    print(f"\nDone. {len(rows)} {ctype} PNGs in {out_dir}")
 
 
 if __name__ == "__main__":

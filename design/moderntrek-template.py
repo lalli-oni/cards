@@ -29,6 +29,7 @@ Usage:
 import csv
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.request
@@ -51,7 +52,8 @@ DEFAULT_CSV = os.path.join(SCRIPT_DIR, "..", "library", "sets", "alpha-1", "unit
 SG = {"font_family": "Space Grotesk", "font_id": "gfont-space-grotesk"}
 JB = {"font_family": "JetBrains Mono", "font_id": "gfont-jetbrains-mono"}
 
-# --- Palette (from card-spec.json) ------------------------------------------
+# --- Palette (from design/specs/*.json; the unit spec is the source of truth,
+#     one palette is shared across all five card types) -----------------------
 C = {
     "card_bg": "#0a1220",
     "panel": "#0f1a2e",
@@ -110,8 +112,13 @@ def parse_glossary():
                 cells = [c.strip() for c in line.strip().strip("|").split("|")]
                 if len(cells) == 3 and cells[0] not in ("Keyword", "") and "---" not in cells[1]:
                     glossary[cells[0].lower()] = (cells[1], cells[2])
-    except OSError:
-        pass
+    except OSError as exc:
+        print(f"WARNING: keyword glossary unreadable at {path}: {exc} — "
+              f"keyword reminders will be blank", file=sys.stderr)
+        return glossary
+    if not glossary:
+        print(f"WARNING: no keyword rows parsed from {path} (table format may have "
+              f"changed) — keyword reminders will be blank", file=sys.stderr)
     return glossary
 
 
@@ -124,7 +131,7 @@ def keyword_reminder(ability, glossary):
     entry = glossary.get(name.lower())
     reminder = ""
     if entry:
-        reminder = entry[1].replace("X", value) if value else entry[1]
+        reminder = re.sub(r"\bX\b", value, entry[1]) if value else entry[1]
     return ability.upper(), reminder
 
 
@@ -373,8 +380,11 @@ def parse_location(row, index):
         for r in req_part.split(";"):
             r = r.strip()
             if r:
-                key, _, n = r.rpartition("_")
-                reqs.append((key.upper(), n))
+                key, sep, n = r.rpartition("_")
+                if sep and n.isdigit():
+                    reqs.append((key.upper(), n))
+                else:               # no numeric suffix -> use the whole token
+                    reqs.append((r.upper(), ""))
 
     actions = []
     for a in split("actions"):
@@ -533,7 +543,7 @@ def build_location_shapes(page_id, frame_id, card, glossary):
                  "700", C["lime"], ls=2.4)
             cx = GL_L + 70
             for j, (key, n) in enumerate(data["reqs"]):
-                label = f"{key} ×{n}"
+                label = f"{key} ×{n}" if n else key
                 w = int(len(label) * 12 * 0.62) + 20
                 rect(f"Req Chip {j}", cx, cursor, w, 30, fills=_fill("#000000", 0.25),
                      r1=4, r2=4, r3=4, r4=4, strokes=_stroke(C["lime"], 1.5))
@@ -601,7 +611,8 @@ def parse_item(row, index):
         "cost": (row.get("cost") or "").replace("|", " / "),
         "equip": (row.get("equip") or "").strip(),
         "stored": (row.get("stored") or "").strip(),
-        "actions": _parse_actions(row), "flavor": (row.get("flavor") or "").strip(),
+        "actions": _parse_actions(row), "text": (row.get("text") or "").strip(),
+        "flavor": (row.get("flavor") or "").strip(),
     }
 
 
@@ -707,7 +718,8 @@ def build_item_shapes(page_id, frame_id, card, glossary):
     rect("Card Background", 0, 0, 750, 1050, fills=_fill(C["card_bg"]), r1=14, r2=14, r3=14, r4=14)
     text("Art Label", 285, 640, 180, 16, "ITEM ART", JB, "10", "400", C["muted"], align="center", ls=3)
     _name_box(rect, text, card["name"])
-    text("Type Label", 59, 94, 260, 14, card["type"].upper(), JB, "11", "600", C["muted"], ls=2.4)
+    text("Type Label", 59, 94, 260, 14, card["type"].upper().replace(";", " · "),
+         JB, "11", "600", C["muted"], ls=2.4)
     _cost_box(rect, circle, text, card["cost"])
 
     def mode(idx, label, color, body):
@@ -724,16 +736,19 @@ def build_item_shapes(page_id, frame_id, card, glossary):
     def action(idx, a):
         pill = f"{a['name'].upper()} · {a['ap']} AP"
         pw = int(len(pill) * 12 * 0.62) + 20
-        n = _wrapc(a["body"], PF_R - PF_L - pw - 12, 16) if a["body"] else 1
+        # item action effects are DSL tokens (unlike policies' prose); show the
+        # card's human `text` summary as the body instead of the raw effect.
+        body = card["text"]
+        n = _wrapc(body, PF_R - PF_L - pw - 12, 16) if body else 1
         h = max(23, n * 24)
 
         def render(cur):
             rect(f"Act {idx} Pill", 61, cur, pw, 23, fills=_fill(C["lime"]), r1=3, r2=3, r3=3, r4=3)
             text(f"Act {idx} Tag", 61, cur + 5, pw, 15, pill, JB, "12", "800", C["card_bg"],
                  align="center", ls=1.2)
-            if a["body"]:
+            if body:
                 text(f"Act {idx} Body", 61 + pw + 12, cur, PF_R - 61 - pw - 12, n * 24,
-                     a["body"], SG, "16", "400", C["text"])
+                     body, SG, "16", "400", C["text"])
         return (h, render)
 
     rows = []
@@ -743,7 +758,8 @@ def build_item_shapes(page_id, frame_id, card, glossary):
         rows.append(mode(1, "STORED — AT A LOCATION", C["muted"], card["stored"]))
     for i, a in enumerate(card["actions"]):
         rows.append(action(i, a))
-    setid = f"ITEM · {card['type'].upper()} // {card['set'].upper()} · {card['number']}"
+    setid = (f"ITEM · {card['type'].upper().replace(';', ' · ')} // "
+             f"{card['set'].upper()} · {card['number']}")
     _portrait_footer(rect, text, rows, 13, card["flavor"], card["rarity"], setid)
     return ch
 
@@ -784,7 +800,7 @@ def build_event_shapes(page_id, frame_id, card, glossary):
                  C["text"], style="italic")
         rows.append((h, r_trig))
     if card["text"]:
-        n = _wrapc(card["text"], PF_R - PF_L, 17)
+        n = _wrapc(card["text"], PF_R - PF_L, 16)
         h = n * 25
 
         def r_rules(cur, _n=n, _h=h):
@@ -836,7 +852,8 @@ def build_policy_shapes(page_id, frame_id, card, glossary):
     def action(idx, a):
         pill = f"{a['name'].upper()} · {a['ap']} AP"
         pw = int(len(pill) * 12 * 0.62) + 20
-        n = _wrapc(a["body"], PF_R - 246, 17) if a["body"] else 1
+        bx = 61 + pw + 12               # body follows the pill, not a fixed x
+        n = _wrapc(a["body"], PF_R - bx, 17) if a["body"] else 1
         h = max(24, n * 25)
 
         def render(cur):
@@ -844,7 +861,7 @@ def build_policy_shapes(page_id, frame_id, card, glossary):
             text(f"PAct {idx} Tag", 61, cur + 5, pw, 15, pill, JB, "12", "800", C["card_bg"],
                  align="center", ls=1.2)
             if a["body"]:
-                text(f"PAct {idx} Body", 246, cur, PF_R - 246, n * 25, a["body"], SG, "17",
+                text(f"PAct {idx} Body", bx, cur, PF_R - bx, n * 25, a["body"], SG, "17",
                      "400", C["text"])
         return (h, render)
 
@@ -895,7 +912,13 @@ def _try_get_file(client, file_id):
     except urllib.error.HTTPError as exc:
         if exc.code == 404:
             return None
-        raise
+        body = exc.read().decode("utf-8", errors="replace")
+        print(f"ERROR {exc.code} from get-file: {body[:400]}", file=sys.stderr)
+        sys.exit(1)
+    except urllib.error.URLError as exc:
+        print(f"Connection error reaching get-file: {exc.reason}\n"
+              f"Is Penpot running? (python3 design/preflight.py)", file=sys.stderr)
+        sys.exit(1)
 
 
 def _persist_file_id(file_id):
@@ -913,8 +936,11 @@ def _persist_file_id(file_id):
         if lines and not lines[-1].endswith("\n"):
             lines[-1] += "\n"
         lines.append(f"PENPOT_FILE_ID={file_id}\n")
-    with open(env_path, "w") as f:
+    # write atomically so an interrupted write can't truncate the credentials file
+    tmp = env_path + ".tmp"
+    with open(tmp, "w") as f:
         f.writelines(lines)
+    os.replace(tmp, env_path)
 
 
 def _delete_frame_changes(objects, page_id, frame_name):
@@ -945,6 +971,12 @@ def main():
     with open(csv_path, newline="") as f:
         rows = list(csv.DictReader(f))
     print(f"Loaded {len(rows)} {ctype}s from {csv_path}")
+    if rows:
+        missing_cols = {"id", "name"} - set(rows[0])
+        if missing_cols:
+            print(f"ERROR: {csv_path} is missing required column(s): "
+                  f"{', '.join(sorted(missing_cols))}", file=sys.stderr)
+            sys.exit(1)
 
     client = PenpotClient()
     print("Logging in...")
@@ -967,28 +999,48 @@ def main():
 
     for i, row in enumerate(rows):
         card = cfg["parse"](row, i)
-        file_data = client.get_file(file_id)
-        if not page_id:
-            page_id = file_data["data"]["pages"][0]
-        objects = client.get_page_objects(file_data, page_id)
-        root_id = file_data["data"]["pagesIndex"][page_id].get("id", list(objects.keys())[0])
+        try:
+            file_data = client.get_file(file_id)
+            if not page_id:
+                pages = file_data["data"].get("pages") or []
+                if not pages:
+                    print("ERROR: Penpot file has no pages", file=sys.stderr)
+                    sys.exit(1)
+                page_id = pages[0]
+            objects = client.get_page_objects(file_data, page_id)
+            root_id = file_data["data"]["pagesIndex"][page_id].get("id")
+            if not root_id:
+                print(f"ERROR: page {page_id} has no root id", file=sys.stderr)
+                sys.exit(1)
 
-        changes = _delete_frame_changes(objects, page_id, cfg["frame"])
-        frame_id, frame_change = make_frame(cfg["frame"], 0, 0, cfg["w"], cfg["h"],
-                                            page_id, root_id, root_id,
-                                            fills=[{"fill-color": "#0a1220", "fill-opacity": 0}])
-        changes.append(frame_change)
-        changes.extend(cfg["build"](page_id, frame_id, card, glossary))
-        client.update_file(file_id, changes, file_data["revn"], file_data.get("vern", 0))
+            changes = _delete_frame_changes(objects, page_id, cfg["frame"])
+            frame_id, frame_change = make_frame(cfg["frame"], 0, 0, cfg["w"], cfg["h"],
+                                                page_id, root_id, root_id,
+                                                fills=[{"fill-color": "#0a1220", "fill-opacity": 0}])
+            changes.append(frame_change)
+            changes.extend(cfg["build"](page_id, frame_id, card, glossary))
+            client.update_file(file_id, changes, file_data["revn"], file_data.get("vern", 0))
 
-        data = client.export_png(file_id, page_id, frame_id)
-        # exports/<set>/<type>-<id>.png — one folder per set, type-prefixed
-        # filenames so cards group by type when the folder is sorted.
-        set_dir = os.path.join(out_dir, card.get("set") or "unknown")
-        os.makedirs(set_dir, exist_ok=True)
-        out_path = os.path.join(set_dir, f"{ctype}-{card['id']}.png")
-        with open(out_path, "wb") as fout:
-            fout.write(data)
+            data = client.export_png(file_id, page_id, frame_id)
+            if data[:8] != b"\x89PNG\r\n\x1a\n" or len(data) < 1000:
+                print(f"ERROR: export for '{card['id']}' is not a valid PNG "
+                      f"({len(data)} bytes) — aborting", file=sys.stderr)
+                sys.exit(1)
+
+            if not card.get("set"):
+                print(f"  WARNING: {card['id']} has no set — writing to exports/unknown/",
+                      file=sys.stderr)
+            # exports/<set>/<type>-<id>.png — one folder per set, type-prefixed
+            # filenames so cards group by type when the folder is sorted.
+            set_dir = os.path.join(out_dir, card.get("set") or "unknown")
+            os.makedirs(set_dir, exist_ok=True)
+            out_path = os.path.join(set_dir, f"{ctype}-{card['id']}.png")
+            with open(out_path, "wb") as fout:
+                fout.write(data)
+        except (Exception, SystemExit):
+            print(f"  ...while rendering card '{card['id']}' ({i + 1}/{len(rows)})",
+                  file=sys.stderr)
+            raise
         print(f"[{i + 1}/{len(rows)}] {card['name']} -> "
               f"{os.path.relpath(out_path, out_dir)} ({len(data)} bytes)")
 

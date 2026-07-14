@@ -95,16 +95,16 @@ def make_text_content(
     }
 
 
-# Average glyph advance as a fraction of font size. Used both to decide where
-# to wrap and to size each rendered line. Slightly generous so declared line
-# widths are never narrower than the real glyphs (which would compress text).
+# Average glyph advance as a fraction of font size, used both to decide where
+# to wrap and to size each rendered line. Empirically chosen to roughly match
+# the vendored fonts' (Space Grotesk / JetBrains Mono) average advance.
 CHAR_ADVANCE = 0.56
 
 
 def _wrap_lines(text, max_width, fs, char_advance) -> list:
     """Greedy word-wrap: split text into lines that fit within max_width px."""
     if not text:
-        return [""]
+        return []
     max_chars = max(1, int(max_width / (fs * char_advance)))
     lines = []
     current = ""
@@ -124,7 +124,7 @@ def make_position_data(text, x, y, w, h, font_size="14", font_weight="400",
                        fill_color="#ffffff", fill_opacity=1,
                        font_style=None, font_family="sourcesanspro",
                        text_align=None, char_advance=CHAR_ADVANCE,
-                       line_height=1.3) -> list:
+                       line_height=1.3, letter_spacing=None) -> list:
     """Build approximate position-data for the exporter (PNG and SVG).
 
     The Penpot exporter renders text from `position-data` — one entry per
@@ -139,14 +139,17 @@ def make_position_data(text, x, y, w, h, font_size="14", font_weight="400",
     - fontWeight is always "400" in position-data regardless of actual weight
     - x1/y1/x2/y2 are relative offsets within the text line
     - x is offset per line so center/right alignment lands correctly
+    - letterSpacing (px) is honoured in both line width and the emitted field
     """
     fs = float(font_size)
     line_h = fs * line_height
+    ls = float(letter_spacing) if letter_spacing not in (None, "") else 0.0
     lines = _wrap_lines(text, w, fs, char_advance)
 
     entries = []
     for i, line in enumerate(lines):
-        line_w = len(line) * fs * char_advance
+        # include inter-glyph tracking so centered/right text lands correctly
+        line_w = len(line) * fs * char_advance + max(0, len(line) - 1) * ls
         if text_align == "center":
             lx = x + (w - line_w) / 2
             x1 = (w - line_w) / 2
@@ -171,7 +174,7 @@ def make_position_data(text, x, y, w, h, font_size="14", font_weight="400",
             "fontSize": f"{font_size}px",
             "fontWeight": "400",
             "textDecoration": "none",
-            "letterSpacing": "normal",
+            "letterSpacing": f"{ls}px" if ls else "normal",
             "fills": [{"fillColor": fill_color, "fillOpacity": fill_opacity}],
             "direction": "ltr",
             "fontFamily": font_family,
@@ -345,6 +348,7 @@ def make_text(name, x, y, w, h, text, page_id, parent_id, frame_id,
             font_size=font_size, font_weight=font_weight,
             fill_color=fill_color, font_style=font_style,
             text_align=text_align, font_family=font_family,
+            letter_spacing=letter_spacing,
         ),
     }
     if shadow:

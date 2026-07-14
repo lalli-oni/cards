@@ -1,23 +1,26 @@
 #!/usr/bin/env python3
-"""Render the 'Modern Trek' (V2) unit cards to PNG, data-driven from the library.
+"""Render 'Modern Trek' (V2) cards to PNG, data-driven from the card library.
 
-Reads library/sets/<set>/units.csv and, for each unit, builds the Modern Trek
-unit card in Penpot from the card's own data (name, cost, stats, attributes,
-actions, text, flavor, rarity) and exports a PNG. Transcribes the design in
-design/genghis-khan-card.svg into Penpot vector shapes via penpot.py.
+Reads library/sets/<set>/<type>.csv and builds each card in Penpot from its own
+data, then exports a PNG. Card type is detected from the CSV filename; all five
+types are supported (units, locations, items, events, policies), transcribed
+from the design specs/SVGs in design/specs/ into Penpot vector shapes via
+penpot.py. Output goes to exports/<set>/<type>-<id>.png.
 
-Rules-faithful choices (see #202):
-- The chip row shows the card's governed `attributes` (the synergy axis), not
-  an invented "class" — labelled ATTRIBUTES.
-- Effect content: one `actions` entry -> an action block (name + AP badge) whose
-  body is the card's `text`; zero actions -> a nameless passive block with the
-  text; multiple actions -> action-header blocks plus a text block.
-- Keyword pills come from the `abilities` column with reminder text from the
-  rules glossary. Today no alpha-1 unit populates `abilities`, and the value
-  syntax / machine-readable glossary are pending #203, so this is provisional.
+Rules-faithful choices (the library is the source of truth, not the design; #202):
+- Units show the governed `attributes` (synergy axis) as chips, not an invented
+  "class". Locations map `edges` -> compass (blocked = red bar, rest open).
+  Items/events/policies read their dedicated columns (equip/stored,
+  timing/trigger/text, effect/seeding_effect) — cleanly separated, no blob.
+- Where a type has only a freeform `text` blob (units, location actions), it is
+  rendered as-is; per-effect structuring is tracked with the keyword work (#203).
+- Unit keyword pills come from `abilities` + the rules glossary; dormant until
+  cards populate `abilities` (#194/#198) and the value syntax lands (#203).
 
-Deliberately deferred for v1: Space Grotesk/JetBrains Mono fonts (serif
-fallback until vendored, #202), per-attribute icons (#204), grid pattern/mask.
+Deliberately deferred for v1: type/attribute glyph icons (#204), the diagonal
+hatch texture, and the event hazard-stripe top edge (solid bar for now).
+Fonts (Space Grotesk / JetBrains Mono) are vendored in design/fonts/ and served
+to the exporter via the docker-compose font mount.
 
 Usage:
     cd design && python3 moderntrek-template.py [../library/sets/alpha-1/units.csv]

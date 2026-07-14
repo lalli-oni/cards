@@ -979,11 +979,14 @@ def main():
         client.update_file(file_id, changes, file_data["revn"], file_data.get("vern", 0))
 
         data = client.export_png(file_id, page_id, frame_id)
-        out_path = os.path.join(out_dir, f"{card['id']}.png")
+        # exports/<set>/<type>/<id>.png — organized by set then card type
+        type_dir = os.path.join(out_dir, card.get("set") or "unknown", stem)
+        os.makedirs(type_dir, exist_ok=True)
+        out_path = os.path.join(type_dir, f"{card['id']}.png")
         with open(out_path, "wb") as fout:
             fout.write(data)
-        print(f"[{i + 1}/{len(rows)}] {card['name']} -> {os.path.basename(out_path)} "
-              f"({len(data)} bytes)")
+        print(f"[{i + 1}/{len(rows)}] {card['name']} -> "
+              f"{os.path.relpath(out_path, out_dir)} ({len(data)} bytes)")
 
     print(f"\nDone. {len(rows)} {ctype} PNGs in {out_dir}")
 

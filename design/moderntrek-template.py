@@ -979,10 +979,11 @@ def main():
         client.update_file(file_id, changes, file_data["revn"], file_data.get("vern", 0))
 
         data = client.export_png(file_id, page_id, frame_id)
-        # exports/<set>/<type>/<id>.png — organized by set then card type
-        type_dir = os.path.join(out_dir, card.get("set") or "unknown", stem)
-        os.makedirs(type_dir, exist_ok=True)
-        out_path = os.path.join(type_dir, f"{card['id']}.png")
+        # exports/<set>/<type>-<id>.png — one folder per set, type-prefixed
+        # filenames so cards group by type when the folder is sorted.
+        set_dir = os.path.join(out_dir, card.get("set") or "unknown")
+        os.makedirs(set_dir, exist_ok=True)
+        out_path = os.path.join(set_dir, f"{ctype}-{card['id']}.png")
         with open(out_path, "wb") as fout:
             fout.write(data)
         print(f"[{i + 1}/{len(rows)}] {card['name']} -> "

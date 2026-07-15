@@ -1,5 +1,7 @@
 # Card Game Project
 
+> 🃏 **[Browse the card gallery →](https://lalli-oni.github.io/cards/)** — all rendered cards (units, locations, items, events, policies).
+
 This repository houses a card game [name pending] with the following aspects:
 
 1. Completely free. Only monetization is through donations, if I can be bothered.

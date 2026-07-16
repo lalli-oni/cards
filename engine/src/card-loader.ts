@@ -38,7 +38,7 @@ export interface CardDefinition {
   text: string | null;
   flavor: string | null;
   // Shared classification (split out of the old `keywords` column in #119).
-  abilities: string[];
+  keywords: string[];
   attributes?: string[];
 
   // Unit fields
@@ -137,11 +137,11 @@ function validateDefinition(
     errors.push({ cardId, message: `invalid cost type: ${typeof def.cost}` });
   }
 
-  // Abilities: required, must be string[] (build.ts always emits an array).
-  if (!Array.isArray(def.abilities)) {
+  // Keywords: required, must be string[] (build.ts always emits an array).
+  if (!Array.isArray(def.keywords)) {
     errors.push({
       cardId,
-      message: "missing or invalid abilities (expected array)",
+      message: "missing or invalid keywords (expected array)",
     });
   }
 
@@ -318,7 +318,7 @@ export function instantiateCard(
     // Optional-chained so a def constructed outside `loadCardDefinitions`
     // (which guarantees an array) yields `undefined` instead of throwing an
     // opaque, card-id-less TypeError.
-    abilities: def.abilities?.length ? def.abilities : undefined,
+    keywords: def.keywords?.length ? def.keywords : undefined,
     // Cast is safe: `validateDefinition` has already gated these values against
     // the governed vocabularies (`ATTRIBUTES`), so the raw string[] holds only
     // valid members by the time instantiation runs through the loader.

@@ -14,9 +14,9 @@ Every card type includes these columns:
 | set      | string | yes      | Set identifier (e.g. `baseline`) |
 | rarity   | enum   | yes      | `common`, `uncommon`, `epic`, `legendary` |
 | cost     | string | yes      | Gold cost to deploy/play. Multiple costs separated by `\|` (player pays one) |
-| text     | string | no       | Card text — rules text, abilities, effects |
+| text     | string | no       | Card text — rules text, keywords, effects |
 | flavor   | string | no       | Flavor text |
-| abilities  | string | no     | Semicolon-separated mechanical keyword-effects (e.g. `Lethal;Taunt`). Things the card *does*. These are what the rules call **Keywords** (see the Keyword Glossary in `rules/README.md` / `rules/attributes.md`) — the column was named `abilities` in #119 to disambiguate from the thematic `keywords` that moved to `attributes`. Free-text: not vocabulary-validated. |
+| keywords   | string | no     | Semicolon-separated mechanical **keywords** — things the card *does* (e.g. `Berserker;Leader:+1:all:combat`). Drawn from the governed keyword vocabulary; see [Governed vocabularies](#governed-vocabularies) and the Keyword Glossary in `rules/README.md`. Vocabulary-validated: the build fails on unknown or malformed tokens. |
 | attributes | string | no     | Semicolon-separated cross-type synergy labels (e.g. `Knowledge;Engineering`). Governed closed set — see [Governed vocabularies](#governed-vocabularies). |
 
 ## Units
@@ -91,8 +91,8 @@ on any unknown value (exact spelling, case-sensitive).
 `attributes` is the *cross-type* axis — the same value means the same thing on
 any card type. The three `*_type` columns are the *per-type* category
 axis (a card's own kind within its type) — mostly flavor today; governing them
-and wiring them into mechanics is tracked post-v0.1 in #160. `abilities` is not
-vocabulary-validated (freeform mechanical keyword-effects).
+and wiring them into mechanics is tracked post-v0.1 in #160. `keywords` is
+vocabulary-validated against the governed keyword set (see above).
 
 ## Requirement Checks
 
@@ -110,7 +110,7 @@ Stat checks always sum across all friendly units at the location — the attribu
 
 ## Delimiter Conventions
 
-- **Semicolons** (`;`) separate list items within a single field (attributes, abilities, item `type`, actions, requirements)
+- **Semicolons** (`;`) separate list items within a single field (attributes, keywords, item `type`, actions, requirements)
 - **Pipes** (`|`) separate alternative costs
 - **Colons** (`:`) separate action components (name:ap_cost:effect)
 

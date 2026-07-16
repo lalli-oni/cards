@@ -118,13 +118,11 @@ export function transformCard(type: CardType, raw: Record<string, string>): Reco
     cost: raw.cost.includes("|") ? raw.cost.split("|").map((c) => c.trim()) : raw.cost,
     text: raw.text || null,
     flavor: raw.flavor || null,
-    // Shared classification columns (split out of the old `keywords` column):
-    // `abilities` = mechanical keyword-effects, `attributes` = cross-type
-    // synergy vocabulary. Both apply to every card type. `attributes` is
-    // vocabulary-validated below; `abilities` is intentionally free-text (no
-    // governed `ABILITIES` set yet) — the rules' Keyword Glossary is the human
-    // reference until abilities are wired to effect factories (then govern them).
-    abilities: splitList(raw.abilities || ""),
+    // Shared classification columns: `keywords` = mechanical keyword-effects
+    // (things the card *does*), `attributes` = cross-type synergy vocabulary.
+    // Both apply to every card type and are vocabulary-validated below against
+    // their governed sets (`engine/src/keywords.ts`, `engine/src/attributes.ts`).
+    keywords: splitList(raw.keywords || ""),
     attributes: splitList(raw.attributes || ""),
   };
 

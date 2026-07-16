@@ -1,4 +1,4 @@
-id,name,set,rarity,cost,mission,passive,edges,actions,attributes,abilities,location_type,text,flavor
+id,name,set,rarity,cost,mission,passive,edges,actions,attributes,keywords,location_type,text,flavor
 the-great-library,The Great Library,alpha-1,epic,0,knowledge_2>5,Your units here get +1 cunning.,,,,,Archive,Have 2 units with the Knowledge attribute here to complete.,Knowledge is the only treasure that multiplies when shared.
 the-colosseum,The Colosseum,alpha-1,epic,0,military_1;strength_15>4,,,,,,Arena,Have Military units with combined strength of 15+ here to complete.,The sand remembers every name.
 the-silk-road,The Silk Road,alpha-1,uncommon,0,military_1;diplomacy_1;knowledge_1>3,Units here generate 1 gold at start of your turn.,,,Commerce,,,Have 3 units with different attributes here to complete.,A thread that stitched the world together.

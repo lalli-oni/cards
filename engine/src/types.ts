@@ -73,7 +73,7 @@ interface CardBase {
   text?: string;
   /** Mechanical keyword-effects (Lethal, Taunt, Fortified, …). Split out of
    *  the old `keywords` column in #119. Absent when the card has none. */
-  abilities?: string[];
+  keywords?: string[];
   /** Cross-type synergy vocabulary (`rules/attributes.md`). Shared across all
    *  card types; `UnitCard` narrows this to a required field. */
   attributes?: Attribute[];

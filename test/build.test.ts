@@ -26,7 +26,7 @@ function row(overrides: Record<string, string>): Record<string, string> {
     cost: "3",
     text: "",
     flavor: "",
-    abilities: "",
+    keywords: "",
     attributes: "",
     ...overrides,
   };

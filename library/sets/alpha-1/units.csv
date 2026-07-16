@@ -1,4 +1,4 @@
-id,name,set,rarity,cost,strength,cunning,charisma,attributes,abilities,actions,text,flavor
+id,name,set,rarity,cost,strength,cunning,charisma,attributes,keywords,actions,text,flavor
 cleopatra,Cleopatra,alpha-1,legendary,6,4,8,9,Politics;Diplomacy,,diplomacy:1:contest.charisma(enemy + same) > control(target)~round,Target 1 enemy unit at Cleopatra's location. Charisma contest: on win take control of target unit for this round.,The last pharaoh played Rome like a harp.
 nikola-tesla,Nikola Tesla,alpha-1,epic,4,3,9,5,Knowledge;Engineering,,invent:2:buy(item)[0],Buy an item from the market for free.,The man who lit the world — then vanished from it.
 miyamoto-musashi,Miyamoto Musashi,alpha-1,epic,5,9,7,4,Military,,duel:1:contest.strength(enemy),Strength contest: injure target unit at same location.,Undefeated in sixty duels.

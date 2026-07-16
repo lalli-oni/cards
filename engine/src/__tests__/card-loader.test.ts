@@ -30,7 +30,7 @@ const VALID_UNIT: CardDefinition = {
   cost: "3",
   text: "A test unit.",
   flavor: null,
-  abilities: ["Fighter"],
+  keywords: ["Fighter"],
   strength: 5,
   cunning: 3,
   charisma: 2,
@@ -46,7 +46,7 @@ const VALID_LOCATION: CardDefinition = {
   cost: "4",
   text: null,
   flavor: null,
-  abilities: [],
+  keywords: [],
   mission: "control>3",
   requirements: "units_3",
   rewards: "3vp",
@@ -63,7 +63,7 @@ const VALID_ITEM: CardDefinition = {
   cost: "2",
   text: "+2 Strength",
   flavor: null,
-  abilities: [],
+  keywords: [],
   equip: "strength_plus_2",
   stored: null,
   itemType: ["Weapon"],
@@ -78,7 +78,7 @@ const VALID_EVENT: CardDefinition = {
   cost: "1",
   text: null,
   flavor: null,
-  abilities: [],
+  keywords: [],
   timing: "trap",
   trigger: "unit_enters",
   duration: null,
@@ -94,7 +94,7 @@ const VALID_POLICY: CardDefinition = {
   cost: "0",
   text: null,
   flavor: null,
-  abilities: [],
+  keywords: [],
   effect: "all_players_pay_1",
 };
 
@@ -236,9 +236,9 @@ describe("loadCardDefinitions", () => {
     }
   });
 
-  test("validates abilities field", () => {
-    const badAbilities = { ...VALID_UNIT, abilities: "not-an-array" };
-    const path = writeTmpJson("bad-abilities.json", [badAbilities]);
+  test("validates keywords field", () => {
+    const badKeywords = { ...VALID_UNIT, keywords: "not-an-array" };
+    const path = writeTmpJson("bad-keywords.json", [badKeywords]);
     try {
       loadCardDefinitions(path);
       expect(true).toBe(false);
@@ -246,7 +246,7 @@ describe("loadCardDefinitions", () => {
       expect(e).toBeInstanceOf(CardValidationError);
       expect(
         (e as CardValidationError).errors.some((err) =>
-          err.message.includes("abilities"),
+          err.message.includes("keywords"),
         ),
       ).toBe(true);
     }
@@ -424,7 +424,7 @@ describe("instantiateCard", () => {
     expect(card.cost).toBe("3");
     expect(card.rarity).toBe("common");
     expect(card.text).toBe("A test unit.");
-    expect(card.abilities).toEqual(["Fighter"]);
+    expect(card.keywords).toEqual(["Fighter"]);
 
     // Unit-specific
     expect((card as any).strength).toBe(5);

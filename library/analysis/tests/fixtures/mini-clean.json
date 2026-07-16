@@ -8,7 +8,7 @@
     "cost": "3",
     "text": null,
     "flavor": null,
-    "abilities": [],
+    "keywords": [],
     "attributes": [
       "Knowledge", "Military", "Diplomacy", "Commerce", "Politics",
       "Spirituality", "Engineering", "Exploration", "Espionage", "Culture"
@@ -29,7 +29,7 @@
     "cost": "4",
     "text": null,
     "flavor": null,
-    "abilities": [],
+    "keywords": [],
     "attributes": [
       "Knowledge", "Military", "Diplomacy", "Commerce", "Politics",
       "Spirituality", "Engineering", "Exploration", "Espionage", "Culture"
@@ -50,7 +50,7 @@
     "cost": "0",
     "text": null,
     "flavor": null,
-    "abilities": [],
+    "keywords": [],
     "attributes": [],
     "requirements": "knowledge_1;military_1;diplomacy_1;commerce_1;politics_1;spirituality_1;engineering_1;exploration_1;espionage_1;culture_1",
     "rewards": "5vp",

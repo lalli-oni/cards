@@ -1,4 +1,4 @@
-id,name,set,rarity,cost,equip,stored,attributes,abilities,type,actions,text,flavor
+id,name,set,rarity,cost,equip,stored,attributes,keywords,type,actions,text,flavor
 ancient-scroll,Ancient Scroll,alpha-1,common,2,Equipped unit gets +2 cunning.,,,,Artifact,,+2 cunning to equipped unit.,Ink fades but ideas endure.
 war-banner,War Banner,alpha-1,uncommon,3,All friendly units at this location get +1 strength.,Units initiating a strength contest at this location get +2 strength.,,,Banner,,Equip: +1 strength to friendly units here. Stored: +2 strength to attackers here.,It flew above a hundred fields.
 merchant-ledger,Merchant Ledger,alpha-1,epic,4,,Generates 2 gold at start of your turn.,Commerce,,,,Stored at a location: gain 2 gold per turn.,Every coin accounted for.

@@ -16,7 +16,7 @@
 # Canonical DSL verb vocabulary — the verbs the engine implements (see
 # library/schema.md "Effect DSL"). Keyword coverage is measured against the
 # effect DSL — the authoritative source of card mechanics — rather than the
-# `abilities` column.
+# `keywords` column.
 export const DSL_VERBS = [
   gold vp draw buy move peek pick buff contest injure kill control raze to remove
 ]

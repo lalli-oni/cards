@@ -54,7 +54,7 @@ reports gaps/violations with a `pass` flag:
 ## Heuristics & caveats
 
 - **Keyword coverage is measured against DSL verbs** (the effect DSL is the
-  authoritative source of card mechanics), not the `abilities` column. The verb
+  authoritative source of card mechanics), not the `keywords` column. The verb
   list (`DSL_VERBS`) mirrors the engine.
 - **No blended value number.** `gold-out`/`vp-out`/`ap-cost`/`gold-cost` are kept
   separate — gold ≠ vp, AP ≠ gold. This toolkit emits no single value verdict.

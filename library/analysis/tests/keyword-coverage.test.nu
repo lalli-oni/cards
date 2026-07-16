@@ -5,19 +5,18 @@ use ../keyword-coverage.nu
 const FIX = (path self | path dirname | path join fixtures)
 
 export def main [] {
-  let r = (keyword-coverage run --set mini --build-dir $FIX)
+  # Fixture: Leader on 2 units (unit tier=2 → ok), Flying on 1 item (item tier=1
+  # → ok), Aura on 1 location (location tier=2 → GAP).
+  let r = (keyword-coverage run --set kwcov --build-dir $FIX)
   assert equal $r.check "keyword-coverage"
   assert equal $r.pass false
-  assert equal $r.gaps 9                       # buy peek pick injure kill control raze to remove
-  let counts = $r.detail
-  assert equal ($counts | where verb == "gold" | get 0.count) 2
-  assert equal ($counts | where verb == "contest" | get 0.count) 1
-  assert equal ($counts | where verb == "raze" | get 0.count) 0
-  assert equal ($counts | where verb == "raze" | get 0.status) "GAP"
-  # pin the full gap SET, not just its size — a swap of one uncovered verb for
-  # another (same count) would otherwise slip through
-  assert equal ($counts | where count == 0 | get verb | sort) (
-    [buy peek pick injure kill control raze to remove] | sort
-  )
+  assert equal $r.gaps 1
+  let d = $r.detail
+  assert equal ($d | where keyword == "Leader" | get 0.count) 2
+  assert equal ($d | where keyword == "Leader" | get 0.status) "ok"
+  assert equal ($d | where keyword == "Flying" | get 0.count) 1   # item tier = 1
+  assert equal ($d | where keyword == "Flying" | get 0.status) "ok"
+  assert equal ($d | where keyword == "Aura" | get 0.count) 1     # location tier = 2
+  assert equal ($d | where keyword == "Aura" | get 0.status) "GAP"
   print "keyword-coverage.test.nu: OK"
 }

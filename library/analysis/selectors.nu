@@ -64,15 +64,16 @@ export def has-attribute [attr: string] {
   where { |c| ($c.attributes? | default []) | any { |x| $x == $attr } }
 }
 
-export def has-keyword [verb: string] {
+export def has-verb [verb: string] {
   where { |c| (card-verbs $c) | any { |v| $v == $verb } }
 }
 
 # --- derived columns (table -> table, additive, safe-null) ---
 
-# `keywords`: DSL verbs used anywhere in a card's effect strings.
-export def with-keywords [] {
-  insert keywords { |c| card-verbs $c }
+# `verbs`: DSL verbs used anywhere in a card's effect strings. Named `verbs`
+# (not `keywords`) to avoid colliding with the governed `keywords` data column.
+export def with-verbs [] {
+  insert verbs { |c| card-verbs $c }
 }
 
 # `stat-total`: strength+cunning+charisma for units, else null.

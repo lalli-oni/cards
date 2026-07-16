@@ -32,8 +32,8 @@ mixed-type tables flow through.
 | `load-set <set> [--build-dir]` | table of card records + numeric `gold-cost` |
 | `of-type` / `of-rarity` | filtered table |
 | `has-attribute <attr>` | filtered table (attribute = archetype axis) |
-| `has-keyword <verb>` | filtered table (DSL verb present in effects) |
-| `with-keywords` | + `keywords` (DSL verbs used) |
+| `has-verb <verb>` | filtered table (DSL verb present in effects) |
+| `with-verbs` | + `verbs` (DSL verbs used) |
 | `with-stat-total` | + `stat-total` (units only) |
 | `with-ap-cost` | + `ap-cost` (activation AP) |
 | `with-payout` | + `gold-out`, `vp-out` (separate, never summed) |
@@ -43,7 +43,8 @@ reports gaps/violations with a `pass` flag:
 
 | Script | Checks |
 |---|---|
-| `keyword-coverage.nu` | ≥1 card per DSL verb |
+| `keyword-coverage.nu` | governed keywords meet coverage tier (2 unit/location, 1 equipment) |
+| `dsl-verb-coverage.nu` | ≥1 card per engine DSL verb |
 | `negative-value.nu` | payout screen (advisory review list) |
 | `rarity-distribution.nu` | rarity spread + dup-prone locations |
 | `archetype-distribution.nu` | under-served attributes |
@@ -53,9 +54,11 @@ reports gaps/violations with a `pass` flag:
 
 ## Heuristics & caveats
 
-- **Keyword coverage is measured against DSL verbs** (the effect DSL is the
-  authoritative source of card mechanics), not the `keywords` column. The verb
-  list (`DSL_VERBS`) mirrors the engine.
+- **Two coverage checks, two axes.** `keyword-coverage.nu` checks the governed
+  mechanical-keyword vocabulary (from `keywords.json`) against the `keywords`
+  column, tiered (2 unit/location, 1 equipment). `dsl-verb-coverage.nu` checks
+  effect-DSL verb coverage (the `DSL_VERBS` list, mirroring the engine) against
+  action effects — a separate axis of "card mechanics".
 - **No blended value number.** `gold-out`/`vp-out`/`ap-cost`/`gold-cost` are kept
   separate — gold ≠ vp, AP ≠ gold. This toolkit emits no single value verdict.
 - **`gold-out`/`vp-out` are partial** — only literal `gold[N]`/`vp[N]` emissions,

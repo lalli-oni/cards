@@ -13,7 +13,7 @@ import { readdirSync, readFileSync, mkdirSync, writeFileSync, existsSync } from 
 import { join } from "path";
 import { parse as parseDSL, DSLParseError, DSLValidationError } from "../engine/src/effect-dsl";
 import { ATTRIBUTES } from "../engine/src/attributes";
-import { type CardKind, KeywordError, parseKeyword } from "../engine/src/keywords";
+import { type CardKind, KEYWORDS, KeywordError, parseKeyword } from "../engine/src/keywords";
 import {
   LOCATION_TYPES,
   EVENT_TYPES,
@@ -338,6 +338,17 @@ function main() {
 
   // Write merged output
   writeFileSync(join(BUILD_DIR, "all.json"), JSON.stringify(allCards, null, 2));
+
+  // Emit the governed keyword vocabulary so tooling (keyword-coverage) can check
+  // coverage without duplicating the source of truth (engine/src/keywords.ts).
+  writeFileSync(
+    join(BUILD_DIR, "keywords.json"),
+    JSON.stringify(
+      KEYWORDS.map((k) => ({ name: k.name, cardKinds: k.cardKinds })),
+      null,
+      2,
+    ),
+  );
 
   // Report
   if (totalErrors.length > 0) {

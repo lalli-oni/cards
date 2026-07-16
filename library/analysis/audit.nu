@@ -8,7 +8,7 @@
 # Exits non-zero if any HARD check fails. `negative-value` is advisory (a review
 # list) and never fails the audit.
 
-use keyword-coverage.nu
+use dsl-verb-coverage.nu
 use negative-value.nu
 use rarity-distribution.nu
 use archetype-distribution.nu
@@ -22,7 +22,7 @@ const ADVISORY = [negative-value]
 # Run every check, returning the list of structured result records.
 export def run [--set: string = "alpha-1", --build-dir: string = ""] {
   [
-    (keyword-coverage run --set $set --build-dir $build_dir)
+    (dsl-verb-coverage run --set $set --build-dir $build_dir)
     (negative-value run --set $set --build-dir $build_dir)
     (rarity-distribution run --set $set --build-dir $build_dir)
     (archetype-distribution run --set $set --build-dir $build_dir)

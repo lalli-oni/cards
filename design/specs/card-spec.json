@@ -1,0 +1,123 @@
+{
+  "meta": {
+    "name": "cords CCG — Unit card, V2 'Modern Trek'",
+    "example": "Genghis Khan (ALPHA-1 · 005, legendary)",
+    "note": "Layout boxes measured from the CSS layout; content-flow positions (rules panel rows, chip widths) are accurate to ±2px since HTML text metrics drive them. Fixed bands (art, header, class bar, rules, stats, footer) are exact."
+  },
+
+  "canvas": { "width": 750, "height": 1050, "cardCornerRadius": 14 },
+
+  "fonts": {
+    "Space Grotesk": "card name, ability names, ability body text, keyword pill, attribute chip text, cost number, stat values, flavor text",
+    "JetBrains Mono": "set tag (005), CLASS label, AP pill, PASSIVE pill, stat labels (STR/CUN/CHA), footer rarity + set id"
+  },
+
+  "colors": [
+    { "role": "card background",        "hex": "#0a1220" },
+    { "role": "panel background (rules)","hex": "#0f1a2e" },
+    { "role": "dark band bg (class bar, stat ribbon)", "hex": "#060c18" },
+    { "role": "hairline divider",       "hex": "#1a2540" },
+    { "role": "lime accent",            "hex": "#c8f562" },
+    { "role": "lime border 27%",        "hex": "#c8f562", "opacity": 0.27 },
+    { "role": "lime border 20% (band edges)", "hex": "#c8f562", "opacity": 0.2 },
+    { "role": "lime hairline 13%",      "hex": "#c8f562", "opacity": 0.13 },
+    { "role": "text primary",           "hex": "#e6ecf6" },
+    { "role": "text muted / flavor / labels", "hex": "#7a8aa6" },
+    { "role": "passive blue",           "hex": "#8fb0ff" },
+    { "role": "cost coin border",       "hex": "#8a6522" },
+    { "role": "cost coin text",         "hex": "#3a2205" },
+    { "role": "stat STR",               "hex": "#ff6b6b", "glow": "#ff3636" },
+    { "role": "stat CUN",               "hex": "#6bb6ff", "glow": "#2e7bd6" },
+    { "role": "stat CHA",               "hex": "#c8f562", "glow": "#c8f562" },
+    { "role": "side bar legendary",     "gradient": "#8a6515 → #f4c24a" },
+    { "role": "side bar epic",          "gradient": "#5b2a8a → #b07cf1" },
+    { "role": "side bar uncommon",      "gradient": "#1e4a7a → #4a8fd1" },
+    { "role": "side bar common",        "gradient": "#4a5263 → #6c7486" }
+  ],
+
+  "typography": [
+    { "role": "card name",       "font": "Space Grotesk", "size": 30, "weight": 600, "letterSpacing": "-0.01em", "color": "#e6ecf6", "align": "left" },
+    { "role": "set tag (005)",   "font": "JetBrains Mono", "size": 10, "weight": 400, "letterSpacing": "0.2em", "color": "#c8f562", "align": "center", "transform": "uppercase" },
+    { "role": "cost number",     "font": "Space Grotesk", "size": 28, "weight": 800, "color": "#3a2205", "align": "center" },
+    { "role": "CLASS label",     "font": "JetBrains Mono", "size": 10, "weight": 400, "letterSpacing": "0.2em", "color": "#7a8aa6", "transform": "uppercase" },
+    { "role": "attr chip text",  "font": "Space Grotesk", "size": 13, "weight": 500, "letterSpacing": "0.14em", "color": "#e6ecf6", "transform": "uppercase" },
+    { "role": "keyword pill",    "font": "Space Grotesk", "size": 11, "weight": 700, "letterSpacing": "0.18em", "color": "#0a1220", "transform": "uppercase" },
+    { "role": "keyword reminder","font": "Space Grotesk", "size": 12.5, "weight": 400, "style": "italic", "color": "#7a8aa6" },
+    { "role": "ability name",    "font": "Space Grotesk", "size": 22, "weight": 700, "letterSpacing": "-0.01em", "color": "#c8f562 (action) / #8fb0ff (passive)" },
+    { "role": "AP / PASSIVE pill","font": "JetBrains Mono", "size": 11, "weight": 800, "letterSpacing": "0.14em", "color": "#0a1220 on lime (AP) / #8fb0ff outlined (PASSIVE)" },
+    { "role": "ability body",    "font": "Space Grotesk", "size": 14, "weight": 400, "lineHeight": 1.5, "color": "#e6ecf6" },
+    { "role": "flavor",          "font": "Space Grotesk", "size": 12, "weight": 400, "style": "italic", "lineHeight": 1.4, "color": "#7a8aa6" },
+    { "role": "stat label",      "font": "JetBrains Mono", "size": 10, "weight": 400, "letterSpacing": "0.2em", "color": "per-stat color" },
+    { "role": "stat value",      "font": "Space Grotesk", "size": 36, "weight": 700, "lineHeight": 1, "color": "#ffffff" },
+    { "role": "footer",          "font": "JetBrains Mono", "size": 9, "weight": "700 (rarity) / 400 (set id)", "letterSpacing": "0.2em", "color": "#c8f562 (rarity) / #7a8aa6 (set id)", "transform": "uppercase" }
+  ],
+
+  "gradients": [
+    { "role": "cost coin", "type": "radial", "focal": "35% 30%", "stops": [
+      { "offset": 0, "color": "#ffe9a8" }, { "offset": 0.55, "color": "#f4c24a" }, { "offset": 1, "color": "#a3761a" } ] },
+    { "role": "stat orb (per stat)", "type": "radial", "focal": "30% 30%", "stops": [
+      { "offset": 0, "color": "#ffffff" }, { "offset": 0.55, "color": "statColor (#ff6b6b / #6bb6ff / #c8f562)" }, { "offset": 1, "color": "#0a1220" } ] },
+    { "role": "art panel bg", "type": "radial ellipse", "focal": "50% 40% of art area", "stops": [
+      { "offset": 0, "color": "#1c2a48" }, { "offset": 0.78, "color": "#0a1220" } ] },
+    { "role": "header bar bg", "type": "linear 180deg", "stops": [
+      { "offset": 0, "color": "#0a1220", "opacity": 0.92 }, { "offset": 1, "color": "#0a1220", "opacity": 0.7 } ] },
+    { "role": "side bar (legendary)", "type": "linear 90deg", "stops": [
+      { "offset": 0, "color": "#8a6515" }, { "offset": 1, "color": "#f4c24a" } ] }
+  ],
+
+  "shadows": [
+    { "element": "cost coin",        "x": 0, "y": 0, "blur": 20, "spread": 0, "color": "#f4c24a", "opacity": 0.33, "plusInnerRing": "inset 0 0 0 3px #ffe9a8 @ 33%" },
+    { "element": "ability name (action)",  "x": 0, "y": 0, "blur": 20, "spread": 0, "color": "#c8f562", "opacity": 0.27, "type": "text glow" },
+    { "element": "ability name (passive)", "x": 0, "y": 0, "blur": 20, "spread": 0, "color": "#8fb0ff", "opacity": 0.27, "type": "text glow" },
+    { "element": "AP pill",          "x": 0, "y": 0, "blur": 10, "spread": 0, "color": "#c8f562", "opacity": 0.33 },
+    { "element": "stat orb",         "x": 0, "y": 0, "blur": 10, "spread": 0, "color": "glow color per stat", "opacity": 0.67 },
+    { "element": "stat value",       "x": 0, "y": 0, "blur": 12, "spread": 0, "color": "glow color per stat", "opacity": 0.53, "type": "text glow" }
+  ],
+
+  "layout": [
+    { "element": "card",                 "x": 0,   "y": 0,    "w": 750, "h": 1050, "r": 14 },
+    { "element": "rarity side bar",      "x": 0,   "y": 0,    "w": 6,   "h": 1050, "note": "top z-order" },
+    { "element": "art area",             "x": 0,   "y": 0,    "w": 750, "h": 440 },
+    { "element": "unit glyph frame",     "x": 135, "y": 61.6, "w": 480, "h": 325.6, "note": "art inset: 14% top, 18% sides, 12% bottom; glyph viewBox 400×320, aspect-fit centered, opacity 0.9" },
+    { "element": "header bar",           "x": 0,   "y": 0,    "w": 750, "h": 76,  "note": "1px bottom border lime @20%" },
+    { "element": "set tag chip (005)",   "x": 26,  "y": 27,   "w": 44,  "h": 22,  "r": 2 },
+    { "element": "card name",            "x": 84,  "y": 24,   "w": 560, "h": 38,  "note": "baseline y≈48" },
+    { "element": "cost coin",            "x": 668, "y": 8,    "w": 60,  "h": 60,  "r": 30, "note": "center 698,38; 2px border #8a6522" },
+    { "element": "class bar",            "x": 0,   "y": 440,  "w": 750, "h": 62,  "note": "top border lime @20%, bottom #1a2540" },
+    { "element": "CLASS label",          "x": 26,  "y": 466,  "w": 44,  "h": 12 },
+    { "element": "attr chip Warrior",    "x": 84,  "y": 455,  "w": 118, "h": 32,  "r": 4, "note": "icon 18×18 at x96,y462; 14px gap between chips" },
+    { "element": "attr chip Politician", "x": 216, "y": 455,  "w": 146, "h": 32,  "r": 4 },
+    { "element": "rules panel",          "x": 0,   "y": 502,  "w": 750, "h": 410, "note": "padding 18px top/bottom, 26px sides; rows flow with 8px gap" },
+    { "element": "keyword pill",         "x": 26,  "y": 520,  "w": 126, "h": 25,  "r": 2 },
+    { "element": "keyword reminder",     "x": 162, "y": 524,  "w": 540, "h": 17 },
+    { "element": "ability block (Conquer)", "x": 26, "y": 555, "w": 698, "h": 66, "r": 6, "note": "fill #0a1220 @67%, 1px lime border @27%, inner padding 8×10" },
+    { "element": "ability name (Conquer)", "x": 36, "y": 563, "w": 100, "h": 27, "note": "baseline y≈585" },
+    { "element": "AP pill (3 AP)",       "x": 140, "y": 568,  "w": 47,  "h": 21,  "r": 3 },
+    { "element": "ability body text",    "x": 36,  "y": 596,  "w": 676, "h": 21 },
+    { "element": "passive block (Horselord)", "x": 26, "y": 635, "w": 698, "h": 66, "r": 6, "note": "no fill, 1.5px dotted border #8fb0ff @40%" },
+    { "element": "passive name",         "x": 36,  "y": 643,  "w": 112, "h": 27 },
+    { "element": "PASSIVE pill",         "x": 152, "y": 648,  "w": 72,  "h": 21,  "r": 3, "note": "outlined, 1px #8fb0ff @53%" },
+    { "element": "passive body text",    "x": 36,  "y": 676,  "w": 676, "h": 21 },
+    { "element": "flavor divider",       "x": 26,  "y": 869,  "w": 698, "h": 1,   "note": "lime @13%; flavor pinned to panel bottom (margin-top auto)" },
+    { "element": "flavor text",          "x": 26,  "y": 877,  "w": 698, "h": 17,  "note": "baseline y≈890" },
+    { "element": "stat ribbon",          "x": 0,   "y": 938,  "w": 750, "h": 74,  "note": "3 equal cells 250px; dividers at x250, x500 (#1a2540); top border lime @27%, bottom lime @13%" },
+    { "element": "stat orb STR",         "x": 93,  "y": 968,  "w": 14,  "h": 14,  "r": 7, "note": "cell content centered; orb + 14px gap + label/value column" },
+    { "element": "stat label STR",       "x": 121, "y": 952,  "w": 30,  "h": 12 },
+    { "element": "stat value STR",       "x": 121, "y": 966,  "w": 40,  "h": 36,  "note": "baseline y≈998" },
+    { "element": "stat orb CUN",         "x": 343, "y": 968,  "w": 14,  "h": 14,  "r": 7 },
+    { "element": "stat label CUN",       "x": 371, "y": 952,  "w": 30,  "h": 12 },
+    { "element": "stat value CUN",       "x": 371, "y": 966,  "w": 40,  "h": 36 },
+    { "element": "stat orb CHA",         "x": 593, "y": 968,  "w": 14,  "h": 14,  "r": 7 },
+    { "element": "stat label CHA",       "x": 621, "y": 952,  "w": 30,  "h": 12 },
+    { "element": "stat value CHA",       "x": 621, "y": 966,  "w": 40,  "h": 36 },
+    { "element": "footer bar",           "x": 26,  "y": 1020, "w": 698, "h": 20,  "note": "rarity left-aligned, set id right-aligned; baseline y≈1034" }
+  ],
+
+  "artGridPattern": {
+    "cellSize": 38,
+    "lineWidth": 1,
+    "lineColor": "#c8f562",
+    "lineOpacity": 0.06,
+    "mask": "radial ellipse centered at 50% 45% of the 750×440 art area (≈375,198), fully opaque to 20% radius, faded out by 75% radius (≈330px)"
+  }
+}

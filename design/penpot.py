@@ -59,6 +59,7 @@ def make_text_content(
     fill_color="#ffffff", fill_opacity=1,
     font_style=None, text_align=None,
     font_family="sourcesanspro", font_id="gfont-source-sans-pro",
+    letter_spacing=None,
 ) -> dict:
     """Build Penpot text content structure.
 
@@ -78,6 +79,8 @@ def make_text_content(
         text_attrs["font-style"] = font_style
     if text_align:
         text_attrs["text-align"] = text_align
+    if letter_spacing is not None:
+        text_attrs["letter-spacing"] = str(letter_spacing)
 
     paragraph = {
         "type": "paragraph",
@@ -92,59 +95,101 @@ def make_text_content(
     }
 
 
+# Average glyph advance as a fraction of font size, used both to decide where
+# to wrap and to size each rendered line. Empirically chosen to roughly match
+# the vendored fonts' (Space Grotesk / JetBrains Mono) average advance.
+CHAR_ADVANCE = 0.56
+
+
+def _wrap_lines(text, max_width, fs, char_advance, letter_spacing=0.0) -> list:
+    """Greedy word-wrap: split text into lines that fit within max_width px.
+
+    Uses the same per-line width model as make_position_data (glyph advance plus
+    inter-glyph tracking), so a line the wrapper accepts as fitting won't exceed
+    the shape box once letter_spacing widens it downstream.
+    """
+    if not text:
+        return []
+    advance = fs * char_advance
+
+    def fits(s):
+        return len(s) * advance + max(0, len(s) - 1) * letter_spacing <= max_width
+
+    lines = []
+    current = ""
+    for word in text.split(" "):
+        candidate = word if not current else f"{current} {word}"
+        if fits(candidate) or not current:
+            current = candidate
+        else:
+            lines.append(current)
+            current = word
+    if current:
+        lines.append(current)
+    return lines
+
+
 def make_position_data(text, x, y, w, h, font_size="14", font_weight="400",
                        fill_color="#ffffff", fill_opacity=1,
                        font_style=None, font_family="sourcesanspro",
-                       text_align=None) -> list:
-    """Build approximate position-data for the SVG exporter.
+                       text_align=None, char_advance=CHAR_ADVANCE,
+                       line_height=1.3, letter_spacing=None) -> list:
+    """Build approximate position-data for the exporter (PNG and SVG).
 
-    The Penpot SVG exporter uses Playwright to screenshot text elements. It
-    locates them via `#screenshot-text-{id} foreignObject`, which only renders
-    when position-data is present. Normally Penpot's frontend JS computes
-    pixel-perfect position-data when a file is opened in the editor, but
-    API-only workflows never trigger that.
+    The Penpot exporter renders text from `position-data` — one entry per
+    visual line — because API-only workflows never trigger the frontend JS
+    that computes pixel-perfect values. Long strings are word-wrapped to the
+    shape's width so text no longer overflows past its box.
 
     Key calibration notes from actual Penpot-computed values:
-    - width = approximate rendered text width (NOT container width)
-    - height = approximately font_size * 1.3
-    - y = shape_y + font_size * 1.2 (baseline position)
+    - each line's width = approximate rendered width of that line (NOT container)
+    - height = font_size * line_height
+    - first baseline = shape_y + font_size * 1.2; lines advance by height
     - fontWeight is always "400" in position-data regardless of actual weight
     - x1/y1/x2/y2 are relative offsets within the text line
-    - For centered text, x is offset to center text_w within container w
+    - x is offset per line so center/right alignment lands correctly
+    - letterSpacing (px) is honoured in both line width and the emitted field
     """
     fs = float(font_size)
-    line_h = fs * 1.3
-    # Approximate rendered width: ~0.6 * font_size per character
-    text_w = len(text) * fs * 0.6
+    line_h = fs * line_height
+    ls = float(letter_spacing) if letter_spacing not in (None, "") else 0.0
+    lines = _wrap_lines(text, w, fs, char_advance, ls)
 
-    # Position x: centered if text_align is "center"
-    if text_align == "center":
-        text_x = x + (w - text_w) / 2
-        x1 = (w - text_w) / 2
-    else:
-        text_x = x
-        x1 = 0
+    entries = []
+    for i, line in enumerate(lines):
+        # include inter-glyph tracking so centered/right text lands correctly
+        line_w = len(line) * fs * char_advance + max(0, len(line) - 1) * ls
+        if text_align == "center":
+            lx = x + (w - line_w) / 2
+            x1 = (w - line_w) / 2
+        elif text_align == "right":
+            lx = x + (w - line_w)
+            x1 = w - line_w
+        else:
+            lx = x
+            x1 = 0
 
-    return [{
-        "x": text_x,
-        "y": y + fs * 1.2,
-        "width": text_w,
-        "height": line_h,
-        "x1": x1,
-        "y1": -1,
-        "x2": x1 + text_w,
-        "y2": line_h - 1,
-        "fontStyle": font_style or "normal",
-        "textTransform": "none",
-        "fontSize": f"{font_size}px",
-        "fontWeight": "400",
-        "textDecoration": "none",
-        "letterSpacing": "normal",
-        "fills": [{"fillColor": fill_color, "fillOpacity": fill_opacity}],
-        "direction": "ltr",
-        "fontFamily": font_family,
-        "text": text,
-    }]
+        entries.append({
+            "x": lx,
+            "y": y + fs * 1.2 + i * line_h,
+            "width": line_w,
+            "height": line_h,
+            "x1": x1,
+            "y1": -1,
+            "x2": x1 + line_w,
+            "y2": line_h - 1,
+            "fontStyle": font_style or "normal",
+            "textTransform": "none",
+            "fontSize": f"{font_size}px",
+            "fontWeight": "400",
+            "textDecoration": "none",
+            "letterSpacing": f"{ls}px" if ls else "normal",
+            "fills": [{"fillColor": fill_color, "fillOpacity": fill_opacity}],
+            "direction": "ltr",
+            "fontFamily": font_family,
+            "text": line,
+        })
+    return entries
 
 
 # ---------------------------------------------------------------------------
@@ -206,12 +251,32 @@ def make_gradient_stroke(grad_type, start_x, start_y, end_x, end_y, stops,
     }
 
 
+def make_shadow(color, blur, opacity=1, offset_x=0, offset_y=0, spread=0,
+                style="drop-shadow"):
+    """Build a Penpot shadow entry (usable as a glow with 0 offset).
+
+    color: hex string. blur/spread/offsets in px. A drop-shadow with zero
+    offset and a colored fill reads as a symmetric glow.
+    """
+    return {
+        "id": new_uuid(),
+        "style": style,
+        "offset-x": offset_x,
+        "offset-y": offset_y,
+        "blur": blur,
+        "spread": spread,
+        "hidden": False,
+        "color": {"color": color, "opacity": opacity},
+    }
+
+
 # ---------------------------------------------------------------------------
 # Shape builders — each returns (shape_id, add_change)
 # ---------------------------------------------------------------------------
 
 def make_rect(name, x, y, w, h, fills, page_id, parent_id, frame_id,
-              strokes=None, r1=None, r2=None, r3=None, r4=None, opacity=None):
+              strokes=None, r1=None, r2=None, r3=None, r4=None, opacity=None,
+              shadow=None):
     sid = new_uuid()
     obj = {
         "id": sid, "type": "rect", "name": name,
@@ -228,6 +293,8 @@ def make_rect(name, x, y, w, h, fills, page_id, parent_id, frame_id,
         obj.update({"r1": r1, "r2": r2, "r3": r3, "r4": r4})
     if opacity is not None:
         obj["opacity"] = opacity
+    if shadow:
+        obj["shadow"] = shadow
     change = {
         "type": "add-obj", "page-id": page_id,
         "parent-id": parent_id, "frame-id": frame_id,
@@ -237,7 +304,7 @@ def make_rect(name, x, y, w, h, fills, page_id, parent_id, frame_id,
 
 
 def make_circle(name, x, y, w, h, fills, page_id, parent_id, frame_id,
-                strokes=None, opacity=None):
+                strokes=None, opacity=None, shadow=None):
     sid = new_uuid()
     obj = {
         "id": sid, "type": "circle", "name": name,
@@ -252,6 +319,8 @@ def make_circle(name, x, y, w, h, fills, page_id, parent_id, frame_id,
     }
     if opacity is not None:
         obj["opacity"] = opacity
+    if shadow:
+        obj["shadow"] = shadow
     change = {
         "type": "add-obj", "page-id": page_id,
         "parent-id": parent_id, "frame-id": frame_id,
@@ -262,11 +331,14 @@ def make_circle(name, x, y, w, h, fills, page_id, parent_id, frame_id,
 
 def make_text(name, x, y, w, h, text, page_id, parent_id, frame_id,
               font_size="14", font_weight="400", fill_color="#ffffff",
-              font_style=None, text_align=None):
+              font_style=None, text_align=None,
+              font_family="sourcesanspro", font_id="gfont-source-sans-pro",
+              letter_spacing=None, shadow=None):
     sid = new_uuid()
     content = make_text_content(
         text, font_size=font_size, font_weight=font_weight,
         fill_color=fill_color, font_style=font_style, text_align=text_align,
+        font_family=font_family, font_id=font_id, letter_spacing=letter_spacing,
     )
     obj = {
         "id": sid, "type": "text", "name": name,
@@ -284,9 +356,12 @@ def make_text(name, x, y, w, h, text, page_id, parent_id, frame_id,
             text, x, y, w, h,
             font_size=font_size, font_weight=font_weight,
             fill_color=fill_color, font_style=font_style,
-            text_align=text_align,
+            text_align=text_align, font_family=font_family,
+            letter_spacing=letter_spacing,
         ),
     }
+    if shadow:
+        obj["shadow"] = shadow
     change = {
         "type": "add-obj", "page-id": page_id,
         "parent-id": parent_id, "frame-id": frame_id,
@@ -470,7 +545,16 @@ class PenpotClient:
         try:
             with self.opener.open(req) as resp:
                 body = resp.read().decode("utf-8")
-                return json.loads(body) if body else {}
+                if not body:
+                    # A 2xx with no body is a broken RPC; surface it here rather
+                    # than coercing to {} and failing later with an opaque KeyError.
+                    print(f"ERROR: {endpoint} returned an empty 2xx body", file=sys.stderr)
+                    sys.exit(1)
+                return json.loads(body)
+        except json.JSONDecodeError as exc:
+            print(f"ERROR: {endpoint} returned a non-JSON 2xx body: {exc} — "
+                  f"{body[:500]}", file=sys.stderr)
+            sys.exit(1)
         except urllib.error.HTTPError as exc:
             body = exc.read().decode("utf-8", errors="replace")
             print(f"ERROR {exc.code} from {endpoint}: {body[:500]}", file=sys.stderr)
@@ -633,6 +717,10 @@ class PenpotClient:
                     print("ERROR: Export API returned empty response", file=sys.stderr)
                     sys.exit(1)
                 data = json.loads(body)
+        except json.JSONDecodeError as exc:
+            print(f"ERROR: export API returned a non-JSON 2xx body: {exc} — "
+                  f"{body[:500]}", file=sys.stderr)
+            sys.exit(1)
         except urllib.error.HTTPError as exc:
             body = exc.read().decode("utf-8", errors="replace")
             print(f"ERROR {exc.code} from export API: {body[:500]}", file=sys.stderr)

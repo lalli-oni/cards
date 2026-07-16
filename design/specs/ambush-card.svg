@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="750" height="1050" viewBox="0 0 750 1050">
+  
+  
+  <defs>
+    <clipPath id="ev-clip"><rect x="0" y="0" width="750" height="1050" rx="14"></rect></clipPath>
+    <pattern id="ev-hatch" width="16" height="16" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)">
+      <rect width="2" height="16" fill="#ffffff" opacity="0.05"></rect>
+    </pattern>
+    
+    <pattern id="ev-hazard" width="24" height="24" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)">
+      <rect width="12" height="24" fill="#ff6b6b"></rect>
+    </pattern>
+    
+    <pattern id="ev-hazard-sm" width="16" height="16" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)">
+      <rect width="8" height="16" fill="#ff6b6b"></rect>
+    </pattern>
+    <radialGradient id="ev-coin" cx="35%" cy="30%" r="95%">
+      <stop offset="0" stop-color="#ffe9a8"></stop>
+      <stop offset="0.55" stop-color="#f4c24a"></stop>
+      <stop offset="1" stop-color="#a3761a"></stop>
+    </radialGradient>
+  </defs>
+
+  <g clip-path="url(#ev-clip)">
+    <rect x="0" y="0" width="750" height="1050" rx="14" fill="#0a1220"></rect>
+    <rect x="0" y="0" width="750" height="1050" fill="url(#ev-hatch)"></rect>
+    <text x="375" y="661" text-anchor="middle" font-family="JetBrains Mono" font-size="10" letter-spacing="3" fill="#7a8aa6" opacity="0.7">EVENT ART</text>
+
+    
+    <rect x="0" y="0" width="750" height="12" fill="url(#ev-hazard)" opacity="0.9"></rect>
+
+    
+    <rect x="40" y="38" width="574" height="98" rx="10" fill="#060c18" fill-opacity="0.78" stroke="#1a2540" stroke-width="1"></rect>
+    <text x="59" y="79" font-family="Space Grotesk" font-size="32" font-weight="700" letter-spacing="-0.32" fill="#e6ecf6">Ambush</text>
+    
+    <rect x="60" y="93.6" width="58" height="26.5" rx="4" fill="none" stroke="#ff6b6b" stroke-width="2"></rect>
+    <text x="89" y="111" text-anchor="middle" font-family="JetBrains Mono" font-size="11" font-weight="800" letter-spacing="2.42" fill="#ff6b6b">TRAP</text>
+    <rect x="127" y="102.8" width="40" height="8" rx="2" fill="url(#ev-hazard-sm)" opacity="0.8"></rect>
+
+    
+    <rect x="626" y="38" width="84" height="98" rx="10" fill="#060c18" fill-opacity="0.78" stroke="#1a2540" stroke-width="1"></rect>
+    <circle cx="668" cy="87" r="31" fill="url(#ev-coin)" stroke="#8a6522" stroke-width="2"></circle>
+    <circle cx="668" cy="87" r="28.5" fill="none" stroke="#ffe9a8" stroke-opacity="0.33" stroke-width="3"></circle>
+    <text x="668" y="97" text-anchor="middle" font-family="Space Grotesk" font-size="28.5" font-weight="800" fill="#3a2205">2</text>
+
+    
+    <rect x="40" y="827.9" width="670" height="184.1" rx="10" fill="#060c18" fill-opacity="0.78" stroke="#1a2540" stroke-width="1"></rect>
+
+    
+    <text x="61" y="859.5" font-family="JetBrains Mono" font-size="10" font-weight="700" letter-spacing="2.2" fill="#ff6b6b">TRIGGER</text>
+    <text x="127.4" y="859.5" font-family="Space Grotesk" font-size="14" font-style="italic" fill="#e6ecf6">An enemy unit enters this location</text>
+
+    
+    <text x="61" y="892.5" font-family="Space Grotesk" font-size="17" fill="#e6ecf6">When an enemy unit enters this location: injure that unit.</text>
+
+    
+    <rect x="61" y="910" width="112.6" height="27" rx="4" fill="#000000" fill-opacity="0.25" stroke="#c8f562" stroke-opacity="0.4" stroke-width="1"></rect>
+    <g transform="translate(72, 916) scale(0.625)" stroke="#c8f562" fill="none" stroke-width="1.8" stroke-linejoin="round">
+      <path d="M4 20 L14 10 M8 16 L4 20 L8 20 M14 10 L20 4 L20 8 L14 10 Z"></path>
+    </g>
+    <text x="94" y="927.5" font-family="JetBrains Mono" font-size="11" font-weight="600" letter-spacing="1.98" fill="#e6ecf6">MILITARY</text>
+
+    
+    <text x="61" y="959.5" font-family="Space Grotesk" font-size="12.5" font-style="italic" fill="#7a8aa6">&#34;They never saw it coming.&#34;</text>
+
+    
+    <line x1="61" y1="975" x2="689" y2="975" stroke="#1a2540" stroke-width="1"></line>
+    <text x="61" y="992.5" font-family="JetBrains Mono" font-size="9" font-weight="700" letter-spacing="1.98" fill="#c8f562">◇ UNCOMMON</text>
+    <text x="689" y="992.5" text-anchor="end" font-family="JetBrains Mono" font-size="9" letter-spacing="1.98" fill="#7a8aa6">EVENT · TRAP // ALPHA-1 · E03</text>
+  </g>
+</svg>

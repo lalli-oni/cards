@@ -1,0 +1,70 @@
+{
+  "meta": {
+    "name": "cords CCG — Policy card, layout 'Gate', V2 'Modern Trek'",
+    "example": "Scholar (ALPHA-1 · P03, epic, Knowledge — doctrine + seeding + action)",
+    "note": "Only policy-specific values; shares glass/hatch/footer language with the other Gate cards. Policies have NO cost coin — the header right box holds an attribute badge instead. Always epic rarity. Measured from live DOM at 1:1.",
+    "canvas": { "width": 750, "height": 1050, "cardCornerRadius": 14, "background": "#0a1220" }
+  },
+
+  "header": {
+    "nameBox": { "x": 40, "y": 38, "w": 576, "h": 87.1, "r": 10 },
+    "name": { "x": 59, "baseline": 79, "font": "Space Grotesk 32/700", "letterSpacing": -0.32, "color": "#e6ecf6" },
+    "subtitle": { "text": "POLICY · KNOWLEDGE", "x": 59, "baseline": 106, "font": "JetBrains Mono", "size": 13, "weight": 600, "letterSpacing": "0.26em", "transform": "uppercase", "color": "#7a8aa6", "pattern": "POLICY[ · {ATTRIBUTE}]" },
+    "attrBadgeBox": { "x": 628, "y": 38, "w": 82, "h": 87.1, "r": 10 },
+    "attrBadge": {
+      "center": [669, 81.5], "diameter": 60,
+      "border": "2px solid #c8f562 (accent)", "fill": "#000 @ 30%",
+      "icon": "attribute glyph, 31.2×31.2 (52% of badge), color accent, stroke 1.8",
+      "noAttribute": "badge shows 'ANY' — JetBrains Mono, 16% of size, weight 700, ls .14em"
+    }
+  },
+
+  "art": {
+    "watermark": { "glyph": "attribute icon", "box": { "x": 195, "y": 282, "w": 360, "h": 360 }, "color": "#7a8aa6", "opacity": 0.15 },
+    "artLabel": { "text": "POLICY ART", "y-top": 609, "font": "JetBrains Mono 11/400", "letterSpacing": 3.3, "color": "#7a8aa6 @ .7", "centered": true, "note": "slightly larger than the other cards' art label" }
+  },
+
+  "footerGlass": {
+    "box": { "x": 40, "y": 755.2, "w": 670, "h": 256.8, "r": 10 },
+    "note": "bottom-anchored at y = 1050 − 38 − height; padding 16/20, rows gap 12. Row order: DOCTRINE → SEEDING (optional) → action (optional) → flavor → rarity/set line. Tallest footer of the set — policies are text-heavy.",
+    "labeledBlock": {
+      "structure": "fixed 104px label column + body, gap 11",
+      "label": { "font": "JetBrains Mono", "size": 12, "weight": 700, "letterSpacing": "0.22em", "transform": "uppercase", "width": 104, "paddingTop": 3, "colors": { "DOCTRINE": "#c8f562 (accent)", "SEEDING": "#7a8aa6 (mute)" } },
+      "body": { "x": 176, "font": "Space Grotesk", "size": 18, "lineHeight": 27, "color": "#e6ecf6", "maxWidth": 513 },
+      "doctrine": { "labelBaseline": 786, "bodyFirstBaseline": 791.5, "rowTop": 772.2 },
+      "seeding": { "labelBaseline": 825, "bodyFirstBaseline": 830.5, "rowTop": 811.2, "rowH": 54 }
+    },
+    "actionRow": {
+      "pill": { "box": { "x": 61, "y": 879.2, "w": 175.5, "h": 23.5, "r": 3 }, "fill": "#c8f562", "padding": "4px 10px", "text": { "content": "INVESTIGATE · 1 AP", "font": "JetBrains Mono", "size": 12, "weight": 800, "letterSpacing": "0.12em", "color": "#0a1220" } },
+      "body": { "x": 246.5, "firstBaseline": 895.5, "font": "Space Grotesk", "size": 17, "lineHeight": 24.65, "color": "#e6ecf6", "maxWidth": 442.5 }
+    },
+    "flavor": { "x": 61, "baseline": 953.5, "font": "Space Grotesk 15 italic", "lineHeight": 21, "color": "#7a8aa6", "quoted": true, "note": "larger than event/item flavor (15 vs 12.5)" },
+    "footerLine": {
+      "divider": { "x1": 61, "x2": 689, "y": 972, "stroke": "1px #1a2540" },
+      "rarity": { "text": "◆ EPIC", "x": 61, "baseline": 991, "font": "JetBrains Mono 9/700 ls .22em", "color": "#c8f562" },
+      "setId": { "text": "POLICY // ALPHA-1 · P03", "rightAlignedTo": 689, "baseline": 991.5, "font": "JetBrains Mono 11/400 ls .22em", "color": "#7a8aa6", "note": "11px — larger than the 9px used on event/item/unit footers", "pattern": "POLICY // {SET} · P##" }
+    }
+  },
+
+  "layout": [
+    { "element": "card",              "x": 0,    "y": 0,     "w": 750,   "h": 1050, "r": 14 },
+    { "element": "attr watermark",    "x": 195,  "y": 282,   "w": 360,   "h": 360 },
+    { "element": "header name box",   "x": 40,   "y": 38,    "w": 576,   "h": 87.1, "r": 10 },
+    { "element": "card name",         "x": 59,   "y": 53,    "w": 538,   "h": 33.6 },
+    { "element": "subtitle",          "x": 59,   "y": 92.6,  "w": 538,   "h": 17.5 },
+    { "element": "attr badge box",    "x": 628,  "y": 38,    "w": 82,    "h": 87.1, "r": 10 },
+    { "element": "attr badge circle", "x": 639,  "y": 51.5,  "w": 60,    "h": 60,   "r": 30 },
+    { "element": "art label",         "x": 325.5,"y": 609,   "w": 99,    "h": 14.5 },
+    { "element": "footer glass",      "x": 40,   "y": 755.2, "w": 670,   "h": 256.8,"r": 10 },
+    { "element": "DOCTRINE label",    "x": 61,   "y": 772.2, "w": 104,   "h": 18.5 },
+    { "element": "doctrine body",     "x": 176,  "y": 772.2, "w": 513,   "h": 27 },
+    { "element": "SEEDING label",     "x": 61,   "y": 811.2, "w": 104,   "h": 18.5 },
+    { "element": "seeding body",      "x": 176,  "y": 811.2, "w": 513,   "h": 54 },
+    { "element": "action pill",       "x": 61,   "y": 879.2, "w": 175.5, "h": 23.5, "r": 3 },
+    { "element": "action body",       "x": 246.5,"y": 877.2, "w": 442.5, "h": 49.3 },
+    { "element": "flavor",            "x": 61,   "y": 938.5, "w": 628,   "h": 21 },
+    { "element": "footer divider",    "x": 61,   "y": 972,   "w": 628,   "h": 1 },
+    { "element": "rarity tag",        "x": 61,   "y": 982,   "w": 42.9,  "h": 11.5 },
+    { "element": "set id",            "x": 481.5,"y": 980.5, "w": 207.5, "h": 14.5 }
+  ]
+}

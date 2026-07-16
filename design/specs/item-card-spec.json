@@ -1,0 +1,72 @@
+{
+  "meta": {
+    "name": "cords CCG — Item card, layout 'Gate', V2 'Modern Trek'",
+    "example": "War Banner (ALPHA-1 · I02, uncommon, Banner, cost 3, equip + stored modes)",
+    "note": "Only item-specific values. Shares glass panels, hatch, gold coin, name/footer styling with the other Gate cards (see event-card-spec.json / location-card-spec.json). Measured from live DOM at 1:1.",
+    "canvas": { "width": 750, "height": 1050, "cardCornerRadius": 14, "background": "#0a1220" }
+  },
+
+  "header": {
+    "nameBox": { "x": 40, "y": 38, "w": 574, "h": 85.6, "r": 10 },
+    "name": { "x": 59, "baseline": 79, "font": "Space Grotesk 32/700", "letterSpacing": -0.32, "color": "#e6ecf6" },
+    "typeRow": {
+      "iconSlot": { "x": 59, "y": 92.6, "w": 16, "h": 16, "color": "#c8f562 (accent), item-type glyph, stroke 1.6" },
+      "label": { "x": 82, "baseline": 104.5, "font": "JetBrains Mono", "size": 11, "weight": 600, "letterSpacing": "0.22em", "transform": "uppercase", "color": "#7a8aa6" }
+    },
+    "costBox": { "x": 626, "y": 38, "w": 84, "h": 85.6, "r": 10 },
+    "costCoin": { "center": [668, 80.8], "diameter": 62, "gradient": "shared gold coin", "number": "Space Grotesk 28.5/800 #3a2205" }
+  },
+
+  "art": {
+    "watermark": { "glyph": "item-type icon (24-unit line glyph)", "box": { "x": 195, "y": 303, "w": 360, "h": 360 }, "color": "#7a8aa6", "opacity": 0.15 },
+    "artLabel": { "text": "ITEM ART", "y-top": 640.5, "font": "JetBrains Mono 10/400", "letterSpacing": 3, "color": "#7a8aa6 @ .7", "centered": true }
+  },
+
+  "footerGlass": {
+    "box": { "x": 40, "y": 824.1, "w": 670, "h": 187.9, "r": 10 },
+    "note": "bottom-anchored at y = 1050 − 38 − height; padding 16/20, rows gap 13. Row order: equip mode → stored mode → action rows → flavor → rarity/set line. Rows only render when the item has that field.",
+    "modeRow": {
+      "semantics": "EQUIP (on a unit) = accent #c8f562, person glyph. STORED (at a location) = mute #7a8aa6, crate glyph. A missing mode is simply omitted (some layouts dim it to 38% instead).",
+      "iconBox": { "w": 34, "h": 34, "r": 8, "border": "1.5px solid mode color", "fill": "#000 @ 25%", "icon": "19×19 glyph in mode color, stroke 1.6" },
+      "gapIconToText": 11,
+      "label": { "font": "JetBrains Mono", "size": 10, "weight": 700, "letterSpacing": "0.24em", "transform": "uppercase", "color": "mode color", "text": "EQUIP — ON A UNIT / STORED — AT A LOCATION", "marginBottom": 3 },
+      "body": { "font": "Space Grotesk", "size": 15.5, "lineHeight": 22.5, "color": "#e6ecf6" },
+      "equipRow": { "iconBox": { "x": 61, "y": 841.1 }, "labelBaseline": 851.1, "bodyX": 106, "bodyBaseline": 873 },
+      "storedRow": { "iconBox": { "x": 61, "y": 892.5 }, "labelBaseline": 902.5, "bodyX": 106, "bodyBaseline": 924.5 }
+    },
+    "actionRow": {
+      "note": "not on War Banner — same styling as policy action row: accent pill 'NAME · N AP' (JetBrains Mono 12/800 ls .12em, ink #0a1220, r3, padding 4/10) + body Space Grotesk 17/1.45 #e6ecf6, gap 10"
+    },
+    "flavor": { "x": 61, "baseline": 956.5, "font": "Space Grotesk 12.5 italic", "lineHeight": 17.5, "color": "#7a8aa6", "quoted": true },
+    "footerLine": {
+      "divider": { "x1": 61, "x2": 689, "y": 975, "stroke": "1px #1a2540" },
+      "rarity": { "text": "◇ UNCOMMON", "x": 61, "baseline": 992.5, "font": "JetBrains Mono 9/700 ls .22em", "color": "#c8f562" },
+      "setId": { "text": "ITEM · BANNER // ALPHA-1 · I02", "rightAlignedTo": 689, "baseline": 992.5, "font": "JetBrains Mono 9/400 ls .22em", "color": "#7a8aa6", "pattern": "ITEM · {TYPE} // {SET} · I##" }
+    }
+  },
+
+  "itemTypeGlyphs": "Weapon / Tool / Artifact / Banner / Regalia — 24×24 line icons, stroke 1.6, see ITEM_TYPE_ICON in item-data.js",
+
+  "layout": [
+    { "element": "card",             "x": 0,   "y": 0,     "w": 750,   "h": 1050, "r": 14 },
+    { "element": "type watermark",   "x": 195, "y": 303,   "w": 360,   "h": 360 },
+    { "element": "header name box",  "x": 40,  "y": 38,    "w": 574,   "h": 85.6, "r": 10 },
+    { "element": "card name",        "x": 59,  "y": 53,    "w": 536,   "h": 33.6 },
+    { "element": "type icon",        "x": 59,  "y": 92.6,  "w": 16,    "h": 16 },
+    { "element": "type label",       "x": 82,  "y": 94,    "w": 100,   "h": 14 },
+    { "element": "cost box",         "x": 626, "y": 38,    "w": 84,    "h": 85.6, "r": 10 },
+    { "element": "cost coin",        "x": 637, "y": 49.8,  "w": 62,    "h": 62,   "r": 31 },
+    { "element": "art label",        "x": 339, "y": 640.5, "w": 72,    "h": 13 },
+    { "element": "footer glass",     "x": 40,  "y": 824.1, "w": 670,   "h": 187.9,"r": 10 },
+    { "element": "equip icon box",   "x": 61,  "y": 841.1, "w": 34,    "h": 34,   "r": 8 },
+    { "element": "equip label",      "x": 106, "y": 841.1, "w": 362.9, "h": 13 },
+    { "element": "equip body",       "x": 106, "y": 857.1, "w": 362.9, "h": 22.5 },
+    { "element": "stored icon box",  "x": 61,  "y": 892.5, "w": 34,    "h": 34,   "r": 8 },
+    { "element": "stored label",     "x": 106, "y": 892.5, "w": 499.7, "h": 13 },
+    { "element": "stored body",      "x": 106, "y": 908.5, "w": 499.7, "h": 22.5 },
+    { "element": "flavor",           "x": 61,  "y": 944,   "w": 628,   "h": 17.5 },
+    { "element": "footer divider",   "x": 61,  "y": 975,   "w": 628,   "h": 1 },
+    { "element": "rarity tag",       "x": 61,  "y": 983.5, "w": 72.5,  "h": 11.5 },
+    { "element": "set id",           "x": 467.6,"y": 983.5,"w": 221.4, "h": 11.5 }
+  ]
+}

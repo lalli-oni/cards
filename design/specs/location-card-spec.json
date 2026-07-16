@@ -1,0 +1,137 @@
+{
+  "meta": {
+    "name": "cords CCG — Location card, layout 'Gate', V2 'Modern Trek'",
+    "example": "The Great Wall (ALPHA-1 · L09, epic, blocked N/S, ROTATE action)",
+    "note": "Only location-specific values. Palette, fonts (Space Grotesk / JetBrains Mono), gold coin gradient, and rarity gems are identical to card-spec.json (unit card). All boxes below measured from the live DOM at 1:1 — text baselines accurate to ±1px.",
+    "sharedWithUnitCard": "colors, fonts, cost/VP coin gradient (#ffe9a8 → #f4c24a 55% → #a3761a, focal 35% 30%, border 2px #8a6522, inner ring 3px #ffe9a8 @33%), footer type styling, rarity gems/colors"
+  },
+
+  "canvas": { "width": 750, "height": 750, "cardCornerRadius": 14, "background": "#0a1220" },
+
+  "artHatch": {
+    "coverage": "full-bleed (entire 750×750, under everything)",
+    "lineAngle": "45° from vertical, stripes running top-left → bottom-right ('\\'), matching CSS repeating-linear-gradient(45deg); in SVG use patternTransform=rotate(-45) on a vertical stripe",
+    "stripeWidth": 2,
+    "period": 16,
+    "stripeColor": "#ffffff",
+    "stripeOpacity": 0.05,
+    "mask": "none — no fade (unlike the unit card's radial-masked grid)",
+    "watermark": {
+      "glyph": "location-type icon (24×24 line icon, stroke-width 1.6, stroke-linejoin round)",
+      "box": { "x": 205, "y": 198, "w": 340, "h": 340 },
+      "color": "#7a8aa6", "opacity": 0.16
+    },
+    "artLabel": {
+      "text": "LOCATION ART", "font": "JetBrains Mono", "size": 10, "weight": 400,
+      "letterSpacing": "0.3em", "transform": "uppercase", "color": "#7a8aa6", "opacity": 0.7,
+      "position": "centered horizontally, top y=412.5 (baseline ≈422.5)"
+    }
+  },
+
+  "compassEdges": {
+    "semantics": {
+      "BLOCKED": "solid heavy bar — 14px stroke, color #ff5a4e (edge-blocked red), runs the full side; letter sits on a solid red plate",
+      "OPEN": "thin 2px line, color #7a8aa6 @ 40% opacity, with a 140px gate gap centered on the side (gap = ±70 from midpoint); 14px-long perpendicular ticks cap both gap ends; letter floats in the gap, same 40% grey",
+      "dataMapping": "loc.edges lists BLOCKED sides; every side NOT listed renders OPEN"
+    },
+    "geometry": {
+      "inset": 9,
+      "note": "bar/line centerline sits 9px in from each card edge; strokes are centered on that line (blocked bar spans 2–16px from edge). Card overflow is clipped by the 14px-radius card shape.",
+      "N": { "line": { "x1": 9, "y1": 9, "x2": 741, "y2": 9 } },
+      "S": { "line": { "x1": 9, "y1": 741, "x2": 741, "y2": 741 } },
+      "W": { "line": { "x1": 9, "y1": 9, "x2": 9, "y2": 741 }, "gapY": [305, 445] },
+      "E": { "line": { "x1": 741, "y1": 9, "x2": 741, "y2": 741 }, "gapY": [305, 445] }
+    },
+    "blockedLabelPlate": { "w": 30, "h": 19, "r": 2, "fill": "#ff5a4e", "centeredOnBar": true },
+    "letterLabel": {
+      "font": "JetBrains Mono", "size": 13, "weight": 700, "letterSpacing": 1, "anchor": "middle",
+      "colorOnBlocked": "#0a1220 (card bg, on the red plate)",
+      "colorOnOpen": "#7a8aa6 @ 40%",
+      "position": "midpoint of the side, baseline = centerline + 4.5"
+    }
+  },
+
+  "header": {
+    "nameTypeBox": {
+      "x": 40, "y": 34, "w": 572, "h": 86, "r": 10,
+      "fill": "#060c18 @ 78%", "border": "1px solid #1a2540",
+      "backdropBlur": "6px (live render only — omit in vector)"
+    },
+    "name": { "x": 59, "baseline": 76.5, "font": "Space Grotesk", "size": 30, "weight": 700, "letterSpacing": "-0.01em", "color": "#e6ecf6" },
+    "typeRow": {
+      "iconSlot": { "x": 59, "y": 86.3, "w": 17, "h": 17, "color": "#c8f562 (accent), stroke 1.6 in 24-unit viewBox" },
+      "label": { "x": 83, "baseline": 98.5, "font": "JetBrains Mono", "size": 11, "weight": 600, "letterSpacing": "0.22em", "transform": "uppercase", "color": "#7a8aa6" }
+    },
+    "vpBox": {
+      "x": 624, "y": 34, "w": 86, "h": 86, "r": 10,
+      "fill": "#060c18 @ 78%", "border": "1px solid #1a2540",
+      "note": "only present on mission locations"
+    },
+    "vpCoin": {
+      "center": [667, 77], "diameter": 64,
+      "gradient": "same as unit cost coin (radial, focal 35% 30%: #ffe9a8 → #f4c24a 55% → #a3761a)",
+      "border": "2px #8a6522", "innerRing": "inset 3px #ffe9a8 @ 33%", "shadow": "0 2px 8px #000 @ 30%",
+      "vpNumber": { "font": "Space Grotesk", "size": 26.88, "weight": 800, "color": "#3a2205", "baseline": 80, "anchor": "center" },
+      "vpLabel": { "text": "VP", "font": "JetBrains Mono", "size": 8.96, "weight": 700, "letterSpacing": "0.2em", "color": "#3a2205", "baseline": 94.5, "anchor": "center" }
+    }
+  },
+
+  "footerGlass": {
+    "box": { "x": 40, "y": 597.7, "w": 670, "h": 118.3, "r": 10, "fill": "#060c18 @ 78%", "border": "1px solid #1a2540" },
+    "note": "height is content-driven: padding 14px top/bottom + 18px sides, rows flow with 9px column gap, bottom-anchored at y = 750 − 34 − height. Row order: mission → passive → actions → rarity/set line.",
+    "missionRow": {
+      "label": { "text": "MISSION", "x": 59, "baseline": 631.5, "font": "JetBrains Mono", "size": 10, "weight": 700, "letterSpacing": "0.24em", "color": "#c8f562", "marginRight": 12 },
+      "reqChip": {
+        "box": { "x": 129.8, "y": 612.7, "w": 118, "h": 30.5, "r": 4 },
+        "border": "1.5px solid #c8f562", "fill": "#000000 @ 25%",
+        "text": { "font": "JetBrains Mono", "size": 12, "weight": 700, "letterSpacing": "0.12em", "color": "#e6ecf6", "padding": "6px 10px" },
+        "note": "chip width is text-driven; multiple reqs sit in the same row with 8px gaps"
+      },
+      "vpArrow": { "text": "→ 6 VP", "x": 255.8, "baseline": 631.7, "font": "JetBrains Mono", "size": 11, "weight": 700, "letterSpacing": "0.12em", "color": "#7a8aa6" }
+    },
+    "passiveRow": {
+      "note": "not present on The Great Wall — styling from sibling cards",
+      "label": { "text": "PASSIVE", "font": "JetBrains Mono", "size": 10, "weight": 700, "letterSpacing": "0.24em", "transform": "uppercase", "color": "#7a8aa6" },
+      "body": { "font": "Space Grotesk", "size": 14.5, "lineHeight": 1.4, "color": "#e6ecf6", "gapAfterLabel": 10 }
+    },
+    "actionRow": {
+      "pill": {
+        "box": { "x": 59, "y": 655.2, "w": 107.6, "h": 17, "r": 3 },
+        "fill": "#c8f562", "padding": "2px 7px",
+        "text": { "content": "ROTATE · 0 AP", "font": "JetBrains Mono", "size": 10, "weight": 800, "letterSpacing": "0.12em", "color": "#0a1220" }
+      },
+      "body": { "x": 176.6, "baseline": 667, "font": "Space Grotesk", "size": 14.5, "lineHeight": 1.4, "color": "#e6ecf6" }
+    },
+    "footerLine": {
+      "divider": { "x1": 59, "y": 681.5, "x2": 691, "stroke": "1px #1a2540", "paddingTopAfter": 7 },
+      "rarity": { "text": "◆ EPIC", "x": 59, "baseline": 698.5, "font": "JetBrains Mono", "size": 9, "weight": 700, "letterSpacing": "0.22em", "color": "#c8f562 (rarity accent)", "note": "same as unit footer" },
+      "setId": { "text": "MISSION // ALPHA-1 · L09", "rightAlignedTo": 691, "baseline": 698.5, "font": "JetBrains Mono", "size": 9, "weight": 400, "letterSpacing": "0.22em", "color": "#7a8aa6", "note": "prefix is 'MISSION' for mission locations, 'LOCATION' otherwise; matches unit footer style. L## is the location set number" }
+    }
+  },
+
+  "layout": [
+    { "element": "card",                "x": 0,     "y": 0,     "w": 750,   "h": 750,   "r": 14 },
+    { "element": "hatch + watermark",   "x": 0,     "y": 0,     "w": 750,   "h": 750 },
+    { "element": "type glyph watermark","x": 205,   "y": 198,   "w": 340,   "h": 340 },
+    { "element": "edge bar N",          "x": 9,     "y": 2,     "w": 732,   "h": 14,    "note": "blocked" },
+    { "element": "edge bar S",          "x": 9,     "y": 734,   "w": 732,   "h": 14,    "note": "blocked" },
+    { "element": "edge line W",         "x": 8,     "y": 9,     "w": 2,     "h": 732,   "note": "open, gap y 305–445" },
+    { "element": "edge line E",         "x": 740,   "y": 9,     "w": 2,     "h": 732,   "note": "open, gap y 305–445" },
+    { "element": "header name box",     "x": 40,    "y": 34,    "w": 572,   "h": 86,    "r": 10 },
+    { "element": "card name",           "x": 59,    "y": 50.8,  "w": 534,   "h": 31.5 },
+    { "element": "type icon",           "x": 59,    "y": 86.3,  "w": 17,    "h": 17 },
+    { "element": "type label",          "x": 83,    "y": 88,    "w": 130,   "h": 14 },
+    { "element": "header VP box",       "x": 624,   "y": 34,    "w": 86,    "h": 86,    "r": 10 },
+    { "element": "VP coin",             "x": 635,   "y": 45,    "w": 64,    "h": 64,    "r": 32 },
+    { "element": "art label",           "x": 321,   "y": 412.5, "w": 108,   "h": 13 },
+    { "element": "footer glass",        "x": 40,    "y": 597.7, "w": 670,   "h": 118.3, "r": 10 },
+    { "element": "MISSION label",       "x": 59,    "y": 621.5, "w": 58.8,  "h": 13 },
+    { "element": "req chip MILITARY ×3","x": 129.8, "y": 612.7, "w": 118,   "h": 30.5,  "r": 4 },
+    { "element": "→ 6 VP",              "x": 255.8, "y": 620.7, "w": 47.6,  "h": 14.5 },
+    { "element": "action pill",         "x": 59,    "y": 655.2, "w": 107.6, "h": 17,    "r": 3 },
+    { "element": "action body text",    "x": 176.6, "y": 652.2, "w": 251,   "h": 20.3 },
+    { "element": "footer divider",      "x": 59,    "y": 681.5, "w": 632,   "h": 1 },
+    { "element": "rarity tag",          "x": 59,    "y": 689.5, "w": 42.9,  "h": 11.5 },
+    { "element": "set id",              "x": 513.9, "y": 689.5, "w": 177.1, "h": 11.5 }
+  ]
+}

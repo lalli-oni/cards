@@ -7,12 +7,17 @@ rules/build/
 # Environment secrets
 design/.env
 
+# macOS
+.DS_Store
+
 # Python
 __pycache__/
 *.pyc
 
 # Generated design exports
 design/exports/
+# Generated gallery (published to the gh-pages branch, not main)
+design/gallery/
 
 # Claude Code local settings
 .claude/settings.local.json

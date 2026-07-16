@@ -187,6 +187,11 @@ services:
     networks:
       - penpot
 
+    # Vendored card fonts, mounted into the exporter's system font path so the
+    # headless renderer uses them (no external Google Fonts fetch). See design/fonts/.
+    volumes:
+      - ./fonts:/usr/share/fonts/truetype/cords:ro
+
     environment:
       << : [*penpot-secret-key]
       # Don't touch it; this uses an internal docker network to

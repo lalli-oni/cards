@@ -200,7 +200,9 @@ Each deck has its own draw behavior:
 
 Combat is initiated by the **Attack** action (1 AP). The attacker must
 have at least one unit at the location and at least one enemy unit must
-be present.
+be present. Card effects may make a unit an **invalid target** (for
+example, a keyword that shields it while it out-matches the attacker on a
+stat); an Attack with **no valid targets** cannot be initiated.
 
 **Combat flow:**
 
@@ -470,42 +472,64 @@ more expensive or powerful than a legendary.
 
 ## Keyword System
 
-Keywords are shorthand abilities referenced by name (bolded text or
-icons) on cards. Each keyword has a fixed definition in the glossary
-below. Some keywords have variable values (e.g. Shield X) where X
-differs per card.
+Keywords are the reusable **mechanical shorthands** a card carries in its
+`keywords` column — the things a card *does*, referenced by name (bolded
+text or icons) on the card. Each keyword is defined once, here, and drawn
+from a closed governed vocabulary (`engine/src/keywords.ts`) so card data
+cannot drift from its meaning.
+
+Keywords come in two shapes:
+
+- **Modifier families** — parameterized stat effects that differ only in
+  *who they affect*; one family name carries parameters instead of minting a
+  new keyword per variant.
+- **Standalone keywords** — discrete effects that don't reduce to a stat formula.
+
+[design: The v0.1 surface below is deliberately small. Deferred keyword
+candidates (Lethal, Taunt, Duelist, Resolute, Ambush, Shield, Caravan,
+Troublemaker, …) and the question of unifying keywords with actions/passives
+are tracked post-v0.1 in the rules-design epic — #210 → #209, #208.]
 
 ### Timing
-- **Static**: Always active while the card is in play.
-- **Triggered**: Fires automatically when a specific condition is met.
-- **Activated**: Initiated by player.
+- **Static**: always active while the card is in play.
+- **Triggered**: fires automatically when a condition is met — no choice, no cost.
+- Anything a player must **activate** (spend AP to use) is an **action**, not a
+  keyword — it lives in the card's `actions`, not `keywords`. (This is why Heal
+  is an action, not a keyword.)
 
-### Keyword Glossary
+### Modifier families
+
+A modifier is written `Family:±MAG:STAT:CONTEXT[:ROLE]`, where STAT ∈
+{strength, cunning, charisma, all}, CONTEXT ∈ {combat, mission}, and ROLE ∈
+{atk, def, either} (default either). The families differ only in scope:
+
+| Family | Affects |
+|--------|---------|
+| Prowess | this unit only |
+| Kindred | friendly units sharing an attribute with this unit |
+| Leader | all friendly units at this location |
+| Aura | every unit at this location — friend and foe (a location keyword) |
+
+Examples: `Prowess:+2:strength:combat:def` — +2 strength when defending in
+combat. `Aura:-1:all:combat` — every unit here takes −1 to all stats in combat.
+
+### Standalone keywords
 
 #### Unit keywords
 | Keyword | Timing | Definition |
 |---------|--------|------------|
-| Commander | Static | Friendly units at the same location get +X to all stats |
-| Ambush | Triggered | When this unit enters a location with an enemy unit, one enemy unit there is injured |
-| Untouchable | Static | This unit cannot be targeted by the Attack action and is not committed to combat as a defender |
-| Duelist | Static | When this unit is in combat, the matchup it is assigned to is resolved in isolation — no other units' keywords or effects apply to it |
-| Lethal | Static | When this unit wins combat, the loser is killed instead of injured (regardless of attack power ratio) |
-| Resolute | Static | This unit wins ties when attacking |
-| Taunt | Static | Enemy units at this location must target this unit when attacking. If multiple friendly units have Taunt, the attacker chooses among them |
-| Heal | Activated (1 AP) | Remove the injured status from a friendly unit at the same location |
+| Untouchable | Static | Cannot be targeted by an Attack while this unit's [stat] exceeds the attacker's [stat]. Written `Untouchable:STAT` (v0.1: charisma). |
+| Berserker | Triggered | When this unit wins combat and would injure the loser, it injures itself and kills the loser instead. |
+| Patron | Static | While in play, cards you buy that share an attribute with this unit cost X less gold. Written `Patron:X`. |
+| Loot | Triggered | When this unit kills an enemy in combat, draw a card. |
+| Squire | Static | Your Equip/Unequip actions cost X less AP (default 1). Written `Squire` or `Squire:X`. |
 
 #### Equipment keywords
 | Keyword | Timing | Definition |
 |---------|--------|------------|
-| Flying | Static | Equipped unit ignores blocked edges when moving |
-| Shield | Triggered | Prevents the equipped unit from being injured or killed once. Equipment is discarded after use |
-| Heavy | Static | Equipped unit cannot use the Move action more than once per turn |
-
-#### Location keywords
-| Keyword | Timing | Definition |
-|---------|--------|------------|
-| Radiated | Static | Units at this location get -X to all stats while present |
-| Fortified | Static | Defender units at this location get +X to strength when calculating attack power |
+| Flying | Static | Equipped unit ignores blocked edges when moving. |
+| Heavy | Static | The equipped unit's Move action costs +1 AP. |
+| Lightweight | Static | The equipped unit's Move action costs 1 less AP. |
 
 ## Economy
 - Each player begins with [var:starting_gold:10] gold.

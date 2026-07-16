@@ -41,9 +41,9 @@ keywords:
 
 - **Attributes** (this file) — the *cross-type* synergy axis. The same
   vocabulary means the same thing on every card type.
-- **Keywords** — mechanical keyword-effects (Lethal, Taunt, Fortified, …),
-  defined in the [Keyword Glossary](README.md#keyword-glossary). Unlike an
-  attribute, a keyword *does* something; it is not a classifier.
+- **Keywords** — mechanical keyword-effects carried in the `keywords` column
+  (Berserker, Leader, Aura, …), defined in the [Keyword System](README.md#keyword-system).
+  Unlike an attribute, a keyword *does* something; it is not a classifier.
 
 [design: In v0.1 the attributes field is carried by **units**; extending it to
 the other card types — so the cross-type synergy described above is fully

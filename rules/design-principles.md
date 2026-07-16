@@ -32,3 +32,15 @@ resolved by the same action:
 - Take a blocking-wall location and wall off an opponent's corridor
 - Deny a card that looks central to someone's strategy
 - Take a card that isn't useful to you but is clearly important to its owner
+
+## No Free Absolutes
+
+A keyword or effect's power should be **conditional or paid-for**, not an
+unconditional absolute. Absolutes ("can never be targeted", "always kills")
+read as feel-bad on the receiving end and flatten counterplay. Prefer a
+condition the opponent can work around, or a cost the owner pays.
+
+[design: This drove two v0.1 keyword choices — Untouchable became *conditional*
+(targetable once the attacker out-stats it) rather than blanket-immune, and
+Lethal ("always kills") was replaced by Berserker (kills, but the unit injures
+itself to do it).]

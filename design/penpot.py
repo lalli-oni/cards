@@ -101,16 +101,25 @@ def make_text_content(
 CHAR_ADVANCE = 0.56
 
 
-def _wrap_lines(text, max_width, fs, char_advance) -> list:
-    """Greedy word-wrap: split text into lines that fit within max_width px."""
+def _wrap_lines(text, max_width, fs, char_advance, letter_spacing=0.0) -> list:
+    """Greedy word-wrap: split text into lines that fit within max_width px.
+
+    Uses the same per-line width model as make_position_data (glyph advance plus
+    inter-glyph tracking), so a line the wrapper accepts as fitting won't exceed
+    the shape box once letter_spacing widens it downstream.
+    """
     if not text:
         return []
-    max_chars = max(1, int(max_width / (fs * char_advance)))
+    advance = fs * char_advance
+
+    def fits(s):
+        return len(s) * advance + max(0, len(s) - 1) * letter_spacing <= max_width
+
     lines = []
     current = ""
     for word in text.split(" "):
         candidate = word if not current else f"{current} {word}"
-        if len(candidate) <= max_chars or not current:
+        if fits(candidate) or not current:
             current = candidate
         else:
             lines.append(current)
@@ -144,7 +153,7 @@ def make_position_data(text, x, y, w, h, font_size="14", font_weight="400",
     fs = float(font_size)
     line_h = fs * line_height
     ls = float(letter_spacing) if letter_spacing not in (None, "") else 0.0
-    lines = _wrap_lines(text, w, fs, char_advance)
+    lines = _wrap_lines(text, w, fs, char_advance, ls)
 
     entries = []
     for i, line in enumerate(lines):
@@ -536,7 +545,16 @@ class PenpotClient:
         try:
             with self.opener.open(req) as resp:
                 body = resp.read().decode("utf-8")
-                return json.loads(body) if body else {}
+                if not body:
+                    # A 2xx with no body is a broken RPC; surface it here rather
+                    # than coercing to {} and failing later with an opaque KeyError.
+                    print(f"ERROR: {endpoint} returned an empty 2xx body", file=sys.stderr)
+                    sys.exit(1)
+                return json.loads(body)
+        except json.JSONDecodeError as exc:
+            print(f"ERROR: {endpoint} returned a non-JSON 2xx body: {exc} — "
+                  f"{body[:500]}", file=sys.stderr)
+            sys.exit(1)
         except urllib.error.HTTPError as exc:
             body = exc.read().decode("utf-8", errors="replace")
             print(f"ERROR {exc.code} from {endpoint}: {body[:500]}", file=sys.stderr)
@@ -699,6 +717,10 @@ class PenpotClient:
                     print("ERROR: Export API returned empty response", file=sys.stderr)
                     sys.exit(1)
                 data = json.loads(body)
+        except json.JSONDecodeError as exc:
+            print(f"ERROR: export API returned a non-JSON 2xx body: {exc} — "
+                  f"{body[:500]}", file=sys.stderr)
+            sys.exit(1)
         except urllib.error.HTTPError as exc:
             body = exc.read().decode("utf-8", errors="replace")
             print(f"ERROR {exc.code} from export API: {body[:500]}", file=sys.stderr)

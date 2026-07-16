@@ -13,6 +13,10 @@ Both are licensed under the SIL Open Font License 1.1 (see each `OFL.txt`).
   The static weights here (Medium 500, SemiBold 600, Bold 700) were instanced
   from it with `fontTools.varLib.instancer` and given a consistent typographic
   family name ("Space Grotesk") so fontconfig/CSS weight selection resolves.
+- **Space Grotesk tops out at Bold 700** — the variable font has no 800 master,
+  so a weight-800 request falls back to 700. The renderer therefore uses 700 for
+  Space Grotesk; only JetBrains Mono (which ships ExtraBold 800 below) has a real
+  800.
 
 ## jetbrains-mono/
 - **JetBrains Mono** v2.304 — https://github.com/JetBrains/JetBrainsMono

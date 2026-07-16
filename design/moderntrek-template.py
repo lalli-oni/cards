@@ -42,8 +42,17 @@ from penpot import (
 )
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-FRAME_NAME = "Unit Card MT"
 DEFAULT_CSV = os.path.join(SCRIPT_DIR, "..", "library", "sets", "alpha-1", "units.csv")
+
+# Baseline printed for a missing/blank unit stat. Mirrors rules
+# [var:default_stat:5]; the renderer isn't variant-aware, so update this if that
+# baseline changes.
+DEFAULT_STAT = "5"
+
+# Location mission requirement keys that are stat *thresholds* ("combined stat
+# >= N across friendly units") rather than counts of units/attributes. Rendered
+# as "STRENGTH ≥15" instead of "STRENGTH ×15".
+STAT_REQ_KEYS = {"strength", "cunning", "charisma"}
 
 # --- Fonts ------------------------------------------------------------------
 # family names match the vendored TTFs in design/fonts/, mounted into the
@@ -68,7 +77,7 @@ C = {
     "str": "#ff6b6b", "str_glow": "#ff3636",
     "cun": "#6bb6ff", "cun_glow": "#2e7bd6",
     "cha": "#c8f562", "cha_glow": "#c8f562",
-    "glass": "#060c18",       # header/footer glass boxes (locations)
+    "glass": "#060c18",       # header/footer glass boxes (locations + all portrait types)
     "edge_blocked": "#ff5a4e",
     "edge_open": "#7a8aa6",
 }
@@ -100,17 +109,33 @@ def _stroke(color, width, opacity=1, style="solid"):
 # ---------------------------------------------------------------------------
 
 def parse_glossary():
-    """Parse the keyword glossary table in rules/README.md into
-    {keyword_lower: (timing, definition)}. Provisional pending #203."""
+    """Parse the keyword glossary table(s) in rules/README.md into
+    {keyword_lower: (timing, definition)}.
+
+    Only rows belonging to a table whose header is `| Keyword | Timing |
+    Definition |` are captured; other 3-column tables in the README (e.g. the
+    Actions table) are ignored so an action name can't masquerade as a keyword.
+    Provisional pending #203."""
     path = os.path.join(SCRIPT_DIR, "..", "rules", "README.md")
     glossary = {}
     try:
         with open(path) as f:
+            in_glossary = False
             for line in f:
-                if not line.lstrip().startswith("|"):
+                stripped = line.strip()
+                if not stripped.startswith("|"):
+                    in_glossary = False           # a blank/non-table line ends the table
                     continue
-                cells = [c.strip() for c in line.strip().strip("|").split("|")]
-                if len(cells) == 3 and cells[0] not in ("Keyword", "") and "---" not in cells[1]:
+                cells = [c.strip() for c in stripped.strip("|").split("|")]
+                if len(cells) != 3:
+                    in_glossary = False           # a differently-shaped table
+                    continue
+                if cells[0] == "Keyword":         # glossary header row -> start capturing
+                    in_glossary = True
+                    continue
+                if "---" in cells[1]:             # separator row -> keep state
+                    continue
+                if in_glossary:
                     glossary[cells[0].lower()] = (cells[1], cells[2])
     except OSError as exc:
         print(f"WARNING: keyword glossary unreadable at {path}: {exc} — "
@@ -137,13 +162,17 @@ def keyword_reminder(ability, glossary):
 
 def parse_card(row, index):
     def stat(v):
-        return v.strip() if v and v.strip() else "5"
+        return v.strip() if v and v.strip() else DEFAULT_STAT
 
     def split(field):
         return [x.strip() for x in row.get(field, "").split(";") if x.strip()]
 
     actions = []
     for a in split("actions"):
+        if a.count(":") < 2:
+            print(f"WARNING: {row.get('id')}: action '{a}' is not name:ap:effect "
+                  f"— skipping", file=sys.stderr)
+            continue
         name, _, rest = a.partition(":")
         ap, _, effect = rest.partition(":")
         actions.append({"name": name.strip(), "ap": ap.strip(), "effect": effect.strip()})
@@ -228,7 +257,7 @@ def build_shapes(page_id, frame_id, card, glossary):
     circle("Cost Coin", 668, 8, 60, 60, [coin], strokes=_stroke(C["coin_border"], 2),
            shadow=[make_shadow("#f4c24a", 20, 0.33)])
     circle("Cost Ring", 671, 11, 54, 54, [], strokes=_stroke("#ffe9a8", 3, 0.33))
-    text("Cost Value", 668, 22, 60, 36, card["cost"], SG, "28", "800", C["coin_text"],
+    text("Cost Value", 668, 22, 60, 36, card["cost"], SG, "28", "700", C["coin_text"],
          align="center")
 
     # 2. Attribute bar (the governed synergy axis — chips, no icons for v1)
@@ -382,7 +411,11 @@ def parse_location(row, index):
             if r:
                 key, sep, n = r.rpartition("_")
                 if sep and n.isdigit():
-                    reqs.append((key.upper(), n))
+                    # stat thresholds (strength_15 = combined stat >= 15) render
+                    # "STRENGTH ≥15"; attribute/unit counts (knowledge_2, units_3)
+                    # render "KNOWLEDGE ×2".
+                    op = "≥" if key.lower() in STAT_REQ_KEYS else "×"
+                    reqs.append((key.upper(), f"{op}{n}"))
                 else:               # no numeric suffix -> use the whole token
                     reqs.append((r.upper(), ""))
 
@@ -523,7 +556,7 @@ def build_location_shapes(page_id, frame_id, card, glossary):
         circle("VP Coin", 635, 45, 64, 64, [coin], strokes=_stroke(C["coin_border"], 2),
                shadow=[make_shadow("#f4c24a", 16, 0.3)])
         circle("VP Ring", 638, 48, 58, 58, [], strokes=_stroke("#ffe9a8", 3, 0.33))
-        text("VP Number", 635, 56, 64, 34, card["vp"], SG, "26", "800", C["coin_text"],
+        text("VP Number", 635, 56, 64, 34, card["vp"], SG, "26", "700", C["coin_text"],
              align="center")
         text("VP Label", 635, 87, 64, 12, "VP", JB, "8", "700", C["coin_text"],
              align="center", ls=1.8)
@@ -543,7 +576,7 @@ def build_location_shapes(page_id, frame_id, card, glossary):
                  "700", C["lime"], ls=2.4)
             cx = GL_L + 70
             for j, (key, n) in enumerate(data["reqs"]):
-                label = f"{key} ×{n}" if n else key
+                label = f"{key} {n}" if n else key
                 w = int(len(label) * 12 * 0.62) + 20
                 rect(f"Req Chip {j}", cx, cursor, w, 30, fills=_fill("#000000", 0.25),
                      r1=4, r2=4, r3=4, r4=4, strokes=_stroke(C["lime"], 1.5))
@@ -597,6 +630,10 @@ def _gold_coin():
 def _parse_actions(row):
     out = []
     for a in [x.strip() for x in row.get("actions", "").split(";") if x.strip()]:
+        if a.count(":") < 2:
+            print(f"WARNING: {row.get('id')}: action '{a}' is not name:ap:effect "
+                  f"— skipping", file=sys.stderr)
+            continue
         name, _, rest = a.partition(":")
         ap, _, effect = rest.partition(":")
         out.append({"name": name.strip(), "ap": ap.strip(), "body": effect.strip()})
@@ -617,10 +654,14 @@ def parse_item(row, index):
 
 
 def parse_event(row, index):
+    timing = (row.get("timing") or "instant").lower().strip()
+    if timing not in ("instant", "passive", "trap"):
+        print(f"WARNING: {row.get('id')}: unknown timing '{timing}' — rendering "
+              f"with default styling and no trigger row", file=sys.stderr)
     return {
         "id": row["id"], "name": row["name"], "number": f"E{index + 1:02d}",
         "set": row.get("set", ""), "rarity": (row.get("rarity") or "common").lower(),
-        "timing": (row.get("timing") or "instant").lower().strip(),
+        "timing": timing,
         "duration": (row.get("duration") or "").strip(),
         "trigger": (row.get("trigger") or "").strip(),
         "event_type": (row.get("event_type") or "").strip(),
@@ -704,7 +745,7 @@ def _cost_box(rect, circle, text, cost, box_h=86, coin_cy=80):
     circle("Cost Coin", 637, coin_cy - 31, 62, 62, [_gold_coin()],
            strokes=_stroke(C["coin_border"], 2), shadow=[make_shadow("#f4c24a", 16, 0.3)])
     circle("Cost Ring", 640, coin_cy - 28, 56, 56, [], strokes=_stroke("#ffe9a8", 3, 0.33))
-    text("Cost Value", 626, coin_cy - 15, 84, 36, cost, SG, "28", "800",
+    text("Cost Value", 626, coin_cy - 15, 84, 36, cost, SG, "28", "700",
          C["coin_text"], align="center")
 
 
@@ -736,9 +777,11 @@ def build_item_shapes(page_id, frame_id, card, glossary):
     def action(idx, a):
         pill = f"{a['name'].upper()} · {a['ap']} AP"
         pw = int(len(pill) * 12 * 0.62) + 20
-        # item action effects are DSL tokens (unlike policies' prose); show the
-        # card's human `text` summary as the body instead of the raw effect.
-        body = card["text"]
+        # item action effects are DSL tokens (unlike policies' prose); the card's
+        # human `text` summary covers the item as a whole, so show it once under
+        # the first pill and fall back to each later action's own effect token —
+        # otherwise a multi-action item would repeat the same summary per pill.
+        body = card["text"] if idx == 0 else a["body"]
         n = _wrapc(body, PF_R - PF_L - pw - 12, 16) if body else 1
         h = max(23, n * 24)
 
@@ -794,9 +837,9 @@ def build_event_shapes(page_id, frame_id, card, glossary):
         n = _wrapc(trig, PF_R - 127, 14)
         h = max(16, n * 20)
 
-        def r_trig(cur):
+        def r_trig(cur, _n=n):
             text("Trigger Label", 61, cur, 66, 14, "TRIGGER", JB, "10", "700", accent, ls=2.2)
-            text("Trigger Body", 127, cur - 2, PF_R - 127, n * 20, trig, SG, "14", "400",
+            text("Trigger Body", 127, cur - 2, PF_R - 127, _n * 20, trig, SG, "14", "400",
                  C["text"], style="italic")
         rows.append((h, r_trig))
     if card["text"]:
@@ -998,6 +1041,11 @@ def main():
     os.makedirs(out_dir, exist_ok=True)
 
     for i, row in enumerate(rows):
+        if not (row.get("id") or "").strip() or not (row.get("name") or "").strip():
+            print(f"ERROR: row {i + 1} of {csv_path} has an empty id or name — "
+                  f"a blank/short CSV row would silently collide or vanish on "
+                  f"export", file=sys.stderr)
+            sys.exit(1)
         card = cfg["parse"](row, i)
         try:
             file_data = client.get_file(file_id)

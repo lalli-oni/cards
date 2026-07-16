@@ -3,9 +3,9 @@
 
 Scans design/exports/<set>/<type>-<id>.png, copies the PNGs into
 design/gallery/cards/<set>/, and writes a self-contained design/gallery/index.html
-(no external dependencies) — a responsive, dark-themed gallery grouped by card
-type, with type filters and click-to-zoom. Display names + rarity come from the
-library CSVs.
+(no external dependencies) — a responsive, dark-themed masonry gallery sorted by
+card type (with type filter buttons) and click-to-zoom. Display names + rarity
+come from the library CSVs.
 
 Usage:   cd design && python3 build-gallery.py
 Publish: design/publish-gallery.sh   (pushes design/gallery/ to the gh-pages branch)
@@ -15,6 +15,7 @@ import csv
 import html
 import os
 import shutil
+import sys
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 EXPORTS = os.path.join(SCRIPT_DIR, "exports")
@@ -39,14 +40,21 @@ def load_meta(set_name):
             continue
         with open(path, newline="") as f:
             for row in csv.DictReader(f):
-                meta[row["id"]] = {"name": row.get("name", row["id"]),
-                                   "rarity": (row.get("rarity") or "").lower()}
+                cid = row.get("id")
+                if not cid:
+                    print(f"WARNING: {path} has a row with no id — skipping",
+                          file=sys.stderr)
+                    continue
+                meta[cid] = {"name": row.get("name", cid),
+                             "rarity": (row.get("rarity") or "").lower()}
     return meta
 
 
 def collect():
     """Return {set_name: [ {type, id, name, rarity, file} ... ]}."""
     out = {}
+    if not os.path.isdir(EXPORTS):
+        return out              # never rendered yet — main() prints the guidance
     for set_name in sorted(os.listdir(EXPORTS)):
         set_dir = os.path.join(EXPORTS, set_name)
         if not os.path.isdir(set_dir) or set_name.startswith("_"):
@@ -58,8 +66,14 @@ def collect():
                 continue
             ctype, _, cid = fn[:-4].partition("-")
             if ctype not in TYPE_ORDER or not cid:
+                print(f"WARNING: {set_name}/{fn} doesn't match <type>-<id>.png "
+                      f"— skipping", file=sys.stderr)
                 continue
-            m = meta.get(cid, {})
+            m = meta.get(cid)
+            if m is None:               # PNG with no library row (stale export / id mismatch)
+                print(f"WARNING: {set_name}/{fn}: no library entry for id "
+                      f"'{cid}' — using a derived name and no rarity", file=sys.stderr)
+                m = {}
             cards.append({"type": ctype, "id": cid, "file": fn,
                           "name": m.get("name", cid.replace("-", " ").title()),
                           "rarity": m.get("rarity", "")})
@@ -144,8 +158,11 @@ PAGE = """<!doctype html>
 def main():
     data = collect()
     if not data:
-        print("No cards found under design/exports/<set>/ — run the renderer first.")
-        return
+        print("No cards found under design/exports/<set>/ — run the renderer first.",
+              file=sys.stderr)
+        # Non-zero so publish-gallery.sh (set -e) aborts instead of republishing
+        # a stale gallery/ from a previous run.
+        sys.exit(1)
 
     if os.path.isdir(OUT):
         shutil.rmtree(OUT)
@@ -168,7 +185,7 @@ def main():
                 f'alt="{html.escape(c["name"])}">'
                 f'<figcaption><span class="nm">{html.escape(c["name"])}</span>'
                 f'<span class="rr" style="background:{rr}" '
-                f'title="{c["rarity"]}"></span></figcaption></figure>')
+                f'title="{html.escape(c["rarity"])}"></span></figcaption></figure>')
 
     total = sum(counts.values())
     filters = [f'<button class="filter active" data-type="all">All'

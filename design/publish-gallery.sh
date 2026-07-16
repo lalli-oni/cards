@@ -1,26 +1,34 @@
 #!/usr/bin/env bash
 # Build the card gallery and publish it to the orphan `gh-pages` branch (which
-# GitHub Pages serves). Keeps the 66 card PNGs off `main` — they live only on
-# gh-pages. Run whenever the cards change:  bash design/publish-gallery.sh
+# GitHub Pages serves). Keeps the generated card PNGs off `main` — they live only
+# on gh-pages. Run whenever the cards change:  bash design/publish-gallery.sh
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"                 # design/
 REPO="$(git -C "$HERE" rev-parse --show-toplevel)"
 GALLERY="$HERE/gallery"
-WT="$(mktemp -d)/gh-pages"
+TMP="$(mktemp -d)"
+WT="$TMP/gh-pages"
+trap 'git -C "$REPO" worktree remove --force "$WT" >/dev/null 2>&1 || true; rm -rf "$TMP"' EXIT
 
 python3 "$HERE/build-gallery.py"
 
-# Ensure an orphan gh-pages branch exists (empty tree -> no shared history).
+# Ensure a gh-pages branch exists locally. Prefer an existing remote branch so we
+# don't create a divergent orphan that the non-fast-forward push would reject.
 if ! git -C "$REPO" rev-parse --verify -q gh-pages >/dev/null; then
-  empty="$(git -C "$REPO" mktree < /dev/null)"
-  c="$(git -C "$REPO" commit-tree "$empty" -m 'init gh-pages')"
-  git -C "$REPO" branch gh-pages "$c"
-  echo "created orphan gh-pages branch"
+  if git -C "$REPO" ls-remote --exit-code --heads origin gh-pages >/dev/null 2>&1; then
+    git -C "$REPO" fetch -q origin gh-pages
+    git -C "$REPO" branch gh-pages FETCH_HEAD
+    echo "tracked existing remote gh-pages branch"
+  else
+    empty="$(git -C "$REPO" mktree < /dev/null)"      # empty tree -> no shared history
+    c="$(git -C "$REPO" commit-tree "$empty" -m 'init gh-pages')"
+    git -C "$REPO" branch gh-pages "$c"
+    echo "created orphan gh-pages branch"
+  fi
 fi
 
 git -C "$REPO" worktree add --force "$WT" gh-pages >/dev/null
-trap 'git -C "$REPO" worktree remove --force "$WT" >/dev/null 2>&1 || true' EXIT
 
 # Replace the worktree contents with the freshly built gallery.
 find "$WT" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +

@@ -9,9 +9,9 @@ export def main [] {
   let results = (audit run --set mini --build-dir $FIX)
 
   # one record per Layer 2 check, in a stable order
-  assert equal ($results | length) 5
+  assert equal ($results | length) 6
   assert equal ($results | get check) [
-    dsl-verb-coverage negative-value rarity-distribution archetype-distribution mission-vp
+    dsl-verb-coverage keyword-coverage negative-value rarity-distribution archetype-distribution mission-vp
   ]
 
   # summary classification: advisory vs PASS/FAIL
@@ -23,7 +23,7 @@ export def main [] {
   # fixture, and negative-value is NOT among them
   let hard = (audit hard-failures $results)
   assert equal ($hard | get check | sort) [
-    archetype-distribution dsl-verb-coverage mission-vp rarity-distribution
+    archetype-distribution dsl-verb-coverage keyword-coverage mission-vp rarity-distribution
   ]
 
   # advisory exclusion is explicit: a "failing" negative-value never counts,

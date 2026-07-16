@@ -9,6 +9,7 @@
 # list) and never fails the audit.
 
 use dsl-verb-coverage.nu
+use keyword-coverage.nu
 use negative-value.nu
 use rarity-distribution.nu
 use archetype-distribution.nu
@@ -23,6 +24,7 @@ const ADVISORY = [negative-value]
 export def run [--set: string = "alpha-1", --build-dir: string = ""] {
   [
     (dsl-verb-coverage run --set $set --build-dir $build_dir)
+    (keyword-coverage run --set $set --build-dir $build_dir)
     (negative-value run --set $set --build-dir $build_dir)
     (rarity-distribution run --set $set --build-dir $build_dir)
     (archetype-distribution run --set $set --build-dir $build_dir)

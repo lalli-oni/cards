@@ -78,6 +78,29 @@ describe("build validation — governed vocabularies", () => {
   });
 });
 
+describe("build validation — governed keywords", () => {
+  test("accepts governed keyword tokens on the right card type", () => {
+    expect(check("units", { attributes: "Military", keywords: "Berserker;Leader:+1:all:combat" })).toEqual([]);
+    expect(check("items", { type: "Banner", keywords: "Flying" })).toEqual([]);
+    expect(check("locations", { location_type: "Market", keywords: "Aura:-1:all:combat" })).toEqual([]);
+  });
+
+  test("rejects an unknown keyword", () => {
+    const errors = check("units", { attributes: "Military", keywords: "Lethal" });
+    expect(errors.some((e) => e.field === "keywords" && e.message.includes("unknown keyword"))).toBe(true);
+  });
+
+  test("rejects a malformed family token (unsigned magnitude)", () => {
+    const errors = check("units", { attributes: "Military", keywords: "Leader:1:all:combat" });
+    expect(errors.some((e) => e.field === "keywords")).toBe(true);
+  });
+
+  test("rejects wrong-type placement (Aura on a unit)", () => {
+    const errors = check("units", { attributes: "Military", keywords: "Aura:-1:all:combat" });
+    expect(errors.some((e) => e.field === "keywords" && e.message.includes("not valid on unit"))).toBe(true);
+  });
+});
+
 describe("build validation — cost is a numeric gold amount", () => {
   test("accepts an integer cost and `|`-separated integer alternatives", () => {
     expect(check("units", { cost: "3", attributes: "Military" })).toEqual([]);

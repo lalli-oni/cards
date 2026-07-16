@@ -13,6 +13,7 @@ import { readdirSync, readFileSync, mkdirSync, writeFileSync, existsSync } from 
 import { join } from "path";
 import { parse as parseDSL, DSLParseError, DSLValidationError } from "../engine/src/effect-dsl";
 import { ATTRIBUTES } from "../engine/src/attributes";
+import { type CardKind, KeywordError, parseKeyword } from "../engine/src/keywords";
 import {
   LOCATION_TYPES,
   EVENT_TYPES,
@@ -221,6 +222,21 @@ export function validate(type: CardType, card: Record<string, unknown>): Validat
   for (const attr of attributes) {
     if (!ATTRIBUTES.includes(attr as (typeof ATTRIBUTES)[number])) {
       errors.push({ card: id, field: "attributes", message: `invalid attribute: ${attr}` });
+    }
+  }
+
+  // Governed mechanical keyword vocabulary (engine/src/keywords.ts). Each token
+  // in the `keywords` column is parsed + validated: an unknown name, malformed
+  // parameter, wrong arity, or wrong-type placement all fail the build. Mirrors
+  // the attribute gate above so keyword data and effect code can't drift. The
+  // grammar is self-contained for v0.1; unifying it with the action DSL is #208.
+  const keywords = (card.keywords as string[] | undefined) ?? [];
+  for (const token of keywords) {
+    try {
+      parseKeyword(token, card.type as CardKind);
+    } catch (e) {
+      const msg = e instanceof KeywordError ? e.message : String(e);
+      errors.push({ card: id, field: "keywords", message: msg });
     }
   }
 

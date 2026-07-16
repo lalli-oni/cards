@@ -165,7 +165,7 @@ describe("rebuildListeners", () => {
       d.players[p.otherIdx].activeTraps.push({
         card: makeTrapEvent({
           ownerId: p.other,
-          definitionId: "ambush",
+          definitionId: "sprung-trap",
           trigger: "enemy_unit_enters_location",
         }),
       });
@@ -173,7 +173,7 @@ describe("rebuildListeners", () => {
     const { listeners } = rebuildListeners(state);
     const defIds = listeners.map((l) => l.source.definitionId);
     expect(defIds).toContain("scholar");
-    expect(defIds).toContain("ambush");
+    expect(defIds).toContain("sprung-trap");
   });
 
   it("silently skips cards without registered effects", () => {
@@ -194,11 +194,11 @@ describe("rebuildListeners", () => {
 // ---------------------------------------------------------------------------
 
 describe("trap listeners", () => {
-  it("ambush: injures entering enemy unit", () => {
+  it("sprung-trap: injures entering enemy unit", () => {
     const state = gameWith((d, p) => {
       const trap = makeTrapEvent({
         ownerId: p.other,
-        definitionId: "ambush",
+        definitionId: "sprung-trap",
         trigger: "enemy_unit_enters_location",
       });
       const unit = makeUnit({ ownerId: p.active, strength: 8 });
@@ -224,11 +224,11 @@ describe("trap listeners", () => {
     expect(ns.players[otherIdx].activeTraps).toHaveLength(0);
   });
 
-  it("ambush: kills already-injured unit", () => {
+  it("sprung-trap: kills already-injured unit", () => {
     const state = gameWith((d, p) => {
       const trap = makeTrapEvent({
         ownerId: p.other,
-        definitionId: "ambush",
+        definitionId: "sprung-trap",
         trigger: "enemy_unit_enters_location",
       });
       const unit = makeUnit({ ownerId: p.active, strength: 8, injured: true });
@@ -312,7 +312,7 @@ describe("trap listeners", () => {
     const state = gameWith((d, p) => {
       const trap = makeTrapEvent({
         ownerId: p.active,
-        definitionId: "ambush",
+        definitionId: "sprung-trap",
         trigger: "enemy_unit_enters_location",
       });
       const unit = makeUnit({ ownerId: p.active, strength: 8 });
@@ -343,7 +343,7 @@ describe("trap listeners", () => {
       const otherLoc = makeLocation({ ownerId: p.active });
       const trap = makeTrapEvent({
         ownerId: p.other,
-        definitionId: "ambush",
+        definitionId: "sprung-trap",
         trigger: "enemy_unit_enters_location",
       });
       const unit = makeUnit({ ownerId: p.active, strength: 8 });
@@ -374,7 +374,7 @@ describe("trap listeners", () => {
     const state = gameWith((d, p) => {
       const trap = makeTrapEvent({
         ownerId: p.other,
-        definitionId: "ambush",
+        definitionId: "sprung-trap",
         trigger: "enemy_unit_enters_location",
       });
       const unit = makeUnit({ ownerId: p.active, strength: 8 });
@@ -402,8 +402,8 @@ describe("trap listeners", () => {
     const state = gameWith((d, p) => {
       const trap = makeTrapEvent({
         ownerId: p.other,
-        definitionId: "ambush",
-        name: "Ambush",
+        definitionId: "sprung-trap",
+        name: "Sprung Trap",
         trigger: "enemy_unit_enters_location",
       });
       const unit = makeUnit({ ownerId: p.active, strength: 8 });
@@ -437,7 +437,7 @@ describe("trap listeners", () => {
       GameEvent,
       { type: "trap_triggered" }
     >;
-    expect(triggered.cardName).toBe("Ambush");
+    expect(triggered.cardName).toBe("Sprung Trap");
   });
 
   it("trap_triggered precedes all effect events for multi-effect traps (Highway Robbery)", () => {

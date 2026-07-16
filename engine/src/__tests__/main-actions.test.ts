@@ -2145,8 +2145,8 @@ describe("turn lifecycle", () => {
 // ---------------------------------------------------------------------------
 
 describe("traps", () => {
-  it("auto-triggers ambush trap when enemy unit enters location", () => {
-    const trap = makeTrapEvent({ ownerId: OTHER, definitionId: "ambush", trigger: "enemy_unit_enters_location" });
+  it("auto-triggers sprung-trap trap when enemy unit enters location", () => {
+    const trap = makeTrapEvent({ ownerId: OTHER, definitionId: "sprung-trap", trigger: "enemy_unit_enters_location" });
     const unit = makeUnit({ ownerId: ACTIVE });
     const location = makeLocation({ ownerId: OTHER });
     const state = gameWith((d) => {
@@ -2200,7 +2200,7 @@ describe("traps", () => {
   });
 
   it("does not trigger trap at wrong location", () => {
-    const trap = makeTrapEvent({ ownerId: OTHER, definitionId: "ambush", trigger: "enemy_unit_enters_location" });
+    const trap = makeTrapEvent({ ownerId: OTHER, definitionId: "sprung-trap", trigger: "enemy_unit_enters_location" });
     const loc1 = makeLocation({ ownerId: OTHER });
     const loc2 = makeLocation({ ownerId: OTHER });
     const unit = makeUnit({ ownerId: ACTIVE });
@@ -2224,7 +2224,7 @@ describe("traps", () => {
   });
 
   it("does not trigger own traps", () => {
-    const trap = makeTrapEvent({ ownerId: ACTIVE, definitionId: "ambush", trigger: "enemy_unit_enters_location" });
+    const trap = makeTrapEvent({ ownerId: ACTIVE, definitionId: "sprung-trap", trigger: "enemy_unit_enters_location" });
     const location = makeLocation({ ownerId: ACTIVE });
     const unit = makeUnit({ ownerId: ACTIVE });
     const state = gameWith((d) => {
@@ -2609,7 +2609,7 @@ describe("move details", () => {
     const unit = makeUnit({ ownerId: ACTIVE });
     const trap = makeTrapEvent({
       ownerId: OTHER,
-      definitionId: "ambush",
+      definitionId: "sprung-trap",
       trigger: "enemy_unit_enters_location",
     });
     const loc1 = makeLocation({ ownerId: ACTIVE });

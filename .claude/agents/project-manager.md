@@ -149,6 +149,20 @@ gh issue edit <number> --milestone "<name>"
 gh issue edit <number> --remove-milestone
 ```
 
+### Epics
+
+Epics are **master/tracking issues for a thematic body of work** (e.g. #45 masters content/balance; #210 masters rules-architecture). They are **orthogonal to milestones**: a milestone answers "what's in this release," an epic answers "what thematic work is this." An issue can carry both — its area epic (via sub-issue link) and a milestone.
+
+**Principles:**
+- An epic groups issues that share an **area/theme**, mirroring the Issue Grouping rule. Don't make one epic a catch-all across unrelated areas — that re-creates the retired `design`-label / overloaded-`keywords`-column anti-pattern.
+- Epics **span milestones** and persist across releases; they are not release buckets.
+- Assign an issue to an epic by its *primary axis of change* (e.g. content/balance → #45; schema/effect-model/vocabulary → the rules-design epic #210).
+- Tag epics with the `epic` label.
+
+**Epic-as-interim-holding-area** (only when a future milestone is deliberately deferred):
+- A themed epic MAY serve as the interim parking lot for post-current-milestone issues **within its own theme** — never as a universal backlog. General post-milestone work stays unmilestoned (unmilestoned = backlog).
+- When the next milestone is created, **triage the epic's children into it**; the epic itself persists as a cross-milestone tracker.
+
 ### Roadmap
 The roadmap lives in the pinned tracking issue for the current milestone. When updating:
 - Keep the dependency diagram current

@@ -103,20 +103,26 @@ where a value is `[N]`:
 | Written | Meaning |
 |---------|---------|
 | `Lethal` | value-less keyword |
-| `Commander[3]` | keyword with value 3 (renders `COMMANDER 3`) |
+| `Commander[3]` | keyword with value 3 (magnitude 3) |
 | `Commander[3];Resolute` | two keywords |
 
 Keywords are Title-case matching the glossary; values are **magnitudes** (the
 sign lives in the reminder text — `Radiated[2]` → "get **-2** …"). Only
-`Commander`, `Radiated`, and `Fortified` take a value today (glossary definitions
-containing `X`).
+`Commander`, `Radiated`, and `Fortified` take a value today — they are the
+keywords whose glossary Definition contains an `X`. That standalone `X` is the
+marker the build reads to make a keyword value-bearing, so it must be preserved
+when editing a definition. (Note: the Keyword System intro in `rules/README.md`
+mentions "Shield X", but Shield's Definition row has no `X`, so the contract
+treats Shield as value-less until that row is updated.)
 
 **Glossary artifact.** `library/build.ts` derives a machine-readable glossary
 from the `rules/README.md` tables and writes `library/build/glossary.json`
 (keyword `id → {name, scope, timing, apCost?, valued, reminder}`). `rules/README.md`
-stays the human-authored source; the artifact is the render↔data contract that
-`design/compose-cards.py` (keyword pills + reminder text) and, eventually, the
-engine consume. See #203.
+stays the human-authored source. Today the build itself is the only consumer of
+the artifact; the Penpot renderer (`design/moderntrek-template.py`) and,
+eventually, the engine are meant to migrate onto it for keyword pills + reminder
+text (both still re-parse the prose for now, and the renderer still expects the
+space-separated `Commander 3` form rather than `Commander[3]`). See #203.
 
 The build validates the ability **value syntax** and value-arity for known
 keywords (a valued keyword must carry `[N]`; a value-less one must not). Whether

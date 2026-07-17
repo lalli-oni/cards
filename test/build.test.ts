@@ -115,9 +115,117 @@ describe("build validation — cost is a numeric gold amount", () => {
 // checks — while confirming governance of *unknown* keywords stays deferred.
 // ---------------------------------------------------------------------------
 
+// Synthetic `rules/README.md` fixtures — exercise parseGlossary's logic and its
+// throw guards independently of the live rules content (#203).
+function keywordSystem(body: string): string {
+  return `# Rules\n\n## Keyword System\n\n### Keyword Glossary\n${body}\n\n## Economy\n`;
+}
+
+const UNIT_TABLE: string = [
+  "#### Unit keywords",
+  "| Keyword | Timing | Definition |",
+  "|---------|--------|------------|",
+  "| Commander | Static | Friendly units get +X to all stats |",
+  "| Lethal | Static | The loser is killed instead of injured |",
+  "| Heal | Activated (1 AP) | Remove the injured status |",
+].join("\n");
+const EQUIP_TABLE: string = [
+  "#### Equipment keywords",
+  "| Keyword | Timing | Definition |",
+  "|---------|--------|------------|",
+  "| Flying | Static | Ignores blocked edges |",
+].join("\n");
+const LOCATION_TABLE: string = [
+  "#### Location keywords",
+  "| Keyword | Timing | Definition |",
+  "|---------|--------|------------|",
+  "| Radiated | Static | Units get -X to all stats |",
+].join("\n");
+// A minimal well-formed section covering all three required scopes.
+const FULL: string = `\n${UNIT_TABLE}\n\n${EQUIP_TABLE}\n\n${LOCATION_TABLE}\n`;
+
+describe("keyword glossary — parseGlossary (synthetic + throw guards)", () => {
+  test("parses a well-formed synthetic section", () => {
+    const g = parseGlossary(keywordSystem(FULL));
+    expect(g.commander).toMatchObject({ scope: "unit", timing: "static", valued: true });
+    expect(g.heal).toMatchObject({ timing: "activated", apCost: 1 });
+    expect(g.flying.scope).toBe("equipment");
+    expect(g.radiated.scope).toBe("location");
+  });
+
+  test("throws when the `## Keyword System` section is missing", () => {
+    expect(() => parseGlossary("# Rules\n\nNothing here.\n")).toThrow(/Keyword System/);
+  });
+
+  test("throws on an unrecognized timing", () => {
+    const bad = FULL.replace("| Lethal | Static |", "| Lethal | Bogus |");
+    expect(() => parseGlossary(keywordSystem(bad))).toThrow(/unrecognized timing/);
+  });
+
+  test("throws when no keywords parse (heading present, no rows)", () => {
+    const empty = "\n#### Unit keywords\n| Keyword | Timing | Definition |\n|---|---|---|\n";
+    expect(() => parseGlossary(keywordSystem(empty))).toThrow(/no keywords parsed/);
+  });
+
+  test("throws when a whole scope's heading is renamed (partial corruption)", () => {
+    const renamed = FULL.replace("#### Location keywords", "#### Location Keywords (core)");
+    expect(() => parseGlossary(keywordSystem(renamed))).toThrow(/no 'location' keywords/);
+  });
+
+  test("throws on a duplicate keyword", () => {
+    const dup = FULL.replace(
+      "| Lethal | Static | The loser is killed instead of injured |",
+      "| Lethal | Static | The loser is killed instead of injured |\n| Commander | Static | Duplicate |",
+    );
+    expect(() => parseGlossary(keywordSystem(dup))).toThrow(/duplicate keyword/);
+  });
+
+  test("throws on a content-bearing malformed row", () => {
+    const short = FULL.replace(
+      "| Lethal | Static | The loser is killed instead of injured |",
+      "| Lonely |",
+    );
+    expect(() => parseGlossary(keywordSystem(short))).toThrow(/malformed table row/);
+  });
+
+  test("throws when AP cost and timing disagree", () => {
+    const apStatic = FULL.replace("| Commander | Static |", "| Commander | Static (2 AP) |");
+    expect(() => parseGlossary(keywordSystem(apStatic))).toThrow(/AP cost but timing/);
+    const noAp = FULL.replace("| Heal | Activated (1 AP) |", "| Heal | Activated |");
+    expect(() => parseGlossary(keywordSystem(noAp))).toThrow(/missing its "\(N AP\)"/);
+  });
+
+  test("infers valued from a standalone X, not an X inside a word", () => {
+    const body = FULL.replace(
+      "| Lethal | Static | The loser is killed instead of injured |",
+      "| Boost | Static | Gain +X power |\n| Taxman | Static | Costs MAX gold |",
+    );
+    const g = parseGlossary(keywordSystem(body));
+    expect(g.boost.valued).toBe(true); // standalone +X
+    expect(g.taxman.valued).toBe(false); // X only inside MAX
+  });
+
+  test("tolerates a missing trailing pipe and markdown alignment separators", () => {
+    const body = [
+      "",
+      "#### Unit keywords",
+      "| Keyword | Timing | Definition |",
+      "|:--------|:------:|--------:|", // alignment colons
+      "| NoTrail | Static | Works without a trailing pipe", // no trailing |
+      "",
+      EQUIP_TABLE,
+      "",
+      LOCATION_TABLE,
+    ].join("\n");
+    const g = parseGlossary(keywordSystem(body));
+    expect(g.notrail).toMatchObject({ scope: "unit", timing: "static" });
+  });
+});
+
 describe("keyword glossary — parseGlossary", () => {
   test("parses timing, scope, and apCost", () => {
     expect(GLOSSARY.commander).toMatchObject({ name: "Commander", scope: "unit", timing: "static" });
+    expect(GLOSSARY.commander.apCost).toBeUndefined();
     expect(GLOSSARY.heal).toMatchObject({ timing: "activated", apCost: 1 });
     expect(GLOSSARY.flying.scope).toBe("equipment");
     expect(GLOSSARY.radiated.scope).toBe("location");
@@ -132,8 +240,14 @@ describe("keyword glossary — parseGlossary", () => {
     expect(GLOSSARY.taunt.valued).toBe(false);
   });
 
-  test("keeps the X placeholder in the reminder template", () => {
-    expect(GLOSSARY.commander.reminder).toContain("+X");
+  test("keeps the definition verbatim as the reminder (incl. its X)", () => {
+    const g = parseGlossary(keywordSystem(FULL));
+    expect(g.commander.reminder).toBe("Friendly units get +X to all stats");
+  });
+
+  test("skips header/separator rows and parses all 13 live keywords", () => {
+    expect(GLOSSARY.keyword).toBeUndefined();
+    expect(Object.keys(GLOSSARY).length).toBe(13);
   });
 });
 
@@ -146,6 +260,18 @@ describe("parseAbilityToken", () => {
   test("returns null on malformed tokens", () => {
     expect(parseAbilityToken("Bogus{x}")).toBeNull();
     expect(parseAbilityToken("Commander(3)")).toBeNull();
+  });
+
+  test("trims surrounding whitespace and parses multi-digit values", () => {
+    expect(parseAbilityToken(" Commander[10] ")).toEqual({ id: "commander", name: "Commander", value: 10 });
+  });
+
+  test("allows a hyphenated ident", () => {
+    expect(parseAbilityToken("Some-Word")).toEqual({ id: "some-word", name: "Some-Word", value: null });
+  });
+
+  test("parses [0] at the token level (arity/positivity is validate()'s call)", () => {
+    expect(parseAbilityToken("Commander[0]")).toEqual({ id: "commander", name: "Commander", value: 0 });
   });
 });
 
@@ -174,6 +300,25 @@ describe("build validation — ability value syntax (#203)", () => {
 
   test("allows an unknown keyword (governance deferred to #194)", () => {
     expect(checkAbilities("Mystery")).toEqual([]);
+  });
+
+  test("rejects a mis-cased keyword (Title-case must match the glossary)", () => {
+    expect(checkAbilities("commander[3]").some((e) => e.message.includes('must be written "Commander"'))).toBe(true);
+  });
+
+  test("rejects a zero magnitude on a valued keyword", () => {
+    expect(checkAbilities("Commander[0]").some((e) => e.message.includes("positive magnitude"))).toBe(true);
+  });
+
+  test("reports each token independently in a multi-keyword field", () => {
+    // One malformed + one valid → exactly the malformed one flagged.
+    const mixed = checkAbilities("Bogus{x};Commander[3]");
+    expect(mixed).toHaveLength(1);
+    expect(mixed[0].message).toContain("malformed");
+    // Two distinct arity errors in one field both surface.
+    const both = checkAbilities("Commander;Lethal[2]");
+    expect(both.some((e) => e.message.includes("requires a value"))).toBe(true);
+    expect(both.some((e) => e.message.includes("does not take a value"))).toBe(true);
   });
 
   test("skips ability validation when no glossary is supplied", () => {

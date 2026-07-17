@@ -18,7 +18,7 @@ import {
   EVENT_TYPES,
   ITEM_TYPES,
 } from "../engine/src/card-categories";
-import { parseGlossary, parseAbilityToken, type Glossary } from "./glossary";
+import { parseGlossary, parseAbilityToken, type Glossary, type KeywordDef } from "./glossary";
 
 const LIBRARY_DIR = join(import.meta.dir);
 const SETS_DIR = join(LIBRARY_DIR, "sets");
@@ -252,11 +252,11 @@ export function validate(
   }
 
   // Keyword `abilities` — render-accuracy checks only (#203). We validate the
-  // value *syntax* (`Keyword` or `Keyword[N]`) always, and value-arity for
-  // keywords the glossary knows. Whether unknown keywords are *rejected*
-  // (governance) is deferred to #194, so an unlisted keyword is skipped here,
-  // not flagged. Runs only when a glossary is supplied (i.e. the full build);
-  // unit tests calling `validate(type, card)` skip it.
+  // value *syntax* (`Keyword` or `Keyword[N]`) for every token, plus canonical
+  // Title-case and value-arity for the keywords the glossary knows. Whether
+  // unknown keywords are *rejected* (governance) is deferred to #194, so an
+  // unlisted keyword is warned-about but not failed here. Runs only when a
+  // glossary is supplied (the full build); `validate(type, card)` skips it.
   if (glossary) {
     const abilities = (card.abilities as string[] | undefined) ?? [];
     for (const raw of abilities) {
@@ -265,12 +265,23 @@ export function validate(
         errors.push({ card: id, field: "abilities", message: `malformed keyword "${raw}" (expected "Keyword" or "Keyword[N]")` });
         continue;
       }
-      const def = glossary[token.id];
-      if (!def) continue; // unknown keyword — governance is #194's call, not #203's
+      const def: KeywordDef | undefined = glossary[token.id];
+      if (!def) {
+        // Unknown keyword — rejecting it is #194's call, not #203's. Warn so a
+        // fat-fingered *known* keyword (e.g. "Commmander") surfaces in build
+        // output instead of silently rendering with no reminder text.
+        console.warn(`  Warning: card "${id}" uses unknown keyword "${token.name}" (no glossary entry; not validated)`);
+        continue;
+      }
+      if (token.name !== def.name) {
+        errors.push({ card: id, field: "abilities", message: `keyword "${token.name}" must be written "${def.name}" (Title-case matching the glossary)` });
+      }
       if (def.valued && token.value === null) {
-        errors.push({ card: id, field: "abilities", message: `keyword "${token.name}" requires a value, e.g. ${token.name}[1]` });
+        errors.push({ card: id, field: "abilities", message: `keyword "${def.name}" requires a value, e.g. ${def.name}[1]` });
       } else if (!def.valued && token.value !== null) {
-        errors.push({ card: id, field: "abilities", message: `keyword "${token.name}" does not take a value (got "${raw}")` });
+        errors.push({ card: id, field: "abilities", message: `keyword "${def.name}" does not take a value (got "${raw}")` });
+      } else if (def.valued && token.value !== null && token.value < 1) {
+        errors.push({ card: id, field: "abilities", message: `keyword "${def.name}" value must be a positive magnitude (got ${token.value})` });
       }
     }
   }

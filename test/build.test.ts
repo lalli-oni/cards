@@ -1,9 +1,14 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "fs";
+import { join } from "path";
 import {
   transformCard,
   validate,
   type CardType,
 } from "../library/build";
+import { parseGlossary, parseAbilityToken } from "../library/glossary";
+
+const GLOSSARY = parseGlossary(readFileSync(join(import.meta.dir, "../rules/README.md"), "utf-8"));
 
 // ---------------------------------------------------------------------------
 // Build-time governed-vocabulary validation (#119)
@@ -98,5 +103,82 @@ describe("build validation — cost is a numeric gold amount", () => {
   test("rejects when any alternative-cost option is non-numeric", () => {
     const errors = check("units", { cost: "4|X", attributes: "Military" });
     expect(errors.some((e) => e.field === "cost")).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Keyword glossary — the render↔data contract (#203)
+//
+// `parseGlossary` derives the machine-readable glossary from rules/README.md;
+// `validate` uses it to check ability value-syntax. These pin the derivation
+// (a rules refactor that breaks the tables fails here) and the render-accuracy
+// checks — while confirming governance of *unknown* keywords stays deferred.
+// ---------------------------------------------------------------------------
+
+describe("keyword glossary — parseGlossary", () => {
+  test("parses timing, scope, and apCost", () => {
+    expect(GLOSSARY.commander).toMatchObject({ name: "Commander", scope: "unit", timing: "static" });
+    expect(GLOSSARY.heal).toMatchObject({ timing: "activated", apCost: 1 });
+    expect(GLOSSARY.flying.scope).toBe("equipment");
+    expect(GLOSSARY.radiated.scope).toBe("location");
+  });
+
+  test("infers valued-ness from an X placeholder in the definition", () => {
+    // Only the +X / -X keywords take a value.
+    expect(GLOSSARY.commander.valued).toBe(true);
+    expect(GLOSSARY.radiated.valued).toBe(true);
+    expect(GLOSSARY.fortified.valued).toBe(true);
+    expect(GLOSSARY.lethal.valued).toBe(false);
+    expect(GLOSSARY.taunt.valued).toBe(false);
+  });
+
+  test("keeps the X placeholder in the reminder template", () => {
+    expect(GLOSSARY.commander.reminder).toContain("+X");
+  });
+});
+
+describe("parseAbilityToken", () => {
+  test("parses value-less and valued tokens", () => {
+    expect(parseAbilityToken("Lethal")).toEqual({ id: "lethal", name: "Lethal", value: null });
+    expect(parseAbilityToken("Commander[3]")).toEqual({ id: "commander", name: "Commander", value: 3 });
+  });
+
+  test("returns null on malformed tokens", () => {
+    expect(parseAbilityToken("Bogus{x}")).toBeNull();
+    expect(parseAbilityToken("Commander(3)")).toBeNull();
+  });
+});
+
+describe("build validation — ability value syntax (#203)", () => {
+  /** transformCard + validate WITH the glossary, returning ability errors. */
+  function checkAbilities(abilities: string) {
+    return validate("units", transformCard("units", row({ abilities })), GLOSSARY)
+      .filter((e) => e.field === "abilities");
+  }
+
+  test("accepts correct arity", () => {
+    expect(checkAbilities("Commander[3];Lethal")).toEqual([]);
+  });
+
+  test("rejects a valued keyword with no value", () => {
+    expect(checkAbilities("Commander").some((e) => e.message.includes("requires a value"))).toBe(true);
+  });
+
+  test("rejects a value-less keyword given a value", () => {
+    expect(checkAbilities("Lethal[2]").some((e) => e.message.includes("does not take a value"))).toBe(true);
+  });
+
+  test("rejects a malformed token", () => {
+    expect(checkAbilities("Bogus{x}").some((e) => e.message.includes("malformed"))).toBe(true);
+  });
+
+  test("allows an unknown keyword (governance deferred to #194)", () => {
+    expect(checkAbilities("Mystery")).toEqual([]);
+  });
+
+  test("skips ability validation when no glossary is supplied", () => {
+    // The 2-arg form (used elsewhere) must not touch abilities.
+    expect(validate("units", transformCard("units", row({ abilities: "Commander" })))
+      .some((e) => e.field === "abilities")).toBe(false);
   });
 });

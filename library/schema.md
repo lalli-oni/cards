@@ -111,9 +111,9 @@ sign lives in the reminder text — `Radiated[2]` → "get **-2** …"). Only
 `Commander`, `Radiated`, and `Fortified` take a value today — they are the
 keywords whose glossary Definition contains an `X`. That standalone `X` is the
 marker the build reads to make a keyword value-bearing, so it must be preserved
-when editing a definition. (Note: the Keyword System intro in `rules/README.md`
-mentions "Shield X", but Shield's Definition row has no `X`, so the contract
-treats Shield as value-less until that row is updated.)
+when editing a definition. (Shield, though a variable-value keyword in concept,
+has no `X` in its Definition row, so the contract treats it as value-less until
+that row is updated.)
 
 **Glossary artifact.** `library/build.ts` derives a machine-readable glossary
 from the `rules/README.md` tables and writes `library/build/glossary.json`

@@ -109,7 +109,7 @@ def _stroke(color, width, opacity=1, style="solid"):
 # Data
 # ---------------------------------------------------------------------------
 
-def parse_glossary():
+def parse_glossary(path=None, rules_path=None):
     """Load the machine-readable keyword glossary emitted by the library build
     (`library/build/glossary.json`, the #203 render↔data contract) into
     `{keyword_id: {name, scope, timing, apCost?, valued, reminder}}`.
@@ -119,9 +119,14 @@ def parse_glossary():
     the renderer reads one contract instead of re-parsing prose. It's a build
     output: run the build to (re)generate it. If it's missing, unreadable, or
     older than the rules it derives from, the renderer warns and degrades to
-    blank keyword reminders rather than failing the whole export."""
-    path = os.path.join(SCRIPT_DIR, "..", "library", "build", "glossary.json")
-    rules_path = os.path.join(SCRIPT_DIR, "..", "rules", "README.md")
+    blank keyword reminders rather than failing the whole export.
+
+    `path`/`rules_path` default to the real artifact and rules locations; they're
+    parameterised so tests can drive the degradation paths against fixtures."""
+    if path is None:
+        path = os.path.join(SCRIPT_DIR, "..", "library", "build", "glossary.json")
+    if rules_path is None:
+        rules_path = os.path.join(SCRIPT_DIR, "..", "rules", "README.md")
     if not os.path.exists(path):
         print(f"WARNING: glossary artifact not found at {path} — run "
               f"`bun library/build.ts` to generate it; keyword reminders will be "
@@ -134,12 +139,22 @@ def parse_glossary():
         print(f"WARNING: glossary artifact unreadable at {path}: {exc} — keyword "
               f"reminders will be blank", file=sys.stderr)
         return {}
+    if not isinstance(glossary, dict):
+        print(f"WARNING: glossary artifact at {path} is not a JSON object (got "
+              f"{type(glossary).__name__}) — keyword reminders will be blank",
+              file=sys.stderr)
+        return {}
+    # mtime is a cheap staleness *proxy*, not a guarantee: an operation that
+    # rewrites rules/README.md without rebuilding the (git-ignored) artifact —
+    # e.g. a git checkout/stash — can trip a false "stale" warning. Fine for a
+    # non-blocking heads-up.
     try:
         if os.path.getmtime(path) < os.path.getmtime(rules_path):
             print(f"WARNING: {path} is older than rules/README.md — it may be "
                   f"stale; re-run `bun library/build.ts`", file=sys.stderr)
-    except OSError:
-        pass
+    except OSError as exc:
+        print(f"WARNING: could not compare glossary/rules timestamps ({exc}) — "
+              f"staleness not checked", file=sys.stderr)
     return glossary
 
 
@@ -151,17 +166,35 @@ _ABILITY_TOKEN = re.compile(r"^([A-Za-z][A-Za-z-]*)(?:\[(\d+)\])?$")
 def keyword_reminder(ability, glossary):
     """Split an `abilities` token into (label, reminder). Value-bearing keywords
     like `Commander[3]` substitute the value into the glossary's X placeholder;
-    the pill label renders the value space-separated (`COMMANDER 3`)."""
+    the pill label renders the value space-separated (`COMMANDER 3`). Degrades to
+    a blank reminder — never raises — on an unknown keyword, a malformed token, or
+    a malformed/incomplete glossary entry (see parse_glossary's shape note)."""
     m = _ABILITY_TOKEN.match(ability.strip())
     if not m:
         return ability.upper(), ""
     name, value = m.group(1), m.group(2)
     entry = glossary.get(name.lower())
-    if not entry:
-        # Unknown keyword — render the label as written, no reminder.
+    if not isinstance(entry, dict) or "reminder" not in entry:
+        # Unknown keyword, or a wrong-shape artifact entry — label as written, no
+        # reminder. Guarding here (not just entry truthiness) keeps a corrupt
+        # glossary.json from crashing the export deep in shape-building.
         return (f"{name} {value}" if value else name).upper(), ""
-    reminder = re.sub(r"\bX\b", value, entry["reminder"]) if value else entry["reminder"]
-    label = f"{entry['name']} {value}" if value else entry["name"]
+    display = entry.get("name", name)
+    reminder = entry["reminder"]
+    valued = entry.get("valued", "X" in reminder)
+    # Arity mismatches the full build would have caught (reachable on a partial
+    # build or hand-edited data) — warn and degrade, never print a literal "X" or
+    # a bogus magnitude.
+    if valued and value is None:
+        print(f"WARNING: keyword '{display}' needs a value but none was given in "
+              f"'{ability}' — reminder blanked", file=sys.stderr)
+        return display.upper(), ""
+    if not valued and value is not None:
+        print(f"WARNING: keyword '{display}' takes no value but '{ability}' "
+              f"supplies one — value ignored", file=sys.stderr)
+        return display.upper(), reminder
+    reminder = re.sub(r"\bX\b", value, reminder) if value else reminder
+    label = f"{display} {value}" if value else display
     return label.upper(), reminder
 
 

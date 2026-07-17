@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import { readFileSync } from "fs";
 import { join } from "path";
 import {
@@ -220,6 +220,56 @@ describe("keyword glossary — parseGlossary (synthetic + throw guards)", () => 
     const g = parseGlossary(keywordSystem(body));
     expect(g.notrail).toMatchObject({ scope: "unit", timing: "static" });
   });
+
+  test("keeps an escaped pipe in the definition (not a column break)", () => {
+    const body = FULL.replace(
+      "| Lethal | Static | The loser is killed instead of injured |",
+      "| Split | Static | Deal +X to left \\| right |",
+    );
+    const g = parseGlossary(keywordSystem(body));
+    expect(g.split.reminder).toBe("Deal +X to left | right");
+  });
+
+  test("throws on an unescaped pipe that over-splits the definition", () => {
+    const body = FULL.replace(
+      "| Lethal | Static | The loser is killed instead of injured |",
+      "| Split | Static | gain A | B extra |",
+    );
+    expect(() => parseGlossary(keywordSystem(body))).toThrow(/malformed table row/);
+  });
+
+  test("throws on an unrecognized `#### ... keywords` scope heading", () => {
+    const body = FULL + "\n#### Structure keywords\n| Keyword | Timing | Definition |\n|---|---|---|\n| Wall | Static | Blocks |\n";
+    expect(() => parseGlossary(keywordSystem(body))).toThrow(/unrecognized keyword-scope heading/);
+  });
+
+  test("ignores a fully-empty table row without dropping its neighbours", () => {
+    const body = FULL.replace(
+      "| Commander | Static | Friendly units get +X to all stats |",
+      "| Commander | Static | Friendly units get +X to all stats |\n|   |   |   |",
+    );
+    const g = parseGlossary(keywordSystem(body));
+    expect(g.commander).toBeDefined();
+    expect(Object.keys(g)).toContain("lethal");
+  });
+
+  test("skips a stray header-like row keyed on the Timing column", () => {
+    // keyword col is NOT "Keyword" but timing col is "Timing" — must be skipped.
+    const body = FULL.replace(
+      "| Commander | Static | Friendly units get +X to all stats |",
+      "| Name | Timing | Meaning |\n| Commander | Static | Friendly units get +X to all stats |",
+    );
+    const g = parseGlossary(keywordSystem(body));
+    expect(g.name).toBeUndefined();
+    expect(g.commander).toBeDefined();
+  });
+
+  test("anchors on the real heading despite an inline mention or a plural heading", () => {
+    const noise = "Earlier prose that says ## Keyword System inline.\n\n## Keyword Systems (overview)\n\nBlah.\n";
+    const g = parseGlossary(`# Rules\n\n${noise}\n${keywordSystem(FULL)}`);
+    expect(g.commander).toBeDefined();
+    expect(Object.keys(g).length).toBe(5);
+  });
 });
 
 describe("keyword glossary — parseGlossary", () => {
@@ -245,9 +295,27 @@ describe("keyword glossary — parseGlossary", () => {
     expect(g.commander.reminder).toBe("Friendly units get +X to all stats");
   });
 
-  test("skips header/separator rows and parses all 13 live keywords", () => {
+  test("skips header and separator rows (no scaffolding entries)", () => {
     expect(GLOSSARY.keyword).toBeUndefined();
+  });
+
+  // Canary on the live rules content: bump this when a keyword is added to
+  // rules/README.md's Keyword System tables.
+  test("parses every keyword currently in the rules glossary (count canary)", () => {
     expect(Object.keys(GLOSSARY).length).toBe(13);
+  });
+
+  test("emits the exact field shape the Python renderer reads (JSON contract)", () => {
+    // design/moderntrek-template.py reads entry.name/reminder/scope/timing/valued
+    // and joins on the lowercased id key. Pin those field names so a rename fails
+    // here, not silently in the renderer.
+    const roundTripped = JSON.parse(JSON.stringify(GLOSSARY));
+    const entry = roundTripped.commander;
+    expect(Object.keys(entry).sort()).toEqual(["id", "name", "reminder", "scope", "timing", "valued"]);
+    expect(entry.id).toBe("commander"); // top-level key === lowercased id
+    expect(typeof entry.name).toBe("string");
+    expect(typeof entry.reminder).toBe("string");
+    expect(typeof entry.valued).toBe("boolean");
   });
 });
 
@@ -299,7 +367,28 @@ describe("build validation — ability value syntax (#203)", () => {
   });
 
   test("allows an unknown keyword (governance deferred to #194)", () => {
-    expect(checkAbilities("Mystery")).toEqual([]);
+    const warn = spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      expect(checkAbilities("Mystery")).toEqual([]);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  test("warns (not errors) on an unknown keyword so a typo of a known one is visible", () => {
+    const warn = spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      // A fat-fingered known keyword: no glossary entry, so it warns and skips.
+      expect(checkAbilities("Commmander[3]")).toEqual([]);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0][0]).toContain("Commmander");
+      // A correctly-spelled known keyword must NOT warn.
+      warn.mockClear();
+      checkAbilities("Commander[3]");
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   test("rejects a mis-cased keyword (Title-case must match the glossary)", () => {

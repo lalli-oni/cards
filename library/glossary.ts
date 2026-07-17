@@ -3,10 +3,9 @@
  *
  * `rules/README.md` stays the human-authored source of truth. This module
  * derives a structured glossary from its "## Keyword System" tables and the
- * build writes it to `library/build/glossary.json`. Today only the build reads
- * that artifact; the Penpot renderer (`design/moderntrek-template.py`) and,
- * eventually, the engine are intended to migrate onto it instead of each
- * re-parsing the prose (they still re-parse it for now).
+ * build writes it to `library/build/glossary.json`. The build and the Penpot
+ * renderer (`design/moderntrek-template.py`) both read that artifact; the engine
+ * is intended to migrate onto it too (it still re-parses the prose for now).
  *
  * Keyword value syntax (decided in #203): a card's `abilities` field is a
  * `;`-separated list of tokens shaped like the effect-DSL `token` rule —
@@ -79,15 +78,35 @@ export function parseGlossary(readmeContent: string): Glossary {
   const glossary: Glossary = {};
   const scopesSeen: Set<KeywordScope> = new Set();
   let scope: KeywordScope | null = null;
+  let sawTableLine: boolean = false;
 
   for (const line of section.split("\n")) {
     const heading: RegExpMatchArray | null = line.match(/^####\s+(.+?)\s*$/);
     if (heading) {
-      scope = SCOPE_HEADINGS[heading[1].trim().toLowerCase()] ?? null;
+      const headingText: string = heading[1].trim();
+      scope = SCOPE_HEADINGS[headingText.toLowerCase()] ?? null;
+      sawTableLine = false;
+      // A `#### ... keywords` heading that isn't a known scope is almost
+      // certainly a renamed/typo'd scope table — fail loud rather than silently
+      // dropping its rows. (The scopesSeen guard below only catches a *canonical*
+      // scope going empty, not a fourth-category table under a new heading.)
+      if (!scope && headingText.toLowerCase().endsWith("keywords")) {
+        throw new Error(`glossary: unrecognized keyword-scope heading '#### ${headingText}' — expected Unit/Equipment/Location keywords`);
+      }
       continue;
     }
 
-    if (!scope || !line.trimStart().startsWith("|")) continue;
+    if (!line.trimStart().startsWith("|")) {
+      // A non-pipe line after a table's rows ends that table's scope, so stray
+      // pipe-leading prose before the next heading isn't parsed as keyword rows.
+      if (sawTableLine) {
+        scope = null;
+        sawTableLine = false;
+      }
+      continue;
+    }
+    if (!scope) continue;
+    sawTableLine = true;
 
     // Strip the (optional) outer pipes, then split on unescaped `|`. This keeps
     // a row that omits its trailing pipe, or embeds an escaped `\|` in the
@@ -96,22 +115,25 @@ export function parseGlossary(readmeContent: string): Glossary {
     const cells: string[] = inner.split(/(?<!\\)\|/).map((c: string) => c.trim().replace(/\\\|/g, "|"));
     const [keyword, timingCell, definition] = cells;
 
-    // Skip the header row and any alignment separator (`---`, `:--:`, `--:`).
+    // A fully-empty row (any column count) is ignorable table filler.
+    if (cells.every((c: string) => c === "")) continue;
+
+    // Skip the header row and any alignment separator. A separator only counts
+    // as one when *every* cell is dashes (optionally colon-aligned), so a real
+    // data row can't be mistaken for scaffolding.
     if (
       keyword.toLowerCase() === "keyword" ||
       timingCell?.toLowerCase() === "timing" ||
-      /^:?-+:?$/.test(keyword)
+      cells.every((c: string) => /^:?-+:?$/.test(c))
     ) {
       continue;
     }
 
-    // A real data row has all three columns. A content-bearing short row is
-    // malformed (throw, don't silently skip); a fully-empty one is ignorable.
-    if (cells.length < 3) {
-      if (cells.some((c: string) => c !== "")) {
-        throw new Error(`glossary: malformed table row "${line.trim()}" (expected 3 columns: Keyword | Timing | Definition)`);
-      }
-      continue;
+    // A real data row has exactly three columns. Too few or too many (e.g. an
+    // unescaped `|` in the definition) is malformed — throw rather than silently
+    // truncate. (Fully-empty rows were already skipped above.)
+    if (cells.length !== 3) {
+      throw new Error(`glossary: malformed table row "${line.trim()}" — expected 3 columns (Keyword | Timing | Definition); escape any literal '|' in the definition as '\\|'`);
     }
 
     const timingWord: KeywordTiming = (timingCell.match(/^([A-Za-z]+)/)?.[1] ?? "").toLowerCase() as KeywordTiming;
@@ -170,7 +192,12 @@ export interface AbilityToken {
   value: number | null;
 }
 
-/** `ident value?` where value is `[N]` — e.g. `Commander[3]` or `Lethal`. */
+/**
+ * `ident value?` where value is `[N]` — e.g. `Commander[3]` or `Lethal`.
+ * NOTE: kept byte-identical to `_ABILITY_TOKEN` in `design/moderntrek-template.py`
+ * (the renderer's copy) — the render↔data contract depends on both agreeing, so
+ * edit them together.
+ */
 const ABILITY_TOKEN = /^([A-Za-z][A-Za-z-]*)(?:\[(\d+)\])?$/;
 
 /**

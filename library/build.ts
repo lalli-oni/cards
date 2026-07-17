@@ -274,7 +274,11 @@ export function validate(
         continue;
       }
       if (token.name !== def.name) {
+        // Report only the casing problem for a mis-cased token — its arity is
+        // checked on the next build once the name is fixed, so we avoid emitting
+        // two errors that refer to the keyword by two different casings.
         errors.push({ card: id, field: "abilities", message: `keyword "${token.name}" must be written "${def.name}" (Title-case matching the glossary)` });
+        continue;
       }
       if (def.valued && token.value === null) {
         errors.push({ card: id, field: "abilities", message: `keyword "${def.name}" requires a value, e.g. ${def.name}[1]` });

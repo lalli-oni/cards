@@ -118,11 +118,11 @@ treats Shield as value-less until that row is updated.)
 **Glossary artifact.** `library/build.ts` derives a machine-readable glossary
 from the `rules/README.md` tables and writes `library/build/glossary.json`
 (keyword `id → {name, scope, timing, apCost?, valued, reminder}`). `rules/README.md`
-stays the human-authored source. Today the build itself is the only consumer of
-the artifact; the Penpot renderer (`design/moderntrek-template.py`) and,
-eventually, the engine are meant to migrate onto it for keyword pills + reminder
-text (both still re-parse the prose for now, and the renderer still expects the
-space-separated `Commander 3` form rather than `Commander[3]`). See #203.
+stays the human-authored source. The build and the Penpot renderer
+(`design/moderntrek-template.py`, keyword pills + reminder text) both consume the
+artifact; the engine is expected to migrate onto it too. Because it's a build
+output, run `bun library/build.ts` before rendering so the renderer picks up any
+glossary changes. See #203.
 
 The build validates the ability **value syntax** and value-arity for known
 keywords (a valued keyword must carry `[N]`; a value-less one must not). Whether

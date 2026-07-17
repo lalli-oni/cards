@@ -14,8 +14,9 @@ Rules-faithful choices (the library is the source of truth, not the design; #202
   timing/trigger/text, effect/seeding_effect) — cleanly separated, no blob.
 - Where a type has only a freeform `text` blob (units, location actions), it is
   rendered as-is; per-effect structuring is tracked with the keyword work (#203).
-- Unit keyword pills come from `abilities` + the rules glossary; dormant until
-  cards populate `abilities` (#194/#198) and the value syntax lands (#203).
+- Unit keyword pills come from `abilities` + the glossary artifact
+  (`library/build/glossary.json`, the #203 render↔data contract); dormant until
+  cards populate `abilities` (#194/#198).
 
 Deliberately deferred for v1: type/attribute glyph icons (#204), the diagonal
 hatch texture, and the event hazard-stripe top edge (solid bar for now).
@@ -109,55 +110,59 @@ def _stroke(color, width, opacity=1, style="solid"):
 # ---------------------------------------------------------------------------
 
 def parse_glossary():
-    """Parse the keyword glossary table(s) in rules/README.md into
-    {keyword_lower: (timing, definition)}.
+    """Load the machine-readable keyword glossary emitted by the library build
+    (`library/build/glossary.json`, the #203 render↔data contract) into
+    `{keyword_id: {name, scope, timing, apCost?, valued, reminder}}`.
 
-    Only rows belonging to a table whose header is `| Keyword | Timing |
-    Definition |` are captured; other 3-column tables in the README (e.g. the
-    Actions table) are ignored so an action name can't masquerade as a keyword.
-    Provisional pending #203."""
-    path = os.path.join(SCRIPT_DIR, "..", "rules", "README.md")
-    glossary = {}
+    `rules/README.md` stays the human-authored source; `bun library/build.ts`
+    derives this artifact from it (and validates card `abilities` against it), so
+    the renderer reads one contract instead of re-parsing prose. It's a build
+    output: run the build to (re)generate it. If it's missing, unreadable, or
+    older than the rules it derives from, the renderer warns and degrades to
+    blank keyword reminders rather than failing the whole export."""
+    path = os.path.join(SCRIPT_DIR, "..", "library", "build", "glossary.json")
+    rules_path = os.path.join(SCRIPT_DIR, "..", "rules", "README.md")
+    if not os.path.exists(path):
+        print(f"WARNING: glossary artifact not found at {path} — run "
+              f"`bun library/build.ts` to generate it; keyword reminders will be "
+              f"blank", file=sys.stderr)
+        return {}
     try:
         with open(path) as f:
-            in_glossary = False
-            for line in f:
-                stripped = line.strip()
-                if not stripped.startswith("|"):
-                    in_glossary = False           # a blank/non-table line ends the table
-                    continue
-                cells = [c.strip() for c in stripped.strip("|").split("|")]
-                if len(cells) != 3:
-                    in_glossary = False           # a differently-shaped table
-                    continue
-                if cells[0] == "Keyword":         # glossary header row -> start capturing
-                    in_glossary = True
-                    continue
-                if "---" in cells[1]:             # separator row -> keep state
-                    continue
-                if in_glossary:
-                    glossary[cells[0].lower()] = (cells[1], cells[2])
-    except OSError as exc:
-        print(f"WARNING: keyword glossary unreadable at {path}: {exc} — "
-              f"keyword reminders will be blank", file=sys.stderr)
-        return glossary
-    if not glossary:
-        print(f"WARNING: no keyword rows parsed from {path} (table format may have "
-              f"changed) — keyword reminders will be blank", file=sys.stderr)
+            glossary = json.load(f)
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"WARNING: glossary artifact unreadable at {path}: {exc} — keyword "
+              f"reminders will be blank", file=sys.stderr)
+        return {}
+    try:
+        if os.path.getmtime(path) < os.path.getmtime(rules_path):
+            print(f"WARNING: {path} is older than rules/README.md — it may be "
+                  f"stale; re-run `bun library/build.ts`", file=sys.stderr)
+    except OSError:
+        pass
     return glossary
 
 
+# `ident value?` where a value is `[N]` — mirrors the library's ABILITY_TOKEN
+# (library/glossary.ts) and the effect-DSL `token` grammar (#203).
+_ABILITY_TOKEN = re.compile(r"^([A-Za-z][A-Za-z-]*)(?:\[(\d+)\])?$")
+
+
 def keyword_reminder(ability, glossary):
-    """Split an `abilities` entry into (label, reminder). Value-bearing keywords
-    like 'Commander 3' substitute the value into the glossary's X placeholder."""
-    parts = ability.split()
-    value = parts[-1] if len(parts) > 1 and parts[-1].isdigit() else None
-    name = " ".join(parts[:-1]) if value else ability
+    """Split an `abilities` token into (label, reminder). Value-bearing keywords
+    like `Commander[3]` substitute the value into the glossary's X placeholder;
+    the pill label renders the value space-separated (`COMMANDER 3`)."""
+    m = _ABILITY_TOKEN.match(ability.strip())
+    if not m:
+        return ability.upper(), ""
+    name, value = m.group(1), m.group(2)
     entry = glossary.get(name.lower())
-    reminder = ""
-    if entry:
-        reminder = re.sub(r"\bX\b", value, entry[1]) if value else entry[1]
-    return ability.upper(), reminder
+    if not entry:
+        # Unknown keyword — render the label as written, no reminder.
+        return (f"{name} {value}" if value else name).upper(), ""
+    reminder = re.sub(r"\bX\b", value, entry["reminder"]) if value else entry["reminder"]
+    label = f"{entry['name']} {value}" if value else entry["name"]
+    return label.upper(), reminder
 
 
 def parse_card(row, index):

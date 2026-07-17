@@ -1,5 +1,5 @@
 [
-  { "name": "Leader", "cardKinds": ["unit"] },
-  { "name": "Flying", "cardKinds": ["item"] },
-  { "name": "Aura", "cardKinds": ["location"] }
+  { "name": "Leader", "cardTypes": ["unit"] },
+  { "name": "Flying", "cardTypes": ["item"] },
+  { "name": "Aura", "cardTypes": ["location"] }
 ]

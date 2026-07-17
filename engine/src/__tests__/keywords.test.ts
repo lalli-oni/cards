@@ -6,7 +6,7 @@ describe("keyword vocabulary", () => {
     expect(isKeyword("Berserker")).toBe(true);
     expect(isKeyword("Leader")).toBe(true);
     expect(isKeyword("berserker")).toBe(false);
-    expect(isKeyword("Lethal")).toBe(false); // deferred, not in v0.1
+    expect(isKeyword("Lethal")).toBe(false); // deferred candidate, not governed
   });
 
   describe("modifier families", () => {
@@ -51,13 +51,13 @@ describe("keyword vocabulary", () => {
   });
 
   describe("per-type scoping", () => {
-    test("Aura is a location keyword, not a unit keyword", () => {
-      expect(() => parseKeyword("Aura:-1:all:combat", "unit")).toThrow(/not valid on unit/);
+    test("Aura is a location keyword, not supported on units", () => {
+      expect(() => parseKeyword("Aura:-1:all:combat", "unit")).toThrow(/not supported on unit/);
       expect(parseKeyword("Aura:-1:all:combat", "location").name).toBe("Aura");
     });
 
-    test("Flying is an equipment keyword, not a location keyword", () => {
-      expect(() => parseKeyword("Flying", "location")).toThrow(/not valid on location/);
+    test("Flying is an equipment keyword, not supported on locations", () => {
+      expect(() => parseKeyword("Flying", "location")).toThrow(/not supported on location/);
       expect(parseKeyword("Flying", "item").name).toBe("Flying");
     });
   });

@@ -13,8 +13,8 @@ use selectors.nu *
 const ANALYSIS_DIR = (path self | path dirname)
 
 # Coverage tier: equipment (item-scoped) keywords need 1 card, others need 2.
-def threshold-of [kinds: list] {
-  if ("item" in $kinds) { 1 } else { 2 }
+def threshold-of [types: list] {
+  if ("item" in $types) { 1 } else { 2 }
 }
 
 # The keyword name of a token ("Leader:+1:all:combat" -> "Leader").
@@ -39,7 +39,7 @@ export def run [--set: string = "alpha-1", --build-dir: string = ""] {
     let n = ($cards | where { |c|
       ($c.keywords? | default []) | any { |tok| (token-name $tok) == $k.name }
     } | length)
-    let need = (threshold-of $k.cardKinds)
+    let need = (threshold-of $k.cardTypes)
     { keyword: $k.name, count: $n, need: $need, status: (if $n >= $need { "ok" } else { "GAP" }) }
   })
   let gaps = ($counts | where status == "GAP" | get keyword)

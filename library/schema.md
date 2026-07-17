@@ -91,7 +91,7 @@ on any unknown value (exact spelling, case-sensitive).
 `attributes` is the *cross-type* axis — the same value means the same thing on
 any card type. The three `*_type` columns are the *per-type* category
 axis (a card's own kind within its type) — mostly flavor today; governing them
-and wiring them into mechanics is tracked post-v0.1 in #160. `keywords` is
+and wiring them into mechanics is tracked in #160. `keywords` is
 vocabulary-validated against the governed keyword set (see above).
 
 ## Requirement Checks

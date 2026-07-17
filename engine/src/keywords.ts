@@ -1,50 +1,42 @@
-// ---------------------------------------------------------------------------
-// Governed mechanical keyword vocabulary
-// ---------------------------------------------------------------------------
+// Governed mechanical keyword vocabulary — the source of truth for what keywords
+// exist, how their tokens parse, and which card types the engine supports each
+// on. A keyword is a reusable "what a card does" shorthand carried in the
+// `keywords` column; `parseKeyword` validates a token against that grammar and
+// support map, so an unknown name, malformed parameter, wrong arity, or a
+// keyword used on an unsupported card type all fail the build.
 //
-// Mechanical keywords are the reusable "what a card *does*" shorthands, carried
-// in the `keywords` CSV column (renamed from `abilities` in #194). This module
-// is the source of truth for the v0.1 keyword surface — the names, parameters,
-// and which card types each keyword is legal on. `library/build.ts` parses every
-// `keywords` token through `parseKeyword`, so an unknown name, malformed
-// parameter, wrong arity, or wrong-type placement fails the build instead of
-// shipping a silent no-op token. Keep in lockstep with the Keyword Glossary in
-// `rules/README.md`.
-//
-// The vocabulary is deliberately self-contained — NOT merged with the action
-// effect-DSL in `effect-dsl/`. Unifying keywords, actions, and passives under a
-// single effect grammar is tracked post-v0.1 in #208.
+// This is the engine-side mechanic definition. Card-SET composition rules
+// (e.g. coverage minimums) are design-side and live in the library, not here.
 
-export type CardKind = "unit" | "item" | "location" | "event" | "policy";
-export type StatScope = "strength" | "cunning" | "charisma" | "all";
-export type Stat = "strength" | "cunning" | "charisma";
+import { type CardType, type Stat, STAT_NAMES } from "./types";
+
+export type StatScope = Stat | "all";
 export type Context = "combat" | "mission";
 export type Role = "atk" | "def" | "either";
 
-const STAT_SCOPES: readonly StatScope[] = ["strength", "cunning", "charisma", "all"];
-const STATS: readonly Stat[] = ["strength", "cunning", "charisma"];
-const CONTEXTS: readonly Context[] = ["combat", "mission"];
-const ROLES: readonly Role[] = ["atk", "def", "either"];
+const STAT_SCOPES = [...STAT_NAMES, "all"] as const;
+const CONTEXTS = ["combat", "mission"] as const;
+const ROLES = ["atk", "def", "either"] as const;
 
-/** A positional parameter a keyword token carries after its name. */
+// A positional parameter a keyword token carries after its name.
 type ParamKind =
   | "signedMagnitude" // e.g. +2 / -1 — sign required
   | "magnitude" // positive integer
-  | "statScope" // strength | cunning | charisma | all
-  | "stat" // strength | cunning | charisma (no `all`)
+  | "statScope" // a stat, or `all`
+  | "stat" // a stat (no `all`)
   | "context" // combat | mission
   | "role"; // atk | def | either
 
 interface ParamSpec {
   kind: ParamKind;
-  /** Optional params may be omitted. Only trailing params should be optional. */
+  // Optional params may be omitted. Only trailing params should be optional.
   optional?: boolean;
 }
 
 export interface KeywordSpec {
   name: string;
-  /** Card types this keyword may legally appear on (per-type scoping). */
-  cardKinds: readonly CardKind[];
+  // Card types the engine supports this keyword on.
+  cardTypes: readonly CardType[];
   params: readonly ParamSpec[];
 }
 
@@ -57,35 +49,36 @@ const FAMILY_PARAMS: readonly ParamSpec[] = [
   { kind: "role", optional: true },
 ];
 
-/** The closed v0.1 keyword vocabulary. Source of truth; keep in sync with rules. */
+// The closed keyword vocabulary. Source of truth; keep in sync with the rules
+// Keyword Glossary.
 export const KEYWORDS: readonly KeywordSpec[] = [
   // Modifier families (parameterized stat effects), by who they affect:
-  { name: "Prowess", cardKinds: ["unit"], params: FAMILY_PARAMS }, // self
-  { name: "Kindred", cardKinds: ["unit"], params: FAMILY_PARAMS }, // attribute-kin
-  { name: "Leader", cardKinds: ["unit"], params: FAMILY_PARAMS }, // all friendly here
-  { name: "Aura", cardKinds: ["location"], params: FAMILY_PARAMS }, // every unit here (friend + foe)
+  { name: "Prowess", cardTypes: ["unit"], params: FAMILY_PARAMS }, // self
+  { name: "Kindred", cardTypes: ["unit"], params: FAMILY_PARAMS }, // attribute-kin
+  { name: "Leader", cardTypes: ["unit"], params: FAMILY_PARAMS }, // all friendly here
+  { name: "Aura", cardTypes: ["location"], params: FAMILY_PARAMS }, // every unit here (friend + foe)
 
   // Standalone effect keywords:
-  { name: "Untouchable", cardKinds: ["unit"], params: [{ kind: "stat" }] },
-  { name: "Berserker", cardKinds: ["unit"], params: [] },
-  { name: "Patron", cardKinds: ["unit"], params: [{ kind: "magnitude" }] },
-  { name: "Loot", cardKinds: ["unit"], params: [] },
-  { name: "Squire", cardKinds: ["unit"], params: [{ kind: "magnitude", optional: true }] },
-  { name: "Flying", cardKinds: ["item"], params: [] },
-  { name: "Heavy", cardKinds: ["item"], params: [] },
-  { name: "Lightweight", cardKinds: ["item"], params: [] },
+  { name: "Untouchable", cardTypes: ["unit"], params: [{ kind: "stat" }] },
+  { name: "Berserker", cardTypes: ["unit"], params: [] },
+  { name: "Patron", cardTypes: ["unit"], params: [{ kind: "magnitude" }] },
+  { name: "Loot", cardTypes: ["unit"], params: [] },
+  { name: "Squire", cardTypes: ["unit"], params: [{ kind: "magnitude", optional: true }] },
+  { name: "Flying", cardTypes: ["item"], params: [] },
+  { name: "Heavy", cardTypes: ["item"], params: [] },
+  { name: "Lightweight", cardTypes: ["item"], params: [] },
 ];
 
 const KEYWORD_BY_NAME: ReadonlyMap<string, KeywordSpec> = new Map(
   KEYWORDS.map((k) => [k.name, k]),
 );
 
-/** Whether `name` is a governed keyword (exact CamelCase, like attributes). */
+// Whether `name` is a governed keyword (exact CamelCase, like attributes).
 export function isKeyword(name: string): boolean {
   return KEYWORD_BY_NAME.has(name);
 }
 
-/** Structured result of parsing a keyword token. */
+// Structured result of parsing a keyword token.
 export interface ParsedKeyword {
   name: string;
   signedMagnitude?: number;
@@ -103,22 +96,19 @@ export class KeywordError extends Error {
   }
 }
 
-/**
- * Parse and validate a single `keywords`-column token (e.g. `Leader:+1:all:combat`)
- * against the governed vocabulary and the card type it appears on.
- *
- * Throws `KeywordError` on an unknown name, wrong-type placement, wrong arity, or
- * a malformed parameter. Case-sensitive on the keyword name and on enum params, so
- * CSV data and code cannot drift on spelling.
- */
-export function parseKeyword(token: string, cardKind: CardKind): ParsedKeyword {
+// Parse and validate a single `keywords`-column token (e.g. `Leader:+1:all:combat`)
+// against the keyword grammar and the card type it appears on. Throws
+// `KeywordError` on an unknown name, an unsupported card type, wrong arity, or a
+// malformed parameter. Case-sensitive on the name and enum params so card data
+// and code cannot drift on spelling.
+export function parseKeyword(token: string, cardType: CardType): ParsedKeyword {
   const parts = token.split(":");
   const name = parts[0];
   const spec = KEYWORD_BY_NAME.get(name);
   if (!spec) throw new KeywordError(`unknown keyword: ${name}`);
-  if (!spec.cardKinds.includes(cardKind)) {
+  if (!spec.cardTypes.includes(cardType)) {
     throw new KeywordError(
-      `keyword ${name} is not valid on ${cardKind} cards (allowed: ${spec.cardKinds.join(", ")})`,
+      `keyword ${name} is not supported on ${cardType} cards (supported: ${spec.cardTypes.join(", ")})`,
     );
   }
 
@@ -164,8 +154,8 @@ function assignParam(name: string, kind: ParamKind, raw: string, out: ParsedKeyw
       out.statScope = raw as StatScope;
       return;
     case "stat":
-      if (!STATS.includes(raw as Stat)) {
-        throw new KeywordError(`keyword ${name}: stat must be one of ${STATS.join(", ")}, got "${raw}"`);
+      if (!STAT_NAMES.includes(raw as Stat)) {
+        throw new KeywordError(`keyword ${name}: stat must be one of ${STAT_NAMES.join(", ")}, got "${raw}"`);
       }
       out.stat = raw as Stat;
       return;

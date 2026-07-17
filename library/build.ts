@@ -13,7 +13,8 @@ import { readdirSync, readFileSync, mkdirSync, writeFileSync, existsSync } from 
 import { join } from "path";
 import { parse as parseDSL, DSLParseError, DSLValidationError } from "../engine/src/effect-dsl";
 import { ATTRIBUTES } from "../engine/src/attributes";
-import { type CardKind, KEYWORDS, KeywordError, parseKeyword } from "../engine/src/keywords";
+import { KEYWORDS, KeywordError, parseKeyword } from "../engine/src/keywords";
+import type { CardType as EngineCardType } from "../engine/src/types";
 import {
   LOCATION_TYPES,
   EVENT_TYPES,
@@ -213,11 +214,9 @@ export function validate(type: CardType, card: Record<string, unknown>): Validat
     errors.push({ card: id, field: "timing", message: `invalid timing: ${card.timing}` });
   }
 
-  // Cross-type attribute vocabulary — exact CamelCase membership in the
-  // governed set (`engine/src/attributes.ts`). Closes the gap #158 left: the
-  // old `keywords` column was unvalidated, so typos/un-migrated values could
-  // silently no-op an effect. Case-sensitive on purpose so CSV data and the
-  // hardcoded literals in effect factories cannot drift on spelling.
+  // Cross-type attribute vocabulary — exact CamelCase membership in the governed
+  // set (`engine/src/attributes.ts`). Case-sensitive on purpose so CSV data and
+  // the hardcoded literals in effect factories cannot drift on spelling.
   const attributes = (card.attributes as string[] | undefined) ?? [];
   for (const attr of attributes) {
     if (!ATTRIBUTES.includes(attr as (typeof ATTRIBUTES)[number])) {
@@ -225,15 +224,14 @@ export function validate(type: CardType, card: Record<string, unknown>): Validat
     }
   }
 
-  // Governed mechanical keyword vocabulary (engine/src/keywords.ts). Each token
-  // in the `keywords` column is parsed + validated: an unknown name, malformed
-  // parameter, wrong arity, or wrong-type placement all fail the build. Mirrors
-  // the attribute gate above so keyword data and effect code can't drift. The
-  // grammar is self-contained for v0.1; unifying it with the action DSL is #208.
+  // Governed keyword vocabulary (engine/src/keywords.ts). Each token in the
+  // `keywords` column is parsed + validated: an unknown name, malformed
+  // parameter, wrong arity, or an unsupported card type all fail the build,
+  // mirroring the attribute gate above so keyword data and code can't drift.
   const keywords = (card.keywords as string[] | undefined) ?? [];
   for (const token of keywords) {
     try {
-      parseKeyword(token, card.type as CardKind);
+      parseKeyword(token, card.type as EngineCardType);
     } catch (e) {
       const msg = e instanceof KeywordError ? e.message : String(e);
       errors.push({ card: id, field: "keywords", message: msg });
@@ -344,7 +342,7 @@ function main() {
   writeFileSync(
     join(BUILD_DIR, "keywords.json"),
     JSON.stringify(
-      KEYWORDS.map((k) => ({ name: k.name, cardKinds: k.cardKinds })),
+      KEYWORDS.map((k) => ({ name: k.name, cardTypes: k.cardTypes })),
       null,
       2,
     ),

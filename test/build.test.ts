@@ -95,9 +95,9 @@ describe("build validation — governed keywords", () => {
     expect(errors.some((e) => e.field === "keywords")).toBe(true);
   });
 
-  test("rejects wrong-type placement (Aura on a unit)", () => {
+  test("rejects an unsupported card type (Aura on a unit)", () => {
     const errors = check("units", { attributes: "Military", keywords: "Aura:-1:all:combat" });
-    expect(errors.some((e) => e.field === "keywords" && e.message.includes("not valid on unit"))).toBe(true);
+    expect(errors.some((e) => e.field === "keywords" && e.message.includes("not supported on unit"))).toBe(true);
   });
 });
 

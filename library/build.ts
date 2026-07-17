@@ -18,10 +18,12 @@ import {
   EVENT_TYPES,
   ITEM_TYPES,
 } from "../engine/src/card-categories";
+import { parseGlossary, parseAbilityToken, type Glossary } from "./glossary";
 
 const LIBRARY_DIR = join(import.meta.dir);
 const SETS_DIR = join(LIBRARY_DIR, "sets");
 const BUILD_DIR = join(LIBRARY_DIR, "build");
+const RULES_README = join(LIBRARY_DIR, "..", "rules", "README.md");
 
 const CARD_TYPES = ["units", "locations", "items", "events", "policies"] as const;
 export type CardType = (typeof CARD_TYPES)[number];
@@ -188,7 +190,11 @@ export function transformCard(type: CardType, raw: Record<string, string>): Reco
 
 export type ValidationError = { card: string; field: string; message: string };
 
-export function validate(type: CardType, card: Record<string, unknown>): ValidationError[] {
+export function validate(
+  type: CardType,
+  card: Record<string, unknown>,
+  glossary?: Glossary,
+): ValidationError[] {
   const errors: ValidationError[] = [];
   const id = (card.id as string) || "unknown";
 
@@ -245,6 +251,30 @@ export function validate(type: CardType, card: Record<string, unknown>): Validat
     }
   }
 
+  // Keyword `abilities` — render-accuracy checks only (#203). We validate the
+  // value *syntax* (`Keyword` or `Keyword[N]`) always, and value-arity for
+  // keywords the glossary knows. Whether unknown keywords are *rejected*
+  // (governance) is deferred to #194, so an unlisted keyword is skipped here,
+  // not flagged. Runs only when a glossary is supplied (i.e. the full build);
+  // unit tests calling `validate(type, card)` skip it.
+  if (glossary) {
+    const abilities = (card.abilities as string[] | undefined) ?? [];
+    for (const raw of abilities) {
+      const token = parseAbilityToken(raw);
+      if (!token) {
+        errors.push({ card: id, field: "abilities", message: `malformed keyword "${raw}" (expected "Keyword" or "Keyword[N]")` });
+        continue;
+      }
+      const def = glossary[token.id];
+      if (!def) continue; // unknown keyword — governance is #194's call, not #203's
+      if (def.valued && token.value === null) {
+        errors.push({ card: id, field: "abilities", message: `keyword "${token.name}" requires a value, e.g. ${token.name}[1]` });
+      } else if (!def.valued && token.value !== null) {
+        errors.push({ card: id, field: "abilities", message: `keyword "${token.name}" does not take a value (got "${raw}")` });
+      }
+    }
+  }
+
   // DSL effect validation — skipped for policies (action.effect is
   // human-readable prose; executable DSL lives in POLICY_ACTIONS).
   const actions = card.actions as { name: string; apCost: number; effect: string }[] | undefined;
@@ -272,7 +302,7 @@ export function validate(type: CardType, card: Record<string, unknown>): Validat
 
 // --- Main ---
 
-function buildSet(setName: string): { cards: Record<string, unknown>[]; errors: ValidationError[] } {
+function buildSet(setName: string, glossary: Glossary): { cards: Record<string, unknown>[]; errors: ValidationError[] } {
   const setDir = join(SETS_DIR, setName);
   const cards: Record<string, unknown>[] = [];
   const errors: ValidationError[] = [];
@@ -289,7 +319,7 @@ function buildSet(setName: string): { cards: Record<string, unknown>[]; errors: 
 
     for (const row of rows) {
       const card = transformCard(type, row);
-      errors.push(...validate(type, card));
+      errors.push(...validate(type, card, glossary));
       cards.push(card);
     }
   }
@@ -300,6 +330,12 @@ function buildSet(setName: string): { cards: Record<string, unknown>[]; errors: 
 function main() {
   const targetSet = process.argv[2];
   mkdirSync(BUILD_DIR, { recursive: true });
+
+  // Derive the keyword glossary from rules/README.md and emit the render↔data
+  // contract artifact (#203). Also used to validate card `abilities` below.
+  const glossary = parseGlossary(readFileSync(RULES_README, "utf-8"));
+  writeFileSync(join(BUILD_DIR, "glossary.json"), JSON.stringify(glossary, null, 2));
+  console.log(`Glossary: ${Object.keys(glossary).length} keywords → build/glossary.json`);
 
   const sets = targetSet
     ? [targetSet]
@@ -313,7 +349,7 @@ function main() {
 
   for (const setName of sets) {
     console.log(`Building set: ${setName}`);
-    const { cards, errors } = buildSet(setName);
+    const { cards, errors } = buildSet(setName, glossary);
 
     writeFileSync(join(BUILD_DIR, `${setName}.json`), JSON.stringify(cards, null, 2));
     console.log(`  ${cards.length} cards`);

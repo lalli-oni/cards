@@ -28,11 +28,17 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      # Build the library first: the generated build/*.json (e.g. @library/all.json)
+      # is a gitignored artifact that cards-web's typecheck imports, so it must
+      # exist before typecheck runs.
+      - name: Build library
+        run: bun run build:library
+
       - name: Typecheck (all workspaces)
         run: bun --filter '*' typecheck
 
-      - name: Test (build library + engine/web/test suites)
-        run: bun run test
+      - name: Test (engine/web/test suites)
+        run: bun --filter '*' test
 
       - name: Renderer smoke tests (Python)
         run: bun run test:renderer

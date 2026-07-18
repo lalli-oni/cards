@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
-"""Smoke tests for the glossary consumer in moderntrek-template.py (#203).
+"""Smoke tests for the keyword consumer in moderntrek-template.py (#194).
 
 The renderer is Python while the rest of the suite is bun/TS, so these run
 standalone:  python3 design/test_moderntrek_template.py  (exit 0 = pass).
 
-Covers parse_glossary's degradation paths (missing / non-JSON / wrong-shape /
-valid / stale) and keyword_reminder's bracket parse, X-substitution, unknown /
-malformed-token / arity-mismatch degradation — the branches that would otherwise
-ship unverified.
+Covers load_keyword_vocab's degradation paths (missing / non-JSON / wrong-shape /
+valid) and keyword_reminder's structural pill labels for the family grammar +
+standalones — the branches that would otherwise ship unverified.
 """
 
 import contextlib
@@ -26,14 +25,15 @@ _spec = importlib.util.spec_from_file_location(
 mt = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(mt)
 
-GLOSSARY = {
-    "commander": {"id": "commander", "name": "Commander", "scope": "unit",
-                  "timing": "static", "valued": True,
-                  "reminder": "Friendly units get +X to all stats"},
-    "lethal": {"id": "lethal", "name": "Lethal", "scope": "unit",
-               "timing": "static", "valued": False,
-               "reminder": "The loser is killed instead of injured"},
-}
+# build/keywords.json is a JSON array of {name, cardTypes}.
+VOCAB_JSON = [
+    {"name": "Leader", "cardTypes": ["unit"]},
+    {"name": "Aura", "cardTypes": ["location"]},
+    {"name": "Untouchable", "cardTypes": ["unit"]},
+    {"name": "Berserker", "cardTypes": ["unit"]},
+    {"name": "Flying", "cardTypes": ["item"]},
+]
+VOCAB = {k["name"]: k for k in VOCAB_JSON}
 
 _failures = []
 
@@ -46,7 +46,7 @@ def check(name, cond):
 
 @contextlib.contextmanager
 def _tmp_json(obj_or_text):
-    """Write a temp file (dict → JSON, str → raw) and yield its path."""
+    """Write a temp file (obj → JSON, str → raw) and yield its path."""
     fd, path = tempfile.mkstemp(suffix=".json")
     try:
         with os.fdopen(fd, "w") as f:
@@ -64,74 +64,74 @@ def _quiet(fn, *args):
     return result, buf.getvalue()
 
 
-def test_parse_glossary():
-    print("parse_glossary:")
-    # Missing file → {} + a warning.
-    res, err = _quiet(mt.parse_glossary, os.path.join(SCRIPT_DIR, "does-not-exist.json"))
+def test_load_keyword_vocab():
+    print("load_keyword_vocab:")
+    res, err = _quiet(mt.load_keyword_vocab, os.path.join(SCRIPT_DIR, "does-not-exist.json"))
     check("missing file → {}", res == {})
-    check("missing file → warns", "not found" in err.lower() or "blank" in err.lower())
+    check("missing file → warns", "not found" in err.lower())
 
-    # Valid JSON object → dict passthrough.
-    with _tmp_json({"commander": GLOSSARY["commander"]}) as p:
-        res, _ = _quiet(mt.parse_glossary, p, __file__)
-        check("valid JSON → dict", isinstance(res, dict) and "commander" in res)
+    with _tmp_json(VOCAB_JSON) as p:
+        res, _ = _quiet(mt.load_keyword_vocab, p)
+        check("valid array → name-keyed dict", isinstance(res, dict) and "Leader" in res and "Aura" in res)
 
-    # Non-object JSON (a list) → {} + warning, no crash.
-    with _tmp_json([1, 2, 3]) as p:
-        res, err = _quiet(mt.parse_glossary, p, __file__)
-        check("non-object JSON → {}", res == {})
-        check("non-object JSON → warns", "not a json object" in err.lower())
+    with _tmp_json({"not": "an array"}) as p:
+        res, err = _quiet(mt.load_keyword_vocab, p)
+        check("non-array JSON → {}", res == {})
+        check("non-array JSON → warns", "not a json array" in err.lower())
 
-    # Invalid JSON text → {} + warning, no crash.
     with _tmp_json("{ not json ") as p:
-        res, err = _quiet(mt.parse_glossary, p, __file__)
+        res, err = _quiet(mt.load_keyword_vocab, p)
         check("unreadable JSON → {}", res == {})
+        check("unreadable JSON → warns", "unreadable" in err.lower())
 
-    # Stale (artifact older than rules) → warns but still returns the data.
-    with _tmp_json({"commander": GLOSSARY["commander"]}) as p:
-        os.utime(p, (0, 0))  # far in the past, older than any rules file
-        res, err = _quiet(mt.parse_glossary, p, __file__)
-        check("stale artifact → still returns data", "commander" in res)
-        check("stale artifact → warns", "stale" in err.lower())
+    # Per-entry malformed: garbage / name-less entries are skipped WITH a warning,
+    # not silently dropped.
+    with _tmp_json([{"name": "Leader", "cardTypes": ["unit"]}, "garbage", {"cardTypes": ["unit"]}]) as p:
+        res, err = _quiet(mt.load_keyword_vocab, p)
+        check("malformed entries → good one survives", res == {"Leader": {"name": "Leader", "cardTypes": ["unit"]}})
+        check("malformed entries → warns", "malformed" in err.lower())
+
+    # A non-string name must not crash (unhashable dict key) — skipped + warned.
+    with _tmp_json([{"name": ["x"], "cardTypes": ["unit"]}, {"name": "Aura", "cardTypes": ["location"]}]) as p:
+        res, err = _quiet(mt.load_keyword_vocab, p)
+        check("non-string name → skipped, no crash", res == {"Aura": {"name": "Aura", "cardTypes": ["location"]}})
 
 
 def test_keyword_reminder():
     print("keyword_reminder:")
-    label, reminder = mt.keyword_reminder("Commander[3]", GLOSSARY)
-    check("valued → COMMANDER 3 label", label == "COMMANDER 3")
-    check("valued → X substituted", reminder == "Friendly units get +3 to all stats")
+    (label, reminder), err = _quiet(mt.keyword_reminder, "Leader:+1:all:combat", VOCAB)
+    check("family token → structural label", label == "LEADER +1 ALL COMBAT")
+    # Intentional stub canary — reminder stays "" until prose composition (#194/#209).
+    check("family token → blank reminder (composition is a follow-up)", reminder == "")
+    check("governed keyword in a populated vocab → no warning", err == "")
 
-    label, reminder = mt.keyword_reminder("commander[3]", GLOSSARY)
-    check("mis-cased → canonical label", label == "COMMANDER 3")
+    label, _ = mt.keyword_reminder("Untouchable:charisma", VOCAB)
+    check("parameterised standalone → label", label == "UNTOUCHABLE CHARISMA")
 
-    label, reminder = mt.keyword_reminder("Lethal", GLOSSARY)
-    check("value-less → LETHAL label", label == "LETHAL")
-    check("value-less → full reminder", reminder == "The loser is killed instead of injured")
+    label, _ = mt.keyword_reminder("Berserker", VOCAB)
+    check("value-less standalone → label", label == "BERSERKER")
 
-    label, reminder = mt.keyword_reminder("Mystery[9]", GLOSSARY)
-    check("unknown → label as written", label == "MYSTERY 9")
-    check("unknown → blank reminder", reminder == "")
+    # Degenerate tokens: no crash, sensible label, clear signal on an empty name.
+    label, _ = mt.keyword_reminder("Leader", VOCAB)
+    check("family name with no params → label", label == "LEADER")
+    label, _ = mt.keyword_reminder("Leader:", VOCAB)
+    check("trailing colon → no trailing space in label", label == "LEADER")
+    (label, _), err = _quiet(mt.keyword_reminder, ":", VOCAB)
+    check("empty-name token → warns", "empty name" in err.lower())
 
-    label, reminder = mt.keyword_reminder("Bogus{x}", GLOSSARY)
-    check("malformed token → no crash, blank reminder", label == "BOGUS{X}" and reminder == "")
+    # Unknown name (not in vocab) → warns but still renders verbatim.
+    (label, reminder), err = _quiet(mt.keyword_reminder, "Mystery:9", VOCAB)
+    check("unknown keyword → verbatim label", label == "MYSTERY 9")
+    check("unknown keyword → warns", "not in the governed vocab" in err.lower())
 
-    # Wrong-shape entry (missing "reminder") must degrade, not KeyError.
-    (label, reminder), _ = _quiet(mt.keyword_reminder, "Commander[3]", {"commander": {"scope": "unit"}})
-    check("wrong-shape entry → degrades (no crash)", reminder == "")
-
-    # Arity mismatch: valued keyword without a value → warn + blank (no literal X).
-    (label, reminder), err = _quiet(mt.keyword_reminder, "Commander", GLOSSARY)
-    check("valued w/o value → blank reminder (no literal X)", reminder == "")
-    check("valued w/o value → warns", "needs a value" in err.lower())
-
-    # Arity mismatch: value-less keyword given a value → warn, value dropped.
-    (label, reminder), err = _quiet(mt.keyword_reminder, "Lethal[2]", GLOSSARY)
-    check("value-less w/ value → label drops value", label == "LETHAL")
-    check("value-less w/ value → warns", "takes no value" in err.lower())
+    # Empty vocab (degraded load) → no warning, still renders.
+    (label, _), err = _quiet(mt.keyword_reminder, "Leader:+1:all:combat", {})
+    check("empty vocab → renders label", label == "LEADER +1 ALL COMBAT")
+    check("empty vocab → no warning", err == "")
 
 
 if __name__ == "__main__":
-    test_parse_glossary()
+    test_load_keyword_vocab()
     test_keyword_reminder()
     if _failures:
         print(f"\n{len(_failures)} FAILED: {', '.join(_failures)}")

@@ -32,13 +32,13 @@ describe("describeEvent", () => {
         type: "trap_triggered",
         playerId: "p1",
         cardId: "inst-42",
-        cardName: "Ambush",
+        cardName: "Sprung Trap",
         targetId: "loc-7",
       };
 
       const out = describeEvent(event, { card: cardResolver });
 
-      expect(out).toContain("Ambush");
+      expect(out).toContain("Sprung Trap");
       expect(out).toContain("The Pyramids");
       expect(cardResolver).toHaveBeenCalledWith("loc-7");
     });

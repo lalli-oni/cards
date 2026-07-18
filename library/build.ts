@@ -13,17 +13,17 @@ import { readdirSync, readFileSync, mkdirSync, writeFileSync, existsSync } from 
 import { join } from "path";
 import { parse as parseDSL, DSLParseError, DSLValidationError } from "../engine/src/effect-dsl";
 import { ATTRIBUTES } from "../engine/src/attributes";
+import { KEYWORDS, KeywordError, parseKeyword } from "../engine/src/keywords";
+import type { CardType as EngineCardType } from "../engine/src/types";
 import {
   LOCATION_TYPES,
   EVENT_TYPES,
   ITEM_TYPES,
 } from "../engine/src/card-categories";
-import { parseGlossary, parseAbilityToken, type Glossary, type KeywordDef } from "./glossary";
 
 const LIBRARY_DIR = join(import.meta.dir);
 const SETS_DIR = join(LIBRARY_DIR, "sets");
 const BUILD_DIR = join(LIBRARY_DIR, "build");
-const RULES_README = join(LIBRARY_DIR, "..", "rules", "README.md");
 
 const CARD_TYPES = ["units", "locations", "items", "events", "policies"] as const;
 export type CardType = (typeof CARD_TYPES)[number];
@@ -120,13 +120,11 @@ export function transformCard(type: CardType, raw: Record<string, string>): Reco
     cost: raw.cost.includes("|") ? raw.cost.split("|").map((c) => c.trim()) : raw.cost,
     text: raw.text || null,
     flavor: raw.flavor || null,
-    // Shared classification columns (split out of the old `keywords` column):
-    // `abilities` = mechanical keyword-effects, `attributes` = cross-type
-    // synergy vocabulary. Both apply to every card type. `attributes` is
-    // vocabulary-validated below; `abilities` is intentionally free-text (no
-    // governed `ABILITIES` set yet) — the rules' Keyword Glossary is the human
-    // reference until abilities are wired to effect factories (then govern them).
-    abilities: splitList(raw.abilities || ""),
+    // Shared classification columns: `keywords` = mechanical keyword-effects
+    // (things the card *does*), `attributes` = cross-type synergy vocabulary.
+    // Both apply to every card type and are vocabulary-validated below against
+    // their governed sets (`engine/src/keywords.ts`, `engine/src/attributes.ts`).
+    keywords: splitList(raw.keywords || ""),
     attributes: splitList(raw.attributes || ""),
   };
 
@@ -193,7 +191,6 @@ export type ValidationError = { card: string; field: string; message: string };
 export function validate(
   type: CardType,
   card: Record<string, unknown>,
-  glossary?: Glossary,
 ): ValidationError[] {
   const errors: ValidationError[] = [];
   const id = (card.id as string) || "unknown";
@@ -220,15 +217,30 @@ export function validate(
     errors.push({ card: id, field: "timing", message: `invalid timing: ${card.timing}` });
   }
 
-  // Cross-type attribute vocabulary — exact CamelCase membership in the
-  // governed set (`engine/src/attributes.ts`). Closes the gap #158 left: the
-  // old `keywords` column was unvalidated, so typos/un-migrated values could
-  // silently no-op an effect. Case-sensitive on purpose so CSV data and the
-  // hardcoded literals in effect factories cannot drift on spelling.
+  // Cross-type attribute vocabulary — exact CamelCase membership in the governed
+  // set (`engine/src/attributes.ts`). Case-sensitive on purpose so CSV data and
+  // the hardcoded literals in effect factories cannot drift on spelling.
   const attributes = (card.attributes as string[] | undefined) ?? [];
   for (const attr of attributes) {
     if (!ATTRIBUTES.includes(attr as (typeof ATTRIBUTES)[number])) {
       errors.push({ card: id, field: "attributes", message: `invalid attribute: ${attr}` });
+    }
+  }
+
+  // Governed keyword vocabulary (engine/src/keywords.ts). Each token in the
+  // `keywords` column is parsed + validated: an unknown name, malformed
+  // parameter, wrong arity, or an unsupported card type all fail the build,
+  // mirroring the attribute gate above so keyword data and code can't drift.
+  const keywords = (card.keywords as string[] | undefined) ?? [];
+  for (const token of keywords) {
+    try {
+      parseKeyword(token, card.type as EngineCardType);
+    } catch (e) {
+      // Only a KeywordError is card-data (a bad token). Let anything else — an
+      // engine fault in parseKeyword — propagate with its stack rather than
+      // mislabel it as this card's validation error.
+      if (!(e instanceof KeywordError)) throw e;
+      errors.push({ card: id, field: "keywords", message: e.message });
     }
   }
 
@@ -247,45 +259,6 @@ export function validate(
     for (const t of (card.itemType as string[] | undefined) ?? []) {
       if (!ITEM_TYPES.includes(t as (typeof ITEM_TYPES)[number])) {
         errors.push({ card: id, field: "type", message: `invalid item type: ${t}` });
-      }
-    }
-  }
-
-  // Keyword `abilities` — render-accuracy checks only (#203). We validate the
-  // value *syntax* (`Keyword` or `Keyword[N]`) for every token, plus canonical
-  // Title-case and value-arity for the keywords the glossary knows. Whether
-  // unknown keywords are *rejected* (governance) is deferred to #194, so an
-  // unlisted keyword is warned-about but not failed here. Runs only when a
-  // glossary is supplied (the full build); `validate(type, card)` skips it.
-  if (glossary) {
-    const abilities = (card.abilities as string[] | undefined) ?? [];
-    for (const raw of abilities) {
-      const token = parseAbilityToken(raw);
-      if (!token) {
-        errors.push({ card: id, field: "abilities", message: `malformed keyword "${raw}" (expected "Keyword" or "Keyword[N]")` });
-        continue;
-      }
-      const def: KeywordDef | undefined = glossary[token.id];
-      if (!def) {
-        // Unknown keyword — rejecting it is #194's call, not #203's. Warn so a
-        // fat-fingered *known* keyword (e.g. "Commmander") surfaces in build
-        // output instead of silently rendering with no reminder text.
-        console.warn(`  Warning: card "${id}" uses unknown keyword "${token.name}" (no glossary entry; not validated)`);
-        continue;
-      }
-      if (token.name !== def.name) {
-        // Report only the casing problem for a mis-cased token — its arity is
-        // checked on the next build once the name is fixed, so we avoid emitting
-        // two errors that refer to the keyword by two different casings.
-        errors.push({ card: id, field: "abilities", message: `keyword "${token.name}" must be written "${def.name}" (Title-case matching the glossary)` });
-        continue;
-      }
-      if (def.valued && token.value === null) {
-        errors.push({ card: id, field: "abilities", message: `keyword "${def.name}" requires a value, e.g. ${def.name}[1]` });
-      } else if (!def.valued && token.value !== null) {
-        errors.push({ card: id, field: "abilities", message: `keyword "${def.name}" does not take a value (got "${raw}")` });
-      } else if (def.valued && token.value !== null && token.value < 1) {
-        errors.push({ card: id, field: "abilities", message: `keyword "${def.name}" value must be a positive magnitude (got ${token.value})` });
       }
     }
   }
@@ -317,7 +290,7 @@ export function validate(
 
 // --- Main ---
 
-function buildSet(setName: string, glossary: Glossary): { cards: Record<string, unknown>[]; errors: ValidationError[] } {
+function buildSet(setName: string): { cards: Record<string, unknown>[]; errors: ValidationError[] } {
   const setDir = join(SETS_DIR, setName);
   const cards: Record<string, unknown>[] = [];
   const errors: ValidationError[] = [];
@@ -334,7 +307,7 @@ function buildSet(setName: string, glossary: Glossary): { cards: Record<string, 
 
     for (const row of rows) {
       const card = transformCard(type, row);
-      errors.push(...validate(type, card, glossary));
+      errors.push(...validate(type, card));
       cards.push(card);
     }
   }
@@ -345,12 +318,6 @@ function buildSet(setName: string, glossary: Glossary): { cards: Record<string, 
 function main() {
   const targetSet = process.argv[2];
   mkdirSync(BUILD_DIR, { recursive: true });
-
-  // Derive the keyword glossary from rules/README.md and emit the render↔data
-  // contract artifact (#203). Also used to validate card `abilities` below.
-  const glossary = parseGlossary(readFileSync(RULES_README, "utf-8"));
-  writeFileSync(join(BUILD_DIR, "glossary.json"), JSON.stringify(glossary, null, 2));
-  console.log(`Glossary: ${Object.keys(glossary).length} keywords → build/glossary.json`);
 
   const sets = targetSet
     ? [targetSet]
@@ -364,7 +331,7 @@ function main() {
 
   for (const setName of sets) {
     console.log(`Building set: ${setName}`);
-    const { cards, errors } = buildSet(setName, glossary);
+    const { cards, errors } = buildSet(setName);
 
     writeFileSync(join(BUILD_DIR, `${setName}.json`), JSON.stringify(cards, null, 2));
     console.log(`  ${cards.length} cards`);
@@ -375,6 +342,17 @@ function main() {
 
   // Write merged output
   writeFileSync(join(BUILD_DIR, "all.json"), JSON.stringify(allCards, null, 2));
+
+  // Emit the governed keyword vocabulary so tooling (keyword-coverage) can check
+  // coverage without duplicating the source of truth (engine/src/keywords.ts).
+  writeFileSync(
+    join(BUILD_DIR, "keywords.json"),
+    JSON.stringify(
+      KEYWORDS.map((k) => ({ name: k.name, cardTypes: k.cardTypes })),
+      null,
+      2,
+    ),
+  );
 
   // Report
   if (totalErrors.length > 0) {

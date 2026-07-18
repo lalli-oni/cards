@@ -16,7 +16,7 @@
 # Canonical DSL verb vocabulary — the verbs the engine implements (see
 # library/schema.md "Effect DSL"). Keyword coverage is measured against the
 # effect DSL — the authoritative source of card mechanics — rather than the
-# `abilities` column.
+# `keywords` column.
 export const DSL_VERBS = [
   gold vp draw buy move peek pick buff contest injure kill control raze to remove
 ]
@@ -64,15 +64,16 @@ export def has-attribute [attr: string] {
   where { |c| ($c.attributes? | default []) | any { |x| $x == $attr } }
 }
 
-export def has-keyword [verb: string] {
+export def has-verb [verb: string] {
   where { |c| (card-verbs $c) | any { |v| $v == $verb } }
 }
 
 # --- derived columns (table -> table, additive, safe-null) ---
 
-# `keywords`: DSL verbs used anywhere in a card's effect strings.
-export def with-keywords [] {
-  insert keywords { |c| card-verbs $c }
+# `verbs`: DSL verbs used anywhere in a card's effect strings. Named `verbs`
+# (not `keywords`) to avoid colliding with the governed `keywords` data column.
+export def with-verbs [] {
+  insert verbs { |c| card-verbs $c }
 }
 
 # `stat-total`: strength+cunning+charisma for units, else null.

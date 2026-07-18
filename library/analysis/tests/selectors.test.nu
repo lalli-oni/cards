@@ -34,21 +34,21 @@ export def main [] {
   assert equal (one monument-builder | with-payout | get vp-out) 1
   assert equal (one monument-builder | with-payout | get gold-out) 0
 
-  # --- with-keywords: whole-token DSL verbs; empty on effect-less cards ---
-  assert equal (one warrior | with-keywords | get keywords) [contest]
-  assert equal (one monument-builder | with-keywords | get keywords) [vp]
-  assert equal (one scholar | with-keywords | get keywords) [draw]
-  assert equal (one pilgrim | with-keywords | get keywords) [move]
-  assert equal (one the-archive | with-keywords | get keywords) []
+  # --- with-verbs: whole-token DSL verbs; empty on effect-less cards ---
+  assert equal (one warrior | with-verbs | get verbs) [contest]
+  assert equal (one monument-builder | with-verbs | get verbs) [vp]
+  assert equal (one scholar | with-verbs | get verbs) [draw]
+  assert equal (one pilgrim | with-verbs | get verbs) [move]
+  assert equal (one the-archive | with-verbs | get verbs) []
 
   # --- filters compose and drop rows only ---
   assert equal (cards | of-type unit | length) 7
   assert equal (cards | of-type location | length) 5
   assert equal (cards | of-type unit | has-attribute Military | get id) [gold-sink warrior general]
-  assert equal (cards | has-keyword contest | get id) [warrior]
+  assert equal (cards | has-verb contest | get id) [warrior]
   assert equal (cards | of-rarity common | length) 6
 
-  # --- multi-action card: ap-cost is a LIST, keywords collects ALL verbs ---
+  # --- multi-action card: ap-cost is a LIST, verbs collects ALL verbs ---
   let multi = [{
     type: "unit",
     actions: [
@@ -57,7 +57,7 @@ export def main [] {
     ]
   }]
   assert equal ($multi | with-ap-cost | get 0.ap-cost) [1 3]
-  assert equal ($multi | with-keywords | get 0.keywords) [gold draw]
+  assert equal ($multi | with-verbs | get 0.verbs) [gold draw]
 
   # --- negative emissions sum with sign; economy lens (gold-out > 0) excludes them ---
   let neg = [{ type: "unit", actions: [{ name: "drain", apCost: 1, effect: "gold[-2]" }] }]

@@ -13,6 +13,8 @@ Use canonical terms from `rules/README.md`. If the user uses informal or ambiguo
 
 Route routine issue work to the **`project-manager` subagent** — picking what to work on next, status reports, triage, labelling, sub-issue creation, and roadmap updates. The agent owns the label model, sub-issue workflow, and the "issues as living documents" convention; consult its definition (`.claude/agents/project-manager.md`) for current conventions rather than improvising.
 
+**Epics vs milestones** are orthogonal: milestones = "what's in this release," epics = "what thematic body of work" (e.g. #45 = content/balance, #210 = rules-architecture). Route epic/milestone decisions through the `project-manager` subagent — see its `### Epics` and `### Milestones` sections. When a future milestone is deliberately deferred, a themed epic may hold post-milestone issues **within its own theme only**; everything else stays unmilestoned/backlog.
+
 ## Code Style
 - Always use explicit TypeScript type annotations for readability — variables, parameters, return types, reactive declarations
 - Avoid Svelte `{@html}` — return structured data and render with `{#each}` or components instead

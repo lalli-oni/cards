@@ -38,8 +38,8 @@ only the `use library/analysis/selectors.nu` path is relative to where you run `
 - `of-type unit|location|item|event|policy` — filter by card type
 - `of-rarity common|uncommon|rare|epic|legendary` — filter by rarity
 - `has-attribute <Attr>` — cards with an attribute (the archetype axis)
-- `has-keyword <verb>` — cards whose effects use a DSL verb (`gold`, `contest`, `buff`, …)
-- `with-keywords` — add `keywords` (DSL verbs used)
+- `has-verb <verb>` — cards whose effects use a DSL verb (`gold`, `contest`, `buff`, …)
+- `with-verbs` — add `verbs` (DSL verbs used)
 - `with-stat-total` — add `stat-total` (units)
 - `with-ap-cost` — add `ap-cost` (activation AP)
 - `with-payout` — add `gold-out` + `vp-out` (direct emissions, kept separate)
@@ -66,7 +66,7 @@ nu -c "use library/analysis/selectors.nu *; load-set alpha-1 | has-attribute Mil
 
 **Filter by mechanic (DSL verb):**
 ```nu
-nu -c "use library/analysis/selectors.nu *; load-set alpha-1 | has-keyword contest | select name"
+nu -c "use library/analysis/selectors.nu *; load-set alpha-1 | has-verb contest | select name"
 ```
 
 **Count by group:**

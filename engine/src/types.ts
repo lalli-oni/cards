@@ -48,6 +48,10 @@ export interface PlayerState {
 
 export type CardType = "unit" | "location" | "item" | "event" | "policy";
 export type Rarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
+
+// The named stats a unit card carries, contested/checked by mechanics.
+export const STAT_NAMES = ["strength", "cunning", "charisma"] as const;
+export type Stat = (typeof STAT_NAMES)[number];
 export type EventTiming = "instant" | "passive" | "trap";
 
 export interface GridPosition {
@@ -73,7 +77,7 @@ interface CardBase {
   text?: string;
   /** Mechanical keyword-effects (Lethal, Taunt, Fortified, …). Split out of
    *  the old `keywords` column in #119. Absent when the card has none. */
-  abilities?: string[];
+  keywords?: string[];
   /** Cross-type synergy vocabulary (`rules/attributes.md`). Shared across all
    *  card types; `UnitCard` narrows this to a required field. */
   attributes?: Attribute[];

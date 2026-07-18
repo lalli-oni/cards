@@ -1,4 +1,4 @@
-import type { MainGameState, UnitCard } from "./types";
+import { type MainGameState, type Stat, STAT_NAMES, type UnitCard } from "./types";
 import type { QueryListener } from "./listeners/types";
 import { getModifiedStat } from "./listeners/query";
 import { hasAttribute, isAttribute } from "./attributes";
@@ -9,16 +9,14 @@ import { hasAttribute, isAttribute } from "./attributes";
 
 export type MissionRequirement =
   | { kind: "attribute"; attribute: string; count: number }
-  | { kind: "stat"; stat: StatName; threshold: number }
+  | { kind: "stat"; stat: Stat; threshold: number }
   | { kind: "units"; count: number };
-
-type StatName = "strength" | "cunning" | "charisma";
 
 export interface ParsedRewards {
   vp: number;
 }
 
-const STATS = new Set<string>(["strength", "cunning", "charisma"]);
+const STATS = new Set<string>(STAT_NAMES);
 
 // ---------------------------------------------------------------------------
 // Requirement parser
@@ -73,7 +71,7 @@ function parseAtomicCheck(check: string): MissionRequirement[] {
 
     // Stat name as first token — pure stat check or legacy "stat_unit_N"
     if (STATS.has(token)) {
-      const stat = token as StatName;
+      const stat = token as Stat;
       i++;
       if (i < tokens.length && tokens[i] === "unit") {
         // Legacy: "cunning_unit_7" → stat check (sum, not single-unit)
@@ -105,7 +103,7 @@ function parseAtomicCheck(check: string): MissionRequirement[] {
 
     // Check if next token is a stat name → legacy coupled format
     if (STATS.has(tokens[i])) {
-      const stat = tokens[i] as StatName;
+      const stat = tokens[i] as Stat;
       i++;
       const threshold = Number(tokens[i]);
       if (Number.isNaN(threshold)) {

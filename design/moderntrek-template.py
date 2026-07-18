@@ -14,8 +14,9 @@ Rules-faithful choices (the library is the source of truth, not the design; #202
   timing/trigger/text, effect/seeding_effect) — cleanly separated, no blob.
 - Where a type has only a freeform `text` blob (units, location actions), it is
   rendered as-is; per-effect structuring is tracked with the keyword work (#203).
-- Unit keyword pills come from `abilities` + the rules glossary; dormant until
-  cards populate `abilities` (#194/#198) and the value syntax lands (#203).
+- Unit keyword pills come from `abilities` + the glossary artifact
+  (`library/build/glossary.json`, the #203 render↔data contract); dormant until
+  cards populate `abilities` (#194/#198).
 
 Deliberately deferred for v1: type/attribute glyph icons (#204), the diagonal
 hatch texture, and the event hazard-stripe top edge (solid bar for now).
@@ -108,56 +109,93 @@ def _stroke(color, width, opacity=1, style="solid"):
 # Data
 # ---------------------------------------------------------------------------
 
-def parse_glossary():
-    """Parse the keyword glossary table(s) in rules/README.md into
-    {keyword_lower: (timing, definition)}.
+def parse_glossary(path=None, rules_path=None):
+    """Load the machine-readable keyword glossary emitted by the library build
+    (`library/build/glossary.json`, the #203 render↔data contract) into
+    `{keyword_id: {name, scope, timing, apCost?, valued, reminder}}`.
 
-    Only rows belonging to a table whose header is `| Keyword | Timing |
-    Definition |` are captured; other 3-column tables in the README (e.g. the
-    Actions table) are ignored so an action name can't masquerade as a keyword.
-    Provisional pending #203."""
-    path = os.path.join(SCRIPT_DIR, "..", "rules", "README.md")
-    glossary = {}
+    `rules/README.md` stays the human-authored source; `bun library/build.ts`
+    derives this artifact from it (and validates card `abilities` against it), so
+    the renderer reads one contract instead of re-parsing prose. It's a build
+    output: run the build to (re)generate it. If it's missing, unreadable, or
+    older than the rules it derives from, the renderer warns and degrades to
+    blank keyword reminders rather than failing the whole export.
+
+    `path`/`rules_path` default to the real artifact and rules locations; they're
+    parameterised so tests can drive the degradation paths against fixtures."""
+    if path is None:
+        path = os.path.join(SCRIPT_DIR, "..", "library", "build", "glossary.json")
+    if rules_path is None:
+        rules_path = os.path.join(SCRIPT_DIR, "..", "rules", "README.md")
+    if not os.path.exists(path):
+        print(f"WARNING: glossary artifact not found at {path} — run "
+              f"`bun library/build.ts` to generate it; keyword reminders will be "
+              f"blank", file=sys.stderr)
+        return {}
     try:
         with open(path) as f:
-            in_glossary = False
-            for line in f:
-                stripped = line.strip()
-                if not stripped.startswith("|"):
-                    in_glossary = False           # a blank/non-table line ends the table
-                    continue
-                cells = [c.strip() for c in stripped.strip("|").split("|")]
-                if len(cells) != 3:
-                    in_glossary = False           # a differently-shaped table
-                    continue
-                if cells[0] == "Keyword":         # glossary header row -> start capturing
-                    in_glossary = True
-                    continue
-                if "---" in cells[1]:             # separator row -> keep state
-                    continue
-                if in_glossary:
-                    glossary[cells[0].lower()] = (cells[1], cells[2])
+            glossary = json.load(f)
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"WARNING: glossary artifact unreadable at {path}: {exc} — keyword "
+              f"reminders will be blank", file=sys.stderr)
+        return {}
+    if not isinstance(glossary, dict):
+        print(f"WARNING: glossary artifact at {path} is not a JSON object (got "
+              f"{type(glossary).__name__}) — keyword reminders will be blank",
+              file=sys.stderr)
+        return {}
+    # mtime is a cheap staleness *proxy*, not a guarantee: an operation that
+    # rewrites rules/README.md without rebuilding the (git-ignored) artifact —
+    # e.g. a git checkout/stash — can trip a false "stale" warning. Fine for a
+    # non-blocking heads-up.
+    try:
+        if os.path.getmtime(path) < os.path.getmtime(rules_path):
+            print(f"WARNING: {path} is older than rules/README.md — it may be "
+                  f"stale; re-run `bun library/build.ts`", file=sys.stderr)
     except OSError as exc:
-        print(f"WARNING: keyword glossary unreadable at {path}: {exc} — "
-              f"keyword reminders will be blank", file=sys.stderr)
-        return glossary
-    if not glossary:
-        print(f"WARNING: no keyword rows parsed from {path} (table format may have "
-              f"changed) — keyword reminders will be blank", file=sys.stderr)
+        print(f"WARNING: could not compare glossary/rules timestamps ({exc}) — "
+              f"staleness not checked", file=sys.stderr)
     return glossary
 
 
+# `ident value?` where a value is `[N]` — mirrors the library's ABILITY_TOKEN
+# (library/glossary.ts) and the effect-DSL `token` grammar (#203).
+_ABILITY_TOKEN = re.compile(r"^([A-Za-z][A-Za-z-]*)(?:\[(\d+)\])?$")
+
+
 def keyword_reminder(ability, glossary):
-    """Split an `abilities` entry into (label, reminder). Value-bearing keywords
-    like 'Commander 3' substitute the value into the glossary's X placeholder."""
-    parts = ability.split()
-    value = parts[-1] if len(parts) > 1 and parts[-1].isdigit() else None
-    name = " ".join(parts[:-1]) if value else ability
+    """Split an `abilities` token into (label, reminder). Value-bearing keywords
+    like `Commander[3]` substitute the value into the glossary's X placeholder;
+    the pill label renders the value space-separated (`COMMANDER 3`). Degrades to
+    a blank reminder — never raises — on an unknown keyword, a malformed token, or
+    a malformed/incomplete glossary entry (see parse_glossary's shape note)."""
+    m = _ABILITY_TOKEN.match(ability.strip())
+    if not m:
+        return ability.upper(), ""
+    name, value = m.group(1), m.group(2)
     entry = glossary.get(name.lower())
-    reminder = ""
-    if entry:
-        reminder = re.sub(r"\bX\b", value, entry[1]) if value else entry[1]
-    return ability.upper(), reminder
+    if not isinstance(entry, dict) or "reminder" not in entry:
+        # Unknown keyword, or a wrong-shape artifact entry — label as written, no
+        # reminder. Guarding here (not just entry truthiness) keeps a corrupt
+        # glossary.json from crashing the export deep in shape-building.
+        return (f"{name} {value}" if value else name).upper(), ""
+    display = entry.get("name", name)
+    reminder = entry["reminder"]
+    valued = entry.get("valued", "X" in reminder)
+    # Arity mismatches the full build would have caught (reachable on a partial
+    # build or hand-edited data) — warn and degrade, never print a literal "X" or
+    # a bogus magnitude.
+    if valued and value is None:
+        print(f"WARNING: keyword '{display}' needs a value but none was given in "
+              f"'{ability}' — reminder blanked", file=sys.stderr)
+        return display.upper(), ""
+    if not valued and value is not None:
+        print(f"WARNING: keyword '{display}' takes no value but '{ability}' "
+              f"supplies one — value ignored", file=sys.stderr)
+        return display.upper(), reminder
+    reminder = re.sub(r"\bX\b", value, reminder) if value else reminder
+    label = f"{display} {value}" if value else display
+    return label.upper(), reminder
 
 
 def parse_card(row, index):

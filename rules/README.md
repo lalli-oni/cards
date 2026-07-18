@@ -472,7 +472,7 @@ more expensive or powerful than a legendary.
 
 Keywords are shorthand abilities referenced by name (bolded text or
 icons) on cards. Each keyword has a fixed definition in the glossary
-below. Some keywords have variable values (e.g. Shield X) where X
+below. Some keywords have variable values (e.g. Commander X) where X
 differs per card.
 
 ### Timing

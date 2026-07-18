@@ -236,8 +236,11 @@ export function validate(
     try {
       parseKeyword(token, card.type as EngineCardType);
     } catch (e) {
-      const msg = e instanceof KeywordError ? e.message : String(e);
-      errors.push({ card: id, field: "keywords", message: msg });
+      // Only a KeywordError is card-data (a bad token). Let anything else — an
+      // engine fault in parseKeyword — propagate with its stack rather than
+      // mislabel it as this card's validation error.
+      if (!(e instanceof KeywordError)) throw e;
+      errors.push({ card: id, field: "keywords", message: e.message });
     }
   }
 

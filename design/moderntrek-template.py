@@ -13,10 +13,12 @@ Rules-faithful choices (the library is the source of truth, not the design; #202
   Items/events/policies read their dedicated columns (equip/stored,
   timing/trigger/text, effect/seeding_effect) — cleanly separated, no blob.
 - Where a type has only a freeform `text` blob (units, location actions), it is
-  rendered as-is; per-effect structuring is tracked with the keyword work (#203).
-- Unit keyword pills come from the governed `keywords` column + the vocab
-  artifact (`library/build/keywords.json`, #203/#194), rendered as structural
-  pills today; prose reminder composition from the family grammar is a follow-up.
+  rendered as-is; per-effect structuring is tracked under the effect-grammar work (#208).
+- Keyword pills come from the governed `keywords` column + the vocab artifact
+  (`library/build/keywords.json`, #194), rendered as structural pills today;
+  prose reminder composition from the family grammar is a follow-up. NOTE: only
+  unit cards render keyword pills today — location `Aura` / item `Flying` etc.
+  aren't drawn yet (renderer follow-up).
 
 Deliberately deferred for v1: type/attribute glyph icons (#204), the diagonal
 hatch texture, and the event hazard-stripe top edge (solid bar for now).
@@ -112,12 +114,14 @@ def _stroke(color, width, opacity=1, style="solid"):
 def load_keyword_vocab(path=None):
     """Load the governed keyword vocabulary the library build emits
     (`library/build/keywords.json`, from engine/src/keywords.ts) as
-    `{name: {"cardTypes": [...]}}` — the render↔data contract (#203/#194).
+    `{name: entry}` (each entry is the raw `{"name", "cardTypes"}` object) — the
+    artifact both the renderer and coverage tooling consume (#194).
 
-    It's a build output: run `bun library/build.ts` to (re)generate it. A
-    missing / unreadable / wrong-shape artifact degrades to an empty vocab
-    (keyword pills still render structurally, just unvalidated) rather than
-    failing the export. `path` is parameterised so tests can drive these paths."""
+    It's a build output: run `bun library/build.ts` to (re)generate it. A missing
+    / unreadable / wrong-shape (or per-entry malformed) artifact degrades to an
+    empty-or-partial vocab with a warning (keyword pills still render structurally,
+    just unvalidated) rather than failing the export. `path` is parameterised so
+    tests can drive these paths."""
     if path is None:
         path = os.path.join(SCRIPT_DIR, "..", "library", "build", "keywords.json")
     if not os.path.exists(path):
@@ -134,23 +138,39 @@ def load_keyword_vocab(path=None):
         print(f"WARNING: keyword vocab at {path} is not a JSON array (got "
               f"{type(data).__name__})", file=sys.stderr)
         return {}
-    return {k["name"]: k for k in data if isinstance(k, dict) and "name" in k}
+    vocab = {}
+    skipped = 0
+    for k in data:
+        if isinstance(k, dict) and isinstance(k.get("name"), str):
+            vocab[k["name"]] = k
+        else:
+            skipped += 1
+    if skipped:
+        print(f"WARNING: keyword vocab at {path} had {skipped} malformed "
+              f"entr{'y' if skipped == 1 else 'ies'} — artifact may be corrupt; "
+              f"re-run `bun library/build.ts`", file=sys.stderr)
+    return vocab
 
 
 def keyword_reminder(token, vocab):
     """Split a `keywords` token into (pill_label, reminder). Handles the family
     grammar (`Leader:+1:all:combat`, `Untouchable:charisma`) and value-less
     standalones (`Berserker`) by rendering a structural pill label from the
-    token's parts. Warns on a name outside the governed vocab. Never raises.
+    token's parts. Warns on a name outside the governed vocab (skipped when the
+    vocab is empty/degraded). Never raises. Param/arity validation lives in the
+    build (`engine/src/keywords.ts` via `bun library/build.ts`) — this assumes a
+    validated build and does not re-check params.
 
     Prose reminder text (composing "friendly units here get +1 …" from the family
     params) is a follow-up — reminder is blank for now — rather than duplicating
     the rules-glossary prose here. (#194/#209.)"""
     name = token.split(":")[0]
-    if vocab and name not in vocab:
+    if not name:
+        print(f"WARNING: malformed keyword token {token!r} — empty name", file=sys.stderr)
+    elif vocab and name not in vocab:
         print(f"WARNING: keyword '{name}' is not in the governed vocab "
               f"(build/keywords.json) — rendering it verbatim", file=sys.stderr)
-    label = token.replace(":", " ").upper()
+    label = token.replace(":", " ").strip().upper()
     return label, ""
 
 
@@ -202,7 +222,7 @@ PAD_BOTTOM, BLOCK_GAP = 8, 14
 FLAVOR_Y = 876           # flavor pinned near the panel bottom
 
 
-def build_shapes(page_id, frame_id, card, glossary):
+def build_shapes(page_id, frame_id, card, vocab):
     ch = []
 
     def rect(name, x, y, w, h, **kw):
@@ -274,12 +294,13 @@ def build_shapes(page_id, frame_id, card, glossary):
 
     # Keyword pills from the `keywords` column (structural label; reminder TBD).
     for i, kw in enumerate(card["keywords"]):
-        label, reminder = keyword_reminder(kw, glossary)
+        label, reminder = keyword_reminder(kw, vocab)
         pw = int(len(label) * 11 * 0.62) + 24
         rect(f"KW Pill {i}", 26, cursor, pw, 25, fills=_fill(C["lime"]),
              r1=2, r2=2, r3=2, r4=2)
         text(f"KW Label {i}", 26, cursor + 4, pw, 18, label, SG, "11", "700",
              C["card_bg"], align="center", ls=1.6)
+        # reminder is blank until prose composition lands (#194/#209).
         if reminder:
             text(f"KW Reminder {i}", 26 + pw + 12, cursor + 4, 690 - (26 + pw + 12), 18,
                  reminder, SG, "12.5", "400", C["muted"], style="italic")
@@ -497,7 +518,7 @@ def _loc_rows(card):
     return rows
 
 
-def build_location_shapes(page_id, frame_id, card, glossary):
+def build_location_shapes(page_id, frame_id, card, vocab):
     ch = []
 
     def rect(name, x, y, w, h, **kw):
@@ -747,7 +768,7 @@ def _wrapc(s, w, fs=15):
     return max(1, len(_wrap_lines(s, w, fs, CHAR_ADVANCE)))
 
 
-def build_item_shapes(page_id, frame_id, card, glossary):
+def build_item_shapes(page_id, frame_id, card, vocab):
     ch = []
     rect, circle, text = _mk_closures(page_id, frame_id, ch)
     rect("Card Background", 0, 0, 750, 1050, fills=_fill(C["card_bg"]), r1=14, r2=14, r3=14, r4=14)
@@ -801,7 +822,7 @@ def build_item_shapes(page_id, frame_id, card, glossary):
     return ch
 
 
-def build_event_shapes(page_id, frame_id, card, glossary):
+def build_event_shapes(page_id, frame_id, card, vocab):
     ch = []
     rect, circle, text = _mk_closures(page_id, frame_id, ch)
     timing = card["timing"]
@@ -860,7 +881,7 @@ def build_event_shapes(page_id, frame_id, card, glossary):
     return ch
 
 
-def build_policy_shapes(page_id, frame_id, card, glossary):
+def build_policy_shapes(page_id, frame_id, card, vocab):
     ch = []
     rect, circle, text = _mk_closures(page_id, frame_id, ch)
     rect("Card Background", 0, 0, 750, 1050, fills=_fill(C["card_bg"]), r1=14, r2=14, r3=14, r4=14)
@@ -1030,7 +1051,7 @@ def main():
         _persist_file_id(file_id)
         print(f"  Created file {file_id} (saved to .env)")
 
-    glossary = load_keyword_vocab()
+    vocab = load_keyword_vocab()
     out_dir = os.path.join(SCRIPT_DIR, "exports")
     os.makedirs(out_dir, exist_ok=True)
 
@@ -1060,7 +1081,7 @@ def main():
                                                 page_id, root_id, root_id,
                                                 fills=[{"fill-color": "#0a1220", "fill-opacity": 0}])
             changes.append(frame_change)
-            changes.extend(cfg["build"](page_id, frame_id, card, glossary))
+            changes.extend(cfg["build"](page_id, frame_id, card, vocab))
             client.update_file(file_id, changes, file_data["revn"], file_data.get("vern", 0))
 
             data = client.export_png(file_id, page_id, frame_id)

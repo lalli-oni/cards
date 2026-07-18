@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Smoke tests for the keyword consumer in moderntrek-template.py (#194/#203).
+"""Smoke tests for the keyword consumer in moderntrek-template.py (#194).
 
 The renderer is Python while the rest of the suite is bun/TS, so these run
 standalone:  python3 design/test_moderntrek_template.py  (exit 0 = pass).
@@ -80,21 +80,44 @@ def test_load_keyword_vocab():
         check("non-array JSON → warns", "not a json array" in err.lower())
 
     with _tmp_json("{ not json ") as p:
-        res, _ = _quiet(mt.load_keyword_vocab, p)
+        res, err = _quiet(mt.load_keyword_vocab, p)
         check("unreadable JSON → {}", res == {})
+        check("unreadable JSON → warns", "unreadable" in err.lower())
+
+    # Per-entry malformed: garbage / name-less entries are skipped WITH a warning,
+    # not silently dropped.
+    with _tmp_json([{"name": "Leader", "cardTypes": ["unit"]}, "garbage", {"cardTypes": ["unit"]}]) as p:
+        res, err = _quiet(mt.load_keyword_vocab, p)
+        check("malformed entries → good one survives", res == {"Leader": {"name": "Leader", "cardTypes": ["unit"]}})
+        check("malformed entries → warns", "malformed" in err.lower())
+
+    # A non-string name must not crash (unhashable dict key) — skipped + warned.
+    with _tmp_json([{"name": ["x"], "cardTypes": ["unit"]}, {"name": "Aura", "cardTypes": ["location"]}]) as p:
+        res, err = _quiet(mt.load_keyword_vocab, p)
+        check("non-string name → skipped, no crash", res == {"Aura": {"name": "Aura", "cardTypes": ["location"]}})
 
 
 def test_keyword_reminder():
     print("keyword_reminder:")
-    label, reminder = mt.keyword_reminder("Leader:+1:all:combat", VOCAB)
+    (label, reminder), err = _quiet(mt.keyword_reminder, "Leader:+1:all:combat", VOCAB)
     check("family token → structural label", label == "LEADER +1 ALL COMBAT")
+    # Intentional stub canary — reminder stays "" until prose composition (#194/#209).
     check("family token → blank reminder (composition is a follow-up)", reminder == "")
+    check("governed keyword in a populated vocab → no warning", err == "")
 
     label, _ = mt.keyword_reminder("Untouchable:charisma", VOCAB)
     check("parameterised standalone → label", label == "UNTOUCHABLE CHARISMA")
 
     label, _ = mt.keyword_reminder("Berserker", VOCAB)
     check("value-less standalone → label", label == "BERSERKER")
+
+    # Degenerate tokens: no crash, sensible label, clear signal on an empty name.
+    label, _ = mt.keyword_reminder("Leader", VOCAB)
+    check("family name with no params → label", label == "LEADER")
+    label, _ = mt.keyword_reminder("Leader:", VOCAB)
+    check("trailing colon → no trailing space in label", label == "LEADER")
+    (label, _), err = _quiet(mt.keyword_reminder, ":", VOCAB)
+    check("empty-name token → warns", "empty name" in err.lower())
 
     # Unknown name (not in vocab) → warns but still renders verbatim.
     (label, reminder), err = _quiet(mt.keyword_reminder, "Mystery:9", VOCAB)
@@ -103,7 +126,8 @@ def test_keyword_reminder():
 
     # Empty vocab (degraded load) → no warning, still renders.
     (label, _), err = _quiet(mt.keyword_reminder, "Leader:+1:all:combat", {})
-    check("empty vocab → renders without warning", label == "LEADER +1 ALL COMBAT" and err == "")
+    check("empty vocab → renders label", label == "LEADER +1 ALL COMBAT")
+    check("empty vocab → no warning", err == "")
 
 
 if __name__ == "__main__":

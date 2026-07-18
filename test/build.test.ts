@@ -1,9 +1,12 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "fs";
+import { join } from "path";
 import {
   transformCard,
   validate,
   type CardType,
 } from "../library/build";
+import { KEYWORDS } from "../engine/src/keywords";
 
 // ---------------------------------------------------------------------------
 // Build-time governed-vocabulary validation (#119)
@@ -92,12 +95,27 @@ describe("build validation — governed keywords", () => {
 
   test("rejects a malformed family token (unsigned magnitude)", () => {
     const errors = check("units", { attributes: "Military", keywords: "Leader:1:all:combat" });
-    expect(errors.some((e) => e.field === "keywords")).toBe(true);
+    expect(errors.some((e) => e.field === "keywords" && e.message.includes("magnitude"))).toBe(true);
   });
 
   test("rejects an unsupported card type (Aura on a unit)", () => {
     const errors = check("units", { attributes: "Military", keywords: "Aura:-1:all:combat" });
     expect(errors.some((e) => e.field === "keywords" && e.message.includes("not supported on unit"))).toBe(true);
+  });
+
+  test("build/keywords.json emits the {name, cardTypes} shape the renderer reads", () => {
+    // Pins the producer half of the render↔data contract: the Python renderer's
+    // load_keyword_vocab expects a JSON array of {name, cardTypes}. A rename or
+    // reshape in build.ts's emit would break it silently — caught here. (Requires
+    // a prior `bun library/build.ts`, which the `test` script runs first.)
+    const artifact = JSON.parse(readFileSync(join(import.meta.dir, "../library/build/keywords.json"), "utf-8"));
+    expect(Array.isArray(artifact)).toBe(true);
+    expect(artifact.length).toBe(KEYWORDS.length);
+    for (const entry of artifact) {
+      expect(Object.keys(entry).sort()).toEqual(["cardTypes", "name"]);
+      expect(typeof entry.name).toBe("string");
+      expect(Array.isArray(entry.cardTypes)).toBe(true);
+    }
   });
 });
 

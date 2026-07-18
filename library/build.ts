@@ -20,12 +20,10 @@ import {
   EVENT_TYPES,
   ITEM_TYPES,
 } from "../engine/src/card-categories";
-import { parseGlossary, parseAbilityToken, type Glossary, type KeywordDef } from "./glossary";
 
 const LIBRARY_DIR = join(import.meta.dir);
 const SETS_DIR = join(LIBRARY_DIR, "sets");
 const BUILD_DIR = join(LIBRARY_DIR, "build");
-const RULES_README = join(LIBRARY_DIR, "..", "rules", "README.md");
 
 const CARD_TYPES = ["units", "locations", "items", "events", "policies"] as const;
 export type CardType = (typeof CARD_TYPES)[number];
@@ -193,7 +191,6 @@ export type ValidationError = { card: string; field: string; message: string };
 export function validate(
   type: CardType,
   card: Record<string, unknown>,
-  glossary?: Glossary,
 ): ValidationError[] {
   const errors: ValidationError[] = [];
   const id = (card.id as string) || "unknown";
@@ -263,45 +260,6 @@ export function validate(
     }
   }
 
-  // Keyword `abilities` — render-accuracy checks only (#203). We validate the
-  // value *syntax* (`Keyword` or `Keyword[N]`) for every token, plus canonical
-  // Title-case and value-arity for the keywords the glossary knows. Whether
-  // unknown keywords are *rejected* (governance) is deferred to #194, so an
-  // unlisted keyword is warned-about but not failed here. Runs only when a
-  // glossary is supplied (the full build); `validate(type, card)` skips it.
-  if (glossary) {
-    const abilities = (card.abilities as string[] | undefined) ?? [];
-    for (const raw of abilities) {
-      const token = parseAbilityToken(raw);
-      if (!token) {
-        errors.push({ card: id, field: "abilities", message: `malformed keyword "${raw}" (expected "Keyword" or "Keyword[N]")` });
-        continue;
-      }
-      const def: KeywordDef | undefined = glossary[token.id];
-      if (!def) {
-        // Unknown keyword — rejecting it is #194's call, not #203's. Warn so a
-        // fat-fingered *known* keyword (e.g. "Commmander") surfaces in build
-        // output instead of silently rendering with no reminder text.
-        console.warn(`  Warning: card "${id}" uses unknown keyword "${token.name}" (no glossary entry; not validated)`);
-        continue;
-      }
-      if (token.name !== def.name) {
-        // Report only the casing problem for a mis-cased token — its arity is
-        // checked on the next build once the name is fixed, so we avoid emitting
-        // two errors that refer to the keyword by two different casings.
-        errors.push({ card: id, field: "abilities", message: `keyword "${token.name}" must be written "${def.name}" (Title-case matching the glossary)` });
-        continue;
-      }
-      if (def.valued && token.value === null) {
-        errors.push({ card: id, field: "abilities", message: `keyword "${def.name}" requires a value, e.g. ${def.name}[1]` });
-      } else if (!def.valued && token.value !== null) {
-        errors.push({ card: id, field: "abilities", message: `keyword "${def.name}" does not take a value (got "${raw}")` });
-      } else if (def.valued && token.value !== null && token.value < 1) {
-        errors.push({ card: id, field: "abilities", message: `keyword "${def.name}" value must be a positive magnitude (got ${token.value})` });
-      }
-    }
-  }
-
   // DSL effect validation — skipped for policies (action.effect is
   // human-readable prose; executable DSL lives in POLICY_ACTIONS).
   const actions = card.actions as { name: string; apCost: number; effect: string }[] | undefined;
@@ -329,7 +287,7 @@ export function validate(
 
 // --- Main ---
 
-function buildSet(setName: string, glossary: Glossary): { cards: Record<string, unknown>[]; errors: ValidationError[] } {
+function buildSet(setName: string): { cards: Record<string, unknown>[]; errors: ValidationError[] } {
   const setDir = join(SETS_DIR, setName);
   const cards: Record<string, unknown>[] = [];
   const errors: ValidationError[] = [];
@@ -346,7 +304,7 @@ function buildSet(setName: string, glossary: Glossary): { cards: Record<string, 
 
     for (const row of rows) {
       const card = transformCard(type, row);
-      errors.push(...validate(type, card, glossary));
+      errors.push(...validate(type, card));
       cards.push(card);
     }
   }
@@ -357,12 +315,6 @@ function buildSet(setName: string, glossary: Glossary): { cards: Record<string, 
 function main() {
   const targetSet = process.argv[2];
   mkdirSync(BUILD_DIR, { recursive: true });
-
-  // Derive the keyword glossary from rules/README.md and emit the render↔data
-  // contract artifact (#203). Also used to validate card `abilities` below.
-  const glossary = parseGlossary(readFileSync(RULES_README, "utf-8"));
-  writeFileSync(join(BUILD_DIR, "glossary.json"), JSON.stringify(glossary, null, 2));
-  console.log(`Glossary: ${Object.keys(glossary).length} keywords → build/glossary.json`);
 
   const sets = targetSet
     ? [targetSet]
@@ -376,7 +328,7 @@ function main() {
 
   for (const setName of sets) {
     console.log(`Building set: ${setName}`);
-    const { cards, errors } = buildSet(setName, glossary);
+    const { cards, errors } = buildSet(setName);
 
     writeFileSync(join(BUILD_DIR, `${setName}.json`), JSON.stringify(cards, null, 2));
     console.log(`  ${cards.length} cards`);

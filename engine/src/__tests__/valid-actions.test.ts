@@ -198,7 +198,7 @@ describe("play_event enumeration", () => {
 
   const LOCATION_TARGETING_TRAPS = [
     { definitionId: "highway-robbery", label: "Highway Robbery" },
-    { definitionId: "ambush", label: "Ambush" },
+    { definitionId: "sprung-trap", label: "Sprung Trap" },
     { definitionId: "assassination-attempt", label: "Assassination Attempt" },
   ] as const;
 

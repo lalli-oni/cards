@@ -41,10 +41,9 @@ injury penalties, etc.) apply to the relevant stat in a contest. A
 any other use of that stat.
 
 Some modifiers are scoped to specific contexts by their own text — for
-example, the Fortified keyword grants defending units a strength bonus
-"when calculating attack power," which limits it to combat. This
-scoping comes from the card or keyword text, not from a blanket rule
-about contests.
+example, a modifier keyword scoped to combat and defending (`…:combat:def`)
+grants its bonus only when the unit defends in combat. This scoping comes
+from the card or keyword text, not from a blanket rule about contests.
 
 ## Stat contests vs. stat checks
 

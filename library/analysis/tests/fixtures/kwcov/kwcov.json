@@ -1,0 +1,6 @@
+[
+  { "id": "u1", "name": "U1", "type": "unit", "cost": "1", "keywords": ["Leader:+1:all:combat"] },
+  { "id": "u2", "name": "U2", "type": "unit", "cost": "1", "keywords": ["Leader:+1:all:combat"] },
+  { "id": "i1", "name": "I1", "type": "item", "cost": "1", "keywords": ["Flying"] },
+  { "id": "l1", "name": "L1", "type": "location", "cost": "1", "keywords": ["Aura:-1:all:combat"] }
+]

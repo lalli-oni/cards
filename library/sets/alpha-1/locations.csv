@@ -1,6 +1,6 @@
-id,name,set,rarity,cost,mission,passive,edges,actions,attributes,abilities,location_type,text,flavor
+id,name,set,rarity,cost,mission,passive,edges,actions,attributes,keywords,location_type,text,flavor
 the-great-library,The Great Library,alpha-1,epic,0,knowledge_2>5,Your units here get +1 cunning.,,,,,Archive,Have 2 units with the Knowledge attribute here to complete.,Knowledge is the only treasure that multiplies when shared.
-the-colosseum,The Colosseum,alpha-1,epic,0,military_1;strength_15>4,,,,,,Arena,Have Military units with combined strength of 15+ here to complete.,The sand remembers every name.
+the-colosseum,The Colosseum,alpha-1,epic,0,military_1;strength_15>4,,,,,Aura:+1:strength:combat,Arena,Have Military units with combined strength of 15+ here to complete.,The sand remembers every name.
 the-silk-road,The Silk Road,alpha-1,uncommon,0,military_1;diplomacy_1;knowledge_1>3,Units here generate 1 gold at start of your turn.,,,Commerce,,,Have 3 units with different attributes here to complete.,A thread that stitched the world together.
 the-agora,The Agora,alpha-1,uncommon,0,diplomacy_1;charisma_12>3,,,,,,Market,Have Diplomacy units with combined charisma 12+ here.,Where words were worth more than swords.
 machu-picchu,Machu Picchu,alpha-1,epic,0,units_3>5,Units entering here cannot be targeted by events until your next turn.,,,,,Sanctuary,Have 3 units here to complete.,Hidden above the clouds.
@@ -14,4 +14,4 @@ sherwood-forest,Sherwood Forest,alpha-1,uncommon,0,cunning_7>3,Units here with 7
 the-arena,The Arena,alpha-1,common,0,,Strength contests here get +1 bonus for the attacker.,,,,,Arena,No mission. Favors attackers.,The crowd demands blood.
 the-observatory,The Observatory,alpha-1,uncommon,0,knowledge_1;cunning_14>4,,,,,,Research,Have Knowledge units with combined cunning 14+ here.,The stars do not lie — if you know how to read them.
 trade-port,Trade Port,alpha-1,common,0,,Generates 1 gold at start of your turn if a Diplomacy unit is here.,,,Commerce,,,No mission. Gold income with Diplomacy unit.,Ships come and go. Gold stays.
-the-catacombs,The Catacombs,alpha-1,uncommon,0,spirituality_2>4,Units here cannot be injured by events.,,,,,Sanctuary,Have 2 Spirituality units here.,The dead protect the living.
+the-catacombs,The Catacombs,alpha-1,uncommon,0,spirituality_2>4,Units here cannot be injured by events.,,,,Aura:-1:all:combat,Sanctuary,Have 2 Spirituality units here.,The dead protect the living.

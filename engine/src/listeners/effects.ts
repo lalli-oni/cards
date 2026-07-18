@@ -684,7 +684,7 @@ function makeEntryTrapListeners(
 }
 
 export const TRAP_EFFECTS: Record<string, TrapEffectFactory> = {
-  "ambush": (trap, controllerId) => ({
+  "sprung-trap": (trap, controllerId) => ({
     listeners: makeEntryTrapListeners(trap, controllerId, (draft, cell, unit, row, col, emit) => {
       if (unit.injured) {
         killUnit(draft, cell, unit, row, col, emit);

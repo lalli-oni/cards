@@ -13,6 +13,8 @@ import { readdirSync, readFileSync, mkdirSync, writeFileSync, existsSync } from 
 import { join } from "path";
 import { parse as parseDSL, DSLParseError, DSLValidationError } from "../engine/src/effect-dsl";
 import { ATTRIBUTES } from "../engine/src/attributes";
+import { KEYWORDS, KeywordError, parseKeyword } from "../engine/src/keywords";
+import type { CardType as EngineCardType } from "../engine/src/types";
 import {
   LOCATION_TYPES,
   EVENT_TYPES,
@@ -120,13 +122,11 @@ export function transformCard(type: CardType, raw: Record<string, string>): Reco
     cost: raw.cost.includes("|") ? raw.cost.split("|").map((c) => c.trim()) : raw.cost,
     text: raw.text || null,
     flavor: raw.flavor || null,
-    // Shared classification columns (split out of the old `keywords` column):
-    // `abilities` = mechanical keyword-effects, `attributes` = cross-type
-    // synergy vocabulary. Both apply to every card type. `attributes` is
-    // vocabulary-validated below; `abilities` is intentionally free-text (no
-    // governed `ABILITIES` set yet) — the rules' Keyword Glossary is the human
-    // reference until abilities are wired to effect factories (then govern them).
-    abilities: splitList(raw.abilities || ""),
+    // Shared classification columns: `keywords` = mechanical keyword-effects
+    // (things the card *does*), `attributes` = cross-type synergy vocabulary.
+    // Both apply to every card type and are vocabulary-validated below against
+    // their governed sets (`engine/src/keywords.ts`, `engine/src/attributes.ts`).
+    keywords: splitList(raw.keywords || ""),
     attributes: splitList(raw.attributes || ""),
   };
 
@@ -220,15 +220,27 @@ export function validate(
     errors.push({ card: id, field: "timing", message: `invalid timing: ${card.timing}` });
   }
 
-  // Cross-type attribute vocabulary — exact CamelCase membership in the
-  // governed set (`engine/src/attributes.ts`). Closes the gap #158 left: the
-  // old `keywords` column was unvalidated, so typos/un-migrated values could
-  // silently no-op an effect. Case-sensitive on purpose so CSV data and the
-  // hardcoded literals in effect factories cannot drift on spelling.
+  // Cross-type attribute vocabulary — exact CamelCase membership in the governed
+  // set (`engine/src/attributes.ts`). Case-sensitive on purpose so CSV data and
+  // the hardcoded literals in effect factories cannot drift on spelling.
   const attributes = (card.attributes as string[] | undefined) ?? [];
   for (const attr of attributes) {
     if (!ATTRIBUTES.includes(attr as (typeof ATTRIBUTES)[number])) {
       errors.push({ card: id, field: "attributes", message: `invalid attribute: ${attr}` });
+    }
+  }
+
+  // Governed keyword vocabulary (engine/src/keywords.ts). Each token in the
+  // `keywords` column is parsed + validated: an unknown name, malformed
+  // parameter, wrong arity, or an unsupported card type all fail the build,
+  // mirroring the attribute gate above so keyword data and code can't drift.
+  const keywords = (card.keywords as string[] | undefined) ?? [];
+  for (const token of keywords) {
+    try {
+      parseKeyword(token, card.type as EngineCardType);
+    } catch (e) {
+      const msg = e instanceof KeywordError ? e.message : String(e);
+      errors.push({ card: id, field: "keywords", message: msg });
     }
   }
 
@@ -375,6 +387,17 @@ function main() {
 
   // Write merged output
   writeFileSync(join(BUILD_DIR, "all.json"), JSON.stringify(allCards, null, 2));
+
+  // Emit the governed keyword vocabulary so tooling (keyword-coverage) can check
+  // coverage without duplicating the source of truth (engine/src/keywords.ts).
+  writeFileSync(
+    join(BUILD_DIR, "keywords.json"),
+    JSON.stringify(
+      KEYWORDS.map((k) => ({ name: k.name, cardTypes: k.cardTypes })),
+      null,
+      2,
+    ),
+  );
 
   // Report
   if (totalErrors.length > 0) {

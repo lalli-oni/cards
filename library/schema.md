@@ -14,9 +14,9 @@ Every card type includes these columns:
 | set      | string | yes      | Set identifier (e.g. `baseline`) |
 | rarity   | enum   | yes      | `common`, `uncommon`, `epic`, `legendary` |
 | cost     | string | yes      | Gold cost to deploy/play. Multiple costs separated by `\|` (player pays one) |
-| text     | string | no       | Card text — rules text, abilities, effects |
+| text     | string | no       | Card text — rules text, keywords, effects |
 | flavor   | string | no       | Flavor text |
-| abilities  | string | no     | Semicolon-separated mechanical keywords, `Keyword` or `Keyword[N]` (e.g. `Lethal;Commander[3]`). Things the card *does*. These are what the rules call **Keywords** (see the Keyword Glossary in `rules/README.md`) — the column was named `abilities` in #119 to disambiguate from the thematic `keywords` that moved to `attributes`. Value syntax + the generated glossary artifact are documented under [Keyword abilities](#keyword-abilities). |
+| keywords   | string | no     | Semicolon-separated mechanical **keywords** — things the card *does* (e.g. `Berserker;Leader:+1:all:combat`). Drawn from the governed keyword vocabulary; see [Governed vocabularies](#governed-vocabularies) and the Keyword Glossary in `rules/README.md`. Vocabulary-validated: the build fails on unknown or malformed tokens. |
 | attributes | string | no     | Semicolon-separated cross-type synergy labels (e.g. `Knowledge;Engineering`). Governed closed set — see [Governed vocabularies](#governed-vocabularies). |
 
 ## Units
@@ -91,44 +91,8 @@ on any unknown value (exact spelling, case-sensitive).
 `attributes` is the *cross-type* axis — the same value means the same thing on
 any card type. The three `*_type` columns are the *per-type* category
 axis (a card's own kind within its type) — mostly flavor today; governing them
-and wiring them into mechanics is tracked post-v0.1 in #160.
-
-## Keyword abilities
-
-The `abilities` column is a `;`-separated list of **mechanical keywords** drawn
-from the Keyword Glossary in [`rules/README.md`](../rules/README.md) (`## Keyword
-System`). Each token is shaped like the effect-DSL `token` rule — `ident value?`,
-where a value is `[N]`:
-
-| Written | Meaning |
-|---------|---------|
-| `Lethal` | value-less keyword |
-| `Commander[3]` | keyword with value 3 (magnitude 3) |
-| `Commander[3];Resolute` | two keywords |
-
-Keywords are Title-case matching the glossary; values are **magnitudes** (the
-sign lives in the reminder text — `Radiated[2]` → "get **-2** …"). Only
-`Commander`, `Radiated`, and `Fortified` take a value today — they are the
-keywords whose glossary Definition contains an `X`. That standalone `X` is the
-marker the build reads to make a keyword value-bearing, so it must be preserved
-when editing a definition. (Shield, though a variable-value keyword in concept,
-has no `X` in its Definition row, so the contract treats it as value-less until
-that row is updated.)
-
-**Glossary artifact.** `library/build.ts` derives a machine-readable glossary
-from the `rules/README.md` tables and writes `library/build/glossary.json`
-(keyword `id → {name, scope, timing, apCost?, valued, reminder}`). `rules/README.md`
-stays the human-authored source. The build and the Penpot renderer
-(`design/moderntrek-template.py`, keyword pills + reminder text) both consume the
-artifact; the engine is expected to migrate onto it too. Because it's a build
-output, run `bun library/build.ts` before rendering so the renderer picks up any
-glossary changes. See #203.
-
-The build validates the ability **value syntax** and value-arity for known
-keywords (a valued keyword must carry `[N]`; a value-less one must not). Whether
-*unknown* keywords are rejected (full governance of the `abilities` vocabulary)
-is deferred to #194 — until then an unlisted keyword is allowed and simply
-won't resolve to glossary reminder text.
+and wiring them into mechanics is tracked in #160. `keywords` is
+vocabulary-validated against the governed keyword set (see above).
 
 ## Requirement Checks
 
@@ -146,7 +110,7 @@ Stat checks always sum across all friendly units at the location — the attribu
 
 ## Delimiter Conventions
 
-- **Semicolons** (`;`) separate list items within a single field (attributes, abilities, item `type`, actions, requirements)
+- **Semicolons** (`;`) separate list items within a single field (attributes, keywords, item `type`, actions, requirements)
 - **Pipes** (`|`) separate alternative costs
 - **Colons** (`:`) separate action components (name:ap_cost:effect)
 

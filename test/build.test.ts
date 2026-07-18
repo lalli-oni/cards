@@ -31,7 +31,7 @@ function row(overrides: Record<string, string>): Record<string, string> {
     cost: "3",
     text: "",
     flavor: "",
-    abilities: "",
+    keywords: "",
     attributes: "",
     ...overrides,
   };
@@ -80,6 +80,29 @@ describe("build validation — governed vocabularies", () => {
     // #119 folded thematic keywords into `attributes` across all types.
     expect(check("policies", { attributes: "Nonsense" }).some((e) => e.field === "attributes")).toBe(true);
     expect(check("events", { timing: "instant", attributes: "Nonsense" }).some((e) => e.field === "attributes")).toBe(true);
+  });
+});
+
+describe("build validation — governed keywords", () => {
+  test("accepts governed keyword tokens on the right card type", () => {
+    expect(check("units", { attributes: "Military", keywords: "Berserker;Leader:+1:all:combat" })).toEqual([]);
+    expect(check("items", { type: "Banner", keywords: "Flying" })).toEqual([]);
+    expect(check("locations", { location_type: "Market", keywords: "Aura:-1:all:combat" })).toEqual([]);
+  });
+
+  test("rejects an unknown keyword", () => {
+    const errors = check("units", { attributes: "Military", keywords: "Lethal" });
+    expect(errors.some((e) => e.field === "keywords" && e.message.includes("unknown keyword"))).toBe(true);
+  });
+
+  test("rejects a malformed family token (unsigned magnitude)", () => {
+    const errors = check("units", { attributes: "Military", keywords: "Leader:1:all:combat" });
+    expect(errors.some((e) => e.field === "keywords")).toBe(true);
+  });
+
+  test("rejects an unsupported card type (Aura on a unit)", () => {
+    const errors = check("units", { attributes: "Military", keywords: "Aura:-1:all:combat" });
+    expect(errors.some((e) => e.field === "keywords" && e.message.includes("not supported on unit"))).toBe(true);
   });
 });
 

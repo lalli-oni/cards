@@ -1,0 +1,5 @@
+[
+  { "name": "Leader", "cardTypes": ["unit"] },
+  { "name": "Flying", "cardTypes": ["item"] },
+  { "name": "Aura", "cardTypes": ["location"] }
+]

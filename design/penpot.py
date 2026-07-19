@@ -100,6 +100,14 @@ def make_text_content(
 # the vendored fonts' (Space Grotesk / JetBrains Mono) average advance.
 CHAR_ADVANCE = 0.56
 
+# Overflow handling (#10). The width/height model here is approximate (it rides
+# on CHAR_ADVANCE), so fit_text shrinks font size toward MIN_FONT_SIZE before it
+# ever drops text, and fits to FIT_SAFETY of the height budget to absorb the gap
+# between this estimate and Penpot's real glyph metrics.
+MIN_FONT_SIZE = 10       # px floor; below this fit_text truncates instead
+ELLIPSIS = "…"      # single-glyph ellipsis appended to truncated lines
+FIT_SAFETY = 0.95        # fraction of the height budget fit_text is allowed to use
+
 
 def _wrap_lines(text, max_width, fs, char_advance, letter_spacing=0.0) -> list:
     """Greedy word-wrap: split text into lines that fit within max_width px.
@@ -190,6 +198,84 @@ def make_position_data(text, x, y, w, h, font_size="14", font_weight="400",
             "text": line,
         })
     return entries
+
+
+def _fmt_fs(fs) -> str:
+    """Format a font size the way the rest of the renderer passes them: a bare
+    integer string ("14") when whole, else one decimal ("10.5")."""
+    f = float(fs)
+    return str(int(f)) if f == int(f) else f"{f:g}"
+
+
+def _line_budget(max_height, fs, line_height, max_lines, safety) -> float:
+    """How many lines fit, bounded by height (× safety) and/or an explicit cap."""
+    if max_height is None:
+        h_budget = float("inf")
+    else:
+        h_budget = int((float(max_height) * safety) // (fs * line_height))
+    if max_lines is not None:
+        return min(h_budget, max_lines)
+    return h_budget
+
+
+def _truncate_line(line, max_width, fs, char_advance, ls, ellipsis=ELLIPSIS) -> str:
+    """Return `line` with an ellipsis appended, trimming characters until the
+    result fits `max_width` under the shared advance+tracking width model."""
+    advance = fs * char_advance
+
+    def width(s):
+        return len(s) * advance + max(0, len(s) - 1) * ls
+
+    s = line
+    while s and width(s + ellipsis) > max_width:
+        s = s[:-1]
+    return (s.rstrip() + ellipsis) if s.strip() else ellipsis
+
+
+def fit_text(text, max_width, max_height, base_fs, min_fs=MIN_FONT_SIZE,
+             line_height=1.3, char_advance=CHAR_ADVANCE, letter_spacing=0.0,
+             max_lines=None, safety=FIT_SAFETY) -> dict:
+    """Fit text into a (max_width × max_height) box by shrinking, then truncating.
+
+    Implements issue #10's "shrink then truncate" strategy:
+      1. From base_fs down to min_fs in 0.5px steps, pick the largest size whose
+         word-wrapped block fits both the height budget (× safety) and max_lines.
+      2. If nothing fits even at min_fs, keep min_fs, clamp to the line budget,
+         and append an ellipsis to the last kept line (trimmed to max_width).
+
+    max_height may be None to fit purely by max_lines (or unbounded if both None).
+
+    Returns a dict:
+      font_size  str  — chosen size, == base_fs when the text already fits
+      lines      list — the wrapped (and possibly truncated) visual lines
+      text       str  — " ".join(lines); hand this to make_text so the rich-text
+                        content and the position-data wrap to the same lines
+      truncated  bool — True iff any text was dropped to make it fit
+    """
+    base = float(base_fs)
+    mn = float(min_fs)
+    ls = float(letter_spacing) if letter_spacing not in (None, "") else 0.0
+    if not text:
+        return {"font_size": _fmt_fs(base), "lines": [], "text": "", "truncated": False}
+
+    fs = base
+    while fs >= mn - 1e-9:
+        lines = _wrap_lines(text, max_width, fs, char_advance, ls)
+        if len(lines) <= _line_budget(max_height, fs, line_height, max_lines, safety):
+            return {"font_size": _fmt_fs(fs), "lines": lines,
+                    "text": " ".join(lines), "truncated": False}
+        fs -= 0.5
+
+    # Nothing fit at the floor — truncate at min_fs.
+    fs = mn
+    lines = _wrap_lines(text, max_width, fs, char_advance, ls)
+    budget = max(1, int(_line_budget(max_height, fs, line_height, max_lines, safety)))
+    truncated = len(lines) > budget
+    if truncated:
+        lines = lines[:budget]
+        lines[-1] = _truncate_line(lines[-1], max_width, fs, char_advance, ls)
+    return {"font_size": _fmt_fs(fs), "lines": lines,
+            "text": " ".join(lines), "truncated": truncated}
 
 
 # ---------------------------------------------------------------------------

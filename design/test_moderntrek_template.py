@@ -215,10 +215,29 @@ def test_passives_and_blocks():
           [b["kind"] for b in multi] == ["action", "action", "passive"] and multi[2]["name"] is None)
 
 
+def test_nonunit_keywords():
+    print("non-unit keywords:")
+    # parse_location / parse_item now carry the keywords column so their builders
+    # can render pills (Aura on locations, Flying/Heavy/Lightweight on items).
+    loc = mt.parse_location({"id": "x", "name": "X", "keywords": "Aura:-1:all:combat"}, 0)
+    check("parse_location carries keywords", loc["keywords"] == ["Aura:-1:all:combat"])
+    item = mt.parse_item({"id": "y", "name": "Y", "keywords": "Flying;Heavy"}, 0)
+    check("parse_item carries keywords", item["keywords"] == ["Flying", "Heavy"])
+
+    # _kw_reminder_lines: no reminder → 1; a long reminder wraps to ≥1 lines.
+    check("kw lines: empty reminder → 1", mt._kw_reminder_lines("FLYING", "", 26, 716, 14) == 1)
+    n = mt._kw_reminder_lines(
+        "AURA -1",
+        "Every unit at this location — friend or foe — gets -1 to all stats in combat.",
+        59, 691, 14)
+    check("kw lines: long reminder wraps to >= 1", n >= 1)
+
+
 if __name__ == "__main__":
     test_load_keyword_vocab()
     test_keyword_reminder()
     test_passives_and_blocks()
+    test_nonunit_keywords()
     if _failures:
         print(f"\n{len(_failures)} FAILED: {', '.join(_failures)}")
         sys.exit(1)

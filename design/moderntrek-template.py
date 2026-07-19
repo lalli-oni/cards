@@ -238,6 +238,34 @@ def keyword_reminder(token, vocab):
     return label, reminder
 
 
+def _kw_reminder_lines(label, reminder, x, right, body_fs):
+    """Wrapped line-count of a keyword pill's reminder (>=1). The pill width
+    mirrors _keyword_pill_row so a height pre-pass and the draw agree."""
+    if not reminder:
+        return 1
+    pill_w = int(len(label) * 11 * 0.62) + 24
+    reminder_x = x + pill_w + 12
+    return max(1, len(_wrap_lines(reminder, right - reminder_x, body_fs, CHAR_ADVANCE)))
+
+
+def _keyword_pill_row(rect, text, idx, label, reminder, x, right, cur, body_fs=14, line_h=18):
+    """Draw one keyword pill (name + value) at `cur`, with its reminder prose
+    wrapped in the space to its right up to `right`. Returns the row height.
+    Shared by the unit / location / item builders so keywords render identically
+    across card types (#202)."""
+    pill_w = int(len(label) * 11 * 0.62) + 24
+    rect(f"KW Pill {idx}", x, cur, pill_w, 25, fills=_fill(C["lime"]),
+         r1=2, r2=2, r3=2, r4=2)
+    text(f"KW Label {idx}", x, cur + 4, pill_w, 18, label, SG, "11", "700",
+         C["card_bg"], align="center", ls=1.6)
+    n = _kw_reminder_lines(label, reminder, x, right, body_fs)
+    if reminder:
+        text(f"KW Reminder {idx}", x + pill_w + 12, cur + 4,
+             right - (x + pill_w + 12), n * line_h, reminder, SG, "12.5", "400",
+             C["muted"], style="italic")
+    return max(25, n * line_h)
+
+
 def parse_card(row, index):
     def stat(v):
         return v.strip() if v and v.strip() else DEFAULT_STAT
@@ -366,19 +394,10 @@ def build_shapes(page_id, frame_id, card, vocab):
     rect("Rules Panel", 0, 502, 750, 410, fills=_fill(C["panel"]))
     cursor = RULES_TOP
 
-    # Keyword pills from the `keywords` column (structural label; reminder TBD).
+    # Keyword pills (name + value) with wrapped reminder prose.
     for i, kw in enumerate(card["keywords"]):
         label, reminder = keyword_reminder(kw, vocab)
-        pw = int(len(label) * 11 * 0.62) + 24
-        rect(f"KW Pill {i}", 26, cursor, pw, 25, fills=_fill(C["lime"]),
-             r1=2, r2=2, r3=2, r4=2)
-        text(f"KW Label {i}", 26, cursor + 4, pw, 18, label, SG, "11", "700",
-             C["card_bg"], align="center", ls=1.6)
-        # reminder is blank until prose composition lands (#194/#209).
-        if reminder:
-            text(f"KW Reminder {i}", 26 + pw + 12, cursor + 4, 690 - (26 + pw + 12), 18,
-                 reminder, SG, "12.5", "400", C["muted"], style="italic")
-        cursor += 33
+        cursor += _keyword_pill_row(rect, text, i, label, reminder, 26, 716, cursor) + 8
 
     # Effect blocks (action/passive) with content-driven heights
     for i, b in enumerate(_blocks_for(card)):
@@ -535,6 +554,7 @@ def parse_location(row, index):
         "passive": (row.get("passive") or "").strip(),
         "edges": [e.strip().upper() for e in row.get("edges", "").split(";") if e.strip()],
         "actions": actions,
+        "keywords": split("keywords"),
         "text": (row.get("text") or "").strip(),
         "flavor": (row.get("flavor") or "").strip(),
     }
@@ -583,9 +603,13 @@ def _draw_edge(rect, text, side, blocked):
                  grey, align="center", ls=1)
 
 
-def _loc_rows(card):
-    """Footer rows [(kind, data, height)] in order: mission, passive, action."""
+def _loc_rows(card, vocab):
+    """Footer rows [(kind, data, height)] in order: keywords, mission, passive, action."""
     rows = []
+    for kw in card["keywords"]:
+        label, reminder = keyword_reminder(kw, vocab)
+        n = _kw_reminder_lines(label, reminder, GL_L, GL_R, LOC_BODY_FS)
+        rows.append(("keyword", (label, reminder), max(25, n * LOC_BODY_LH)))
     if card["reqs"]:
         rows.append(("mission", card, 31))
     if card["passive"]:
@@ -660,7 +684,7 @@ def build_location_shapes(page_id, frame_id, card, vocab):
              align="center", ls=1.8)
 
     # 5. Footer glass — content-driven height, bottom-anchored
-    rows = _loc_rows(card)
+    rows = _loc_rows(card, vocab)
     content_h = sum(h for _, _, h in rows) + GL_GAP * max(0, len(rows) - 1)
     total_h = GL_PAD_T + content_h + GL_GAP + GL_LINE_H + GL_PAD_B
     glass_y = 750 - 34 - total_h
@@ -668,8 +692,14 @@ def build_location_shapes(page_id, frame_id, card, vocab):
          r1=10, r2=10, r3=10, r4=10, strokes=_stroke(C["hairline"], 1))
 
     cursor = glass_y + GL_PAD_T
+    kw_i = 0
     for kind, data, h in rows:
-        if kind == "mission":
+        if kind == "keyword":
+            label, reminder = data
+            _keyword_pill_row(rect, text, kw_i, label, reminder, GL_L, GL_R,
+                              cursor, body_fs=LOC_BODY_FS, line_h=LOC_BODY_LH)
+            kw_i += 1
+        elif kind == "mission":
             text("Mission Label", GL_L, cursor + 8, 60, 14, "MISSION", JB, "10",
                  "700", C["lime"], ls=2.4)
             cx = GL_L + 70
@@ -746,6 +776,7 @@ def parse_item(row, index):
         "cost": (row.get("cost") or "").replace("|", " / "),
         "equip": (row.get("equip") or "").strip(),
         "stored": (row.get("stored") or "").strip(),
+        "keywords": [x.strip() for x in row.get("keywords", "").split(";") if x.strip()],
         "actions": _parse_actions(row), "text": (row.get("text") or "").strip(),
         "flavor": (row.get("flavor") or "").strip(),
     }
@@ -892,7 +923,15 @@ def build_item_shapes(page_id, frame_id, card, vocab):
                      body, SG, "16", "400", C["text"])
         return (h, render)
 
+    def kw_row(idx, label, reminder):
+        h = max(25, _kw_reminder_lines(label, reminder, 61, PF_R, 15) * 22)
+        return (h, lambda cur: _keyword_pill_row(rect, text, idx, label, reminder,
+                                                 61, PF_R, cur, body_fs=15, line_h=22))
+
     rows = []
+    for i, kw in enumerate(card["keywords"]):
+        label, reminder = keyword_reminder(kw, vocab)
+        rows.append(kw_row(i, label, reminder))
     if card["equip"]:
         rows.append(mode(0, "EQUIP — ON A UNIT", C["lime"], card["equip"]))
     if card["stored"]:

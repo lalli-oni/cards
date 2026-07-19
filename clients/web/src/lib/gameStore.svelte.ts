@@ -19,6 +19,11 @@ import {
   type ContestResult,
   stepCombatBuffer,
 } from "./contestResult";
+import {
+  deriveTurnStartIndices,
+  restoreEventLogState,
+  type RestoredEventLog,
+} from "./eventLog";
 import { buildMainSetup, buildSeedingSetup, DEFAULT_CONFIG } from "./gameSetup";
 import { HotseatAdapter } from "./HotseatAdapter";
 import {
@@ -303,16 +308,15 @@ function assertNever(x: never): never {
 }
 
 function onEvent(events: GameEvent[], state: GameState): void {
-  const baseIndex = _eventLog.length;
   _eventLog = [..._eventLog, ...events];
   _gamePhase = state.phase;
 
-  for (let i = 0; i < events.length; i++) {
-    if (events[i].type === "turn_started") {
-      _prevTurnStartIndex = _lastTurnStartIndex;
-      _lastTurnStartIndex = baseIndex + i;
-    }
-  }
+  // Recompute the recap boundaries from the full log via the same helper the
+  // load path uses, so live bookkeeping and restore can't drift (single source
+  // of truth). See `deriveTurnStartIndices` in eventLog.ts.
+  const turnStarts = deriveTurnStartIndices(_eventLog);
+  _prevTurnStartIndex = turnStarts.prev;
+  _lastTurnStartIndex = turnStarts.last;
 
   // Popup state — names resolved NOW because killed units will leave the
   // visible state before the popup renders. Factories live in contestResult.ts
@@ -399,7 +403,7 @@ function onEvent(events: GameEvent[], state: GameState): void {
   // Auto-save after every action
   if (controller) {
     try {
-      const session = structuredClone(controller.toSession(true));
+      const session = structuredClone(controller.toSession(true, _eventLog));
       autoSave(session)
         .then(() => {
           autoSaveFailCount = 0;
@@ -414,11 +418,14 @@ function onEvent(events: GameEvent[], state: GameState): void {
           }
         });
     } catch (err) {
+      // Serialization (structuredClone of the session, including the god-view
+      // log) failed. Manual save runs the identical clone, so don't advise it —
+      // this is likely a bug worth reporting.
       console.error("Failed to serialize session for auto-save:", err);
       autoSaveFailCount++;
       if (autoSaveFailCount >= 3) {
         _error =
-          "Auto-save is failing. Your progress may not be saved. Try saving manually.";
+          "Auto-save can't serialize the game — your progress may not be saved. This is likely a bug; please report it.";
       }
     }
   }
@@ -542,10 +549,22 @@ export async function loadGame(key: string): Promise<void> {
     );
   }
 
-  _eventLog = [];
+  // Restore the god-view event log persisted with the save (issue #147) and
+  // reconstruct the recap boundaries, so the pass-device recap shows only the
+  // last completed turn — not the whole restored history, nor an empty panel.
+  // Pure + validated + snapshot-gated in `restoreEventLogState`.
+  const restored: RestoredEventLog = restoreEventLogState(session);
+  _eventLog = restored.eventLog;
   _error = null;
-  _prevTurnStartIndex = 0;
-  _lastTurnStartIndex = 0;
+  _prevTurnStartIndex = restored.prev;
+  _lastTurnStartIndex = restored.last;
+  if (restored.malformed) {
+    console.error(
+      "Restored event log was malformed; showing empty history",
+      session.events,
+    );
+    pushError("Saved event history was unreadable and could not be restored.");
+  }
   _contestResult = null;
   _combatEvents = [];
   lastActivePlayerId = null;
@@ -630,7 +649,7 @@ export async function saveGame(name: string): Promise<void> {
     return;
   }
   try {
-    await saveSession(name, structuredClone(controller.toSession(true)));
+    await saveSession(name, structuredClone(controller.toSession(true, _eventLog)));
     await refreshSessions();
   } catch (err) {
     _error = `Failed to save game: ${err instanceof Error ? err.message : String(err)}`;

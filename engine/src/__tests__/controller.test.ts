@@ -435,6 +435,29 @@ describe("GameController", () => {
       expect(parsed.snapshot.rngState.length).toBeGreaterThan(0);
     });
 
+    it("omits events when none are passed", () => {
+      const controller = createController();
+      expect(controller.toSession(true).events).toBeUndefined();
+    });
+
+    it("persists an empty event log as an empty array (distinct from omitted)", () => {
+      const controller = createController();
+      expect(controller.toSession(true, []).events).toEqual([]);
+    });
+
+    it("persists the passed event log and survives JSON round-trip", () => {
+      const controller = createController();
+      const events: GameEvent[] = [
+        { type: "turn_started", playerId: "p1", round: 1 },
+        { type: "turn_started", playerId: "p2", round: 1 },
+      ];
+      const session = controller.toSession(true, events);
+      expect(session.events).toEqual(events);
+
+      const parsed = JSON.parse(JSON.stringify(session)) as Session;
+      expect(parsed.events).toEqual(events);
+    });
+
     it("replays actions from session", async () => {
       const controller = createController();
       await controller.playTurn();

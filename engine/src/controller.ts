@@ -241,8 +241,13 @@ export class GameController {
     return this.state;
   }
 
-  /** Serialize the current game as a session. */
-  toSession(includeSnapshot = false): Session {
+  /**
+   * Serialize the current game as a session. The controller does not accumulate
+   * an event log itself (clients do, via the `onEvent` callback), so callers
+   * pass the god-view log in to persist it. `events` is stored independently of
+   * `includeSnapshot`; pass it only when serializing for later restore.
+   */
+  toSession(includeSnapshot = false, events?: GameEvent[]): Session {
     const round =
       this.state.phase === "main" || this.state.phase === "ended"
         ? this.state.turn.round
@@ -255,6 +260,7 @@ export class GameController {
       seed: this.seed,
       actions: this.state.actionLog,
       snapshot: includeSnapshot ? this.state : undefined,
+      events,
       result:
         this.state.phase === "ended"
           ? {

@@ -1102,6 +1102,12 @@ export interface Session {
   actions: Action[];
   /** Optional snapshot for quick resume. Fully JSON-serializable. */
   snapshot?: GameState;
+  /**
+   * Optional god-view event log, persisted so clients can restore prior-turn
+   * history (combat math, contest breakdowns, activity) on load. The snapshot
+   * resume path does not replay actions, so without this the log is lost.
+   */
+  events?: GameEvent[];
   result?: {
     winner?: string;
     scores: Record<string, number>;

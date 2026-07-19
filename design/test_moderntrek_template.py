@@ -347,10 +347,42 @@ def test_keyword_pill_row():
           any("KW Reminder" in str(a) for _, a in calls))
 
 
+def test_block_fitting():
+    """#10 unit overflow: _fit_block_font shrinks a uniform body size before any
+    truncation, and _render_block ellipsises a block that still overflows the
+    hard bottom rather than colliding with the flavor / stat ribbon."""
+    print("unit block fitting:")
+    from penpot import ELLIPSIS
+
+    long_body = "Deal three damage to a chosen enemy unit and draw a card. " * 6
+    blocks = [{"kind": "action", "name": "strike", "ap": "2", "body": long_body}]
+
+    # Loose budget keeps the nominal size; a tight one shrinks toward the floor.
+    check("loose budget → keeps nominal body size",
+          mt._fit_block_font(blocks, 400) == mt.BODY_FS)
+    tight = mt._fit_block_font(blocks, 120)
+    check("tight budget → shrinks below nominal", tight < mt.BODY_FS)
+    check("tight budget → not below the floor", tight >= mt.MIN_FONT_SIZE)
+    check("impossible budget → clamps at the floor",
+          mt._fit_block_font(blocks, 40) == float(mt.MIN_FONT_SIZE))
+
+    # A block rendered into a tiny space above hard_bottom truncates its body.
+    calls = []
+    fake_rect = lambda *a, **k: None
+    fake_text = lambda *a, **k: calls.append(a)
+    mt._render_block(fake_rect, fake_text, 0, blocks[0], 800,
+                     body_fs=mt.MIN_FONT_SIZE, hard_bottom=860)
+    body_calls = [a for a in calls if "Body" in a[0]]
+    check("overflowing block → body still drawn", len(body_calls) == 1)
+    check("overflowing block → body truncated with ellipsis",
+          body_calls[0][5].endswith(ELLIPSIS))
+
+
 if __name__ == "__main__":
     test_load_keyword_vocab()
     test_keyword_reminder()
     test_passives_and_blocks()
+    test_block_fitting()
     test_nonunit_keywords()
     test_real_vocab_reminders()
     test_compose_reminder_degradation()

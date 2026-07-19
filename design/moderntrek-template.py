@@ -42,6 +42,7 @@ from penpot import (
     make_rect, make_circle, make_text, make_frame,
     make_linear_gradient_fill, make_radial_gradient_fill, make_shadow,
     del_obj_change, _wrap_lines, CHAR_ADVANCE,
+    fit_text, _fmt_fs, MIN_FONT_SIZE,
 )
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -336,10 +337,13 @@ def parse_card(row, index):
 RULES_TOP = 520          # top of the rules-panel content
 BLOCK_X, BLOCK_W = 26, 698
 BODY_X, BODY_W = 36, 676
-BODY_LINE_H = 18         # 14px * ~1.3
+BODY_FS = 14             # nominal effect-body font size (shrunk to fit, #10)
+BODY_LINE_RATIO = 1.3    # line spacing; matches make_position_data's default
 NAME_TOP, NAMED_BODY_TOP, BARE_BODY_TOP = 6, 41, 12
 PAD_BOTTOM, BLOCK_GAP = 8, 14
 FLAVOR_Y = 876           # flavor pinned near the panel bottom
+RULES_BOTTOM_BARE = 922  # blocks may fill down to here when there's no flavor
+MAX_FLAVOR_LINES = 2     # flavor wraps up to this many lines, then truncates
 
 
 def build_shapes(page_id, frame_id, card, vocab):
@@ -417,15 +421,24 @@ def build_shapes(page_id, frame_id, card, vocab):
         label, reminder = keyword_reminder(kw, vocab)
         cursor += _keyword_pill_row(rect, text, i, label, reminder, 26, 716, cursor) + 8
 
-    # Effect blocks (action/passive) with content-driven heights
-    for i, b in enumerate(_blocks_for(card)):
-        cursor = _render_block(rect, text, i, b, cursor)
+    # Effect blocks (action/passive) with content-driven heights. Shrink the body
+    # font uniformly so the whole stack fits the panel above the flavor / ribbon;
+    # _render_block truncates any block that still overflows the hard bottom (#10).
+    blocks = _blocks_for(card)
+    rules_bottom = (FLAVOR_Y - 7 - PAD_BOTTOM) if card["flavor"] else RULES_BOTTOM_BARE
+    body_fs = _fit_block_font(blocks, rules_bottom - cursor) if blocks else BODY_FS
+    for i, b in enumerate(blocks):
+        cursor = _render_block(rect, text, i, b, cursor, body_fs=body_fs,
+                               hard_bottom=rules_bottom)
 
-    # Flavor (pinned near the panel bottom)
+    # Flavor (pinned near the panel bottom, up to MAX_FLAVOR_LINES then truncated)
     if card["flavor"]:
         rect("Flavor Divider", 26, FLAVOR_Y - 7, 698, 1, fills=_fill(C["lime"], 0.13))
-        text("Flavor Text", 26, FLAVOR_Y, 698, 18, f'"{card["flavor"]}"', SG, "12",
-             "400", C["muted"], style="italic")
+        fit = fit_text(f'"{card["flavor"]}"', 698, None, base_fs=12, min_fs=12,
+                       line_height=BODY_LINE_RATIO, max_lines=MAX_FLAVOR_LINES)
+        line_h = 12 * BODY_LINE_RATIO
+        text("Flavor Text", 26, FLAVOR_Y, 698, max(1, len(fit["lines"])) * line_h,
+             fit["text"], SG, "12", "400", C["muted"], style="italic")
 
     # 4. Stat ribbon
     rect("Stat Ribbon", 0, 938, 750, 74, fills=_fill(C["band"]))
@@ -488,15 +501,50 @@ def _blocks_for(card):
     return blocks
 
 
-def _render_block(rect, text, i, b, cursor):
-    """Render one effect block at `cursor`, return the next cursor position."""
+def _block_height(b, body_fs):
+    """Rendered height of one effect block at `body_fs` (the pre-pass measure)."""
+    body_top = NAMED_BODY_TOP if b["name"] else BARE_BODY_TOP
+    line_h = body_fs * BODY_LINE_RATIO
+    n_lines = len(_wrap_lines(b["body"], BODY_W, body_fs, CHAR_ADVANCE)) if b["body"] else 0
+    return body_top + n_lines * line_h + PAD_BOTTOM
+
+
+def _fit_block_font(blocks, budget, base=BODY_FS, min_fs=MIN_FONT_SIZE):
+    """Largest uniform body font size (base→min_fs in 0.5px steps) whose stacked
+    blocks fit `budget` px, so all effect text on a card scales together (#10).
+    Returns min_fs when even the floor overflows — truncation then handles it."""
+    fs = float(base)
+    while fs >= min_fs - 1e-9:
+        total = sum(_block_height(b, fs) + BLOCK_GAP for b in blocks)
+        if total <= budget:
+            return fs
+        fs -= 0.5
+    return float(min_fs)
+
+
+def _render_block(rect, text, i, b, cursor, body_fs=BODY_FS, hard_bottom=None):
+    """Render one effect block at `cursor`, return the next cursor position.
+
+    Body text renders at `body_fs` (chosen by _fit_block_font). When `hard_bottom`
+    is set the body is fit_text'd into the space above it, so a block that would
+    otherwise collide with the flavor / stat ribbon truncates with an ellipsis
+    instead (#10)."""
     action = b["kind"] == "action"
     accent = C["lime"] if action else C["passive"]
     has_name = bool(b["name"])
     body_top = NAMED_BODY_TOP if has_name else BARE_BODY_TOP
+    line_h = body_fs * BODY_LINE_RATIO
 
-    n_lines = len(_wrap_lines(b["body"], BODY_W, 14, CHAR_ADVANCE)) if b["body"] else 0
-    block_h = body_top + n_lines * BODY_LINE_H + PAD_BOTTOM
+    body, body_size = b["body"], _fmt_fs(body_fs)
+    if body:
+        avail = hard_bottom - (cursor + body_top + PAD_BOTTOM) if hard_bottom else None
+        fit = fit_text(body, BODY_W, avail, base_fs=body_fs, min_fs=body_fs,
+                       line_height=BODY_LINE_RATIO)
+        body, body_size = fit["text"], fit["font_size"]
+        n_lines = max(1, len(fit["lines"]))
+    else:
+        n_lines = 0
+    block_h = body_top + n_lines * line_h + PAD_BOTTOM
 
     if action:
         rect(f"Block {i}", BLOCK_X, cursor, BLOCK_W, block_h,
@@ -523,7 +571,7 @@ def _render_block(rect, text, i, b, cursor):
 
     if b["body"]:
         text(f"Block {i} Body", BODY_X, cursor + body_top, BODY_W,
-             n_lines * BODY_LINE_H, b["body"], SG, "14", "400", C["text"])
+             n_lines * line_h, body, SG, body_size, "400", C["text"])
 
     return cursor + block_h + BLOCK_GAP
 

@@ -102,6 +102,19 @@ function parseAction(raw: string): { name: string; apCost: number; effect: strin
   };
 }
 
+// A named passive ability: `name:effect`. Unlike an action there is no AP cost
+// and `effect` is human-readable prose (not DSL), so we split on the first colon
+// only and keep the rest verbatim. Drops (returns null) a nameless or
+// colon-less token, mirroring parseAction's tolerance.
+function parsePassive(raw: string): { name: string; effect: string } | null {
+  const idx = raw.indexOf(":");
+  if (idx <= 0) return null;
+  const name = raw.slice(0, idx).trim();
+  const effect = raw.slice(idx + 1).trim();
+  if (!name || !effect) return null;
+  return { name, effect };
+}
+
 function intOrNull(value: string): number | null {
   if (!value) return null;
   const n = parseInt(value, 10);
@@ -134,6 +147,7 @@ export function transformCard(type: CardType, raw: Record<string, string>): Reco
       base.cunning = intOrNull(raw.cunning);
       base.charisma = intOrNull(raw.charisma);
       base.actions = splitList(raw.actions || "").map(parseAction).filter(Boolean);
+      base.passives = splitList(raw.passives || "").map(parsePassive).filter(Boolean);
       break;
 
     case "locations":

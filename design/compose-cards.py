@@ -123,7 +123,7 @@ def validate_tokens(tokens, card_type):
 # Known CSV columns per card type (for typo detection)
 KNOWN_COLUMNS = {
     "unit": {"id", "name", "set", "rarity", "cost", "text", "flavor", "keywords",
-             "strength", "cunning", "charisma", "attributes", "actions"},
+             "strength", "cunning", "charisma", "attributes", "actions", "passives"},
     "location": {"id", "name", "set", "rarity", "cost", "text", "flavor", "keywords",
                  "mission", "passive", "edges", "actions"},
     "item": {"id", "name", "set", "rarity", "cost", "text", "flavor", "keywords",

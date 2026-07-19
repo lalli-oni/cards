@@ -8,6 +8,7 @@ import type {
   InstantEventCard,
   ItemCard,
   LocationCard,
+  PassiveDef,
   PassiveEventCard,
   PolicyCard,
   Rarity,
@@ -46,6 +47,8 @@ export interface CardDefinition {
   cunning?: number | null;
   charisma?: number | null;
   actions?: ActionDef[];
+  /** Named passive abilities (`name:effect`). Display-only prose today. */
+  passives?: PassiveDef[];
 
   // Location fields
   mission?: string | null;
@@ -341,6 +344,7 @@ export function instantiateCard(
         attributes: (def.attributes ?? []) as Attribute[],
         injured: false,
         actions: def.actions ?? undefined,
+        passives: def.passives ?? undefined,
       } satisfies UnitCard;
 
     case "location":

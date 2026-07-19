@@ -165,9 +165,52 @@ def test_keyword_reminder():
     check("empty vocab → no warning", err == "")
 
 
+def test_passives_and_blocks():
+    print("passives + blocks:")
+
+    # parse_card splits the `passives` column into {name, effect} on the first colon.
+    row = {"id": "genghis-khan", "name": "Genghis Khan",
+           "actions": "conquer:3:raze(location)", "text": "Raze a location.",
+           "passives": "Horselord:Your Equip actions involving a Mount cost 0 AP."}
+    card = mt.parse_card(row, 0)
+    check("parse_card → named passive parsed",
+          card["passives"] == [{"name": "Horselord",
+                                "effect": "Your Equip actions involving a Mount cost 0 AP."}])
+
+    card2, err = _quiet(mt.parse_card,
+                        {"id": "x", "name": "X", "passives": "NoColonHere"}, 0)
+    check("parse_card → colon-less passive skipped", card2["passives"] == [])
+    check("parse_card → colon-less passive warns", "is not name:effect" in err.lower())
+
+    # _blocks_for: a single action carries the text; named passives get their own
+    # blocks; leftover text with no single action falls back to an unnamed passive.
+    blocks = mt._blocks_for({"actions": [{"name": "conquer", "ap": "3"}],
+                             "passives": [{"name": "Horselord", "effect": "Mount equips free."}],
+                             "text": "Raze a location."})
+    check("action + passive → two blocks", len(blocks) == 2)
+    check("action block carries text",
+          blocks[0] == {"kind": "action", "name": "conquer", "ap": "3", "body": "Raze a location."})
+    check("named passive block",
+          blocks[1] == {"kind": "passive", "name": "Horselord", "body": "Mount equips free."})
+
+    only_passive = mt._blocks_for({"actions": [], "passives": [{"name": "Galvanism", "effect": "First event is free."}], "text": ""})
+    check("action-less + named passive → single named passive block",
+          only_passive == [{"kind": "passive", "name": "Galvanism", "body": "First event is free."}])
+
+    fallback = mt._blocks_for({"actions": [], "passives": [], "text": "Some loose prose."})
+    check("action-less loose text → unnamed passive fallback",
+          fallback == [{"kind": "passive", "name": None, "body": "Some loose prose."}])
+
+    multi = mt._blocks_for({"actions": [{"name": "a", "ap": "1"}, {"name": "b", "ap": "2"}],
+                            "passives": [], "text": "Trailing note."})
+    check("multi-action → empty action bodies + unnamed passive for trailing text",
+          [b["kind"] for b in multi] == ["action", "action", "passive"] and multi[2]["name"] is None)
+
+
 if __name__ == "__main__":
     test_load_keyword_vocab()
     test_keyword_reminder()
+    test_passives_and_blocks()
     if _failures:
         print(f"\n{len(_failures)} FAILED: {', '.join(_failures)}")
         sys.exit(1)

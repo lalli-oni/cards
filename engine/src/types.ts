@@ -107,6 +107,16 @@ export interface ActionDef {
   effect: string;
 }
 
+/** A named passive ability: a static/triggered effect a card has while in play,
+ *  with no AP cost and no player activation (contrast ActionDef). `effect` is
+ *  human-readable prose today — like a location's `passive` and policy action
+ *  text — not executable DSL; the engine does not yet apply unit passives
+ *  mechanically. Sourced from the CSV `passives` column (`name:effect`). */
+export interface PassiveDef {
+  name: string;
+  effect: string;
+}
+
 /** Single source of truth for "what kind of card applied a modifier".
  *  Reused by `ModifierSource` (event payloads) and `EffectSource`
  *  (listener registrations). */
@@ -208,6 +218,9 @@ export interface UnitCard extends CardBase {
   attributes: Attribute[];
   injured: boolean;
   actions?: ActionDef[];
+  /** Named passive abilities (e.g. Genghis Khan's "Horselord"). Display-only
+   *  today — see PassiveDef. Absent when the card has none. */
+  passives?: PassiveDef[];
   statModifiers?: StatModifier[];
   controlOverride?: ControlOverride;
 }

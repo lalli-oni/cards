@@ -132,6 +132,37 @@ describe("build validation — governed keywords", () => {
   });
 });
 
+describe("build transform — unit passives column", () => {
+  // The `passives` column carries named passive abilities as `name:effect`,
+  // split from the freeform `text` blob (#202). Effect prose is kept verbatim
+  // after the first colon (it may itself contain colons); nameless / colon-less
+  // tokens drop, mirroring parseAction's tolerance.
+  const passivesOf = (raw: string) =>
+    (transformCard("units", row({ passives: raw })) as { passives?: unknown }).passives;
+
+  test("parses a single name:effect passive", () => {
+    expect(passivesOf("Horselord:Your Equip actions involving a Mount cost 0 AP.")).toEqual([
+      { name: "Horselord", effect: "Your Equip actions involving a Mount cost 0 AP." },
+    ]);
+  });
+
+  test("splits multiple passives on `;` and keeps colons in the effect", () => {
+    expect(passivesOf("Alpha:Ratio is 3:1 here.;Beta:Does a thing.")).toEqual([
+      { name: "Alpha", effect: "Ratio is 3:1 here." },
+      { name: "Beta", effect: "Does a thing." },
+    ]);
+  });
+
+  test("drops a nameless or colon-less token", () => {
+    expect(passivesOf("Berserker")).toEqual([]);
+    expect(passivesOf(":no name here")).toEqual([]);
+  });
+
+  test("absent column yields an empty list", () => {
+    expect(passivesOf("")).toEqual([]);
+  });
+});
+
 describe("build validation — cost is a numeric gold amount", () => {
   test("accepts an integer cost and `|`-separated integer alternatives", () => {
     expect(check("units", { cost: "3", attributes: "Military" })).toEqual([]);

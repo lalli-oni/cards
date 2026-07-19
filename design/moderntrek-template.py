@@ -238,6 +238,15 @@ def parse_card(row, index):
         ap, _, effect = rest.partition(":")
         actions.append({"name": name.strip(), "ap": ap.strip(), "effect": effect.strip()})
 
+    passives = []
+    for p in split("passives"):
+        if ":" not in p:
+            print(f"WARNING: {row.get('id')}: passive '{p}' is not name:effect "
+                  f"— skipping", file=sys.stderr)
+            continue
+        name, _, effect = p.partition(":")
+        passives.append({"name": name.strip(), "effect": effect.strip()})
+
     return {
         "id": row["id"],
         "name": row["name"],
@@ -251,6 +260,7 @@ def parse_card(row, index):
         "attributes": split("attributes"),
         "keywords": split("keywords"),
         "actions": actions,
+        "passives": passives,
         "text": (row.get("text") or "").strip(),
         "flavor": (row.get("flavor") or "").strip(),
     }
@@ -401,16 +411,25 @@ def build_shapes(page_id, frame_id, card, vocab):
 
 
 def _blocks_for(card):
-    """Turn a card's actions/text into a list of renderable blocks."""
-    actions, text = card["actions"], card["text"]
-    if len(actions) == 1:
-        return [{"kind": "action", "name": actions[0]["name"], "ap": actions[0]["ap"],
-                 "body": text}]
-    if not actions:
-        return [{"kind": "passive", "name": None, "body": text}] if text else []
-    blocks = [{"kind": "action", "name": a["name"], "ap": a["ap"], "body": ""}
-              for a in actions]
-    if text:
+    """Turn a card's actions/passives/text into a list of renderable blocks.
+
+    A single action carries the freeform `text` as its reminder body; with
+    multiple actions the text can't belong to any one, so their bodies stay
+    empty. Named passives (from the `passives` column) render as their own
+    dashed blocks with a name. Leftover `text` that has no single action to
+    attach to falls back to an unnamed passive block so nothing disappears."""
+    actions, passives, text = card["actions"], card["passives"], card["text"]
+    single_action = len(actions) == 1
+    blocks = []
+    if single_action:
+        blocks.append({"kind": "action", "name": actions[0]["name"],
+                       "ap": actions[0]["ap"], "body": text})
+    else:
+        blocks += [{"kind": "action", "name": a["name"], "ap": a["ap"], "body": ""}
+                   for a in actions]
+    blocks += [{"kind": "passive", "name": p["name"], "body": p["effect"]}
+               for p in passives]
+    if text and not single_action:
         blocks.append({"kind": "passive", "name": None, "body": text})
     return blocks
 

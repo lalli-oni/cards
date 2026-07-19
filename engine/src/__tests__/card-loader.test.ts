@@ -434,6 +434,17 @@ describe("instantiateCard", () => {
     expect((card as any).injured).toBe(false);
   });
 
+  test("carries named passives onto the runtime unit card", () => {
+    const withPassive: CardDefinition = {
+      ...VALID_UNIT,
+      passives: [{ name: "Horselord", effect: "Mount equips cost 0 AP." }],
+    };
+    const card = instantiateCard(withPassive, "player-1", counter);
+    expect((card as any).passives).toEqual([
+      { name: "Horselord", effect: "Mount equips cost 0 AP." },
+    ]);
+  });
+
   test("creates location card with default open edges", () => {
     const card = instantiateCard(VALID_LOCATION, "player-1", counter);
     expect(card.type).toBe("location");

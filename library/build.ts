@@ -22,8 +22,11 @@ import {
 } from "../engine/src/card-categories";
 
 const LIBRARY_DIR = join(import.meta.dir);
-const SETS_DIR = join(LIBRARY_DIR, "sets");
-const BUILD_DIR = join(LIBRARY_DIR, "build");
+// `CARDS_SETS_DIR` / `CARDS_BUILD_DIR` override the input/output roots so a test
+// can drive `main()` against a temp fixture without touching `library/`. Default
+// to the real locations.
+const SETS_DIR = process.env.CARDS_SETS_DIR ?? join(LIBRARY_DIR, "sets");
+const BUILD_DIR = process.env.CARDS_BUILD_DIR ?? join(LIBRARY_DIR, "build");
 
 const CARD_TYPES = ["units", "locations", "items", "events", "policies"] as const;
 export type CardType = (typeof CARD_TYPES)[number];
@@ -186,14 +189,25 @@ export function transformCard(type: CardType, raw: Record<string, string>): Reco
 
 // --- Validation ---
 
-export type ValidationError = { card: string; field: string; message: string };
+// A build notice: a card/field-addressed message. The `severity` discriminant
+// keeps the two channels non-interchangeable — a failing `ValidationError`
+// cannot be silently routed into the non-failing `BuildWarning` list — while
+// still letting one `printNotice` render both with the same line format.
+type BuildNotice = {
+  readonly card: string;
+  readonly field: string;
+  readonly message: string;
+};
 
-// Non-failing build notices (e.g. a missing per-type CSV). Structured like
-// `ValidationError` so the summary printer renders both uniformly and callers
-// can assert on them via the return value — but warnings never fail the build.
-// Governance that *should* fail (unknown keyword/attribute, bad DSL) lives in
-// `validate()`'s `errors[]` instead. See #213.
-export type BuildWarning = { card: string; field: string; message: string };
+// Governance that *should* fail the build: unknown keyword/attribute, bad DSL,
+// a missing/typo'd set, etc. Produced by `validate()` and `buildSet()`.
+export type ValidationError = BuildNotice & { readonly severity: "error" };
+
+// Non-failing notices that never affect the exit code — currently only a set
+// legitimately omitting a per-type CSV (see `buildSet`). Returned via
+// `buildSet().warnings` (not `console.warn`) so they land in the summary and are
+// assertable via the return value. See #213.
+export type BuildWarning = BuildNotice & { readonly severity: "warning" };
 
 export function validate(
   type: CardType,
@@ -201,12 +215,18 @@ export function validate(
 ): ValidationError[] {
   const errors: ValidationError[] = [];
   const id = (card.id as string) || "unknown";
+  const err = (field: string, message: string): ValidationError => ({
+    card: id,
+    field,
+    message,
+    severity: "error",
+  });
 
-  if (!card.id) errors.push({ card: id, field: "id", message: "missing id" });
-  if (!card.name) errors.push({ card: id, field: "name", message: "missing name" });
-  if (!card.set) errors.push({ card: id, field: "set", message: "missing set" });
+  if (!card.id) errors.push(err("id", "missing id"));
+  if (!card.name) errors.push(err("name", "missing name"));
+  if (!card.set) errors.push(err("set", "missing set"));
   if (!RARITIES.includes(card.rarity as any)) {
-    errors.push({ card: id, field: "rarity", message: `invalid rarity: ${card.rarity}` });
+    errors.push(err("rarity", `invalid rarity: ${card.rarity}`));
   }
 
   // Cost is a required gold amount (or `|`-separated alternatives, stored as a
@@ -216,12 +236,12 @@ export function validate(
   const costs = Array.isArray(card.cost) ? card.cost : [card.cost];
   for (const c of costs) {
     if (!/^\d+$/.test(String(c ?? "").trim())) {
-      errors.push({ card: id, field: "cost", message: `invalid cost: ${JSON.stringify(card.cost)}` });
+      errors.push(err("cost", `invalid cost: ${JSON.stringify(card.cost)}`));
     }
   }
 
   if (type === "events" && !EVENT_TIMINGS.includes(card.timing as any)) {
-    errors.push({ card: id, field: "timing", message: `invalid timing: ${card.timing}` });
+    errors.push(err("timing", `invalid timing: ${card.timing}`));
   }
 
   // Cross-type attribute vocabulary — exact CamelCase membership in the governed
@@ -230,7 +250,7 @@ export function validate(
   const attributes = (card.attributes as string[] | undefined) ?? [];
   for (const attr of attributes) {
     if (!ATTRIBUTES.includes(attr as (typeof ATTRIBUTES)[number])) {
-      errors.push({ card: id, field: "attributes", message: `invalid attribute: ${attr}` });
+      errors.push(err("attributes", `invalid attribute: ${attr}`));
     }
   }
 
@@ -247,7 +267,7 @@ export function validate(
       // engine fault in parseKeyword — propagate with its stack rather than
       // mislabel it as this card's validation error.
       if (!(e instanceof KeywordError)) throw e;
-      errors.push({ card: id, field: "keywords", message: e.message });
+      errors.push(err("keywords", e.message));
     }
   }
 
@@ -256,16 +276,16 @@ export function validate(
   // `location_type`/`event_type`/`type` (reflected in the error `field`).
   const locationType = card.locationType as (typeof LOCATION_TYPES)[number] | undefined;
   if (type === "locations" && locationType && !LOCATION_TYPES.includes(locationType)) {
-    errors.push({ card: id, field: "location_type", message: `invalid location_type: ${locationType}` });
+    errors.push(err("location_type", `invalid location_type: ${locationType}`));
   }
   const eventType = card.eventType as (typeof EVENT_TYPES)[number] | undefined;
   if (type === "events" && eventType && !EVENT_TYPES.includes(eventType)) {
-    errors.push({ card: id, field: "event_type", message: `invalid event_type: ${eventType}` });
+    errors.push(err("event_type", `invalid event_type: ${eventType}`));
   }
   if (type === "items") {
     for (const t of (card.itemType as string[] | undefined) ?? []) {
       if (!ITEM_TYPES.includes(t as (typeof ITEM_TYPES)[number])) {
-        errors.push({ card: id, field: "type", message: `invalid item type: ${t}` });
+        errors.push(err("type", `invalid item type: ${t}`));
       }
     }
   }
@@ -279,7 +299,7 @@ export function validate(
         parseDSL(action.effect);
       } catch (e) {
         const msg = (e instanceof DSLParseError || e instanceof DSLValidationError) ? e.message : String(e);
-        errors.push({ card: id, field: "actions", message: `invalid DSL in action "${action.name}": ${msg}` });
+        errors.push(err("actions", `invalid DSL in action "${action.name}": ${msg}`));
       }
     }
   }
@@ -288,7 +308,7 @@ export function validate(
       parseDSL(card.effect as string);
     } catch (e) {
       const msg = (e instanceof DSLParseError || e instanceof DSLValidationError) ? e.message : String(e);
-      errors.push({ card: id, field: "effect", message: `invalid DSL: ${msg}` });
+      errors.push(err("effect", `invalid DSL: ${msg}`));
     }
   }
 
@@ -297,23 +317,33 @@ export function validate(
 
 // --- Main ---
 
+// Builds one set. Returns `warnings` alongside `errors`; unlike the old
+// in-function `console.warn`, warnings are only visible if the caller surfaces
+// them (see `main`'s summary) — a caller that ignores `.warnings` silently drops
+// the notices, so callers are responsible for reporting them.
 export function buildSet(setName: string, setsDir: string = SETS_DIR): {
   cards: Record<string, unknown>[];
   errors: ValidationError[];
   warnings: BuildWarning[];
 } {
-  const setDir = join(setsDir, setName);
+  const setDir: string = join(setsDir, setName);
   const cards: Record<string, unknown>[] = [];
   const errors: ValidationError[] = [];
   const warnings: BuildWarning[] = [];
 
+  // A set whose directory is entirely absent is an operator error (a typo'd set
+  // name), not a set legitimately omitting a card type — fail rather than emit
+  // five "not found" warnings and a hollow exit-0 build.
+  if (!existsSync(setDir)) {
+    errors.push({ card: setName, field: "set", message: "set directory not found", severity: "error" });
+    return { cards, errors, warnings };
+  }
+
   for (const type of CARD_TYPES) {
     const csvPath = join(setDir, `${type}.csv`);
     if (!existsSync(csvPath)) {
-      // Non-failing: a set may legitimately omit a card type. Surfaced as a
-      // structured warning (not `console.warn`) so it lands in the summary and
-      // is assertable via the return value.
-      warnings.push({ card: setName, field: type, message: `${type}.csv not found, skipping` });
+      // Non-failing: a set may legitimately omit a card type.
+      warnings.push({ card: setName, field: type, message: `${type}.csv not found, skipping`, severity: "warning" });
       continue;
     }
 
@@ -328,6 +358,21 @@ export function buildSet(setName: string, setsDir: string = SETS_DIR): {
   }
 
   return { cards, errors, warnings };
+}
+
+// Render a notice list under a count header; shared by the warning and error
+// summaries so both print with an identical `[card] field: message` line format
+// (the whole point of the common `BuildNotice` base).
+function printNotices(
+  notices: BuildNotice[],
+  header: string,
+  stream: (message: string) => void,
+): void {
+  if (notices.length === 0) return;
+  stream(`\n${notices.length} ${header}:`);
+  for (const n of notices) {
+    stream(`  [${n.card}] ${n.field}: ${n.message}`);
+  }
 }
 
 function main() {
@@ -372,19 +417,9 @@ function main() {
   );
 
   // Report — warnings first (non-failing), then errors (which fail the build).
-  if (totalWarnings.length > 0) {
-    console.warn(`\n${totalWarnings.length} warning(s):`);
-    for (const w of totalWarnings) {
-      console.warn(`  [${w.card}] ${w.field}: ${w.message}`);
-    }
-  }
-  if (totalErrors.length > 0) {
-    console.error(`\n${totalErrors.length} validation error(s):`);
-    for (const e of totalErrors) {
-      console.error(`  [${e.card}] ${e.field}: ${e.message}`);
-    }
-    process.exit(1);
-  }
+  printNotices(totalWarnings, "warning(s)", (m) => console.warn(m));
+  printNotices(totalErrors, "validation error(s)", (m) => console.error(m));
+  if (totalErrors.length > 0) process.exit(1);
 
   console.log(`\nDone. ${allCards.length} cards total across ${sets.length} set(s).`);
 }

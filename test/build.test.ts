@@ -183,11 +183,45 @@ describe("build warnings — structured non-failing channel", () => {
     ]);
     for (const w of warnings) {
       expect(w.card).toBe("warn-set");
+      expect(w.severity).toBe("warning");
+      // Pin the human-readable message: it names the missing file and its disposition.
+      expect(w.message).toContain(`${w.field}.csv`);
       expect(w.message).toContain("not found");
     }
   });
 
+  test("warnings and errors coexist as disjoint channels in one build", () => {
+    // units.csv holds a card with an invalid rarity (→ error); the other four
+    // types are absent (→ warnings). The channels must not bleed into each other.
+    const BAD_UNIT_CSV: string =
+      "id,name,set,rarity,cost,keywords,attributes,strength,cunning,charisma,actions\n" +
+      "bad-unit,Bad Unit,mixed-set,not-a-rarity,3,,Military,2,1,1,\n";
+    makeSet("mixed-set", { units: BAD_UNIT_CSV });
+    const { errors, warnings } = buildSet("mixed-set", fixtureRoot);
+
+    expect(errors.some((e) => e.field === "rarity")).toBe(true);
+    expect(errors.every((e) => e.severity === "error")).toBe(true);
+    expect(warnings.length).toBe(4);
+    expect(warnings.every((w) => w.severity === "warning")).toBe(true);
+    // No warning leaked into errors, no error into warnings.
+    expect(warnings.every((w) => w.message.includes("not found"))).toBe(true);
+    expect(errors.some((e) => e.message.includes("not found"))).toBe(false);
+  });
+
+  test("a nonexistent set directory fails the build instead of warning", () => {
+    const { cards, errors, warnings } = buildSet("does-not-exist", fixtureRoot);
+    expect(cards).toEqual([]);
+    expect(warnings).toEqual([]);
+    expect(errors.length).toBe(1);
+    expect(errors[0].field).toBe("set");
+    expect(errors[0].severity).toBe("error");
+  });
+
   test("no warnings when every card-type CSV is present", () => {
+    // Header-only fixtures for the non-unit types are intentional: the warning
+    // path keys purely on file existence (existsSync), so a present-but-empty CSV
+    // is enough to prove "present → no warning". Card-row flow into cards[] is
+    // covered by the UNIT_CSV rows in the tests above.
     makeSet("full-set", {
       units: UNIT_CSV,
       locations: "id,name,set,rarity,cost,keywords,attributes,location_type\n",
@@ -197,5 +231,65 @@ describe("build warnings — structured non-failing channel", () => {
     });
     const { warnings } = buildSet("full-set", fixtureRoot);
     expect(warnings).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Build CLI — main() summary rendering and exit codes (#213)
+//
+// buildSet()'s return value is unit-tested above; the fail/no-fail contract
+// itself lives in main() (warnings are non-failing, errors exit 1, warnings
+// print before errors). main() isn't exported, so we drive it as a subprocess,
+// pointing CARDS_SETS_DIR/CARDS_BUILD_DIR at temp dirs for isolation.
+// ---------------------------------------------------------------------------
+describe("build CLI — main() summary and exit codes", () => {
+  const cliRoot: string = mkdtempSync(join(tmpdir(), "cards-buildcli-"));
+  const cliBuild: string = mkdtempSync(join(tmpdir(), "cards-buildout-"));
+  afterAll(() => {
+    rmSync(cliRoot, { recursive: true, force: true });
+    rmSync(cliBuild, { recursive: true, force: true });
+  });
+
+  const BUILD_SCRIPT: string = join(import.meta.dir, "../library/build.ts");
+  const CLI_UNIT_CSV: string =
+    "id,name,set,rarity,cost,keywords,attributes,strength,cunning,charisma,actions\n" +
+    "cli-unit,CLI Unit,cli,common,3,,Military,2,1,1,\n";
+
+  /** Write a fixture set, then run `bun library/build.ts <setName>` against it. */
+  function run(
+    setName: string,
+    csvs: Partial<Record<CardType, string>>,
+  ): { code: number | null; stderr: string } {
+    const dir: string = join(cliRoot, setName);
+    mkdirSync(dir, { recursive: true });
+    for (const [type, body] of Object.entries(csvs)) {
+      writeFileSync(join(dir, `${type}.csv`), body);
+    }
+    const proc = Bun.spawnSync(["bun", BUILD_SCRIPT, setName], {
+      env: { ...process.env, CARDS_SETS_DIR: cliRoot, CARDS_BUILD_DIR: cliBuild },
+    });
+    return { code: proc.exitCode, stderr: proc.stderr.toString() };
+  }
+
+  test("a warning-only build prints the warning summary and exits 0", () => {
+    // Only units.csv → the other four types warn, nothing errors.
+    const { code, stderr } = run("cli-warn", { units: CLI_UNIT_CSV });
+    expect(code).toBe(0);
+    expect(stderr).toContain("warning(s):");
+    expect(stderr).toContain("events.csv not found");
+  });
+
+  test("a validation error fails the build (exit 1), printed after warnings", () => {
+    const BAD_UNIT_CSV: string =
+      "id,name,set,rarity,cost,keywords,attributes,strength,cunning,charisma,actions\n" +
+      "cli-bad,CLI Bad,cli,not-a-rarity,3,,Military,2,1,1,\n";
+    const { code, stderr } = run("cli-err", { units: BAD_UNIT_CSV });
+    expect(code).toBe(1);
+    expect(stderr).toContain("validation error(s):");
+    // Warnings (the four missing CSVs) must print before the error summary.
+    const warnIdx: number = stderr.indexOf("warning(s):");
+    const errIdx: number = stderr.indexOf("validation error(s):");
+    expect(warnIdx).toBeGreaterThanOrEqual(0);
+    expect(errIdx).toBeGreaterThan(warnIdx);
   });
 });

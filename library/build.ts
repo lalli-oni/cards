@@ -188,6 +188,13 @@ export function transformCard(type: CardType, raw: Record<string, string>): Reco
 
 export type ValidationError = { card: string; field: string; message: string };
 
+// Non-failing build notices (e.g. a missing per-type CSV). Structured like
+// `ValidationError` so the summary printer renders both uniformly and callers
+// can assert on them via the return value — but warnings never fail the build.
+// Governance that *should* fail (unknown keyword/attribute, bad DSL) lives in
+// `validate()`'s `errors[]` instead. See #213.
+export type BuildWarning = { card: string; field: string; message: string };
+
 export function validate(
   type: CardType,
   card: Record<string, unknown>,
@@ -290,15 +297,23 @@ export function validate(
 
 // --- Main ---
 
-function buildSet(setName: string): { cards: Record<string, unknown>[]; errors: ValidationError[] } {
-  const setDir = join(SETS_DIR, setName);
+export function buildSet(setName: string, setsDir: string = SETS_DIR): {
+  cards: Record<string, unknown>[];
+  errors: ValidationError[];
+  warnings: BuildWarning[];
+} {
+  const setDir = join(setsDir, setName);
   const cards: Record<string, unknown>[] = [];
   const errors: ValidationError[] = [];
+  const warnings: BuildWarning[] = [];
 
   for (const type of CARD_TYPES) {
     const csvPath = join(setDir, `${type}.csv`);
     if (!existsSync(csvPath)) {
-      console.warn(`  Warning: ${type}.csv not found in ${setName}, skipping`);
+      // Non-failing: a set may legitimately omit a card type. Surfaced as a
+      // structured warning (not `console.warn`) so it lands in the summary and
+      // is assertable via the return value.
+      warnings.push({ card: setName, field: type, message: `${type}.csv not found, skipping` });
       continue;
     }
 
@@ -312,7 +327,7 @@ function buildSet(setName: string): { cards: Record<string, unknown>[]; errors: 
     }
   }
 
-  return { cards, errors };
+  return { cards, errors, warnings };
 }
 
 function main() {
@@ -328,16 +343,18 @@ function main() {
 
   let allCards: Record<string, unknown>[] = [];
   let totalErrors: ValidationError[] = [];
+  let totalWarnings: BuildWarning[] = [];
 
   for (const setName of sets) {
     console.log(`Building set: ${setName}`);
-    const { cards, errors } = buildSet(setName);
+    const { cards, errors, warnings } = buildSet(setName);
 
     writeFileSync(join(BUILD_DIR, `${setName}.json`), JSON.stringify(cards, null, 2));
     console.log(`  ${cards.length} cards`);
 
     allCards = allCards.concat(cards);
     totalErrors = totalErrors.concat(errors);
+    totalWarnings = totalWarnings.concat(warnings);
   }
 
   // Write merged output
@@ -354,7 +371,13 @@ function main() {
     ),
   );
 
-  // Report
+  // Report — warnings first (non-failing), then errors (which fail the build).
+  if (totalWarnings.length > 0) {
+    console.warn(`\n${totalWarnings.length} warning(s):`);
+    for (const w of totalWarnings) {
+      console.warn(`  [${w.card}] ${w.field}: ${w.message}`);
+    }
+  }
   if (totalErrors.length > 0) {
     console.error(`\n${totalErrors.length} validation error(s):`);
     for (const e of totalErrors) {

@@ -103,18 +103,31 @@ describe("build validation — governed keywords", () => {
     expect(errors.some((e) => e.field === "keywords" && e.message.includes("not supported on unit"))).toBe(true);
   });
 
-  test("build/keywords.json emits the {name, cardTypes} shape the renderer reads", () => {
+  test("build/keywords.json emits the {name, cardTypes, params, reminder} shape the renderer reads", () => {
     // Pins the producer half of the render↔data contract: the Python renderer's
-    // load_keyword_vocab expects a JSON array of {name, cardTypes}. A rename or
+    // load_keyword_vocab expects a JSON array of {name, cardTypes, params,
+    // reminder}, and compose_reminder binds a token's positional args to each
+    // param `name`/`kind` before substituting into `reminder`. A rename or
     // reshape in build.ts's emit would break it silently — caught here. (Requires
     // a prior `bun library/build.ts`, which the `test` script runs first.)
     const artifact = JSON.parse(readFileSync(join(import.meta.dir, "../library/build/keywords.json"), "utf-8"));
     expect(Array.isArray(artifact)).toBe(true);
     expect(artifact.length).toBe(KEYWORDS.length);
     for (const entry of artifact) {
-      expect(Object.keys(entry).sort()).toEqual(["cardTypes", "name"]);
+      expect(Object.keys(entry).sort()).toEqual(["cardTypes", "name", "params", "reminder"]);
       expect(typeof entry.name).toBe("string");
       expect(Array.isArray(entry.cardTypes)).toBe(true);
+      expect(typeof entry.reminder).toBe("string");
+      expect(Array.isArray(entry.params)).toBe(true);
+      for (const p of entry.params) {
+        expect(typeof p.name).toBe("string");
+        expect(typeof p.kind).toBe("string");
+      }
+      // Every {paramName} placeholder in the template must bind to a declared param.
+      const declared = new Set(entry.params.map((p: { name: string }) => p.name));
+      for (const ph of entry.reminder.matchAll(/\{(\w+)\}/g)) {
+        expect(declared.has(ph[1])).toBe(true);
+      }
     }
   });
 });

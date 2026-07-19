@@ -152,26 +152,73 @@ def load_keyword_vocab(path=None):
     return vocab
 
 
+# Presentation formatting for keyword param values, keyed by the param `kind`
+# emitted in build/keywords.json. The sentence templates themselves live in
+# engine/src/keywords.ts (the source of truth); this map is the one presentation
+# concern the renderer owns — turning a raw enum value into card-facing wording.
+_PARAM_DISPLAY = {
+    "statScope": {"all": "all stats", "strength": "strength",
+                  "cunning": "cunning", "charisma": "charisma"},
+    "context": {"combat": "in combat", "mission": "on missions"},
+    "role": {"atk": " when attacking", "def": " when defending", "either": ""},
+}
+
+
+def _format_param(kind, raw):
+    """Format a keyword param value for reminder prose. signedMagnitude/magnitude
+    render as their literal token (`+1`, `1`); enum kinds map through
+    _PARAM_DISPLAY (unknown values pass through verbatim)."""
+    return _PARAM_DISPLAY.get(kind, {}).get(raw, raw)
+
+
+def compose_reminder(token, entry):
+    """Compose card-facing reminder prose for a keyword token from its vocab
+    `entry` (build/keywords.json): substitute the token's positional args into
+    the `reminder` template, binding each to its param `name` and formatting by
+    `kind`. Omitted optional params fall back to their `default`. Returns "" when
+    the entry lacks a usable template/params (older or degraded artifact) so pills
+    still render. Assumes a validated build — does not re-check arity."""
+    template = entry.get("reminder")
+    params = entry.get("params")
+    if not isinstance(template, str) or not isinstance(params, list):
+        return ""
+    args = token.split(":")[1:]
+    values = {}
+    for i, p in enumerate(params):
+        if not isinstance(p, dict) or not isinstance(p.get("name"), str):
+            return ""  # malformed entry — fall back to no reminder
+        raw = args[i] if i < len(args) else p.get("default")
+        values[p["name"]] = _format_param(p.get("kind"), "" if raw is None else str(raw))
+    try:
+        text = template.format(**values)
+    except (KeyError, IndexError):
+        return ""
+    # Collapse whitespace an omitted param may leave (e.g. a blank trailing role).
+    return " ".join(text.split())
+
+
 def keyword_reminder(token, vocab):
     """Split a `keywords` token into (pill_label, reminder). Handles the family
     grammar (`Leader:+1:all:combat`, `Untouchable:charisma`) and value-less
-    standalones (`Berserker`) by rendering a structural pill label from the
-    token's parts. Warns on a name outside the governed vocab (skipped when the
-    vocab is empty/degraded). Never raises. Param/arity validation lives in the
+    standalones (`Berserker`): the pill label is a structural rendering of the
+    token's parts; the reminder is card-facing prose composed from the governed
+    vocab's template (see compose_reminder). Warns on a name outside the governed
+    vocab (skipped when the vocab is empty/degraded — reminder is then blank but
+    the pill still renders). Never raises. Param/arity validation lives in the
     build (`engine/src/keywords.ts` via `bun library/build.ts`) — this assumes a
-    validated build and does not re-check params.
-
-    Prose reminder text (composing "friendly units here get +1 …" from the family
-    params) is a follow-up — reminder is blank for now — rather than duplicating
-    the rules-glossary prose here. (#194/#209.)"""
+    validated build and does not re-check params."""
     name = token.split(":")[0]
+    entry = None
     if not name:
         print(f"WARNING: malformed keyword token {token!r} — empty name", file=sys.stderr)
     elif vocab and name not in vocab:
         print(f"WARNING: keyword '{name}' is not in the governed vocab "
               f"(build/keywords.json) — rendering it verbatim", file=sys.stderr)
+    else:
+        entry = vocab.get(name)
     label = token.replace(":", " ").strip().upper()
-    return label, ""
+    reminder = compose_reminder(token, entry) if entry else ""
+    return label, reminder
 
 
 def parse_card(row, index):

@@ -28,9 +28,18 @@ type ParamKind =
   | "role"; // atk | def | either
 
 interface ParamSpec {
+  // Placeholder name referenced by a keyword's `reminder` template (e.g. a
+  // template `"...get {magnitude} to {stat}..."` binds to the params named
+  // `magnitude` and `stat`). Also emitted into build/keywords.json so the
+  // renderer can map a token's positional args onto these names.
+  name: string;
   kind: ParamKind;
   // Optional params may be omitted. Only trailing params should be optional.
   optional?: boolean;
+  // Value the reminder renderer substitutes when an optional param is omitted
+  // (e.g. `Squire` with no arg reads as "…cost 1 less AP"). Display-only — the
+  // engine does not apply it in `parseKeyword`.
+  default?: number;
 }
 
 export interface KeywordSpec {
@@ -38,35 +47,55 @@ export interface KeywordSpec {
   // Card types the engine supports this keyword on.
   cardTypes: readonly CardType[];
   params: readonly ParamSpec[];
+  // Card-facing reminder text, with `{paramName}` placeholders bound to `params`
+  // (see ParamSpec.name). The renderer composes prose by substituting the
+  // token's parsed values; this is the source of truth for that prose, kept in
+  // sync with the rules Keyword Glossary. Formatting of param values (e.g. the
+  // `all` scope → "all stats", `mission` context → "on missions") is a
+  // presentation concern the renderer applies.
+  reminder: string;
 }
 
 // The four modifier families share one parameter shape:
 //   Name:±MAG:STAT-SCOPE:CONTEXT[:ROLE]   e.g. Prowess:+2:strength:combat:def
 const FAMILY_PARAMS: readonly ParamSpec[] = [
-  { kind: "signedMagnitude" },
-  { kind: "statScope" },
-  { kind: "context" },
-  { kind: "role", optional: true },
+  { name: "magnitude", kind: "signedMagnitude" },
+  { name: "stat", kind: "statScope" },
+  { name: "context", kind: "context" },
+  { name: "role", kind: "role", optional: true },
 ];
 
 // The closed keyword vocabulary. Source of truth; keep in sync with the rules
 // Keyword Glossary.
 export const KEYWORDS: readonly KeywordSpec[] = [
-  // Modifier families (parameterized stat effects), by who they affect:
-  { name: "Prowess", cardTypes: ["unit"], params: FAMILY_PARAMS }, // self
-  { name: "Kindred", cardTypes: ["unit"], params: FAMILY_PARAMS }, // attribute-kin
-  { name: "Leader", cardTypes: ["unit"], params: FAMILY_PARAMS }, // all friendly here
-  { name: "Aura", cardTypes: ["location"], params: FAMILY_PARAMS }, // every unit here (friend + foe)
+  // Modifier families (parameterized stat effects), by who they affect. They
+  // share FAMILY_PARAMS and differ only in the scope clause of their reminder:
+  { name: "Prowess", cardTypes: ["unit"], params: FAMILY_PARAMS, // self
+    reminder: "This unit gets {magnitude} to {stat} {context}{role}." },
+  { name: "Kindred", cardTypes: ["unit"], params: FAMILY_PARAMS, // attribute-kin
+    reminder: "Friendly units sharing an attribute with this unit get {magnitude} to {stat} {context}{role}." },
+  { name: "Leader", cardTypes: ["unit"], params: FAMILY_PARAMS, // all friendly here
+    reminder: "Friendly units at this location get {magnitude} to {stat} {context}{role}." },
+  { name: "Aura", cardTypes: ["location"], params: FAMILY_PARAMS, // every unit here (friend + foe)
+    reminder: "Every unit at this location — friend or foe — gets {magnitude} to {stat} {context}{role}." },
 
   // Standalone effect keywords:
-  { name: "Untouchable", cardTypes: ["unit"], params: [{ kind: "stat" }] },
-  { name: "Berserker", cardTypes: ["unit"], params: [] },
-  { name: "Patron", cardTypes: ["unit"], params: [{ kind: "magnitude" }] },
-  { name: "Loot", cardTypes: ["unit"], params: [] },
-  { name: "Squire", cardTypes: ["unit"], params: [{ kind: "magnitude", optional: true }] },
-  { name: "Flying", cardTypes: ["item"], params: [] },
-  { name: "Heavy", cardTypes: ["item"], params: [] },
-  { name: "Lightweight", cardTypes: ["item"], params: [] },
+  { name: "Untouchable", cardTypes: ["unit"], params: [{ name: "stat", kind: "stat" }],
+    reminder: "Cannot be targeted by an Attack while this unit's {stat} exceeds the attacker's {stat}." },
+  { name: "Berserker", cardTypes: ["unit"], params: [],
+    reminder: "When this unit wins combat and would injure the loser, it injures itself and kills the loser instead." },
+  { name: "Patron", cardTypes: ["unit"], params: [{ name: "amount", kind: "magnitude" }],
+    reminder: "Cards you buy that share an attribute with this unit cost {amount} less gold." },
+  { name: "Loot", cardTypes: ["unit"], params: [],
+    reminder: "When this unit kills an enemy in combat, draw a card." },
+  { name: "Squire", cardTypes: ["unit"], params: [{ name: "amount", kind: "magnitude", optional: true, default: 1 }],
+    reminder: "Your Equip and Unequip actions cost {amount} less AP." },
+  { name: "Flying", cardTypes: ["item"], params: [],
+    reminder: "While equipped, this unit ignores blocked edges when moving." },
+  { name: "Heavy", cardTypes: ["item"], params: [],
+    reminder: "The equipped unit's Move action costs +1 AP." },
+  { name: "Lightweight", cardTypes: ["item"], params: [],
+    reminder: "The equipped unit's Move action costs 1 less AP." },
 ];
 
 const KEYWORD_BY_NAME: ReadonlyMap<string, KeywordSpec> = new Map(

@@ -25,13 +25,30 @@ _spec = importlib.util.spec_from_file_location(
 mt = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(mt)
 
-# build/keywords.json is a JSON array of {name, cardTypes}.
+# build/keywords.json is a JSON array of {name, cardTypes, params, reminder}.
+# Mirrors the real artifact shape (engine/src/keywords.ts) for the keywords these
+# tests exercise; compose_reminder binds a token's positional args to param
+# `name`/`kind` and substitutes into `reminder`.
+_FAMILY_PARAMS = [
+    {"name": "magnitude", "kind": "signedMagnitude"},
+    {"name": "stat", "kind": "statScope"},
+    {"name": "context", "kind": "context"},
+    {"name": "role", "kind": "role", "optional": True},
+]
 VOCAB_JSON = [
-    {"name": "Leader", "cardTypes": ["unit"]},
-    {"name": "Aura", "cardTypes": ["location"]},
-    {"name": "Untouchable", "cardTypes": ["unit"]},
-    {"name": "Berserker", "cardTypes": ["unit"]},
-    {"name": "Flying", "cardTypes": ["item"]},
+    {"name": "Leader", "cardTypes": ["unit"], "params": _FAMILY_PARAMS,
+     "reminder": "Friendly units at this location get {magnitude} to {stat} {context}{role}."},
+    {"name": "Aura", "cardTypes": ["location"], "params": _FAMILY_PARAMS,
+     "reminder": "Every unit at this location — friend or foe — gets {magnitude} to {stat} {context}{role}."},
+    {"name": "Untouchable", "cardTypes": ["unit"], "params": [{"name": "stat", "kind": "stat"}],
+     "reminder": "Cannot be targeted by an Attack while this unit's {stat} exceeds the attacker's {stat}."},
+    {"name": "Berserker", "cardTypes": ["unit"], "params": [],
+     "reminder": "When this unit wins combat and would injure the loser, it injures itself and kills the loser instead."},
+    {"name": "Squire", "cardTypes": ["unit"],
+     "params": [{"name": "amount", "kind": "magnitude", "optional": True, "default": 1}],
+     "reminder": "Your Equip and Unequip actions cost {amount} less AP."},
+    {"name": "Flying", "cardTypes": ["item"], "params": [],
+     "reminder": "While equipped, this unit ignores blocked edges when moving."},
 ]
 VOCAB = {k["name"]: k for k in VOCAB_JSON}
 
@@ -101,15 +118,33 @@ def test_keyword_reminder():
     print("keyword_reminder:")
     (label, reminder), err = _quiet(mt.keyword_reminder, "Leader:+1:all:combat", VOCAB)
     check("family token → structural label", label == "LEADER +1 ALL COMBAT")
-    # Intentional stub canary — reminder stays "" until prose composition (#194/#209).
-    check("family token → blank reminder (composition is a follow-up)", reminder == "")
+    check("family token → composed prose reminder",
+          reminder == "Friendly units at this location get +1 to all stats in combat.")
     check("governed keyword in a populated vocab → no warning", err == "")
 
-    label, _ = mt.keyword_reminder("Untouchable:charisma", VOCAB)
-    check("parameterised standalone → label", label == "UNTOUCHABLE CHARISMA")
+    # Specific stat + mission context + role clause all format through.
+    _, reminder = mt.keyword_reminder("Leader:+1:strength:mission:def", VOCAB)
+    check("family with role → mission/stat/role formatted",
+          reminder == "Friendly units at this location get +1 to strength on missions when defending.")
 
-    label, _ = mt.keyword_reminder("Berserker", VOCAB)
+    label, reminder = mt.keyword_reminder("Untouchable:charisma", VOCAB)
+    check("parameterised standalone → label", label == "UNTOUCHABLE CHARISMA")
+    check("parameterised standalone → reminder repeats the stat",
+          reminder == "Cannot be targeted by an Attack while this unit's charisma exceeds the attacker's charisma.")
+
+    label, reminder = mt.keyword_reminder("Berserker", VOCAB)
     check("value-less standalone → label", label == "BERSERKER")
+    check("value-less standalone → static reminder",
+          reminder == "When this unit wins combat and would injure the loser, it injures itself and kills the loser instead.")
+
+    # Omitted optional param falls back to its declared default (Squire → 1 AP).
+    _, reminder = mt.keyword_reminder("Squire", VOCAB)
+    check("omitted optional param → default substituted",
+          reminder == "Your Equip and Unequip actions cost 1 less AP.")
+
+    # A degraded/empty vocab still renders the pill but composes no reminder.
+    _, reminder = mt.keyword_reminder("Leader:+1:all:combat", {})
+    check("empty vocab → blank reminder, pill still renders", reminder == "")
 
     # Degenerate tokens: no crash, sensible label, clear signal on an empty name.
     label, _ = mt.keyword_reminder("Leader", VOCAB)

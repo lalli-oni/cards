@@ -343,12 +343,25 @@ function main() {
   // Write merged output
   writeFileSync(join(BUILD_DIR, "all.json"), JSON.stringify(allCards, null, 2));
 
-  // Emit the governed keyword vocabulary so tooling (keyword-coverage) can check
-  // coverage without duplicating the source of truth (engine/src/keywords.ts).
+  // Emit the governed keyword vocabulary so tooling (keyword-coverage) and the
+  // card renderer can consume it without duplicating the source of truth
+  // (engine/src/keywords.ts). `params` + `reminder` let the renderer compose
+  // card-facing reminder prose from a token's values; coverage reads only
+  // `name`/`cardTypes` and ignores the rest.
   writeFileSync(
     join(BUILD_DIR, "keywords.json"),
     JSON.stringify(
-      KEYWORDS.map((k) => ({ name: k.name, cardTypes: k.cardTypes })),
+      KEYWORDS.map((k) => ({
+        name: k.name,
+        cardTypes: k.cardTypes,
+        params: k.params.map((p) => ({
+          name: p.name,
+          kind: p.kind,
+          ...(p.optional ? { optional: true } : {}),
+          ...(p.default !== undefined ? { default: p.default } : {}),
+        })),
+        reminder: k.reminder,
+      })),
       null,
       2,
     ),

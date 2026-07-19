@@ -263,11 +263,48 @@ def test_event_type_chip():
     check("event_type parsed", typed["event_type"] == "Catastrophe")
     check("event_type chip drawn, uppercased",
           _rendered_text(ch, "Event Type Label") == "CATASTROPHE")
+    # The chip's contract is positional: it sits to the RIGHT of the timing badge,
+    # not overlapping it (renderer: ex = 59 + bw + 10). The text-content check above
+    # would still pass on a mis-positioned chip, so assert the geometry too.
+    tb = _shape_bounds(ch, "Timing Badge")
+    et = _shape_bounds(ch, "Event Type Badge")
+    check("event_type chip sits right of the timing badge, no overlap",
+          tb is not None and et is not None and et[0] >= tb[0] + tb[2])
+    # The chip label is a single word, so it never wraps (`_wrap_lines` only breaks
+    # on spaces) — the real invariant is that the rendered text fits inside the chip
+    # box rather than spilling past its outline. `_line_count == 1` would be vacuous.
+    check("CATASTROPHE chip text fits inside its box",
+          _text_width(ch, "Event Type Label") <= et[2])
 
     untyped = mt.parse_event({"id": "e2", "name": "E2", "timing": "instant"}, 0)
     ch2, _ = _quiet(mt.build_event_shapes, "pg", "fr", untyped, {})
+    # Rename-safe only because the positive assertion above anchors the
+    # "Event Type Label" name and would fail loudly if the shape were renamed.
     check("no event_type → no chip drawn",
           _rendered_text(ch2, "Event Type Label") is None)
+
+    # The other half of #202: the timing-badge width fix. A passive event with a
+    # duration renders the long "PASSIVE · N TURNS" badge, which must stay on one
+    # line. Assert the position-data line count — NOT _rendered_text, which joins
+    # lines with a space and so reads identically whether or not the badge wrapped.
+    passive = mt.parse_event({"id": "e3", "name": "E3", "timing": "passive",
+                              "duration": "3"}, 0)
+    ch3, _ = _quiet(mt.build_event_shapes, "pg", "fr", passive, {})
+    check("PASSIVE · N TURNS badge stays on one line",
+          _line_count(ch3, "Timing Label") == 1)
+
+    # Both halves together: a wide passive badge AND a chip. The chip's x offset
+    # depends on the badge width, so this is where the two features interact.
+    combo = mt.parse_event({"id": "e4", "name": "E4", "timing": "passive",
+                            "duration": "3", "event_type": "Prosperity"}, 0)
+    ch4, _ = _quiet(mt.build_event_shapes, "pg", "fr", combo, {})
+    check("combined: passive badge one line", _line_count(ch4, "Timing Label") == 1)
+    ctb = _shape_bounds(ch4, "Timing Badge")
+    cet = _shape_bounds(ch4, "Event Type Badge")
+    check("combined: PROSPERITY chip text fits inside its box",
+          _text_width(ch4, "Event Type Label") <= cet[2])
+    check("combined: chip clears the wide passive badge",
+          ctb is not None and cet is not None and cet[0] >= ctb[0] + ctb[2])
 
 
 def _real_vocab():
@@ -419,6 +456,39 @@ def _rendered_text(ch, name):
         o = c["obj"]
         if o.get("type") == "text" and name in o["name"]:
             return " ".join(e["text"] for e in o.get("position-data", []))
+    return None
+
+
+def _line_count(ch, name):
+    """Number of laid-out lines (position-data entries) of the first text shape whose
+    name contains `name`, or None if absent. Unlike `_rendered_text`, this detects
+    wrapping — the join in `_rendered_text` reads identically whether text wrapped."""
+    for c in ch:
+        o = c["obj"]
+        if o.get("type") == "text" and name in o["name"]:
+            return len(o.get("position-data", []))
+    return None
+
+
+def _shape_bounds(ch, name):
+    """(x, y, w, h) of the first shape whose name contains `name`, or None."""
+    for n, x, y, w, h in _bounds(ch):
+        if name in n:
+            return (x, y, w, h)
+    return None
+
+
+def _text_width(ch, name):
+    """Widest rendered line (position-data `width`) of the first text shape whose
+    name contains `name`, or None. This is the true rendered advance (CHAR_ADVANCE
+    + letter-spacing), so it can be compared against the shape's box width to catch
+    a label that spills past its container — which single-word labels do without
+    ever wrapping (`_wrap_lines` only breaks on spaces)."""
+    for c in ch:
+        o = c["obj"]
+        if o.get("type") == "text" and name in o["name"]:
+            pd = o.get("position-data", [])
+            return max((e["width"] for e in pd), default=0)
     return None
 
 

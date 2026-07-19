@@ -1,7 +1,9 @@
 # Design Principles
 
-Meta-level principles that inform game rule design. These are not rules
-themselves but guide how rules are created and evaluated.
+Meta-level principles that inform design across the game — its rules and
+mechanics, whole sets, and individual cards. These are not rules themselves but
+guide how the game is designed and evaluated. (Mechanics-design and card-craft
+principles live in the **Mechanics Design** and **Card Craft** sections below.)
 
 ## Intent
 

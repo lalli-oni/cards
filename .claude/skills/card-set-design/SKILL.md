@@ -6,25 +6,25 @@ description: Set-level design philosophy and the iteration loop for building a c
 # Card Set Design
 
 Design a **set as a whole** — the shape of the pool, the archetypes it supports,
-and the loop that moves it from rough to playable. This is the bucket-2
-methodology: distinct from crafting one card well (the `card-design` skill) and
-from designing the game's rules/mechanics (`rules/design-principles.md`).
+and the loop that moves it from rough to playable. This is distinct from
+crafting one card well (the `card-design` skill) and from designing the game's
+rules/mechanics (`rules/design-principles.md`).
 
 Load this skill and keep it in mind for the duration of a set-design session.
 
 ## Arguments
 
 - Free-form description of the set-level goal. Examples:
-  - "shape the v0.1 alpha-1 set for first playtest"
+  - "shape the alpha-1 set for first playtest"
   - "audit alpha-1 for dead archetypes"
   - "which archetypes still lack a payoff card?"
-- Optional: target set (defaults to the set under active work).
+- Optional: target set (defaults to `alpha-1`).
 
 ## Philosophy
 
 ### Playtest-appropriate > balanced
 
-The goal of an early set (e.g. v0.1) is a set that is **playable**, not one that
+The goal of an early set (e.g. alpha-1) is a set that is **playable**, not one that
 is fully tuned. Perfect balance is a moving target that only real play reveals;
 chasing it before the set is playable wastes effort on numbers that will move.
 Ship something you can play, then tune from evidence.
@@ -35,12 +35,12 @@ Represent every mechanic and archetype **before** fine-tuning any numbers. A set
 that covers its intended strategies at rough power levels is more useful than a
 half-covered set with three perfectly-tuned cards. Breadth first, then depth.
 
-### No dead archetypes — ≥2 viable win paths
+### No dead archetypes — ≥2 viable strategies
 
 Every archetype the set gestures at should have a real path to the win
 condition; an archetype with no payoff is a trap that punishes the player who
 believes the set's own signposting. Aim for **at least two** viable, distinct
-paths to victory so deckbuilding is a genuine choice, not a solved line.
+paths to accumulating VP so deckbuilding is a genuine choice, not a solved line.
 
 ### Bounded, learnable pool
 
@@ -51,7 +51,8 @@ because an archetype needs them, not to hit a count.
 
 ### Deliberate rarity distribution
 
-The common/uncommon/epic/legendary mix is a design lever, not an afterthought.
+The rarity mix (see **Rarity** in `rules/README.md`) is a design lever, not an
+afterthought.
 Commons form the backbone every deck leans on; rarer slots carry the
 build-around payoffs. Decide the intended distribution across the set and check
 the actual pool against it — skew reveals archetypes that are over- or

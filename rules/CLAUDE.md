@@ -25,7 +25,7 @@ This folder contains markdown files defining the card game rules.
 
 ## File Structure
 - `README.md` — Master design document (phases, card types, economy, variants)
-- `design-principles.md` — Meta-level design goals that guide rule design
+- `design-principles.md` — Meta-level design principles for rules/mechanics, whole sets, and individual cards
 - `attributes.md` — Closed cross-card-type attribute vocabulary
 - `stat-contests.md` — Stat contest mechanics (1v1 resolution, modifiers, distinction from stat checks)
 - `market.md` — Market and economy rules

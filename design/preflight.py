@@ -2,8 +2,8 @@
 """Preflight / doctor for the Penpot card-rendering environment.
 
 Validates that design/.env and the local Penpot stack are in a state where
-setup-template.py, compose-cards.py, and moderntrek-template.py can actually
-run. It checks the failure modes we've hit for real:
+moderntrek-template.py can actually run. It checks the failure modes we've hit
+for real:
 
   - PENPOT_SECRET_KEY missing/empty        -> backend crash-loops on startup
   - services not started                   -> connection refused / 502

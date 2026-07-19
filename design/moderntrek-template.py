@@ -42,6 +42,7 @@ from penpot import (
     make_rect, make_circle, make_text, make_frame,
     make_linear_gradient_fill, make_radial_gradient_fill, make_shadow,
     del_obj_change, _wrap_lines, CHAR_ADVANCE,
+    fit_text, _fmt_fs, MIN_FONT_SIZE,
 )
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -51,6 +52,16 @@ DEFAULT_CSV = os.path.join(SCRIPT_DIR, "..", "library", "sets", "alpha-1", "unit
 # [var:default_stat:5]; the renderer isn't variant-aware, so update this if that
 # baseline changes.
 DEFAULT_STAT = "5"
+
+
+def _warn_overflow(card_id, what):
+    """Announce that #10 overflow handling had to drop or truncate gameplay text.
+
+    The fit is intentionally lossy as a last resort, but a dropped footer row or
+    ellipsised rules line is otherwise invisible in the exported PNG — so surface
+    it on stderr (matching this file's WARNING convention) so a batch export can't
+    silently ship a card that's missing rules text."""
+    print(f"WARNING: {card_id}: {what} to fit the card frame (#10)", file=sys.stderr)
 
 # Location mission requirement keys that are stat *thresholds* ("combined stat
 # >= N across friendly units") rather than counts of units/attributes. Rendered
@@ -336,10 +347,13 @@ def parse_card(row, index):
 RULES_TOP = 520          # top of the rules-panel content
 BLOCK_X, BLOCK_W = 26, 698
 BODY_X, BODY_W = 36, 676
-BODY_LINE_H = 18         # 14px * ~1.3
+BODY_FS = 14             # nominal effect-body font size (shrunk to fit, #10)
+BODY_LINE_RATIO = 1.3    # line spacing; matches make_position_data's default
 NAME_TOP, NAMED_BODY_TOP, BARE_BODY_TOP = 6, 41, 12
 PAD_BOTTOM, BLOCK_GAP = 8, 14
 FLAVOR_Y = 876           # flavor pinned near the panel bottom
+RULES_BOTTOM_BARE = 922  # blocks may fill down to here when there's no flavor
+MAX_FLAVOR_LINES = 2     # flavor wraps up to this many lines, then truncates
 
 
 def build_shapes(page_id, frame_id, card, vocab):
@@ -417,15 +431,29 @@ def build_shapes(page_id, frame_id, card, vocab):
         label, reminder = keyword_reminder(kw, vocab)
         cursor += _keyword_pill_row(rect, text, i, label, reminder, 26, 716, cursor) + 8
 
-    # Effect blocks (action/passive) with content-driven heights
-    for i, b in enumerate(_blocks_for(card)):
-        cursor = _render_block(rect, text, i, b, cursor)
+    # Effect blocks (action/passive) with content-driven heights. Shrink the body
+    # font uniformly so the whole stack fits the panel above the flavor / ribbon;
+    # _render_block truncates any block that still overflows the hard bottom (#10).
+    blocks = _blocks_for(card)
+    rules_bottom = (FLAVOR_Y - 7 - PAD_BOTTOM) if card["flavor"] else RULES_BOTTOM_BARE
+    body_fs = _fit_block_font(blocks, rules_bottom - cursor) if blocks else BODY_FS
+    for i, b in enumerate(blocks):
+        if cursor >= rules_bottom:            # no room left above the flavor / ribbon
+            _warn_overflow(card["id"], f"{len(blocks) - i} effect block(s) dropped")
+            break
+        cursor = _render_block(rect, text, i, b, cursor, body_fs=body_fs,
+                               hard_bottom=rules_bottom, card_id=card["id"])
 
-    # Flavor (pinned near the panel bottom)
+    # Flavor (pinned near the panel bottom, up to MAX_FLAVOR_LINES then truncated)
     if card["flavor"]:
         rect("Flavor Divider", 26, FLAVOR_Y - 7, 698, 1, fills=_fill(C["lime"], 0.13))
-        text("Flavor Text", 26, FLAVOR_Y, 698, 18, f'"{card["flavor"]}"', SG, "12",
-             "400", C["muted"], style="italic")
+        fit = fit_text(f'"{card["flavor"]}"', 698, None, base_fs=12, min_fs=12,
+                       line_height=BODY_LINE_RATIO, max_lines=MAX_FLAVOR_LINES)
+        if fit["truncated"]:
+            _warn_overflow(card["id"], "flavor text truncated")
+        line_h = 12 * BODY_LINE_RATIO
+        text("Flavor Text", 26, FLAVOR_Y, 698, max(1, len(fit["lines"])) * line_h,
+             fit["text"], SG, "12", "400", C["muted"], style="italic")
 
     # 4. Stat ribbon
     rect("Stat Ribbon", 0, 938, 750, 74, fills=_fill(C["band"]))
@@ -488,15 +516,58 @@ def _blocks_for(card):
     return blocks
 
 
-def _render_block(rect, text, i, b, cursor):
-    """Render one effect block at `cursor`, return the next cursor position."""
+def _block_height(b, body_fs):
+    """Rendered height of one effect block at `body_fs` (the pre-pass measure)."""
+    body_top = NAMED_BODY_TOP if b["name"] else BARE_BODY_TOP
+    line_h = body_fs * BODY_LINE_RATIO
+    # max(1, …) mirrors _render_block, which always draws at least one body line
+    # for a non-empty body (matters only for an all-whitespace body).
+    n_lines = max(1, len(_wrap_lines(b["body"], BODY_W, body_fs, CHAR_ADVANCE))) if b["body"] else 0
+    return body_top + n_lines * line_h + PAD_BOTTOM
+
+
+def _fit_block_font(blocks, budget, base=BODY_FS, min_fs=MIN_FONT_SIZE):
+    """Largest uniform body font size (base→min_fs in 0.5px steps) whose stacked
+    blocks fit `budget` px, so all effect text on a card scales together (#10).
+    Returns min_fs when even the floor overflows — truncation then handles it."""
+    fs = float(base)
+    while fs >= min_fs - 1e-9:
+        total = sum(_block_height(b, fs) + BLOCK_GAP for b in blocks)
+        if total <= budget:
+            return fs
+        fs -= 0.5
+    return float(min_fs)
+
+
+def _render_block(rect, text, i, b, cursor, body_fs=BODY_FS, hard_bottom=None,
+                  card_id=None):
+    """Render one effect block at `cursor`, return the next cursor position.
+
+    Body text renders at `body_fs` (chosen by _fit_block_font). When `hard_bottom`
+    is set the body is fit_text'd into the space above it, so a block that would
+    otherwise collide with the flavor / stat ribbon truncates with an ellipsis
+    instead (#10)."""
     action = b["kind"] == "action"
     accent = C["lime"] if action else C["passive"]
     has_name = bool(b["name"])
     body_top = NAMED_BODY_TOP if has_name else BARE_BODY_TOP
+    line_h = body_fs * BODY_LINE_RATIO
 
-    n_lines = len(_wrap_lines(b["body"], BODY_W, 14, CHAR_ADVANCE)) if b["body"] else 0
-    block_h = body_top + n_lines * BODY_LINE_H + PAD_BOTTOM
+    body, body_size = b["body"], _fmt_fs(body_fs)
+    if body:
+        # Never hand fit_text a negative height (a prior block may have pushed the
+        # cursor down): clamp to 0 so it truncates cleanly rather than emitting a
+        # stray line into the flavor / ribbon zone below hard_bottom.
+        avail = max(0, hard_bottom - (cursor + body_top + PAD_BOTTOM)) if hard_bottom else None
+        fit = fit_text(body, BODY_W, avail, base_fs=body_fs, min_fs=body_fs,
+                       line_height=BODY_LINE_RATIO)
+        if fit["truncated"]:
+            _warn_overflow(card_id, f"effect block {i} body truncated")
+        body, body_size = fit["text"], fit["font_size"]
+        n_lines = max(1, len(fit["lines"]))
+    else:
+        n_lines = 0
+    block_h = body_top + n_lines * line_h + PAD_BOTTOM
 
     if action:
         rect(f"Block {i}", BLOCK_X, cursor, BLOCK_W, block_h,
@@ -523,7 +594,7 @@ def _render_block(rect, text, i, b, cursor):
 
     if b["body"]:
         text(f"Block {i} Body", BODY_X, cursor + body_top, BODY_W,
-             n_lines * BODY_LINE_H, b["body"], SG, "14", "400", C["text"])
+             n_lines * line_h, body, SG, body_size, "400", C["text"])
 
     return cursor + block_h + BLOCK_GAP
 
@@ -584,6 +655,9 @@ GL_L, GL_R = 59, 691           # content left / right
 GL_PAD_T, GL_PAD_B, GL_GAP = 15, 15, 11
 GL_LINE_H = 20                 # rarity/set-id line
 LOC_BODY_FS, LOC_BODY_LH = 14, 20
+LOC_TOP_MIN = 130              # footer glass may not rise above this (clears the name box)
+LOC_MAX_TOTAL = (750 - 34) - LOC_TOP_MIN
+LOC_SCALE_MIN = 0.6            # smallest body-text scale before rows are dropped
 
 
 def _draw_edge(rect, text, side, blocked):
@@ -621,25 +695,69 @@ def _draw_edge(rect, text, side, blocked):
                  grey, align="center", ls=1)
 
 
-def _loc_rows(card, vocab):
-    """Footer rows [(kind, data, height)] in order: keywords, mission, passive, action."""
+def _loc_rows(rect, text, card, vocab, scale=1.0):
+    """Footer rows as [(height, render(cursor))] in order: keywords, mission,
+    passive, action. Body prose scales by `scale` so long text fits the footer
+    without running off the top of the card (#10); keyword pills stay nominal."""
+    sfs = _scaled(LOC_BODY_FS, scale)
+    lh = sfs * (LOC_BODY_LH / LOC_BODY_FS)
     rows = []
-    for kw in card["keywords"]:
+
+    for i, kw in enumerate(card["keywords"]):
         label, reminder = keyword_reminder(kw, vocab)
         n = _kw_reminder_lines(label, reminder, GL_L, GL_R, LOC_BODY_FS)
-        rows.append(("keyword", (label, reminder), max(25, n * LOC_BODY_LH)))
+
+        def render_kw(cur, _l=label, _r=reminder, _i=i):
+            _keyword_pill_row(rect, text, _i, _l, _r, GL_L, GL_R, cur,
+                              body_fs=LOC_BODY_FS, line_h=LOC_BODY_LH)
+        rows.append((max(25, n * LOC_BODY_LH), render_kw))
+
     if card["reqs"]:
-        rows.append(("mission", card, 31))
+        def render_mission(cur):
+            text("Mission Label", GL_L, cur + 8, 60, 14, "MISSION", JB, "10",
+                 "700", C["lime"], ls=2.4)
+            cx = GL_L + 70
+            for j, (key, n) in enumerate(card["reqs"]):
+                label = f"{key} {n}" if n else key
+                w = int(len(label) * 12 * 0.62) + 20
+                rect(f"Req Chip {j}", cx, cur, w, 30, fills=_fill("#000000", 0.25),
+                     r1=4, r2=4, r3=4, r4=4, strokes=_stroke(C["lime"], 1.5))
+                text(f"Req {j}", cx, cur + 7, w, 16, label, JB, "12", "700",
+                     C["text"], align="center", ls=1.2)
+                cx += w + 8
+            if card["vp"]:
+                text("Mission VP", cx + 4, cur + 8, 130, 14, f"→ {card['vp']} VP",
+                     JB, "11", "700", C["muted"], ls=1.2)
+        rows.append((31, render_mission))
+
     if card["passive"]:
-        n = max(1, len(_wrap_lines(card["passive"], 560, LOC_BODY_FS, CHAR_ADVANCE)))
-        rows.append(("passive", card["passive"], n * LOC_BODY_LH))
+        n = max(1, len(_wrap_lines(card["passive"], 560, sfs, CHAR_ADVANCE)))
+
+        def render_passive(cur, _n=n):
+            text("Passive Label", GL_L, cur, 66, 16, "PASSIVE", JB, "10", "700",
+                 C["muted"], ls=2.4)
+            text("Passive Body", GL_L + 72, cur - 2, 560, _n * lh, card["passive"],
+                 SG, _fmt_fs(sfs), "400", C["text"])
+        rows.append((n * lh, render_passive))
+
     if card["actions"]:
         a = card["actions"][0]
         pill = f"{a['name'].upper()} · {a['ap']} AP"
         pill_w = int(len(pill) * 10 * 0.62) + 14
         body = card["text"]
-        n = max(1, len(_wrap_lines(body, GL_R - GL_L - pill_w - 12, LOC_BODY_FS, CHAR_ADVANCE))) if body else 1
-        rows.append(("action", (pill, pill_w, body), n * LOC_BODY_LH))
+        n = (max(1, len(_wrap_lines(body, GL_R - GL_L - pill_w - 12, sfs, CHAR_ADVANCE)))
+             if body else 1)
+
+        def render_action(cur, _n=n, _pill=pill, _pw=pill_w, _body=body):
+            rect("Action Pill", GL_L, cur, _pw, 17, fills=_fill(C["lime"]),
+                 r1=3, r2=3, r3=3, r4=3)
+            text("Action Tag", GL_L, cur + 3, _pw, 13, _pill, JB, "10", "800",
+                 C["card_bg"], align="center", ls=1.2)
+            if _body:
+                text("Action Body", GL_L + _pw + 12, cur - 2, GL_R - GL_L - _pw - 12,
+                     _n * lh, _body, SG, _fmt_fs(sfs), "400", C["text"])
+        rows.append((n * lh, render_action))
+
     return rows
 
 
@@ -701,55 +819,34 @@ def build_location_shapes(page_id, frame_id, card, vocab):
         text("VP Label", 635, 87, 64, 12, "VP", JB, "8", "700", C["coin_text"],
              align="center", ls=1.8)
 
-    # 5. Footer glass — content-driven height, bottom-anchored
-    rows = _loc_rows(card, vocab)
-    content_h = sum(h for _, _, h in rows) + GL_GAP * max(0, len(rows) - 1)
-    total_h = GL_PAD_T + content_h + GL_GAP + GL_LINE_H + GL_PAD_B
+    # 5. Footer glass — content-driven height, bottom-anchored. Shrink body prose
+    # (via scale) until the rows fit, cap the total so the upward-growing glass
+    # never overruns the art, then drop any overflow rows as a last resort (#10).
+    fixed_h = GL_PAD_T + GL_GAP + GL_LINE_H + GL_PAD_B
+    row_budget = LOC_MAX_TOTAL - fixed_h
+    scale = 1.0
+    while True:
+        rows = _loc_rows(rect, text, card, vocab, scale)
+        content_h = sum(h for h, _ in rows) + GL_GAP * max(0, len(rows) - 1)
+        if content_h <= row_budget or scale <= LOC_SCALE_MIN + 1e-9:
+            break
+        scale -= 0.05
+    total_h = min(fixed_h + content_h, LOC_MAX_TOTAL)
     glass_y = 750 - 34 - total_h
     rect("Footer Glass", GL_X, glass_y, GL_W, total_h, fills=_fill(C["glass"], 0.78),
          r1=10, r2=10, r3=10, r4=10, strokes=_stroke(C["hairline"], 1))
 
+    div_y = glass_y + total_h - GL_PAD_B - GL_LINE_H + 6
+    row_limit = div_y - GL_GAP
     cursor = glass_y + GL_PAD_T
-    kw_i = 0
-    for kind, data, h in rows:
-        if kind == "keyword":
-            label, reminder = data
-            _keyword_pill_row(rect, text, kw_i, label, reminder, GL_L, GL_R,
-                              cursor, body_fs=LOC_BODY_FS, line_h=LOC_BODY_LH)
-            kw_i += 1
-        elif kind == "mission":
-            text("Mission Label", GL_L, cursor + 8, 60, 14, "MISSION", JB, "10",
-                 "700", C["lime"], ls=2.4)
-            cx = GL_L + 70
-            for j, (key, n) in enumerate(data["reqs"]):
-                label = f"{key} {n}" if n else key
-                w = int(len(label) * 12 * 0.62) + 20
-                rect(f"Req Chip {j}", cx, cursor, w, 30, fills=_fill("#000000", 0.25),
-                     r1=4, r2=4, r3=4, r4=4, strokes=_stroke(C["lime"], 1.5))
-                text(f"Req {j}", cx, cursor + 7, w, 16, label, JB, "12", "700",
-                     C["text"], align="center", ls=1.2)
-                cx += w + 8
-            if data["vp"]:
-                text("Mission VP", cx + 4, cursor + 8, 130, 14, f"→ {data['vp']} VP",
-                     JB, "11", "700", C["muted"], ls=1.2)
-        elif kind == "passive":
-            text("Passive Label", GL_L, cursor, 66, 16, "PASSIVE", JB, "10", "700",
-                 C["muted"], ls=2.4)
-            text("Passive Body", GL_L + 72, cursor - 2, 560, h, data, SG, "14",
-                 "400", C["text"])
-        elif kind == "action":
-            pill, pill_w, body = data
-            rect("Action Pill", GL_L, cursor, pill_w, 17, fills=_fill(C["lime"]),
-                 r1=3, r2=3, r3=3, r4=3)
-            text("Action Tag", GL_L, cursor + 3, pill_w, 13, pill, JB, "10", "800",
-                 C["card_bg"], align="center", ls=1.2)
-            if body:
-                text("Action Body", GL_L + pill_w + 12, cursor - 2,
-                     GL_R - GL_L - pill_w - 12, h, body, SG, "14", "400", C["text"])
+    for idx, (h, render) in enumerate(rows):
+        if cursor + h > row_limit + 0.5:      # would collide with the footer line — stop
+            _warn_overflow(card["id"], f"{len(rows) - idx} footer row(s) dropped")
+            break
+        render(cursor)
         cursor += h + GL_GAP
 
     # Footer line: divider + rarity + set id
-    div_y = glass_y + total_h - GL_PAD_B - GL_LINE_H + 6
     rect("Footer Divider", GL_L, div_y, GL_R - GL_L, 1, fills=_fill(C["hairline"]))
     text("Footer Rarity", GL_L, div_y + 7, 300, 14,
          f"{RARITY_GEM.get(rarity, '◆')} {rarity.upper()}", JB, "9", "700",
@@ -853,25 +950,61 @@ def _mk_closures(page_id, frame_id, ch):
 
 # portrait Gate footer glass
 PF_L, PF_R, PF_PAD, PF_LINE = 61, 689, 16, 20
+PF_TOP_MIN = 150                 # footer glass may not rise above this (clears the name box)
+PF_MAX_TOTAL = (1050 - 38) - PF_TOP_MIN
+PF_FLAVOR_FS = 12.5
+PF_SCALE_MIN = 0.6               # smallest body-text scale before rows are dropped
 
 
-def _portrait_footer(rect, text, rows, gap, flavor, rarity, setid):
-    """rows = [(height, render(cursor))]. Draws a bottom-anchored glass box with
-    the rows, an optional flavor line, and the divider + rarity + set-id line."""
-    flav_h = 20 if flavor else 0
-    content = sum(h for h, _ in rows) + gap * max(0, len(rows) - 1)
-    total = PF_PAD + content + gap + (flav_h + gap if flavor else 0) + PF_LINE + PF_PAD
+def _scaled(nominal, scale):
+    """A nominal font size reduced by `scale`, floored at MIN_FONT_SIZE so shrink
+    never drops prose below the readability floor (#10)."""
+    return max(float(MIN_FONT_SIZE), nominal * scale)
+
+
+def _fit_rows(make_rows, gap, fixed):
+    """Pick the largest body scale (1.0 → PF_SCALE_MIN) whose rows fit the footer
+    budget, then cap the total so the bottom-anchored glass never runs off the
+    top of the card. Returns (rows, total)."""
+    budget = PF_MAX_TOTAL - fixed
+    scale = 1.0
+    while True:
+        rows = make_rows(scale)
+        content = sum(h for h, _ in rows) + gap * max(0, len(rows) - 1)
+        if content <= budget or scale <= PF_SCALE_MIN + 1e-9:
+            break
+        scale -= 0.05
+    return rows, min(fixed + content, PF_MAX_TOTAL)
+
+
+def _portrait_footer(rect, text, make_rows, gap, flavor, rarity, setid, card_id=None):
+    """make_rows(scale) -> [(height, render(cursor))]. Draws a bottom-anchored
+    glass box whose body text shrinks (via scale) to fit, then drops overflow
+    rows as a last resort, so long text never runs past the card frame (#10)."""
+    flav = (fit_text(f'"{flavor}"', PF_R - PF_L, None, base_fs=PF_FLAVOR_FS,
+                     min_fs=PF_FLAVOR_FS, line_height=BODY_LINE_RATIO,
+                     max_lines=MAX_FLAVOR_LINES) if flavor else None)
+    if flav and flav["truncated"]:
+        _warn_overflow(card_id, "flavor text truncated")
+    flav_h = max(1, len(flav["lines"])) * PF_FLAVOR_FS * BODY_LINE_RATIO if flav else 0
+    fixed = PF_PAD + gap + (flav_h + gap if flavor else 0) + PF_LINE + PF_PAD
+    rows, total = _fit_rows(make_rows, gap, fixed)
     gy = 1050 - 38 - total
+
     rect("Footer Glass", 40, gy, 670, total, fills=_fill(C["glass"], 0.78),
          r1=10, r2=10, r3=10, r4=10, strokes=_stroke(C["hairline"], 1))
+    div_y = gy + total - PF_PAD - PF_LINE + 6
+    row_limit = div_y - gap - (flav_h + gap if flavor else 0)
     cur = gy + PF_PAD
-    for h, render in rows:
+    for idx, (h, render) in enumerate(rows):
+        if cur + h > row_limit + 0.5:      # would collide with flavor/divider — stop
+            _warn_overflow(card_id, f"{len(rows) - idx} footer row(s) dropped")
+            break
         render(cur)
         cur += h + gap
-    if flavor:
-        text("Flavor", PF_L, cur, PF_R - PF_L, 20, f'"{flavor}"', SG, "12.5",
-             "400", C["muted"], style="italic")
-    div_y = gy + total - PF_PAD - PF_LINE + 6
+    if flav:
+        text("Flavor", PF_L, div_y - gap - flav_h, PF_R - PF_L, flav_h, flav["text"],
+             SG, _fmt_fs(PF_FLAVOR_FS), "400", C["muted"], style="italic")
     rect("Footer Divider", PF_L, div_y, PF_R - PF_L, 1, fills=_fill(C["hairline"]))
     text("Footer Rarity", PF_L, div_y + 7, 300, 14,
          f"{RARITY_GEM.get(rarity, '◆')} {rarity.upper()}", JB, "9", "700",
@@ -910,18 +1043,21 @@ def build_item_shapes(page_id, frame_id, card, vocab):
          JB, "11", "600", C["muted"], ls=2.4)
     _cost_box(rect, circle, text, card["cost"])
 
-    def mode(idx, label, color, body):
-        n = _wrapc(body, 560)
-        h = max(34, 18 + n * 22)
+    def mode(idx, label, color, body, scale):
+        sfs = _scaled(15, scale)
+        lh = sfs * (22 / 15)               # preserves the nominal 22px @ 15px spacing
+        n = _wrapc(body, 560, sfs)
+        h = max(34, 18 + n * lh)
 
         def render(cur):
             rect(f"Mode {idx} Box", 61, cur, 34, 34, fills=_fill("#000000", 0.25),
                  r1=8, r2=8, r3=8, r4=8, strokes=_stroke(color, 1.5))
             text(f"Mode {idx} Label", 106, cur, 400, 13, label, JB, "10", "700", color, ls=2.4)
-            text(f"Mode {idx} Body", 106, cur + 18, 560, n * 22, body, SG, "15", "400", C["text"])
+            text(f"Mode {idx} Body", 106, cur + 18, 560, n * lh, body, SG, _fmt_fs(sfs),
+                 "400", C["text"])
         return (h, render)
 
-    def action(idx, a):
+    def action(idx, a, scale):
         pill = f"{a['name'].upper()} · {a['ap']} AP"
         pw = int(len(pill) * 12 * 0.62) + 20
         # item action effects are DSL tokens (unlike policies' prose); the card's
@@ -929,16 +1065,18 @@ def build_item_shapes(page_id, frame_id, card, vocab):
         # the first pill and fall back to each later action's own effect token —
         # otherwise a multi-action item would repeat the same summary per pill.
         body = card["text"] if idx == 0 else a["body"]
-        n = _wrapc(body, PF_R - PF_L - pw - 12, 16) if body else 1
-        h = max(23, n * 24)
+        sfs = _scaled(16, scale)
+        lh = sfs * 1.5
+        n = _wrapc(body, PF_R - PF_L - pw - 12, sfs) if body else 1
+        h = max(23, n * lh)
 
         def render(cur):
             rect(f"Act {idx} Pill", 61, cur, pw, 23, fills=_fill(C["lime"]), r1=3, r2=3, r3=3, r4=3)
             text(f"Act {idx} Tag", 61, cur + 5, pw, 15, pill, JB, "12", "800", C["card_bg"],
                  align="center", ls=1.2)
             if body:
-                text(f"Act {idx} Body", 61 + pw + 12, cur, PF_R - 61 - pw - 12, n * 24,
-                     body, SG, "16", "400", C["text"])
+                text(f"Act {idx} Body", 61 + pw + 12, cur, PF_R - 61 - pw - 12, n * lh,
+                     body, SG, _fmt_fs(sfs), "400", C["text"])
         return (h, render)
 
     def kw_row(idx, label, reminder):
@@ -946,19 +1084,21 @@ def build_item_shapes(page_id, frame_id, card, vocab):
         return (h, lambda cur: _keyword_pill_row(rect, text, idx, label, reminder,
                                                  61, PF_R, cur, body_fs=15, line_h=22))
 
-    rows = []
-    for i, kw in enumerate(card["keywords"]):
-        label, reminder = keyword_reminder(kw, vocab)
-        rows.append(kw_row(i, label, reminder))
-    if card["equip"]:
-        rows.append(mode(0, "EQUIP — ON A UNIT", C["lime"], card["equip"]))
-    if card["stored"]:
-        rows.append(mode(1, "STORED — AT A LOCATION", C["muted"], card["stored"]))
-    for i, a in enumerate(card["actions"]):
-        rows.append(action(i, a))
+    kws = [keyword_reminder(kw, vocab) for kw in card["keywords"]]
+
+    def make_rows(scale):
+        rows = [kw_row(i, label, reminder) for i, (label, reminder) in enumerate(kws)]
+        if card["equip"]:
+            rows.append(mode(0, "EQUIP — ON A UNIT", C["lime"], card["equip"], scale))
+        if card["stored"]:
+            rows.append(mode(1, "STORED — AT A LOCATION", C["muted"], card["stored"], scale))
+        rows += [action(i, a, scale) for i, a in enumerate(card["actions"])]
+        return rows
+
     setid = (f"ITEM · {card['type'].upper().replace(';', ' · ')} // "
              f"{card['set'].upper()} · {card['number']}")
-    _portrait_footer(rect, text, rows, 13, card["flavor"], card["rarity"], setid)
+    _portrait_footer(rect, text, make_rows, 13, card["flavor"], card["rarity"], setid,
+                     card_id=card["id"])
     return ch
 
 
@@ -986,26 +1126,32 @@ def build_event_shapes(page_id, frame_id, card, vocab):
         rect("Timing Badge", 59, 92, bw, 28, fills=_fill(accent), r1=4, r2=4, r3=4, r4=4)
         text("Timing Label", 59, 96, bw, 18, badge, JB, "11", "800", C["card_bg"], align="center", ls=2.2)
 
-    rows = []
-    if timing == "trap" and card["trigger"]:
+    def r_trig_row(scale):
         trig = card["trigger"].replace("_", " ").strip().capitalize()
-        n = _wrapc(trig, PF_R - 127, 14)
-        h = max(16, n * 20)
+        sfs = _scaled(14, scale)
+        lh = sfs * 1.43
+        n = _wrapc(trig, PF_R - 127, sfs)
+        h = max(16, n * lh)
 
-        def r_trig(cur, _n=n):
+        def render(cur):
             text("Trigger Label", 61, cur, 66, 14, "TRIGGER", JB, "10", "700", accent, ls=2.2)
-            text("Trigger Body", 127, cur - 2, PF_R - 127, _n * 20, trig, SG, "14", "400",
-                 C["text"], style="italic")
-        rows.append((h, r_trig))
-    if card["text"]:
-        n = _wrapc(card["text"], PF_R - PF_L, 16)
-        h = n * 25
+            text("Trigger Body", 127, cur - 2, PF_R - 127, n * lh, trig, SG, _fmt_fs(sfs),
+                 "400", C["text"], style="italic")
+        return (h, render)
 
-        def r_rules(cur, _n=n, _h=h):
-            text("Rules Text", 61, cur, PF_R - PF_L, _h, card["text"], SG, "16", "400", C["text"])
-        rows.append((h, r_rules))
-    if card["attributes"]:
-        def r_attrs(cur):
+    def r_rules_row(scale):
+        sfs = _scaled(16, scale)
+        lh = sfs * 1.5625
+        n = _wrapc(card["text"], PF_R - PF_L, sfs)
+        h = n * lh
+
+        def render(cur):
+            text("Rules Text", 61, cur, PF_R - PF_L, n * lh, card["text"], SG, _fmt_fs(sfs),
+                 "400", C["text"])
+        return (h, render)
+
+    def r_attrs_row():
+        def render(cur):
             cx = 61
             for j, at in enumerate(card["attributes"]):
                 w = int(len(at) * 11 * 0.62) + 24
@@ -1014,10 +1160,21 @@ def build_event_shapes(page_id, frame_id, card, vocab):
                 text(f"Attr {j}", cx, cur + 6, w, 15, at.upper(), JB, "11", "600",
                      C["text"], align="center", ls=1.6)
                 cx += w + 8
-        rows.append((27, r_attrs))
+        return (27, render)
+
+    def make_rows(scale):
+        rows = []
+        if timing == "trap" and card["trigger"]:
+            rows.append(r_trig_row(scale))
+        if card["text"]:
+            rows.append(r_rules_row(scale))
+        if card["attributes"]:
+            rows.append(r_attrs_row())
+        return rows
 
     setid = f"EVENT · {timing.upper()} // {card['set'].upper()} · {card['number']}"
-    _portrait_footer(rect, text, rows, 10, card["flavor"], card["rarity"], setid)
+    _portrait_footer(rect, text, make_rows, 10, card["flavor"], card["rarity"], setid,
+                     card_id=card["id"])
     return ch
 
 
@@ -1038,40 +1195,47 @@ def build_policy_shapes(page_id, frame_id, card, vocab):
          (card["attribute"].upper() if card["attribute"] else "ANY"), JB, "9", "700",
          C["lime"], align="center", ls=1.4)
 
-    def labeled(idx, label, color, body):
-        n = _wrapc(body, 513, 18)
-        h = max(20, n * 27)
+    def labeled(idx, label, color, body, scale):
+        sfs = _scaled(18, scale)
+        lh = sfs * 1.5
+        n = _wrapc(body, 513, sfs)
+        h = max(20, n * lh)
 
         def render(cur):
             text(f"LB {idx} Label", 61, cur + 3, 104, 18, label, JB, "12", "700", color, ls=2.2)
-            text(f"LB {idx} Body", 176, cur, 513, n * 27, body, SG, "18", "400", C["text"])
+            text(f"LB {idx} Body", 176, cur, 513, n * lh, body, SG, _fmt_fs(sfs), "400", C["text"])
         return (h, render)
 
-    def action(idx, a):
+    def action(idx, a, scale):
         pill = f"{a['name'].upper()} · {a['ap']} AP"
         pw = int(len(pill) * 12 * 0.62) + 20
         bx = 61 + pw + 12               # body follows the pill, not a fixed x
-        n = _wrapc(a["body"], PF_R - bx, 17) if a["body"] else 1
-        h = max(24, n * 25)
+        sfs = _scaled(17, scale)
+        lh = sfs * 1.47
+        n = _wrapc(a["body"], PF_R - bx, sfs) if a["body"] else 1
+        h = max(24, n * lh)
 
         def render(cur):
             rect(f"PAct {idx} Pill", 61, cur, pw, 24, fills=_fill(C["lime"]), r1=3, r2=3, r3=3, r4=3)
             text(f"PAct {idx} Tag", 61, cur + 5, pw, 15, pill, JB, "12", "800", C["card_bg"],
                  align="center", ls=1.2)
             if a["body"]:
-                text(f"PAct {idx} Body", bx, cur, PF_R - bx, n * 25, a["body"], SG, "17",
+                text(f"PAct {idx} Body", bx, cur, PF_R - bx, n * lh, a["body"], SG, _fmt_fs(sfs),
                      "400", C["text"])
         return (h, render)
 
-    rows = []
-    if card["effect"]:
-        rows.append(labeled(0, "DOCTRINE", C["lime"], card["effect"]))
-    if card["seeding"]:
-        rows.append(labeled(1, "SEEDING", C["muted"], card["seeding"]))
-    for i, a in enumerate(card["actions"]):
-        rows.append(action(i, a))
+    def make_rows(scale):
+        rows = []
+        if card["effect"]:
+            rows.append(labeled(0, "DOCTRINE", C["lime"], card["effect"], scale))
+        if card["seeding"]:
+            rows.append(labeled(1, "SEEDING", C["muted"], card["seeding"], scale))
+        rows += [action(i, a, scale) for i, a in enumerate(card["actions"])]
+        return rows
+
     setid = f"POLICY // {card['set'].upper()} · {card['number']}"
-    _portrait_footer(rect, text, rows, 12, card["flavor"], card["rarity"], setid)
+    _portrait_footer(rect, text, make_rows, 12, card["flavor"], card["rarity"], setid,
+                     card_id=card["id"])
     return ch
 
 

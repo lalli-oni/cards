@@ -347,10 +347,147 @@ def test_keyword_pill_row():
           any("KW Reminder" in str(a) for _, a in calls))
 
 
+def test_block_fitting():
+    """#10 unit overflow: _fit_block_font shrinks a uniform body size before any
+    truncation, and _render_block ellipsises a block that still overflows the
+    hard bottom rather than colliding with the flavor / stat ribbon."""
+    print("unit block fitting:")
+    from penpot import ELLIPSIS
+
+    long_body = "Deal three damage to a chosen enemy unit and draw a card. " * 6
+    blocks = [{"kind": "action", "name": "strike", "ap": "2", "body": long_body}]
+
+    # Loose budget keeps the nominal size; a tight one shrinks toward the floor.
+    check("loose budget → keeps nominal body size",
+          mt._fit_block_font(blocks, 400) == mt.BODY_FS)
+    tight = mt._fit_block_font(blocks, 120)
+    check("tight budget → shrinks below nominal", tight < mt.BODY_FS)
+    check("tight budget → not below the floor", tight >= mt.MIN_FONT_SIZE)
+    check("impossible budget → clamps at the floor",
+          mt._fit_block_font(blocks, 40) == float(mt.MIN_FONT_SIZE))
+
+    # A block rendered into a tiny space above hard_bottom truncates its body.
+    calls = []
+    fake_rect = lambda *a, **k: None
+    fake_text = lambda *a, **k: calls.append(a)
+    mt._render_block(fake_rect, fake_text, 0, blocks[0], 800,
+                     body_fs=mt.MIN_FONT_SIZE, hard_bottom=860)
+    body_calls = [a for a in calls if "Body" in a[0]]
+    check("overflowing block → body still drawn", len(body_calls) == 1)
+    check("overflowing block → body truncated with ellipsis",
+          _text_arg(body_calls[0], "content").endswith(ELLIPSIS))
+
+
+# text() positional-arg order (build_shapes' text(name, x, y, w, h, content, …)),
+# so tests can read a captured call by role instead of a bare magic index.
+_TEXT_ARGS = {"name": 0, "x": 1, "y": 2, "w": 3, "h": 4, "content": 5, "size": 7}
+
+
+def _text_arg(call, role):
+    return call[_TEXT_ARGS[role]]
+
+
+def _bounds(ch):
+    """Yield (name, x, y, w, h) for every shape a builder emitted."""
+    for c in ch:
+        o = c["obj"]
+        yield o["name"], o["x"], o["y"], o["width"], o["height"]
+
+
+def _rendered_text(ch, name):
+    """Concatenated visual text of the first text shape whose name contains `name`
+    (reconstructed from its position-data lines), or None if absent."""
+    for c in ch:
+        o = c["obj"]
+        if o.get("type") == "text" and name in o["name"]:
+            return " ".join(e["text"] for e in o.get("position-data", []))
+    return None
+
+
+def test_overflow_containment():
+    """#10 end-to-end: build each card type from deliberately huge text and
+    assert no shape escapes the fixed card frame — the whole point of the fit."""
+    print("overflow containment (all types):")
+    giant = "This card unleashes a devastating cascade of effects on resolution. " * 40
+    giant2 = "Every adjacent location suffers compounding penalties each turn. " * 40
+
+    cases = [
+        ("unit", 1050, mt.parse_card, {
+            "id": "s-u", "name": "Stress Unit", "strength": "5", "cunning": "5",
+            "charisma": "5", "text": giant, "passives": "Overload:" + giant2,
+            "flavor": giant}),
+        ("location", 750, mt.parse_location, {
+            "id": "s-l", "name": "Stress Loc", "mission": "strength_15;knowledge_2>3",
+            "passive": giant, "actions": "survey:2:scout", "text": giant2}),
+        ("item", 1050, mt.parse_item, {
+            "id": "s-i", "name": "Stress Item", "type": "WEAPON", "equip": giant,
+            "stored": giant2, "text": giant, "actions": "strike:2:deal", "flavor": giant2}),
+        ("event", 1050, mt.parse_event, {
+            "id": "s-e", "name": "Stress Event", "timing": "trap",
+            "trigger": "when an enemy enters " * 20, "text": giant,
+            "attributes": "war;trade", "flavor": giant2}),
+        ("policy", 1050, mt.parse_policy, {
+            "id": "s-p", "name": "Stress Policy", "attributes": "war", "effect": giant,
+            "seeding_effect": giant2, "actions": "enact:1:apply", "flavor": giant}),
+    ]
+    build = {"unit": mt.build_shapes, "location": mt.build_location_shapes,
+             "item": mt.build_item_shapes, "event": mt.build_event_shapes,
+             "policy": mt.build_policy_shapes}
+
+    # The highest-priority body row that must survive the fit on each type, and the
+    # source text it renders — so we assert content is *preserved*, not just that the
+    # geometry stays in-frame (a regression dropping ALL text would pass that alone).
+    body_probe = {
+        # unit has no actions here, so block 0 is the "Overload" passive (giant2).
+        "unit": ("Block 0 Body", giant2),
+        "location": ("Passive Body", giant),
+        "item": ("Mode 0 Body", giant),
+        "event": ("Rules Text", giant),
+        "policy": ("LB 0 Body", giant),
+    }
+
+    for kind, card_h, parse, row in cases:
+        card = parse(row, 0)
+        ch, _ = _quiet(build[kind], "pg", "fr", card, {})
+        # Compass edge labels are fixed decorations placed just outside the frame
+        # by design (pre-#10); the fit only governs footer/rules content shapes.
+        offenders = [(n, y, h) for n, x, y, w, h in _bounds(ch)
+                     if not n.startswith("Edge ")
+                     and (y < -0.5 or y + h > card_h + 1.0 or x < -0.5 or x + w > 750 + 1.0)]
+        check(f"{kind}: giant text → every shape within the {card_h}px frame",
+              not offenders)
+        if offenders:
+            print(f"      offenders: {offenders[:4]}")
+
+        # Content preservation: the top-priority body is still drawn, and what
+        # survived is a leading slice of the source (ellipsis/space trimmed), i.e.
+        # the fit truncated rather than dropped or garbled it.
+        name, src = body_probe[kind]
+        rendered = _rendered_text(ch, name)
+        check(f"{kind}: highest-priority body survives the fit", bool(rendered))
+        if rendered:
+            kept = rendered.rstrip("… ").strip()
+            check(f"{kind}: surviving body text is a prefix of the source",
+                  bool(kept) and src.startswith(kept))
+
+        glass = [(y, h) for n, x, y, w, h in _bounds(ch) if "Footer Glass" in n]
+        if kind == "unit":
+            check("unit: no footer glass (uses the stat ribbon)", not glass)
+        else:
+            # assert presence first, so a shape rename fails loudly instead of
+            # vacuously skipping the on-card bounds check.
+            check(f"{kind}: footer glass shape present", bool(glass))
+            gy, gh = glass[0]
+            check(f"{kind}: footer glass stays on-card (top {gy:.0f})",
+                  gy >= 0 and gy + gh <= card_h + 1.0)
+
+
 if __name__ == "__main__":
     test_load_keyword_vocab()
     test_keyword_reminder()
     test_passives_and_blocks()
+    test_block_fitting()
+    test_overflow_containment()
     test_nonunit_keywords()
     test_real_vocab_reminders()
     test_compose_reminder_degradation()

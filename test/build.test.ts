@@ -1,7 +1,9 @@
-import { describe, expect, test } from "bun:test";
-import { readFileSync } from "fs";
+import { afterAll, describe, expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync, readFileSync } from "fs";
+import { tmpdir } from "os";
 import { join } from "path";
 import {
+  buildSet,
   transformCard,
   validate,
   type CardType,
@@ -139,5 +141,61 @@ describe("build validation — cost is a numeric gold amount", () => {
   test("rejects when any alternative-cost option is non-numeric", () => {
     const errors = check("units", { cost: "4|X", attributes: "Military" });
     expect(errors.some((e) => e.field === "cost")).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Structured warnings channel (#213)
+//
+// Non-failing build notices (e.g. a missing per-type CSV) return via
+// `buildSet().warnings` instead of a bare `console.warn`, so they can be
+// surfaced in the summary and asserted on here. Errors stay in `.errors`.
+// ---------------------------------------------------------------------------
+describe("build warnings — structured non-failing channel", () => {
+  const fixtureRoot: string = mkdtempSync(join(tmpdir(), "cards-buildset-"));
+  afterAll(() => rmSync(fixtureRoot, { recursive: true, force: true }));
+
+  /** Write a fixture set with only the given card-type CSVs present. */
+  function makeSet(name: string, csvs: Partial<Record<CardType, string>>): void {
+    const dir: string = join(fixtureRoot, name);
+    mkdirSync(dir, { recursive: true });
+    for (const [type, body] of Object.entries(csvs)) {
+      writeFileSync(join(dir, `${type}.csv`), body);
+    }
+  }
+
+  const UNIT_CSV: string =
+    "id,name,set,rarity,cost,keywords,attributes,strength,cunning,charisma,actions\n" +
+    "warn-unit,Warn Unit,warn-set,common,3,,Military,2,1,1,\n";
+
+  test("emits a warning per missing card-type CSV, without erroring", () => {
+    // Only units.csv present → the other four types warn but don't fail.
+    makeSet("warn-set", { units: UNIT_CSV });
+    const { cards, errors, warnings } = buildSet("warn-set", fixtureRoot);
+
+    expect(cards.length).toBe(1);
+    expect(errors).toEqual([]);
+    expect(warnings.map((w) => w.field).sort()).toEqual([
+      "events",
+      "items",
+      "locations",
+      "policies",
+    ]);
+    for (const w of warnings) {
+      expect(w.card).toBe("warn-set");
+      expect(w.message).toContain("not found");
+    }
+  });
+
+  test("no warnings when every card-type CSV is present", () => {
+    makeSet("full-set", {
+      units: UNIT_CSV,
+      locations: "id,name,set,rarity,cost,keywords,attributes,location_type\n",
+      items: "id,name,set,rarity,cost,keywords,attributes,type\n",
+      events: "id,name,set,rarity,cost,keywords,attributes,timing\n",
+      policies: "id,name,set,rarity,cost,keywords,attributes,effect\n",
+    });
+    const { warnings } = buildSet("full-set", fixtureRoot);
+    expect(warnings).toEqual([]);
   });
 });

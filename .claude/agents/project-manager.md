@@ -135,7 +135,7 @@ Milestones answer "what's in this release." Labels answer "what kind of work is 
 - Assign to milestone only if strictly needed. Ask: "can we reach this milestone without this?"
 - Issues not assigned to a milestone are backlog.
 - Don't create future milestones prematurely — triage when the current one nears completion.
-- Each milestone should have a pinned tracking issue with a grouped checklist and dependency order. Pin via GitHub web UI. Structure: sections by workstream, `- [ ] #N — description` checklist items, and an ASCII or text dependency diagram at the bottom.
+- Each milestone should have a pinned tracking issue with a grouped checklist and dependency order. Pin via GitHub web UI. Structure: **sections by area label** (`engine`/`client`/`rules`/`visuals`/`tooling`/`cards`) so the roadmap and the routing taxonomy share one vocabulary — do NOT invent per-milestone "workstream" bucket names that don't map to labels (that pollutes context with terms that only approximately match). Then `- [ ] #N — description` checklist items under each, and an ASCII or text dependency diagram at the bottom. Cross-area coupling (e.g. the keyword→build→render hot files) is tracked by the CLAUDE.md "Branching & WIP discipline" guard, not by a roadmap section.
 
 ```bash
 # List milestones (returns open only; add ?state=all for closed)
@@ -180,6 +180,25 @@ When noting dependencies, comment on the blocked issue linking to the blocker:
 ```
 gh issue comment <number> -b "Blocked by #<blocker>"
 ```
+
+### Concurrency & branch hygiene
+Overlapping long-lived branches colliding on the same files are this project's main source of rework — PRs reintroducing or clobbering each other, and the same issue implemented twice. This extends the **Issue Grouping** rule above (group by area label) to the branch/PR level. When giving a status report or recommending what to work on next, actively check for and flag:
+
+- **Multiple open PRs sharing an area label** — the primary grouping. Recommend sequencing (which lands first, which rebases onto it) rather than parallel branches on one area.
+- **Multiple open PRs touching the same cross-area hot file** — label-grouping misses these because the work spans labels. Watch `library/build.ts`, `engine/src/keywords.ts`, `engine/src/types.ts`, and the render pipeline especially.
+  ```bash
+  gh pr list --state open --json number,title,headRefName --jq '.[] | "\(.number) \(.headRefName)"'
+  gh pr diff <number> --name-only   # files a PR touches — look for shared hot files
+  ```
+- **An issue with more than one branch or PR** — duplicate-implementation signal. Surface it rather than green-lighting a second attempt.
+  ```bash
+  gh pr list --state all --search "<issue#> in:title" --json number,state,headRefName
+  git branch -a --list '*<issue#>*'
+  ```
+- **Before recommending `start-task` on an issue, verify no branch/PR already exists for it** (commands above).
+- **Stale branches, abandoned PRs, lingering worktrees** — recommend `/cleanup` and closing abandoned PRs promptly, so "is this merged?" never becomes ambiguous.
+
+See CLAUDE.md → "Branching & WIP discipline" for the underlying convention. You flag violations and recommend sequencing; you don't enforce — the user decides.
 
 ## Output Style
 - Concise, scannable — use tables and bullet points

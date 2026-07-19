@@ -7,6 +7,11 @@ description: Design new cards with real-world historical references, balanced st
 
 Design cards that are historically grounded, mechanically sound, and fun to play.
 
+> The canonical card-craft principles — **No Dominated / Feel-Bad Cards** and
+> **Synergy with Counterplay** — live in the **Card Craft** section of
+> `rules/design-principles.md`. This skill applies them to concrete card designs
+> rather than restating them.
+
 ## Arguments
 - Free-form description of what cards to design. Examples:
   - "5 common units for alpha-1"

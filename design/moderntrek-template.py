@@ -197,11 +197,28 @@ def compose_reminder(token, entry):
     return " ".join(text.split())
 
 
+def _pill_label(token, entry):
+    """The keyword pill's short label: NAME plus its primary *value* only — the
+    first magnitude-like param (`PROWESS +2`, `LEADER +1`, `PATRON 1`). Stat /
+    context / role params are dropped (the reminder prose carries them), and
+    value-less keywords are just the name (`BERSERKER`, `UNTOUCHABLE`). Without a
+    vocab entry (unknown keyword / degraded vocab) we can't tell which arg is the
+    value, so fall back to the verbatim structural token."""
+    if not entry:
+        return token.replace(":", " ").strip().upper()
+    parts = token.split(":")
+    name, args = parts[0], parts[1:]
+    for i, p in enumerate(entry.get("params", [])):
+        if p.get("kind") in ("signedMagnitude", "magnitude") and i < len(args) and args[i]:
+            return f"{name} {args[i]}".upper()
+    return name.upper()
+
+
 def keyword_reminder(token, vocab):
     """Split a `keywords` token into (pill_label, reminder). Handles the family
     grammar (`Leader:+1:all:combat`, `Untouchable:charisma`) and value-less
-    standalones (`Berserker`): the pill label is a structural rendering of the
-    token's parts; the reminder is card-facing prose composed from the governed
+    standalones (`Berserker`): the pill label is NAME + primary value (see
+    _pill_label); the reminder is card-facing prose composed from the governed
     vocab's template (see compose_reminder). Warns on a name outside the governed
     vocab (skipped when the vocab is empty/degraded — reminder is then blank but
     the pill still renders). Never raises. Param/arity validation lives in the
@@ -216,7 +233,7 @@ def keyword_reminder(token, vocab):
               f"(build/keywords.json) — rendering it verbatim", file=sys.stderr)
     else:
         entry = vocab.get(name)
-    label = token.replace(":", " ").strip().upper()
+    label = _pill_label(token, entry)
     reminder = compose_reminder(token, entry) if entry else ""
     return label, reminder
 

@@ -117,10 +117,14 @@ def test_load_keyword_vocab():
 def test_keyword_reminder():
     print("keyword_reminder:")
     (label, reminder), err = _quiet(mt.keyword_reminder, "Leader:+1:all:combat", VOCAB)
-    check("family token → structural label", label == "LEADER +1 ALL COMBAT")
+    check("family token → name + primary value pill", label == "LEADER +1")
     check("family token → composed prose reminder",
           reminder == "Friendly units at this location get +1 to all stats in combat.")
     check("governed keyword in a populated vocab → no warning", err == "")
+
+    # Pill shows only the magnitude value; stat/context/role live in the reminder.
+    label, _ = mt.keyword_reminder("Aura:-1:all:combat", VOCAB)
+    check("family pill drops stat/context, keeps signed magnitude", label == "AURA -1")
 
     # Specific stat + mission context + role clause all format through.
     _, reminder = mt.keyword_reminder("Leader:+1:strength:mission:def", VOCAB)
@@ -128,7 +132,8 @@ def test_keyword_reminder():
           reminder == "Friendly units at this location get +1 to strength on missions when defending.")
 
     label, reminder = mt.keyword_reminder("Untouchable:charisma", VOCAB)
-    check("parameterised standalone → label", label == "UNTOUCHABLE CHARISMA")
+    check("stat-param standalone → name-only pill (stat is not a value)",
+          label == "UNTOUCHABLE")
     check("parameterised standalone → reminder repeats the stat",
           reminder == "Cannot be targeted by an Attack while this unit's charisma exceeds the attacker's charisma.")
 
@@ -138,9 +143,12 @@ def test_keyword_reminder():
           reminder == "When this unit wins combat and would injure the loser, it injures itself and kills the loser instead.")
 
     # Omitted optional param falls back to its declared default (Squire → 1 AP).
-    _, reminder = mt.keyword_reminder("Squire", VOCAB)
+    label, reminder = mt.keyword_reminder("Squire", VOCAB)
+    check("bare optional-magnitude → name-only pill", label == "SQUIRE")
     check("omitted optional param → default substituted",
           reminder == "Your Equip and Unequip actions cost 1 less AP.")
+    label, _ = mt.keyword_reminder("Squire:2", VOCAB)
+    check("optional-magnitude with value → name + value pill", label == "SQUIRE 2")
 
     # A degraded/empty vocab still renders the pill but composes no reminder.
     _, reminder = mt.keyword_reminder("Leader:+1:all:combat", {})

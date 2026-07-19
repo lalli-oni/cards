@@ -104,14 +104,19 @@ function parseAction(raw: string): { name: string; apCost: number; effect: strin
 
 // A named passive ability: `name:effect`. Unlike an action there is no AP cost
 // and `effect` is human-readable prose (not DSL), so we split on the first colon
-// only and keep the rest verbatim. Drops (returns null) a nameless or
-// colon-less token, mirroring parseAction's tolerance.
-function parsePassive(raw: string): { name: string; effect: string } | null {
+// only and keep the rest verbatim. Drops (returns null) any nameless, effectless,
+// or colon-less token — and warns, since the build is the CSV validation gate and
+// a silently-vanished passive is a data bug. The Python renderer's parse_card
+// applies the same tolerance (name and effect both required) so build-time and
+// render-time agree on which tokens are valid.
+function parsePassive(raw: string, cardId: string): { name: string; effect: string } | null {
   const idx = raw.indexOf(":");
-  if (idx <= 0) return null;
-  const name = raw.slice(0, idx).trim();
-  const effect = raw.slice(idx + 1).trim();
-  if (!name || !effect) return null;
+  const name = idx > 0 ? raw.slice(0, idx).trim() : "";
+  const effect = idx > 0 ? raw.slice(idx + 1).trim() : "";
+  if (!name || !effect) {
+    console.warn(`  [${cardId}] passive "${raw}" is not name:effect — skipping`);
+    return null;
+  }
   return { name, effect };
 }
 
@@ -147,7 +152,7 @@ export function transformCard(type: CardType, raw: Record<string, string>): Reco
       base.cunning = intOrNull(raw.cunning);
       base.charisma = intOrNull(raw.charisma);
       base.actions = splitList(raw.actions || "").map(parseAction).filter(Boolean);
-      base.passives = splitList(raw.passives || "").map(parsePassive).filter(Boolean);
+      base.passives = splitList(raw.passives || "").map((p) => parsePassive(p, raw.id)).filter(Boolean);
       break;
 
     case "locations":

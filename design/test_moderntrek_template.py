@@ -14,6 +14,7 @@ import importlib.util
 import io
 import json
 import os
+import subprocess
 import sys
 import tempfile
 
@@ -190,6 +191,12 @@ def test_passives_and_blocks():
     check("parse_card → colon-less passive skipped", card2["passives"] == [])
     check("parse_card → colon-less passive warns", "is not name:effect" in err.lower())
 
+    # Whitespace-only name or effect drops too, matching the TS build parser.
+    card3, err = _quiet(mt.parse_card,
+                        {"id": "z", "name": "Z", "passives": "Name:   ;   :effect"}, 0)
+    check("parse_card → whitespace-only name/effect skipped", card3["passives"] == [])
+    check("parse_card → whitespace-only passive warns", "is not name:effect" in err.lower())
+
     # _blocks_for: a single action carries the text; named passives get their own
     # blocks; leftover text with no single action falls back to an unnamed passive.
     blocks = mt._blocks_for({"actions": [{"name": "conquer", "ap": "3"}],
@@ -214,6 +221,17 @@ def test_passives_and_blocks():
     check("multi-action → empty action bodies + unnamed passive for trailing text",
           [b["kind"] for b in multi] == ["action", "action", "passive"] and multi[2]["name"] is None)
 
+    # Full combination: ≥2 actions AND named passives AND trailing text.
+    # Order must be actions → named passives → unnamed trailing-text passive.
+    combo = mt._blocks_for({
+        "actions": [{"name": "a", "ap": "1"}, {"name": "b", "ap": "2"}],
+        "passives": [{"name": "Horselord", "effect": "Free mounts."}],
+        "text": "Trailing note."})
+    check("multi-action + named passive + trailing text → block order",
+          [b["kind"] for b in combo] == ["action", "action", "passive", "passive"])
+    check("multi-action combo → named passive precedes trailing-text passive",
+          combo[2]["name"] == "Horselord" and combo[3]["name"] is None)
+
 
 def test_nonunit_keywords():
     print("non-unit keywords:")
@@ -224,13 +242,109 @@ def test_nonunit_keywords():
     item = mt.parse_item({"id": "y", "name": "Y", "keywords": "Flying;Heavy"}, 0)
     check("parse_item carries keywords", item["keywords"] == ["Flying", "Heavy"])
 
-    # _kw_reminder_lines: no reminder → 1; a long reminder wraps to ≥1 lines.
+    # _kw_reminder_lines: no reminder → 1; a long reminder actually wraps to ≥2
+    # lines in the pill's right-hand column (max(1, …) makes >= 1 vacuous).
     check("kw lines: empty reminder → 1", mt._kw_reminder_lines("FLYING", "", 26, 716, 14) == 1)
     n = mt._kw_reminder_lines(
         "AURA -1",
         "Every unit at this location — friend or foe — gets -1 to all stats in combat.",
         59, 691, 14)
-    check("kw lines: long reminder wraps to >= 1", n >= 1)
+    check("kw lines: long reminder wraps to >= 2 lines", n >= 2)
+
+
+def _real_vocab():
+    """Load the real build/keywords.json (building it if absent) as a name-keyed dict."""
+    root = os.path.join(SCRIPT_DIR, "..")
+    artifact = os.path.join(root, "library", "build", "keywords.json")
+    if not os.path.exists(artifact):
+        subprocess.run(["bun", "library/build.ts"], cwd=root, check=True,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return mt.load_keyword_vocab(artifact)
+
+
+def test_real_vocab_reminders():
+    """Compose reminders from the REAL shipped keywords.json, not the mock VOCAB.
+
+    The other tests assert against the hand-written VOCAB_JSON, so a change to a
+    real reminder template in engine/src/keywords.ts fails none of them. This
+    exercises the actual artifact end-to-end, catching template↔renderer drift."""
+    print("real keywords.json integration:")
+    vocab = _real_vocab()
+    check("real vocab loaded", bool(vocab) and "Leader" in vocab)
+
+    _, r = mt.keyword_reminder("Leader:+1:all:combat", vocab)
+    check("real Leader reminder composes",
+          r == "Friendly units at this location get +1 to all stats in combat.")
+    _, r = mt.keyword_reminder("Squire", vocab)
+    check("real Squire omitted-arg → default 1",
+          r == "Your Equip and Unequip actions cost 1 less AP.")
+    # Patron: a required, unsigned magnitude standalone — never exercised by the mock.
+    label, r = mt.keyword_reminder("Patron:2", vocab)
+    check("real Patron pill shows the value", label == "PATRON 2")
+    check("real Patron reminder composes",
+          r == "Cards you buy that share an attribute with this unit cost 2 less gold.")
+    _, r = mt.keyword_reminder("Aura:-1:all:combat", vocab)
+    check("real Aura reminder composes",
+          r == "Every unit at this location — friend or foe — gets -1 to all stats in combat.")
+
+
+def test_compose_reminder_degradation():
+    """The silent-degradation guards in compose_reminder now warn; assert both
+    the blank-reminder fallback (never a crash) and the warning."""
+    print("compose_reminder degradation:")
+    res, err = _quiet(mt.compose_reminder, "Foo:1", {"reminder": "x {a}", "params": ["not-a-dict"]})
+    check("non-dict param → blank reminder", res == "")
+    check("non-dict param → warns", "malformed param spec" in err.lower())
+
+    res, _ = _quiet(mt.compose_reminder, "Foo:1",
+                    {"reminder": "x {a}", "params": [{"name": ["a"], "kind": "magnitude"}]})
+    check("non-string param name → blank reminder", res == "")
+
+    res, err = _quiet(mt.compose_reminder, "Foo:1",
+                      {"reminder": "needs {missing}", "params": [{"name": "a", "kind": "magnitude"}]})
+    check("unbound template placeholder → blank reminder", res == "")
+    check("unbound template placeholder → warns", "out of sync" in err.lower())
+
+    check("missing template/params → blank, no crash", mt.compose_reminder("Foo:1", {}) == "")
+
+
+def test_format_param_edges():
+    """_format_param enum-mapping edges: the role 'either' → '' collapse, and the
+    unknown-value verbatim passthrough (which now warns)."""
+    print("_format_param edges:")
+    check("role either → empty clause", mt._format_param("role", "either") == "")
+    check("role atk → ' when attacking'", mt._format_param("role", "atk") == " when attacking")
+    check("statScope all → 'all stats'", mt._format_param("statScope", "all") == "all stats")
+
+    res, err = _quiet(mt._format_param, "context", "underwater")
+    check("unknown enum value → verbatim passthrough", res == "underwater")
+    check("unknown enum value → warns", "not a known context" in err.lower())
+
+    res, err = _quiet(mt._format_param, "magnitude", "3")
+    check("unmapped kind (magnitude) → verbatim, no warn", res == "3" and err == "")
+
+
+def test_keyword_pill_row():
+    """_keyword_pill_row is the draw function unified across unit/location/item
+    builders (#202). Drive it with fake rect/text sinks to pin its returned row
+    height and what it draws, without a real Penpot page."""
+    print("_keyword_pill_row:")
+    calls = []
+    fake_rect = lambda *a, **k: calls.append(("rect", a))
+    fake_text = lambda *a, **k: calls.append(("text", a))
+
+    h = mt._keyword_pill_row(fake_rect, fake_text, 0, "FLYING", "", 26, 716, 100)
+    check("pill row (no reminder) → min height 25", h == 25)
+    check("pill row (no reminder) → draws pill + label only",
+          [c[0] for c in calls] == ["rect", "text"])
+
+    calls.clear()
+    long_r = "Every unit at this location — friend or foe — gets -1 to all stats in combat."
+    h2 = mt._keyword_pill_row(fake_rect, fake_text, 1, "AURA -1", long_r, 59, 691, 100)
+    n = mt._kw_reminder_lines("AURA -1", long_r, 59, 691, 14)
+    check("pill row (reminder) → height == max(25, n*line_h)", h2 == max(25, n * 18))
+    check("pill row (reminder) → draws the reminder text",
+          any("KW Reminder" in str(a) for _, a in calls))
 
 
 if __name__ == "__main__":
@@ -238,6 +352,10 @@ if __name__ == "__main__":
     test_keyword_reminder()
     test_passives_and_blocks()
     test_nonunit_keywords()
+    test_real_vocab_reminders()
+    test_compose_reminder_degradation()
+    test_format_param_edges()
+    test_keyword_pill_row()
     if _failures:
         print(f"\n{len(_failures)} FAILED: {', '.join(_failures)}")
         sys.exit(1)

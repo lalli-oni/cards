@@ -38,7 +38,11 @@ interface ParamSpec {
   optional?: boolean;
   // Value the reminder renderer substitutes when an optional param is omitted
   // (e.g. `Squire` with no arg reads as "…cost 1 less AP"). Display-only — the
-  // engine does not apply it in `parseKeyword`.
+  // engine does not apply it in `parseKeyword`. Only meaningful on an `optional`
+  // numeric (`magnitude`/`signedMagnitude`) param; the type does not currently
+  // enforce that pairing, so keep new keywords honest. Optional enum params
+  // (e.g. the family `role`) intentionally carry no `default` — the renderer
+  // collapses the omitted clause via whitespace rather than substituting a value.
   default?: number;
 }
 
@@ -52,7 +56,10 @@ export interface KeywordSpec {
   // token's parsed values; this is the source of truth for that prose, kept in
   // sync with the rules Keyword Glossary. Formatting of param values (e.g. the
   // `all` scope → "all stats", `mission` context → "on missions") is a
-  // presentation concern the renderer applies.
+  // presentation concern the renderer applies. The placeholder↔param-name
+  // binding is stringly-typed here; it is enforced at build time by
+  // `test/build.test.ts` (every `{placeholder}` must resolve to a declared
+  // param), not by the TypeScript type.
   reminder: string;
 }
 
@@ -107,7 +114,12 @@ export function isKeyword(name: string): boolean {
   return KEYWORD_BY_NAME.has(name);
 }
 
-// Structured result of parsing a keyword token.
+// Structured result of parsing a keyword token. NB: this keys parsed values by
+// param *kind* (`signedMagnitude`, `magnitude`, `statScope`, …), whereas
+// `ParamSpec.name` uses semantic names (`amount`, `magnitude`, `stat`, …) that
+// the renderer binds against. The two namings are intentionally separate — the
+// engine reads `ParsedKeyword`, the renderer reads `build/keywords.json` by
+// name/kind — but they describe the same params and must be kept consistent.
 export interface ParsedKeyword {
   name: string;
   signedMagnitude?: number;

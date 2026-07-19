@@ -166,9 +166,19 @@ _PARAM_DISPLAY = {
 
 def _format_param(kind, raw):
     """Format a keyword param value for reminder prose. signedMagnitude/magnitude
-    render as their literal token (`+1`, `1`); enum kinds map through
-    _PARAM_DISPLAY (unknown values pass through verbatim)."""
-    return _PARAM_DISPLAY.get(kind, {}).get(raw, raw)
+    (and the `stat` kind) render as their literal token (`+1`, `1`, `charisma`);
+    only the statScope/context/role kinds map through _PARAM_DISPLAY. A value not
+    in its kind's map passes through verbatim but warns, since on a validated build
+    every enum value should have a display entry — a miss means _PARAM_DISPLAY and
+    engine/src/keywords.ts have drifted."""
+    mapping = _PARAM_DISPLAY.get(kind)
+    if mapping is None:
+        return raw
+    if raw and raw not in mapping:
+        print(f"WARNING: keyword param value {raw!r} is not a known {kind} value "
+              f"— rendering it verbatim (is _PARAM_DISPLAY in sync with keywords.ts?)",
+              file=sys.stderr)
+    return mapping.get(raw, raw)
 
 
 def compose_reminder(token, entry):
@@ -186,12 +196,16 @@ def compose_reminder(token, entry):
     values = {}
     for i, p in enumerate(params):
         if not isinstance(p, dict) or not isinstance(p.get("name"), str):
+            print(f"WARNING: malformed param spec in vocab entry for {token!r} "
+                  f"— rendering no reminder", file=sys.stderr)
             return ""  # malformed entry — fall back to no reminder
         raw = args[i] if i < len(args) else p.get("default")
         values[p["name"]] = _format_param(p.get("kind"), "" if raw is None else str(raw))
     try:
         text = template.format(**values)
-    except (KeyError, IndexError):
+    except (KeyError, IndexError) as exc:
+        print(f"WARNING: keyword reminder template/params out of sync for "
+              f"{token!r}: {exc} — rendering no reminder", file=sys.stderr)
         return ""
     # Collapse whitespace an omitted param may leave (e.g. a blank trailing role).
     return " ".join(text.split())
@@ -216,8 +230,9 @@ def _pill_label(token, entry):
 
 def keyword_reminder(token, vocab):
     """Split a `keywords` token into (pill_label, reminder). Handles the family
-    grammar (`Leader:+1:all:combat`, `Untouchable:charisma`) and value-less
-    standalones (`Berserker`): the pill label is NAME + primary value (see
+    grammar (`Leader:+1:all:combat`), parameterized standalones
+    (`Untouchable:charisma`), and value-less standalones (`Berserker`): the pill
+    label is NAME + primary value (see
     _pill_label); the reminder is card-facing prose composed from the governed
     vocab's template (see compose_reminder). Warns on a name outside the governed
     vocab (skipped when the vocab is empty/degraded — reminder is then blank but
@@ -285,12 +300,15 @@ def parse_card(row, index):
 
     passives = []
     for p in split("passives"):
-        if ":" not in p:
+        name, sep, effect = p.partition(":")
+        name, effect = name.strip(), effect.strip()
+        # Require a colon plus a non-empty name AND effect, matching the TS build
+        # parser (library/build.ts parsePassive) so both pipelines agree.
+        if not sep or not name or not effect:
             print(f"WARNING: {row.get('id')}: passive '{p}' is not name:effect "
                   f"— skipping", file=sys.stderr)
             continue
-        name, _, effect = p.partition(":")
-        passives.append({"name": name.strip(), "effect": effect.strip()})
+        passives.append({"name": name, "effect": effect})
 
     return {
         "id": row["id"],

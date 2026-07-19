@@ -130,6 +130,33 @@ describe("build validation — governed keywords", () => {
       }
     }
   });
+
+  test("emits optional/default for params that declare them (Squire's default is load-bearing)", () => {
+    // The Python renderer's compose_reminder substitutes `default` when the
+    // optional arg is omitted — drop/rename the emission and Squire renders
+    // "…cost  less AP". The shape test above only checks name/kind, so pin the
+    // optional/default emission explicitly here.
+    const artifact = JSON.parse(readFileSync(join(import.meta.dir, "../library/build/keywords.json"), "utf-8"));
+    const paramOf = (kw: string, param: string) =>
+      artifact.find((k: { name: string }) => k.name === kw)
+        ?.params.find((p: { name: string }) => p.name === param);
+    expect(paramOf("Squire", "amount")).toMatchObject({ optional: true, default: 1 });
+    // A required magnitude param (Patron) carries neither flag.
+    const patron = paramOf("Patron", "amount");
+    expect(patron.optional).toBeUndefined();
+    expect(patron.default).toBeUndefined();
+  });
+
+  test("keyword names and each keyword's param names are unique", () => {
+    // Duplicate keyword names silently collapse in KEYWORD_BY_NAME (last wins);
+    // duplicate param names within a keyword make placeholder binding ambiguous.
+    const names = KEYWORDS.map((k) => k.name);
+    expect(new Set(names).size).toBe(names.length);
+    for (const k of KEYWORDS) {
+      const paramNames = k.params.map((p) => p.name);
+      expect(new Set(paramNames).size).toBe(paramNames.length);
+    }
+  });
 });
 
 describe("build transform — unit passives column", () => {
@@ -156,6 +183,13 @@ describe("build transform — unit passives column", () => {
   test("drops a nameless or colon-less token", () => {
     expect(passivesOf("Berserker")).toEqual([]);
     expect(passivesOf(":no name here")).toEqual([]);
+  });
+
+  test("drops a token whose name or effect is whitespace-only", () => {
+    // The trim-to-empty branch of parsePassive: a colon is present but one side
+    // is blank. Must drop (and warn), matching the Python renderer's parse_card.
+    expect(passivesOf("Name:   ")).toEqual([]);
+    expect(passivesOf("   :effect")).toEqual([]);
   });
 
   test("absent column yields an empty list", () => {

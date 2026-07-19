@@ -219,7 +219,9 @@ export interface UnitCard extends CardBase {
   injured: boolean;
   actions?: ActionDef[];
   /** Named passive abilities (e.g. Genghis Khan's "Horselord"). Display-only
-   *  today — see PassiveDef. Absent when the card has none. */
+   *  today — see PassiveDef. Present as an empty array (not absent) when the
+   *  card has none: the build emits `passives: []` and the loader's
+   *  `?? undefined` is a no-op for `[]`, matching `actions`. */
   passives?: PassiveDef[];
   statModifiers?: StatModifier[];
   controlOverride?: ControlOverride;
@@ -230,6 +232,9 @@ export interface LocationCard extends CardBase {
   edges: LocationEdges;
   requirements?: string;
   rewards?: string;
+  /** A single unnamed passive as prose. Note the asymmetry with
+   *  `UnitCard.passives` (a named, structured `PassiveDef[]`): the same "passive
+   *  ability" concept has two shapes across card types today, by design/scope. */
   passive?: string;
   /** Per-type category (Palace, Archive, Arena, …). Flavor-only today; see #160.
    *  From the CSV `location_type` column (renamed to camelCase in-engine). */

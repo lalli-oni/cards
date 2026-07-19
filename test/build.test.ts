@@ -6,6 +6,7 @@ import {
   buildSet,
   transformCard,
   validate,
+  type BuildWarning,
   type CardType,
 } from "../library/build";
 import { KEYWORDS } from "../engine/src/keywords";
@@ -196,6 +197,17 @@ describe("build transform — unit passives column", () => {
 
   test("absent column yields an empty list", () => {
     expect(passivesOf("")).toEqual([]);
+  });
+
+  test("routes a dropped passive to the warnings sink, not console.warn (#213)", () => {
+    // A malformed passive is a non-failing notice; per the structured warnings
+    // channel it must land in the sink buildSet threads through, not a bare
+    // console.warn. buildSet passes its `warnings` array here.
+    const warnings: BuildWarning[] = [];
+    transformCard("units", row({ passives: ":no name here" }), warnings);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toMatchObject({ field: "passives", severity: "warning" });
+    expect(warnings[0].message).toContain("not name:effect");
   });
 });
 

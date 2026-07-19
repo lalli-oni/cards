@@ -378,11 +378,68 @@ def test_block_fitting():
           body_calls[0][5].endswith(ELLIPSIS))
 
 
+def _bounds(ch):
+    """Yield (name, x, y, w, h) for every shape a builder emitted."""
+    for c in ch:
+        o = c["obj"]
+        yield o["name"], o["x"], o["y"], o["width"], o["height"]
+
+
+def test_overflow_containment():
+    """#10 end-to-end: build each card type from deliberately huge text and
+    assert no shape escapes the fixed card frame — the whole point of the fit."""
+    print("overflow containment (all types):")
+    giant = "This card unleashes a devastating cascade of effects on resolution. " * 40
+    giant2 = "Every adjacent location suffers compounding penalties each turn. " * 40
+
+    cases = [
+        ("unit", 1050, mt.parse_card, {
+            "id": "s-u", "name": "Stress Unit", "strength": "5", "cunning": "5",
+            "charisma": "5", "text": giant, "passives": "Overload:" + giant2,
+            "flavor": giant}),
+        ("location", 750, mt.parse_location, {
+            "id": "s-l", "name": "Stress Loc", "mission": "strength_15;knowledge_2>3",
+            "passive": giant, "actions": "survey:2:scout", "text": giant2}),
+        ("item", 1050, mt.parse_item, {
+            "id": "s-i", "name": "Stress Item", "type": "WEAPON", "equip": giant,
+            "stored": giant2, "text": giant, "actions": "strike:2:deal", "flavor": giant2}),
+        ("event", 1050, mt.parse_event, {
+            "id": "s-e", "name": "Stress Event", "timing": "trap",
+            "trigger": "when an enemy enters " * 20, "text": giant,
+            "attributes": "war;trade", "flavor": giant2}),
+        ("policy", 1050, mt.parse_policy, {
+            "id": "s-p", "name": "Stress Policy", "attributes": "war", "effect": giant,
+            "seeding_effect": giant2, "actions": "enact:1:apply", "flavor": giant}),
+    ]
+    build = {"unit": mt.build_shapes, "location": mt.build_location_shapes,
+             "item": mt.build_item_shapes, "event": mt.build_event_shapes,
+             "policy": mt.build_policy_shapes}
+
+    for kind, card_h, parse, row in cases:
+        card = parse(row, 0)
+        ch, _ = _quiet(build[kind], "pg", "fr", card, {})
+        # Compass edge labels are fixed decorations placed just outside the frame
+        # by design (pre-#10); the fit only governs footer/rules content shapes.
+        offenders = [(n, y, h) for n, x, y, w, h in _bounds(ch)
+                     if not n.startswith("Edge ")
+                     and (y < -0.5 or y + h > card_h + 1.0 or x < -0.5 or x + w > 750 + 1.0)]
+        check(f"{kind}: giant text → every shape within the {card_h}px frame",
+              not offenders)
+        if offenders:
+            print(f"      offenders: {offenders[:4]}")
+        glass = [(y, h) for n, x, y, w, h in _bounds(ch) if "Footer Glass" in n]
+        if glass:
+            gy, gh = glass[0]
+            check(f"{kind}: footer glass stays on-card (top {gy:.0f})",
+                  gy >= 0 and gy + gh <= card_h + 1.0)
+
+
 if __name__ == "__main__":
     test_load_keyword_vocab()
     test_keyword_reminder()
     test_passives_and_blocks()
     test_block_fitting()
+    test_overflow_containment()
     test_nonunit_keywords()
     test_real_vocab_reminders()
     test_compose_reminder_degradation()

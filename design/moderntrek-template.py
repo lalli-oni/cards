@@ -1120,7 +1120,9 @@ def build_event_shapes(page_id, frame_id, card, vocab):
     badge = timing.upper()
     if timing == "passive" and card["duration"]:
         badge = f"PASSIVE · {card['duration']} TURNS"
-    bw = int(len(badge) * 11 * 0.62) + 20
+    # Width must include the badge's wide letter-spacing (ls=2.2) or the long
+    # "PASSIVE · N TURNS" variant overflows its box and wraps to two lines.
+    bw = int(len(badge) * (11 * 0.62 + 2.2)) + 20
     if timing == "trap":
         rect("Timing Badge", 59, 92, bw, 28, fills=[], r1=4, r2=4, r3=4, r4=4, strokes=_stroke(accent, 2))
         text("Timing Label", 59, 96, bw, 18, badge, JB, "11", "800", accent, align="center", ls=2.2)

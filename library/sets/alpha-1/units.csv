@@ -18,4 +18,4 @@ harriet-tubman,Harriet Tubman,alpha-1,uncommon,2,5,7,7,Politics,,underground:1:m
 ibn-battuta,Ibn Battuta,alpha-1,common,2,3,7,6,Diplomacy;Knowledge,,wander:1:move(self) + gold[1],,Move Ibn Battuta to an adjacent location and gain 1 gold.,Seventy-five thousand miles before the age of jet.
 ramesses-ii,Ramesses II,alpha-1,uncommon,4,7,5,7,Military;Politics,Kindred:+1:charisma:mission,monument:2:vp[1] + kill(self),,Gain 1 VP. Ramesses II is killed.,He carved his name into eternity.
 mary-shelley,Mary Shelley,alpha-1,common,2,3,7,5,Knowledge,,,Galvanism:The first event you play each turn costs 0 AP.,,She gave lightning a soul.
-spartacus,Spartacus,alpha-1,common,2,7,4,6,Military,Berserker;Loot,,,When Spartacus wins combat you may injure him to kill the target instead.,He fought not for glory but for freedom.
+spartacus,Spartacus,alpha-1,common,2,7,4,6,Military,Berserker;Loot,,,,He fought not for glory but for freedom.

@@ -160,6 +160,21 @@ describe("build validation — governed keywords", () => {
       expect(new Set(paramNames).size).toBe(paramNames.length);
     }
   });
+
+  test("a param's `default` appears only on an optional numeric param", () => {
+    // `default` is the display-only fallback the renderer substitutes for an
+    // omitted optional arg — meaningful only on an optional magnitude/
+    // signedMagnitude param. ParamSpec doesn't encode that pairing in the type
+    // ("keep new keywords honest"), so enforce the invariant here instead.
+    for (const k of KEYWORDS) {
+      for (const p of k.params) {
+        if (p.default !== undefined) {
+          expect(p.optional).toBe(true);
+          expect(["magnitude", "signedMagnitude"]).toContain(p.kind);
+        }
+      }
+    }
+  });
 });
 
 describe("build transform — unit passives column", () => {

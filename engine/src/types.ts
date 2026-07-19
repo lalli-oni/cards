@@ -107,6 +107,16 @@ export interface ActionDef {
   effect: string;
 }
 
+/** A named passive ability: a static/triggered effect a card has while in play,
+ *  with no AP cost and no player activation (contrast ActionDef). `effect` is
+ *  human-readable prose today — like a location's `passive` and policy action
+ *  text — not executable DSL; the engine does not yet apply unit passives
+ *  mechanically. Sourced from the CSV `passives` column (`name:effect`). */
+export interface PassiveDef {
+  name: string;
+  effect: string;
+}
+
 /** Single source of truth for "what kind of card applied a modifier".
  *  Reused by `ModifierSource` (event payloads) and `EffectSource`
  *  (listener registrations). */
@@ -208,6 +218,11 @@ export interface UnitCard extends CardBase {
   attributes: Attribute[];
   injured: boolean;
   actions?: ActionDef[];
+  /** Named passive abilities (e.g. Genghis Khan's "Horselord"). Display-only
+   *  today — see PassiveDef. Present as an empty array (not absent) when the
+   *  card has none: the build emits `passives: []` and the loader's
+   *  `?? undefined` is a no-op for `[]`, matching `actions`. */
+  passives?: PassiveDef[];
   statModifiers?: StatModifier[];
   controlOverride?: ControlOverride;
 }
@@ -217,6 +232,9 @@ export interface LocationCard extends CardBase {
   edges: LocationEdges;
   requirements?: string;
   rewards?: string;
+  /** A single unnamed passive as prose. Note the asymmetry with
+   *  `UnitCard.passives` (a named, structured `PassiveDef[]`): the same "passive
+   *  ability" concept has two shapes across card types today, by design/scope. */
   passive?: string;
   /** Per-type category (Palace, Archive, Arena, …). Flavor-only today; see #160.
    *  From the CSV `location_type` column (renamed to camelCase in-engine). */

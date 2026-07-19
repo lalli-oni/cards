@@ -105,6 +105,34 @@ function parseAction(raw: string): { name: string; apCost: number; effect: strin
   };
 }
 
+// A named passive ability: `name:effect`. Unlike an action there is no AP cost
+// and `effect` is human-readable prose (not DSL), so we split on the first colon
+// only and keep the rest verbatim. Drops (returns null) any nameless, effectless,
+// or colon-less token — surfacing it as a structured `BuildWarning` (not a bare
+// `console.warn`, per #213) since the build is the CSV validation gate and a
+// silently-vanished passive is a data bug. The Python renderer's parse_card
+// applies the same tolerance (name and effect both required) so build-time and
+// render-time agree on which tokens are valid.
+function parsePassive(
+  raw: string,
+  cardId: string,
+  warnings: BuildWarning[],
+): { name: string; effect: string } | null {
+  const idx = raw.indexOf(":");
+  const name = idx > 0 ? raw.slice(0, idx).trim() : "";
+  const effect = idx > 0 ? raw.slice(idx + 1).trim() : "";
+  if (!name || !effect) {
+    warnings.push({
+      card: cardId,
+      field: "passives",
+      message: `passive "${raw}" is not name:effect — skipping`,
+      severity: "warning",
+    });
+    return null;
+  }
+  return { name, effect };
+}
+
 function intOrNull(value: string): number | null {
   if (!value) return null;
   const n = parseInt(value, 10);
@@ -113,7 +141,11 @@ function intOrNull(value: string): number | null {
 
 // --- Card transformers ---
 
-export function transformCard(type: CardType, raw: Record<string, string>): Record<string, unknown> {
+export function transformCard(
+  type: CardType,
+  raw: Record<string, string>,
+  warnings: BuildWarning[] = [],
+): Record<string, unknown> {
   const base: Record<string, unknown> = {
     id: raw.id,
     name: raw.name,
@@ -137,6 +169,7 @@ export function transformCard(type: CardType, raw: Record<string, string>): Reco
       base.cunning = intOrNull(raw.cunning);
       base.charisma = intOrNull(raw.charisma);
       base.actions = splitList(raw.actions || "").map(parseAction).filter(Boolean);
+      base.passives = splitList(raw.passives || "").map((p) => parsePassive(p, raw.id, warnings)).filter(Boolean);
       break;
 
     case "locations":
@@ -351,7 +384,7 @@ export function buildSet(setName: string, setsDir: string = SETS_DIR): {
     const rows = parseCSV(raw);
 
     for (const row of rows) {
-      const card = transformCard(type, row);
+      const card = transformCard(type, row, warnings);
       errors.push(...validate(type, card));
       cards.push(card);
     }
@@ -405,12 +438,25 @@ function main() {
   // Write merged output
   writeFileSync(join(BUILD_DIR, "all.json"), JSON.stringify(allCards, null, 2));
 
-  // Emit the governed keyword vocabulary so tooling (keyword-coverage) can check
-  // coverage without duplicating the source of truth (engine/src/keywords.ts).
+  // Emit the governed keyword vocabulary so tooling (keyword-coverage) and the
+  // card renderer can consume it without duplicating the source of truth
+  // (engine/src/keywords.ts). `params` + `reminder` let the renderer compose
+  // card-facing reminder prose from a token's values; coverage reads only
+  // `name`/`cardTypes` and ignores the rest.
   writeFileSync(
     join(BUILD_DIR, "keywords.json"),
     JSON.stringify(
-      KEYWORDS.map((k) => ({ name: k.name, cardTypes: k.cardTypes })),
+      KEYWORDS.map((k) => ({
+        name: k.name,
+        cardTypes: k.cardTypes,
+        params: k.params.map((p) => ({
+          name: p.name,
+          kind: p.kind,
+          ...(p.optional ? { optional: true } : {}),
+          ...(p.default !== undefined ? { default: p.default } : {}),
+        })),
+        reminder: k.reminder,
+      })),
       null,
       2,
     ),

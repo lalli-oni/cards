@@ -6,6 +6,7 @@ import {
   buildSet,
   transformCard,
   validate,
+  type BuildWarning,
   type CardType,
 } from "../library/build";
 import { KEYWORDS } from "../engine/src/keywords";
@@ -105,19 +106,123 @@ describe("build validation — governed keywords", () => {
     expect(errors.some((e) => e.field === "keywords" && e.message.includes("not supported on unit"))).toBe(true);
   });
 
-  test("build/keywords.json emits the {name, cardTypes} shape the renderer reads", () => {
+  test("build/keywords.json emits the {name, cardTypes, params, reminder} shape the renderer reads", () => {
     // Pins the producer half of the render↔data contract: the Python renderer's
-    // load_keyword_vocab expects a JSON array of {name, cardTypes}. A rename or
+    // load_keyword_vocab expects a JSON array of {name, cardTypes, params,
+    // reminder}, and compose_reminder binds a token's positional args to each
+    // param `name`/`kind` before substituting into `reminder`. A rename or
     // reshape in build.ts's emit would break it silently — caught here. (Requires
     // a prior `bun library/build.ts`, which the `test` script runs first.)
     const artifact = JSON.parse(readFileSync(join(import.meta.dir, "../library/build/keywords.json"), "utf-8"));
     expect(Array.isArray(artifact)).toBe(true);
     expect(artifact.length).toBe(KEYWORDS.length);
     for (const entry of artifact) {
-      expect(Object.keys(entry).sort()).toEqual(["cardTypes", "name"]);
+      expect(Object.keys(entry).sort()).toEqual(["cardTypes", "name", "params", "reminder"]);
       expect(typeof entry.name).toBe("string");
       expect(Array.isArray(entry.cardTypes)).toBe(true);
+      expect(typeof entry.reminder).toBe("string");
+      expect(Array.isArray(entry.params)).toBe(true);
+      for (const p of entry.params) {
+        expect(typeof p.name).toBe("string");
+        expect(typeof p.kind).toBe("string");
+      }
+      // Every {paramName} placeholder in the template must bind to a declared param.
+      const declared = new Set(entry.params.map((p: { name: string }) => p.name));
+      for (const ph of entry.reminder.matchAll(/\{(\w+)\}/g)) {
+        expect(declared.has(ph[1])).toBe(true);
+      }
     }
+  });
+
+  test("emits optional/default for params that declare them (Squire's default is load-bearing)", () => {
+    // The Python renderer's compose_reminder substitutes `default` when the
+    // optional arg is omitted — drop/rename the emission and Squire renders
+    // "…cost  less AP". The shape test above only checks name/kind, so pin the
+    // optional/default emission explicitly here.
+    const artifact = JSON.parse(readFileSync(join(import.meta.dir, "../library/build/keywords.json"), "utf-8"));
+    const paramOf = (kw: string, param: string) =>
+      artifact.find((k: { name: string }) => k.name === kw)
+        ?.params.find((p: { name: string }) => p.name === param);
+    expect(paramOf("Squire", "amount")).toMatchObject({ optional: true, default: 1 });
+    // A required magnitude param (Patron) carries neither flag.
+    const patron = paramOf("Patron", "amount");
+    expect(patron.optional).toBeUndefined();
+    expect(patron.default).toBeUndefined();
+  });
+
+  test("keyword names and each keyword's param names are unique", () => {
+    // Duplicate keyword names silently collapse in KEYWORD_BY_NAME (last wins);
+    // duplicate param names within a keyword make placeholder binding ambiguous.
+    const names = KEYWORDS.map((k) => k.name);
+    expect(new Set(names).size).toBe(names.length);
+    for (const k of KEYWORDS) {
+      const paramNames = k.params.map((p) => p.name);
+      expect(new Set(paramNames).size).toBe(paramNames.length);
+    }
+  });
+
+  test("a param's `default` appears only on an optional numeric param", () => {
+    // `default` is the display-only fallback the renderer substitutes for an
+    // omitted optional arg — meaningful only on an optional magnitude/
+    // signedMagnitude param. ParamSpec doesn't encode that pairing in the type
+    // ("keep new keywords honest"), so enforce the invariant here instead.
+    for (const k of KEYWORDS) {
+      for (const p of k.params) {
+        if (p.default !== undefined) {
+          expect(p.optional).toBe(true);
+          expect(["magnitude", "signedMagnitude"]).toContain(p.kind);
+        }
+      }
+    }
+  });
+});
+
+describe("build transform — unit passives column", () => {
+  // The `passives` column carries named passive abilities as `name:effect`,
+  // split from the freeform `text` blob (#202). Effect prose is kept verbatim
+  // after the first colon (it may itself contain colons); nameless / colon-less
+  // tokens drop, mirroring parseAction's tolerance.
+  const passivesOf = (raw: string) =>
+    (transformCard("units", row({ passives: raw })) as { passives?: unknown }).passives;
+
+  test("parses a single name:effect passive", () => {
+    expect(passivesOf("Horselord:Your Equip actions involving a Mount cost 0 AP.")).toEqual([
+      { name: "Horselord", effect: "Your Equip actions involving a Mount cost 0 AP." },
+    ]);
+  });
+
+  test("splits multiple passives on `;` and keeps colons in the effect", () => {
+    expect(passivesOf("Alpha:Ratio is 3:1 here.;Beta:Does a thing.")).toEqual([
+      { name: "Alpha", effect: "Ratio is 3:1 here." },
+      { name: "Beta", effect: "Does a thing." },
+    ]);
+  });
+
+  test("drops a nameless or colon-less token", () => {
+    expect(passivesOf("Berserker")).toEqual([]);
+    expect(passivesOf(":no name here")).toEqual([]);
+  });
+
+  test("drops a token whose name or effect is whitespace-only", () => {
+    // The trim-to-empty branch of parsePassive: a colon is present but one side
+    // is blank. Must drop (and warn), matching the Python renderer's parse_card.
+    expect(passivesOf("Name:   ")).toEqual([]);
+    expect(passivesOf("   :effect")).toEqual([]);
+  });
+
+  test("absent column yields an empty list", () => {
+    expect(passivesOf("")).toEqual([]);
+  });
+
+  test("routes a dropped passive to the warnings sink, not console.warn (#213)", () => {
+    // A malformed passive is a non-failing notice; per the structured warnings
+    // channel it must land in the sink buildSet threads through, not a bare
+    // console.warn. buildSet passes its `warnings` array here.
+    const warnings: BuildWarning[] = [];
+    transformCard("units", row({ passives: ":no name here" }), warnings);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toMatchObject({ field: "passives", severity: "warning" });
+    expect(warnings[0].message).toContain("not name:effect");
   });
 });
 

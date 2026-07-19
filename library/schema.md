@@ -27,8 +27,14 @@ Every card type includes these columns:
 | cunning    | int    | no       | Defaults to `[var:default_stat:5]` if omitted |
 | charisma   | int    | no       | Defaults to `[var:default_stat:5]` if omitted |
 | actions    | string | no       | Semicolon-separated action definitions. Format: `name:ap_cost:effect` |
+| passives   | string | no       | Semicolon-separated **named passive abilities** (e.g. Genghis Khan's `Horselord`). Format: `name:effect`, where `effect` is human-readable prose — not DSL — like a location's `passive`. No AP cost, no activation (contrast `actions`). Split from the freeform `text` blob so a passive's name and effect are structured, not conflated with an action's reminder. Display-only today; the engine does not yet apply unit passives mechanically. |
 
 `attributes` is a shared column (see above) — units are the primary carriers.
+
+A unit's freeform `text` remains the reminder prose for its single `action`
+(if any); its named passives live in `passives`, and its mechanical keywords in
+`keywords`. A card whose only effect is a passive should carry it in `passives`
+(named) rather than as a bare `text` blob.
 
 ## Locations
 
@@ -110,9 +116,9 @@ Stat checks always sum across all friendly units at the location — the attribu
 
 ## Delimiter Conventions
 
-- **Semicolons** (`;`) separate list items within a single field (attributes, keywords, item `type`, actions, requirements)
+- **Semicolons** (`;`) separate list items within a single field (attributes, keywords, item `type`, actions, passives, requirements)
 - **Pipes** (`|`) separate alternative costs
-- **Colons** (`:`) separate action components (name:ap_cost:effect)
+- **Colons** (`:`) separate action components (name:ap_cost:effect) and passive components (name:effect — first colon only, since the effect prose may contain colons)
 
 ## Effect DSL
 

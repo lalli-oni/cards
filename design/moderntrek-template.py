@@ -152,26 +152,133 @@ def load_keyword_vocab(path=None):
     return vocab
 
 
+# Presentation formatting for keyword param values, keyed by the param `kind`
+# emitted in build/keywords.json. The sentence templates themselves live in
+# engine/src/keywords.ts (the source of truth); this map is the one presentation
+# concern the renderer owns — turning a raw enum value into card-facing wording.
+_PARAM_DISPLAY = {
+    "statScope": {"all": "all stats", "strength": "strength",
+                  "cunning": "cunning", "charisma": "charisma"},
+    "context": {"combat": "in combat", "mission": "on missions"},
+    "role": {"atk": " when attacking", "def": " when defending", "either": ""},
+}
+
+
+def _format_param(kind, raw):
+    """Format a keyword param value for reminder prose. signedMagnitude/magnitude
+    (and the `stat` kind) render as their literal token (`+1`, `1`, `charisma`);
+    only the statScope/context/role kinds map through _PARAM_DISPLAY. A value not
+    in its kind's map passes through verbatim but warns, since on a validated build
+    every enum value should have a display entry — a miss means _PARAM_DISPLAY and
+    engine/src/keywords.ts have drifted."""
+    mapping = _PARAM_DISPLAY.get(kind)
+    if mapping is None:
+        return raw
+    if raw and raw not in mapping:
+        print(f"WARNING: keyword param value {raw!r} is not a known {kind} value "
+              f"— rendering it verbatim (is _PARAM_DISPLAY in sync with keywords.ts?)",
+              file=sys.stderr)
+    return mapping.get(raw, raw)
+
+
+def compose_reminder(token, entry):
+    """Compose card-facing reminder prose for a keyword token from its vocab
+    `entry` (build/keywords.json): substitute the token's positional args into
+    the `reminder` template, binding each to its param `name` and formatting by
+    `kind`. Omitted optional params fall back to their `default`. Returns "" when
+    the entry lacks a usable template/params (older or degraded artifact) so pills
+    still render. Assumes a validated build — does not re-check arity."""
+    template = entry.get("reminder")
+    params = entry.get("params")
+    if not isinstance(template, str) or not isinstance(params, list):
+        return ""
+    args = token.split(":")[1:]
+    values = {}
+    for i, p in enumerate(params):
+        if not isinstance(p, dict) or not isinstance(p.get("name"), str):
+            print(f"WARNING: malformed param spec in vocab entry for {token!r} "
+                  f"— rendering no reminder", file=sys.stderr)
+            return ""  # malformed entry — fall back to no reminder
+        raw = args[i] if i < len(args) else p.get("default")
+        values[p["name"]] = _format_param(p.get("kind"), "" if raw is None else str(raw))
+    try:
+        text = template.format(**values)
+    except (KeyError, IndexError) as exc:
+        print(f"WARNING: keyword reminder template/params out of sync for "
+              f"{token!r}: {exc} — rendering no reminder", file=sys.stderr)
+        return ""
+    # Collapse whitespace an omitted param may leave (e.g. a blank trailing role).
+    return " ".join(text.split())
+
+
+def _pill_label(token, entry):
+    """The keyword pill's short label: NAME plus its primary *value* only — the
+    first magnitude-like param (`PROWESS +2`, `LEADER +1`, `PATRON 1`). Stat /
+    context / role params are dropped (the reminder prose carries them), and
+    value-less keywords are just the name (`BERSERKER`, `UNTOUCHABLE`). Without a
+    vocab entry (unknown keyword / degraded vocab) we can't tell which arg is the
+    value, so fall back to the verbatim structural token."""
+    if not entry:
+        return token.replace(":", " ").strip().upper()
+    parts = token.split(":")
+    name, args = parts[0], parts[1:]
+    for i, p in enumerate(entry.get("params", [])):
+        if p.get("kind") in ("signedMagnitude", "magnitude") and i < len(args) and args[i]:
+            return f"{name} {args[i]}".upper()
+    return name.upper()
+
+
 def keyword_reminder(token, vocab):
     """Split a `keywords` token into (pill_label, reminder). Handles the family
-    grammar (`Leader:+1:all:combat`, `Untouchable:charisma`) and value-less
-    standalones (`Berserker`) by rendering a structural pill label from the
-    token's parts. Warns on a name outside the governed vocab (skipped when the
-    vocab is empty/degraded). Never raises. Param/arity validation lives in the
+    grammar (`Leader:+1:all:combat`), parameterized standalones
+    (`Untouchable:charisma`), and value-less standalones (`Berserker`): the pill
+    label is NAME + primary value (see
+    _pill_label); the reminder is card-facing prose composed from the governed
+    vocab's template (see compose_reminder). Warns on a name outside the governed
+    vocab (skipped when the vocab is empty/degraded — reminder is then blank but
+    the pill still renders). Never raises. Param/arity validation lives in the
     build (`engine/src/keywords.ts` via `bun library/build.ts`) — this assumes a
-    validated build and does not re-check params.
-
-    Prose reminder text (composing "friendly units here get +1 …" from the family
-    params) is a follow-up — reminder is blank for now — rather than duplicating
-    the rules-glossary prose here. (#194/#209.)"""
+    validated build and does not re-check params."""
     name = token.split(":")[0]
+    entry = None
     if not name:
         print(f"WARNING: malformed keyword token {token!r} — empty name", file=sys.stderr)
     elif vocab and name not in vocab:
         print(f"WARNING: keyword '{name}' is not in the governed vocab "
               f"(build/keywords.json) — rendering it verbatim", file=sys.stderr)
-    label = token.replace(":", " ").strip().upper()
-    return label, ""
+    else:
+        entry = vocab.get(name)
+    label = _pill_label(token, entry)
+    reminder = compose_reminder(token, entry) if entry else ""
+    return label, reminder
+
+
+def _kw_reminder_lines(label, reminder, x, right, body_fs):
+    """Wrapped line-count of a keyword pill's reminder (>=1). The pill width
+    mirrors _keyword_pill_row so a height pre-pass and the draw agree."""
+    if not reminder:
+        return 1
+    pill_w = int(len(label) * 11 * 0.62) + 24
+    reminder_x = x + pill_w + 12
+    return max(1, len(_wrap_lines(reminder, right - reminder_x, body_fs, CHAR_ADVANCE)))
+
+
+def _keyword_pill_row(rect, text, idx, label, reminder, x, right, cur, body_fs=14, line_h=18):
+    """Draw one keyword pill (name + value) at `cur`, with its reminder prose
+    wrapped in the space to its right up to `right`. Returns the row height.
+    Shared by the unit / location / item builders so keywords render identically
+    across card types (#202)."""
+    pill_w = int(len(label) * 11 * 0.62) + 24
+    rect(f"KW Pill {idx}", x, cur, pill_w, 25, fills=_fill(C["lime"]),
+         r1=2, r2=2, r3=2, r4=2)
+    text(f"KW Label {idx}", x, cur + 4, pill_w, 18, label, SG, "11", "700",
+         C["card_bg"], align="center", ls=1.6)
+    n = _kw_reminder_lines(label, reminder, x, right, body_fs)
+    if reminder:
+        text(f"KW Reminder {idx}", x + pill_w + 12, cur + 4,
+             right - (x + pill_w + 12), n * line_h, reminder, SG, "12.5", "400",
+             C["muted"], style="italic")
+    return max(25, n * line_h)
 
 
 def parse_card(row, index):
@@ -191,6 +298,18 @@ def parse_card(row, index):
         ap, _, effect = rest.partition(":")
         actions.append({"name": name.strip(), "ap": ap.strip(), "effect": effect.strip()})
 
+    passives = []
+    for p in split("passives"):
+        name, sep, effect = p.partition(":")
+        name, effect = name.strip(), effect.strip()
+        # Require a colon plus a non-empty name AND effect, matching the TS build
+        # parser (library/build.ts parsePassive) so both pipelines agree.
+        if not sep or not name or not effect:
+            print(f"WARNING: {row.get('id')}: passive '{p}' is not name:effect "
+                  f"— skipping", file=sys.stderr)
+            continue
+        passives.append({"name": name, "effect": effect})
+
     return {
         "id": row["id"],
         "name": row["name"],
@@ -204,6 +323,7 @@ def parse_card(row, index):
         "attributes": split("attributes"),
         "keywords": split("keywords"),
         "actions": actions,
+        "passives": passives,
         "text": (row.get("text") or "").strip(),
         "flavor": (row.get("flavor") or "").strip(),
     }
@@ -292,19 +412,10 @@ def build_shapes(page_id, frame_id, card, vocab):
     rect("Rules Panel", 0, 502, 750, 410, fills=_fill(C["panel"]))
     cursor = RULES_TOP
 
-    # Keyword pills from the `keywords` column (structural label; reminder TBD).
+    # Keyword pills (name + value) with wrapped reminder prose.
     for i, kw in enumerate(card["keywords"]):
         label, reminder = keyword_reminder(kw, vocab)
-        pw = int(len(label) * 11 * 0.62) + 24
-        rect(f"KW Pill {i}", 26, cursor, pw, 25, fills=_fill(C["lime"]),
-             r1=2, r2=2, r3=2, r4=2)
-        text(f"KW Label {i}", 26, cursor + 4, pw, 18, label, SG, "11", "700",
-             C["card_bg"], align="center", ls=1.6)
-        # reminder is blank until prose composition lands (#194/#209).
-        if reminder:
-            text(f"KW Reminder {i}", 26 + pw + 12, cursor + 4, 690 - (26 + pw + 12), 18,
-                 reminder, SG, "12.5", "400", C["muted"], style="italic")
-        cursor += 33
+        cursor += _keyword_pill_row(rect, text, i, label, reminder, 26, 716, cursor) + 8
 
     # Effect blocks (action/passive) with content-driven heights
     for i, b in enumerate(_blocks_for(card)):
@@ -354,16 +465,25 @@ def build_shapes(page_id, frame_id, card, vocab):
 
 
 def _blocks_for(card):
-    """Turn a card's actions/text into a list of renderable blocks."""
-    actions, text = card["actions"], card["text"]
-    if len(actions) == 1:
-        return [{"kind": "action", "name": actions[0]["name"], "ap": actions[0]["ap"],
-                 "body": text}]
-    if not actions:
-        return [{"kind": "passive", "name": None, "body": text}] if text else []
-    blocks = [{"kind": "action", "name": a["name"], "ap": a["ap"], "body": ""}
-              for a in actions]
-    if text:
+    """Turn a card's actions/passives/text into a list of renderable blocks.
+
+    A single action carries the freeform `text` as its reminder body; with
+    multiple actions the text can't belong to any one, so their bodies stay
+    empty. Named passives (from the `passives` column) render as their own
+    dashed blocks with a name. Leftover `text` that has no single action to
+    attach to falls back to an unnamed passive block so nothing disappears."""
+    actions, passives, text = card["actions"], card["passives"], card["text"]
+    single_action = len(actions) == 1
+    blocks = []
+    if single_action:
+        blocks.append({"kind": "action", "name": actions[0]["name"],
+                       "ap": actions[0]["ap"], "body": text})
+    else:
+        blocks += [{"kind": "action", "name": a["name"], "ap": a["ap"], "body": ""}
+                   for a in actions]
+    blocks += [{"kind": "passive", "name": p["name"], "body": p["effect"]}
+               for p in passives]
+    if text and not single_action:
         blocks.append({"kind": "passive", "name": None, "body": text})
     return blocks
 
@@ -452,6 +572,7 @@ def parse_location(row, index):
         "passive": (row.get("passive") or "").strip(),
         "edges": [e.strip().upper() for e in row.get("edges", "").split(";") if e.strip()],
         "actions": actions,
+        "keywords": split("keywords"),
         "text": (row.get("text") or "").strip(),
         "flavor": (row.get("flavor") or "").strip(),
     }
@@ -500,9 +621,13 @@ def _draw_edge(rect, text, side, blocked):
                  grey, align="center", ls=1)
 
 
-def _loc_rows(card):
-    """Footer rows [(kind, data, height)] in order: mission, passive, action."""
+def _loc_rows(card, vocab):
+    """Footer rows [(kind, data, height)] in order: keywords, mission, passive, action."""
     rows = []
+    for kw in card["keywords"]:
+        label, reminder = keyword_reminder(kw, vocab)
+        n = _kw_reminder_lines(label, reminder, GL_L, GL_R, LOC_BODY_FS)
+        rows.append(("keyword", (label, reminder), max(25, n * LOC_BODY_LH)))
     if card["reqs"]:
         rows.append(("mission", card, 31))
     if card["passive"]:
@@ -577,7 +702,7 @@ def build_location_shapes(page_id, frame_id, card, vocab):
              align="center", ls=1.8)
 
     # 5. Footer glass — content-driven height, bottom-anchored
-    rows = _loc_rows(card)
+    rows = _loc_rows(card, vocab)
     content_h = sum(h for _, _, h in rows) + GL_GAP * max(0, len(rows) - 1)
     total_h = GL_PAD_T + content_h + GL_GAP + GL_LINE_H + GL_PAD_B
     glass_y = 750 - 34 - total_h
@@ -585,8 +710,14 @@ def build_location_shapes(page_id, frame_id, card, vocab):
          r1=10, r2=10, r3=10, r4=10, strokes=_stroke(C["hairline"], 1))
 
     cursor = glass_y + GL_PAD_T
+    kw_i = 0
     for kind, data, h in rows:
-        if kind == "mission":
+        if kind == "keyword":
+            label, reminder = data
+            _keyword_pill_row(rect, text, kw_i, label, reminder, GL_L, GL_R,
+                              cursor, body_fs=LOC_BODY_FS, line_h=LOC_BODY_LH)
+            kw_i += 1
+        elif kind == "mission":
             text("Mission Label", GL_L, cursor + 8, 60, 14, "MISSION", JB, "10",
                  "700", C["lime"], ls=2.4)
             cx = GL_L + 70
@@ -663,6 +794,7 @@ def parse_item(row, index):
         "cost": (row.get("cost") or "").replace("|", " / "),
         "equip": (row.get("equip") or "").strip(),
         "stored": (row.get("stored") or "").strip(),
+        "keywords": [x.strip() for x in row.get("keywords", "").split(";") if x.strip()],
         "actions": _parse_actions(row), "text": (row.get("text") or "").strip(),
         "flavor": (row.get("flavor") or "").strip(),
     }
@@ -809,7 +941,15 @@ def build_item_shapes(page_id, frame_id, card, vocab):
                      body, SG, "16", "400", C["text"])
         return (h, render)
 
+    def kw_row(idx, label, reminder):
+        h = max(25, _kw_reminder_lines(label, reminder, 61, PF_R, 15) * 22)
+        return (h, lambda cur: _keyword_pill_row(rect, text, idx, label, reminder,
+                                                 61, PF_R, cur, body_fs=15, line_h=22))
+
     rows = []
+    for i, kw in enumerate(card["keywords"]):
+        label, reminder = keyword_reminder(kw, vocab)
+        rows.append(kw_row(i, label, reminder))
     if card["equip"]:
         rows.append(mode(0, "EQUIP — ON A UNIT", C["lime"], card["equip"]))
     if card["stored"]:

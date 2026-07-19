@@ -2,7 +2,7 @@
 
 Provides PenpotClient for authentication, file operations, and exports,
 plus pure-function geometry helpers and shape/change builders used by
-both setup-template.py and compose-cards.py.
+the renderer (moderntrek-template.py).
 """
 
 import json

@@ -434,6 +434,27 @@ describe("instantiateCard", () => {
     expect((card as any).injured).toBe(false);
   });
 
+  test("carries named passives onto the runtime unit card", () => {
+    const withPassive: CardDefinition = {
+      ...VALID_UNIT,
+      passives: [{ name: "Horselord", effect: "Mount equips cost 0 AP." }],
+    };
+    const card = instantiateCard(withPassive, "player-1", counter);
+    expect((card as any).passives).toEqual([
+      { name: "Horselord", effect: "Mount equips cost 0 AP." },
+    ]);
+  });
+
+  test("a unit def without passives yields undefined (no [] fabricated)", () => {
+    // A hand-built def with no `passives` key stays `undefined` through the
+    // loader's `def.passives ?? undefined`. NB the build pipeline instead emits
+    // `passives: []` (build.ts filters to an array), and `[] ?? undefined` is
+    // `[]` — so real loaded cards carry `[]`, hand-built ones `undefined`. Both
+    // are falsy/empty for the renderer; this pins the loader half of that split.
+    const card = instantiateCard(VALID_UNIT, "player-1", counter);
+    expect((card as any).passives).toBeUndefined();
+  });
+
   test("creates location card with default open edges", () => {
     const card = instantiateCard(VALID_LOCATION, "player-1", counter);
     expect(card.type).toBe("location");

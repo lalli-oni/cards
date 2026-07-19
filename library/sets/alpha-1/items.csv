@@ -3,7 +3,7 @@ ancient-scroll,Ancient Scroll,alpha-1,common,2,Equipped unit gets +2 cunning.,,,
 war-banner,War Banner,alpha-1,uncommon,3,All friendly units at this location get +1 strength.,Units initiating a strength contest at this location get +2 strength.,,Heavy,Banner,,Equip: +1 strength to friendly units here. Stored: +2 strength to attackers here.,It flew above a hundred fields.
 merchant-ledger,Merchant Ledger,alpha-1,epic,4,,Generates 2 gold at start of your turn.,Commerce,,,,Stored at a location: gain 2 gold per turn.,Every coin accounted for.
 compass,Compass,alpha-1,common,1,,,Exploration,Flying,,,Ignore one blocked edge when moving.,It always knows the way home.
-philosophers-stone,Philosopher's Stone,alpha-1,legendary,6,Equipped unit gains +2 to all stats.,,,,Artifact,transmute:1:gain_3_gold,+2 all stats. Action: gain 3 gold.,The real treasure was understanding.
+philosophers-stone,Philosopher's Stone,alpha-1,legendary,6,Equipped unit gains +2 to all stats.,,,,Artifact,transmute:1:gain_3_gold,Gain 3 gold.,The real treasure was understanding.
 spy-glass,Spy Glass,alpha-1,common,1,Equipped unit can look at face-down traps at its location.,,Exploration,Lightweight,,,Reveal traps at your location.,Knowledge is the best armor.
 holy-relic,Holy Relic,alpha-1,uncommon,3,Equipped Spirituality unit gets +3 charisma.,All Spirituality units at this location get +1 charisma.,,,Artifact,,+3 charisma to Spirituality (equip) or +1 charisma to Spirituality (stored).,Faith made tangible.
 siege-engine,Siege Engine,alpha-1,epic,5,,,Military,,,bombard:1:minus2_strength_all_enemy_location,All enemy units at target adjacent location get -2 strength until end of turn. Must be stored at a location to use.,The walls came down.

@@ -20,6 +20,7 @@ import type {
 import {
   createTestGame,
   DEFAULT_CONFIG,
+  expectRejects,
   makeLocation,
   makeUnit,
   resetIds,
@@ -121,7 +122,7 @@ describe("GameController", () => {
 
       // playTurn keeps its throw-based contract for programmatic callers, and
       // the throw is now the typed InvalidActionError that run() keys off of.
-      await expect(controller.playTurn()).rejects.toBeInstanceOf(
+      await expectRejects(controller.playTurn()).toBeInstanceOf(
         InvalidActionError,
       );
     });
@@ -311,7 +312,7 @@ describe("GameController", () => {
 
       // The loop survives the rejection and keeps running; with only passes the
       // game never ends, so the max-actions guard is the terminal signal.
-      await expect(controller.run(20)).rejects.toThrow("exceeded 20 actions");
+      await expectRejects(controller.run(20)).toThrow("exceeded 20 actions");
 
       expect(rejected).toEqual(["p1"]); // re-prompted exactly once, same decider
       expect(deciderCalls).toBeGreaterThanOrEqual(2);
@@ -404,7 +405,7 @@ describe("GameController", () => {
     it("terminates with max actions guard", async () => {
       const controller = createController();
       // With only pass implemented, the game never ends — should hit the guard
-      await expect(controller.run(10)).rejects.toThrow("exceeded 10 actions");
+      await expectRejects(controller.run(10)).toThrow("exceeded 10 actions");
     });
   });
 

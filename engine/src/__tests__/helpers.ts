@@ -1,3 +1,4 @@
+import { expect } from "bun:test";
 import { fromState, type RandomGenerator } from "../rng";
 import { createGame } from "../create-game";
 import type {
@@ -17,6 +18,28 @@ import type {
   TrapEventCard,
   UnitCard,
 } from "../types";
+
+/**
+ * Assert that a promise rejects, with the matcher chain typed as async.
+ *
+ * `bun:test` types every matcher method as returning `void`, but the `.rejects`
+ * chain returns a real Promise at runtime that must be awaited. Awaiting the raw
+ * `expect(p).rejects.toThrow(...)` therefore trips TS 80007 ("'await' has no
+ * effect on the type of this expression"). This wrapper carries the Promise type
+ * through so the required `await` type-checks; runtime behavior is identical to
+ * `expect(p).rejects`.
+ */
+export function expectRejects<T>(
+  promise: Promise<T>,
+): {
+  toThrow(expected?: unknown): Promise<void>;
+  toBeInstanceOf(value: unknown): Promise<void>;
+} {
+  return expect(promise).rejects as unknown as {
+    toThrow(expected?: unknown): Promise<void>;
+    toBeInstanceOf(value: unknown): Promise<void>;
+  };
+}
 
 let instanceCounter = 0;
 

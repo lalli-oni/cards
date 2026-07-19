@@ -11,7 +11,9 @@ Rules-faithful choices (the library is the source of truth, not the design; #202
 - Units show the governed `attributes` (synergy axis) as chips, not an invented
   "class". Locations map `edges` -> compass (blocked = red bar, rest open).
   Items/events/policies read their dedicated columns (equip/stored,
-  timing/trigger/text, effect/seeding_effect) — cleanly separated, no blob.
+  timing/trigger/text/event_type, effect/seeding_effect) — cleanly separated,
+  no blob. The event's thematic `event_type` (Catastrophe/Prosperity) renders as
+  a muted chip beside the mechanical timing badge.
 - Where a type has only a freeform `text` blob (units, location actions), it is
   rendered as-is; per-effect structuring is tracked under the effect-grammar work (#208).
 - Keyword pills come from the governed `keywords` column + the vocab artifact
@@ -1125,6 +1127,18 @@ def build_event_shapes(page_id, frame_id, card, vocab):
     else:
         rect("Timing Badge", 59, 92, bw, 28, fills=_fill(accent), r1=4, r2=4, r3=4, r4=4)
         text("Timing Label", 59, 96, bw, 18, badge, JB, "11", "800", C["card_bg"], align="center", ls=2.2)
+
+    # Thematic event category (governed `event_type` vocab: Catastrophe / Prosperity).
+    # Distinct from the mechanical timing badge, so it renders as a separate muted
+    # outlined chip to its right rather than sharing the timing accent (#202).
+    if card["event_type"]:
+        et = card["event_type"].upper()
+        ew = int(len(et) * 11 * 0.62) + 20
+        ex = 59 + bw + 10
+        rect("Event Type Badge", ex, 92, ew, 28, fills=[], r1=4, r2=4, r3=4, r4=4,
+             strokes=_stroke(C["muted"], 1.5))
+        text("Event Type Label", ex, 96, ew, 18, et, JB, "11", "700", C["muted"],
+             align="center", ls=2.2)
 
     def r_trig_row(scale):
         trig = card["trigger"].replace("_", " ").strip().capitalize()

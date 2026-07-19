@@ -252,6 +252,24 @@ def test_nonunit_keywords():
     check("kw lines: long reminder wraps to >= 2 lines", n >= 2)
 
 
+def test_event_type_chip():
+    """The governed `event_type` (Catastrophe/Prosperity) renders as its own chip
+    beside the timing badge — a rules-faithful category that was previously parsed
+    but never drawn (#202)."""
+    print("event_type chip:")
+    typed = mt.parse_event({"id": "e", "name": "E", "timing": "instant",
+                            "event_type": "Catastrophe"}, 0)
+    ch, _ = _quiet(mt.build_event_shapes, "pg", "fr", typed, {})
+    check("event_type parsed", typed["event_type"] == "Catastrophe")
+    check("event_type chip drawn, uppercased",
+          _rendered_text(ch, "Event Type Label") == "CATASTROPHE")
+
+    untyped = mt.parse_event({"id": "e2", "name": "E2", "timing": "instant"}, 0)
+    ch2, _ = _quiet(mt.build_event_shapes, "pg", "fr", untyped, {})
+    check("no event_type → no chip drawn",
+          _rendered_text(ch2, "Event Type Label") is None)
+
+
 def _real_vocab():
     """Load the real build/keywords.json (building it if absent) as a name-keyed dict."""
     root = os.path.join(SCRIPT_DIR, "..")
@@ -489,6 +507,7 @@ if __name__ == "__main__":
     test_block_fitting()
     test_overflow_containment()
     test_nonunit_keywords()
+    test_event_type_chip()
     test_real_vocab_reminders()
     test_compose_reminder_degradation()
     test_format_param_edges()

@@ -104,7 +104,7 @@ CHAR_ADVANCE = 0.56
 # on CHAR_ADVANCE), so fit_text shrinks font size toward MIN_FONT_SIZE before it
 # ever drops text, and fits to FIT_SAFETY of the height budget to absorb the gap
 # between this estimate and Penpot's real glyph metrics.
-MIN_FONT_SIZE = 10       # px floor; below this fit_text truncates instead
+MIN_FONT_SIZE = 10       # px floor; rather than shrink past this, fit_text truncates at this size
 ELLIPSIS = "…"      # single-glyph ellipsis appended to truncated lines
 FIT_SAFETY = 0.95        # fraction of the height budget fit_text is allowed to use
 
@@ -218,16 +218,17 @@ def _line_budget(max_height, fs, line_height, max_lines, safety) -> float:
     return h_budget
 
 
+def _text_width(s, fs, char_advance, ls) -> float:
+    """Advance+tracking rendered width of `s` at font size `fs`, matching the
+    per-line model used by _wrap_lines and make_position_data."""
+    return len(s) * fs * char_advance + max(0, len(s) - 1) * ls
+
+
 def _truncate_line(line, max_width, fs, char_advance, ls, ellipsis=ELLIPSIS) -> str:
     """Return `line` with an ellipsis appended, trimming characters until the
     result fits `max_width` under the shared advance+tracking width model."""
-    advance = fs * char_advance
-
-    def width(s):
-        return len(s) * advance + max(0, len(s) - 1) * ls
-
     s = line
-    while s and width(s + ellipsis) > max_width:
+    while s and _text_width(s + ellipsis, fs, char_advance, ls) > max_width:
         s = s[:-1]
     return (s.rstrip() + ellipsis) if s.strip() else ellipsis
 
@@ -252,8 +253,10 @@ def fit_text(text, max_width, max_height, base_fs, min_fs=MIN_FONT_SIZE,
                         content and the position-data wrap to the same lines
       truncated  bool — True iff any text was dropped to make it fit
     """
-    base = float(base_fs)
     mn = float(min_fs)
+    # A base below the floor would skip the shrink loop entirely and render at
+    # min_fs (larger than requested); clamp so base_fs is always the ceiling.
+    base = max(float(base_fs), mn)
     ls = float(letter_spacing) if letter_spacing not in (None, "") else 0.0
     if not text:
         return {"font_size": _fmt_fs(base), "lines": [], "text": "", "truncated": False}
@@ -261,7 +264,9 @@ def fit_text(text, max_width, max_height, base_fs, min_fs=MIN_FONT_SIZE,
     fs = base
     while fs >= mn - 1e-9:
         lines = _wrap_lines(text, max_width, fs, char_advance, ls)
-        if len(lines) <= _line_budget(max_height, fs, line_height, max_lines, safety):
+        fits_width = all(_text_width(ln, fs, char_advance, ls) <= max_width for ln in lines)
+        if fits_width and len(lines) <= _line_budget(max_height, fs, line_height,
+                                                     max_lines, safety):
             return {"font_size": _fmt_fs(fs), "lines": lines,
                     "text": " ".join(lines), "truncated": False}
         fs -= 0.5
@@ -269,11 +274,18 @@ def fit_text(text, max_width, max_height, base_fs, min_fs=MIN_FONT_SIZE,
     # Nothing fit at the floor — truncate at min_fs.
     fs = mn
     lines = _wrap_lines(text, max_width, fs, char_advance, ls)
-    budget = max(1, int(_line_budget(max_height, fs, line_height, max_lines, safety)))
+    b = _line_budget(max_height, fs, line_height, max_lines, safety)
+    budget = 1 if b == float("inf") else max(1, int(b))
     truncated = len(lines) > budget
     if truncated:
         lines = lines[:budget]
         lines[-1] = _truncate_line(lines[-1], max_width, fs, char_advance, ls)
+    # Hard-break any line still wider than the box (e.g. a single unbreakable
+    # token _wrap_lines had to emit over-width) so it can't run off the shape.
+    for i, ln in enumerate(lines):
+        if _text_width(ln, fs, char_advance, ls) > max_width:
+            lines[i] = _truncate_line(ln, max_width, fs, char_advance, ls)
+            truncated = True
     return {"font_size": _fmt_fs(fs), "lines": lines,
             "text": " ".join(lines), "truncated": truncated}
 

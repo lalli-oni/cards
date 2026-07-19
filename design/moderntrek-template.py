@@ -53,6 +53,16 @@ DEFAULT_CSV = os.path.join(SCRIPT_DIR, "..", "library", "sets", "alpha-1", "unit
 # baseline changes.
 DEFAULT_STAT = "5"
 
+
+def _warn_overflow(card_id, what):
+    """Announce that #10 overflow handling had to drop or truncate gameplay text.
+
+    The fit is intentionally lossy as a last resort, but a dropped footer row or
+    ellipsised rules line is otherwise invisible in the exported PNG — so surface
+    it on stderr (matching this file's WARNING convention) so a batch export can't
+    silently ship a card that's missing rules text."""
+    print(f"WARNING: {card_id}: {what} to fit the card frame (#10)", file=sys.stderr)
+
 # Location mission requirement keys that are stat *thresholds* ("combined stat
 # >= N across friendly units") rather than counts of units/attributes. Rendered
 # as "STRENGTH ≥15" instead of "STRENGTH ×15".
@@ -428,14 +438,19 @@ def build_shapes(page_id, frame_id, card, vocab):
     rules_bottom = (FLAVOR_Y - 7 - PAD_BOTTOM) if card["flavor"] else RULES_BOTTOM_BARE
     body_fs = _fit_block_font(blocks, rules_bottom - cursor) if blocks else BODY_FS
     for i, b in enumerate(blocks):
+        if cursor >= rules_bottom:            # no room left above the flavor / ribbon
+            _warn_overflow(card["id"], f"{len(blocks) - i} effect block(s) dropped")
+            break
         cursor = _render_block(rect, text, i, b, cursor, body_fs=body_fs,
-                               hard_bottom=rules_bottom)
+                               hard_bottom=rules_bottom, card_id=card["id"])
 
     # Flavor (pinned near the panel bottom, up to MAX_FLAVOR_LINES then truncated)
     if card["flavor"]:
         rect("Flavor Divider", 26, FLAVOR_Y - 7, 698, 1, fills=_fill(C["lime"], 0.13))
         fit = fit_text(f'"{card["flavor"]}"', 698, None, base_fs=12, min_fs=12,
                        line_height=BODY_LINE_RATIO, max_lines=MAX_FLAVOR_LINES)
+        if fit["truncated"]:
+            _warn_overflow(card["id"], "flavor text truncated")
         line_h = 12 * BODY_LINE_RATIO
         text("Flavor Text", 26, FLAVOR_Y, 698, max(1, len(fit["lines"])) * line_h,
              fit["text"], SG, "12", "400", C["muted"], style="italic")
@@ -505,7 +520,9 @@ def _block_height(b, body_fs):
     """Rendered height of one effect block at `body_fs` (the pre-pass measure)."""
     body_top = NAMED_BODY_TOP if b["name"] else BARE_BODY_TOP
     line_h = body_fs * BODY_LINE_RATIO
-    n_lines = len(_wrap_lines(b["body"], BODY_W, body_fs, CHAR_ADVANCE)) if b["body"] else 0
+    # max(1, …) mirrors _render_block, which always draws at least one body line
+    # for a non-empty body (matters only for an all-whitespace body).
+    n_lines = max(1, len(_wrap_lines(b["body"], BODY_W, body_fs, CHAR_ADVANCE))) if b["body"] else 0
     return body_top + n_lines * line_h + PAD_BOTTOM
 
 
@@ -522,7 +539,8 @@ def _fit_block_font(blocks, budget, base=BODY_FS, min_fs=MIN_FONT_SIZE):
     return float(min_fs)
 
 
-def _render_block(rect, text, i, b, cursor, body_fs=BODY_FS, hard_bottom=None):
+def _render_block(rect, text, i, b, cursor, body_fs=BODY_FS, hard_bottom=None,
+                  card_id=None):
     """Render one effect block at `cursor`, return the next cursor position.
 
     Body text renders at `body_fs` (chosen by _fit_block_font). When `hard_bottom`
@@ -537,9 +555,14 @@ def _render_block(rect, text, i, b, cursor, body_fs=BODY_FS, hard_bottom=None):
 
     body, body_size = b["body"], _fmt_fs(body_fs)
     if body:
-        avail = hard_bottom - (cursor + body_top + PAD_BOTTOM) if hard_bottom else None
+        # Never hand fit_text a negative height (a prior block may have pushed the
+        # cursor down): clamp to 0 so it truncates cleanly rather than emitting a
+        # stray line into the flavor / ribbon zone below hard_bottom.
+        avail = max(0, hard_bottom - (cursor + body_top + PAD_BOTTOM)) if hard_bottom else None
         fit = fit_text(body, BODY_W, avail, base_fs=body_fs, min_fs=body_fs,
                        line_height=BODY_LINE_RATIO)
+        if fit["truncated"]:
+            _warn_overflow(card_id, f"effect block {i} body truncated")
         body, body_size = fit["text"], fit["font_size"]
         n_lines = max(1, len(fit["lines"]))
     else:
@@ -816,8 +839,9 @@ def build_location_shapes(page_id, frame_id, card, vocab):
     div_y = glass_y + total_h - GL_PAD_B - GL_LINE_H + 6
     row_limit = div_y - GL_GAP
     cursor = glass_y + GL_PAD_T
-    for h, render in rows:
+    for idx, (h, render) in enumerate(rows):
         if cursor + h > row_limit + 0.5:      # would collide with the footer line — stop
+            _warn_overflow(card["id"], f"{len(rows) - idx} footer row(s) dropped")
             break
         render(cursor)
         cursor += h + GL_GAP
@@ -953,13 +977,15 @@ def _fit_rows(make_rows, gap, fixed):
     return rows, min(fixed + content, PF_MAX_TOTAL)
 
 
-def _portrait_footer(rect, text, make_rows, gap, flavor, rarity, setid):
+def _portrait_footer(rect, text, make_rows, gap, flavor, rarity, setid, card_id=None):
     """make_rows(scale) -> [(height, render(cursor))]. Draws a bottom-anchored
     glass box whose body text shrinks (via scale) to fit, then drops overflow
     rows as a last resort, so long text never runs past the card frame (#10)."""
     flav = (fit_text(f'"{flavor}"', PF_R - PF_L, None, base_fs=PF_FLAVOR_FS,
                      min_fs=PF_FLAVOR_FS, line_height=BODY_LINE_RATIO,
                      max_lines=MAX_FLAVOR_LINES) if flavor else None)
+    if flav and flav["truncated"]:
+        _warn_overflow(card_id, "flavor text truncated")
     flav_h = max(1, len(flav["lines"])) * PF_FLAVOR_FS * BODY_LINE_RATIO if flav else 0
     fixed = PF_PAD + gap + (flav_h + gap if flavor else 0) + PF_LINE + PF_PAD
     rows, total = _fit_rows(make_rows, gap, fixed)
@@ -970,8 +996,9 @@ def _portrait_footer(rect, text, make_rows, gap, flavor, rarity, setid):
     div_y = gy + total - PF_PAD - PF_LINE + 6
     row_limit = div_y - gap - (flav_h + gap if flavor else 0)
     cur = gy + PF_PAD
-    for h, render in rows:
+    for idx, (h, render) in enumerate(rows):
         if cur + h > row_limit + 0.5:      # would collide with flavor/divider — stop
+            _warn_overflow(card_id, f"{len(rows) - idx} footer row(s) dropped")
             break
         render(cur)
         cur += h + gap
@@ -1018,7 +1045,7 @@ def build_item_shapes(page_id, frame_id, card, vocab):
 
     def mode(idx, label, color, body, scale):
         sfs = _scaled(15, scale)
-        lh = sfs * 1.47                    # preserves the nominal 22px @ 15px spacing
+        lh = sfs * (22 / 15)               # preserves the nominal 22px @ 15px spacing
         n = _wrapc(body, 560, sfs)
         h = max(34, 18 + n * lh)
 
@@ -1070,7 +1097,8 @@ def build_item_shapes(page_id, frame_id, card, vocab):
 
     setid = (f"ITEM · {card['type'].upper().replace(';', ' · ')} // "
              f"{card['set'].upper()} · {card['number']}")
-    _portrait_footer(rect, text, make_rows, 13, card["flavor"], card["rarity"], setid)
+    _portrait_footer(rect, text, make_rows, 13, card["flavor"], card["rarity"], setid,
+                     card_id=card["id"])
     return ch
 
 
@@ -1145,7 +1173,8 @@ def build_event_shapes(page_id, frame_id, card, vocab):
         return rows
 
     setid = f"EVENT · {timing.upper()} // {card['set'].upper()} · {card['number']}"
-    _portrait_footer(rect, text, make_rows, 10, card["flavor"], card["rarity"], setid)
+    _portrait_footer(rect, text, make_rows, 10, card["flavor"], card["rarity"], setid,
+                     card_id=card["id"])
     return ch
 
 
@@ -1205,7 +1234,8 @@ def build_policy_shapes(page_id, frame_id, card, vocab):
         return rows
 
     setid = f"POLICY // {card['set'].upper()} · {card['number']}"
-    _portrait_footer(rect, text, make_rows, 12, card["flavor"], card["rarity"], setid)
+    _portrait_footer(rect, text, make_rows, 12, card["flavor"], card["rarity"], setid,
+                     card_id=card["id"])
     return ch
 
 

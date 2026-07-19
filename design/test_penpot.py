@@ -38,13 +38,20 @@ LONG = " ".join(["Deal three damage to a chosen enemy unit"] * 12)
 
 
 def _height_for(lines, fs, line_height=1.3):
-    """Min box height that admits exactly `lines` at `fs` under FIT_SAFETY."""
+    """Min box height that admits exactly `lines` at `fs`.
+
+    Deliberately reconstructs _line_budget's floor-under-FIT_SAFETY boundary so the
+    shrink/truncate tests can pin the exact size at which behaviour flips. That
+    couples those tests to the budget formula on purpose; tests that only need
+    "comfortably fits" (e.g. keeps-base) should pass a generous height instead."""
     return (lines * fs * line_height) / pp.FIT_SAFETY + 0.001
 
 
 def test_no_overflow_keeps_base():
     print("fit_text: text that already fits:")
-    r = pp.fit_text(SHORT, W, _height_for(1, 14), base_fs=14)
+    # Generous height (not the exact boundary) — this test is about "fits at base",
+    # so it shouldn't ride the _line_budget floor the way the shrink tests do.
+    r = pp.fit_text(SHORT, W, 200, base_fs=14)
     check("short text → keeps base font size", r["font_size"] == "14")
     check("short text → not truncated", r["truncated"] is False)
     check("short text → single line preserved", r["lines"] == [SHORT])
@@ -87,9 +94,39 @@ def test_truncated_line_fits_width():
     print("fit_text: truncated line respects width:")
     r = pp.fit_text(LONG, W, _height_for(1, 10), base_fs=14, min_fs=10)
     last = r["lines"][-1]
+    # NB: this recomputes width with the same CHAR_ADVANCE the code uses, so it's a
+    # self-consistency check (the fit obeys its own width model) — NOT a check that
+    # CHAR_ADVANCE matches the real vendored-font metrics. Nothing here pins that.
     width = len(last) * 10 * pp.CHAR_ADVANCE
     check("truncated → single line", len(r["lines"]) == 1)
     check("truncated → ellipsised line still fits the box width", width <= W)
+
+
+def test_defensive_branches():
+    print("fit_text: defensive / edge branches:")
+    # (a) column narrower than the ellipsis itself → bare ellipsis, no crash.
+    r = pp.fit_text(SHORT, 1, _height_for(1, 10), base_fs=10, min_fs=10)
+    check("sub-ellipsis width → result is exactly the ellipsis", r["text"] == pp.ELLIPSIS)
+    check("sub-ellipsis width → marked truncated", r["truncated"] is True)
+    # (b) unbounded box (both max_height and max_lines None) → keep everything at base.
+    r = pp.fit_text(LONG, W, None, base_fs=14, min_fs=10)
+    check("unbounded → not truncated", r["truncated"] is False)
+    check("unbounded → keeps base size", r["font_size"] == "14")
+    check("unbounded → all words preserved", pp.ELLIPSIS not in r["text"])
+    # (c) letter_spacing widens glyphs → the same text wraps to more lines.
+    plain = pp.fit_text(LONG, W, None, base_fs=12, min_fs=12)
+    spaced = pp.fit_text(LONG, W, None, base_fs=12, min_fs=12, letter_spacing=4.0)
+    check("letter_spacing → wraps to more lines than ls=0",
+          len(spaced["lines"]) > len(plain["lines"]))
+
+
+def test_base_below_floor_clamps():
+    print("fit_text: base_fs below the floor is clamped:")
+    # A caller passing base_fs < min_fs must not silently render at min_fs (larger
+    # than asked); base is clamped up to the floor, so both land at min_fs cleanly.
+    r = pp.fit_text(SHORT, W, 200, base_fs=8, min_fs=10)
+    check("base<floor → renders at the floor size", r["font_size"] == "10")
+    check("base<floor → not truncated for short text", r["truncated"] is False)
 
 
 def test_max_lines_cap():
@@ -127,6 +164,8 @@ if __name__ == "__main__":
     test_shrinks_before_truncating()
     test_truncates_at_floor()
     test_truncated_line_fits_width()
+    test_defensive_branches()
+    test_base_below_floor_clamps()
     test_max_lines_cap()
     test_position_data_reflows_to_fit()
     test_half_step_sizes_format()

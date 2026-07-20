@@ -15,6 +15,10 @@ Route routine issue work to the **`project-manager` subagent** — picking what 
 
 **Epics vs milestones** are orthogonal: milestones = "what's in this release," epics = "what thematic body of work" (e.g. #45 = content/balance, #210 = rules-architecture). Route epic/milestone decisions through the `project-manager` subagent — see its `### Epics` and `### Milestones` sections. When a future milestone is deliberately deferred, a themed epic may hold post-milestone issues **within its own theme only**; everything else stays unmilestoned/backlog.
 
+## Design Discussions
+
+When an **open design question** needs deliberating — surfacing tradeoffs, pushing back on premature decisions, and capturing the outcome to an issue — route it to the **`design-facilitator` subagent**. It facilitates the decision, then hands off: execution goes to the `card-design` / `card-set-design` skills (card/set craft) or back to the main session (rules edits), and issue mechanics (labels, sub-issues, closing) go to `project-manager`. It references `rules/design-principles.md` rather than restating principles. This is distinct from `project-manager` (what/why/order, not the design itself) and from the design *skills* (which execute a settled design rather than deliberate an open one).
+
 ## Branching & WIP discipline
 
 Most rework here has come from concurrent long-lived branches colliding on the same files — one PR reintroducing or clobbering another's work, or one issue implemented twice. The existing defence is the PM agent's **Issue Grouping** rule: group work by shared *area label* (`engine`, `client`, `rules`, `visuals`, `tooling`, `cards`). Extend it with:

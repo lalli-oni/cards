@@ -1,6 +1,5 @@
 id,name,set,rarity,cost,timing,duration,trigger,attributes,keywords,event_type,text,flavor,effect
 plague,Plague,alpha-1,epic,4,passive,2,,,,Catastrophe,Place on target location. All units at this location and adjacent locations get -2 strength. Discarded when the location is removed from the grid.,It spared no one.,
-golden-age,Golden Age,alpha-1,epic,5,passive,3,,,,Prosperity,You gain +1 gold per turn for 3 turns.,The coffers overflow and the people rejoice.,
 sprung-trap,Sprung Trap,alpha-1,uncommon,2,trap,,enemy_unit_enters_location,Military,,,When an enemy unit enters this location: injure that unit.,They never saw it coming.,
 diplomatic-summit,Diplomatic Summit,alpha-1,uncommon,2,passive,1,,Diplomacy,,,All Diplomacy units get +2 charisma for 1 turn.,Words sharper than any blade.,
 earthquake,Earthquake,alpha-1,epic,4,instant,,,,,Catastrophe,Remove target location from the grid. All units there are injured. Replacement is drawn.,The earth decides who stays.,injure(all + here) + remove(location)

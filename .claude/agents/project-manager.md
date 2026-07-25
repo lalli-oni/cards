@@ -81,13 +81,16 @@ You can create, label, close, and organize GitHub issues.
 | `bug` | something broken |
 | `enhancement` | new feature / improvement |
 | `documentation` | docs updates |
-| `question` | open decision pending |
+| `question` | an open design/scope decision the issue *exists to resolve* — NOT an implementation issue that merely has an unsettled sub-detail |
 | `good first issue` | small, well-scoped |
 | `balance` | game balance — stat tuning, archetype distribution, win rates |
 
 Note: `design` was retired (ambiguous between "visual design" and "game design"). Visual work → `visuals`; game-mechanics work → `rules` (+ `balance` and/or `cards` as relevant).
 
 **Creating issues:**
+
+**Before creating, check for an existing issue on the same topic** — open *and* closed: `gh issue list --search "<keywords>" --state all`. If a match exists, comment on / update / link it instead of opening a duplicate. (Issue-level analogue of the pre-`start-task` branch/PR check in *Concurrency & branch hygiene* below. Applies even when a caller asks for a batch of new issues — search each topic first.)
+
 ```
 gh issue create --title "..." --body "..." --label "engine,enhancement"
 ```

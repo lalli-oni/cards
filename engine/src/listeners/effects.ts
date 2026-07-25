@@ -26,6 +26,7 @@ import { drawOneCard } from "../deck-helpers";
 import { countActionsThisTurn } from "./query";
 import { hasAttribute } from "../attributes";
 
+// #region Effect definition types
 // ---------------------------------------------------------------------------
 // Effect definition types — each card type has a factory that produces
 // an EffectDefinition (event listeners + query listeners).
@@ -65,6 +66,9 @@ export type UnitEffectFactory = (
   position?: { row: number; col: number },
 ) => EffectDefinition;
 
+// #endregion
+
+// #region Static registries
 // ---------------------------------------------------------------------------
 // Static registries keyed by definitionId.
 // ---------------------------------------------------------------------------
@@ -560,6 +564,9 @@ export const ITEM_EFFECTS: Record<string, ItemEffectFactory> = {
   }),
 };
 
+// #endregion
+
+// #region Policy actions
 // ---------------------------------------------------------------------------
 // Policy actions — activatable actions surfaced on active policies.
 // Keyed by policy definitionId. The action shape mirrors UnitCard.actions.
@@ -573,6 +580,9 @@ export const POLICY_ACTIONS: Record<string, ActionDef[]> = {
   ],
 };
 
+// #endregion
+
+// #region Unit effects
 // ---------------------------------------------------------------------------
 // Unit effects — passives that fire while a unit is in play (HQ or grid).
 // ---------------------------------------------------------------------------
@@ -591,6 +601,9 @@ export const UNIT_EFFECTS: Record<string, UnitEffectFactory> = {
   }),
 };
 
+// #endregion
+
+// #region Trap effects
 // ---------------------------------------------------------------------------
 // Trap effects
 // ---------------------------------------------------------------------------
@@ -721,3 +734,4 @@ export const TRAP_EFFECTS: Record<string, TrapEffectFactory> = {
     queries: [],
   }),
 };
+// #endregion

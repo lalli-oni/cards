@@ -9,6 +9,7 @@ import {
   getVisibleEvent,
   type InvalidActionError,
   type PlayerDescriptor,
+  type Session,
   setAutoFreeze,
   type VisibleState,
 } from "cards-engine";
@@ -404,9 +405,9 @@ function onEvent(events: GameEvent[], state: GameState): void {
   if (controller) {
     try {
       // `_eventLog` is a Svelte `$state` proxy; `structuredClone` throws
-      // DataCloneError on reactive proxies, so snapshot it to plain data first
+      // DataCloneError on `$state` proxies, so snapshot it to plain data first
       // (#244). The rest of the session is plain engine state.
-      const session = structuredClone(controller.toSession(true, $state.snapshot(_eventLog)));
+      const session: Session = structuredClone(controller.toSession(true, $state.snapshot(_eventLog)));
       autoSave(session)
         .then(() => {
           autoSaveFailCount = 0;
@@ -652,6 +653,7 @@ export async function saveGame(name: string): Promise<void> {
     return;
   }
   try {
+    // Snapshot the reactive `_eventLog` before cloning — see the auto-save site / #244.
     await saveSession(name, structuredClone(controller.toSession(true, $state.snapshot(_eventLog))));
     await refreshSessions();
   } catch (err) {

@@ -172,6 +172,14 @@ Each player has [var:action_points_per_turn:3] **action points (AP)** per turn. 
 
 A player may pass any remaining AP to end their turn early.
 
+#### Event resolution
+
+When an event resolves — an instant after its effect, a passive when its
+duration ends, a trap after it triggers — it goes to its **resolution**
+destination. By default this is the **discard pile**. Some events instead
+return to the **top of the owner's main deck**, so they can be drawn and played
+again. Each event card states its resolution.
+
 #### Drawing cards
 
 Each deck has its own draw behavior:

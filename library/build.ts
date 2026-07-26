@@ -18,6 +18,7 @@ import type { CardType as EngineCardType } from "../engine/src/types";
 import {
   LOCATION_TYPES,
   EVENT_TYPES,
+  EVENT_RESOLUTIONS,
   ITEM_TYPES,
 } from "../engine/src/card-categories";
 
@@ -203,6 +204,9 @@ export function transformCard(
       base.trigger = raw.trigger || null;
       // CSV column is `event_type`; stored as `eventType` (camelCase) in-engine.
       base.eventType = raw.event_type || null;
+      // Lifecycle destination on resolution; absent/empty defaults to `discard`
+      // so every built event carries a concrete value.
+      base.resolution = raw.resolution || "discard";
       if (raw.effect) base.effect = raw.effect;
       break;
 
@@ -314,6 +318,10 @@ export function validate(
   const eventType = card.eventType as (typeof EVENT_TYPES)[number] | undefined;
   if (type === "events" && eventType && !EVENT_TYPES.includes(eventType)) {
     errors.push(err("event_type", `invalid event_type: ${eventType}`));
+  }
+  const resolution = card.resolution as (typeof EVENT_RESOLUTIONS)[number] | undefined;
+  if (type === "events" && resolution && !EVENT_RESOLUTIONS.includes(resolution)) {
+    errors.push(err("resolution", `invalid resolution: ${resolution}`));
   }
   if (type === "items") {
     for (const t of (card.itemType as string[] | undefined) ?? []) {

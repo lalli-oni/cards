@@ -1,5 +1,5 @@
 import type { Attribute } from "./attributes";
-import type { LocationType, EventType, ItemType } from "./card-categories";
+import type { LocationType, EventType, EventResolution, ItemType } from "./card-categories";
 
 // ---------------------------------------------------------------------------
 // Config
@@ -262,6 +262,11 @@ interface EventCardBase extends CardBase {
   /** Per-type category (Catastrophe, Prosperity). Flavor-only today; see #160.
    *  From the CSV `event_type` column (renamed to camelCase in-engine). */
   eventType?: EventType;
+  /** Where this event goes when it resolves: `discard` (default) or `main-top`
+   *  (return to the top of the owner's main deck). From the CSV `resolution`
+   *  column; the build defaults an absent value to `discard`, so built cards
+   *  always carry it. Runtime routing is wired in #212. */
+  resolution?: EventResolution;
 }
 
 export interface InstantEventCard extends EventCardBase {

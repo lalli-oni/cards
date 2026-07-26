@@ -403,7 +403,10 @@ function onEvent(events: GameEvent[], state: GameState): void {
   // Auto-save after every action
   if (controller) {
     try {
-      const session = structuredClone(controller.toSession(true, _eventLog));
+      // `_eventLog` is a Svelte `$state` proxy; `structuredClone` throws
+      // DataCloneError on reactive proxies, so snapshot it to plain data first
+      // (#244). The rest of the session is plain engine state.
+      const session = structuredClone(controller.toSession(true, $state.snapshot(_eventLog)));
       autoSave(session)
         .then(() => {
           autoSaveFailCount = 0;
@@ -649,7 +652,7 @@ export async function saveGame(name: string): Promise<void> {
     return;
   }
   try {
-    await saveSession(name, structuredClone(controller.toSession(true, _eventLog)));
+    await saveSession(name, structuredClone(controller.toSession(true, $state.snapshot(_eventLog))));
     await refreshSessions();
   } catch (err) {
     _error = `Failed to save game: ${err instanceof Error ? err.message : String(err)}`;

@@ -35,8 +35,9 @@ export const EVENT_TYPES = ["Catastrophe", "Prosperity"] as const;
  * governed property of every event (peer of `timing`/`duration`, not a
  * keyword). `discard` is the default (the normal fate); `main-top` returns the
  * card to the top of the owner's main deck so it can be redrawn and replayed.
- * v0.1 vocabulary — `hand`/`exile`/`main-bottom` are deferred post-v0.1 (#239).
- * Runtime routing is wired in #212.
+ * v0.1 vocabulary — `hand`/`exile` are deferred post-v0.1 (#239); `main-bottom`
+ * was rejected as equivalent to `discard` after reshuffle (#231). Runtime
+ * routing is wired in #212 (event-resolution sub-scope tracked under #231).
  */
 export const EVENT_RESOLUTIONS = ["discard", "main-top"] as const;
 

@@ -65,7 +65,7 @@ A unit's freeform `text` remains the reminder prose for its single `action`
 | trigger  | string | no       | Trigger condition (for `trap` timing) |
 | effect   | string | no       | DSL effect string, resolved when the event fires (`instant` timing). Build-validated via `parseDSL`. |
 | event_type | enum | no       | Per-type category (single value): `Catastrophe`, `Prosperity`. Thematic — distinct from the mechanical `timing` field. See [Governed vocabularies](#governed-vocabularies). Loaded as `eventType` in the engine (camelCase). |
-| resolution | enum | no       | Where the event goes when it resolves: `discard` (default) or `main-top` (return to top of the owner's main deck). Absent/empty defaults to `discard`, so every built event carries a value. See [Governed vocabularies](#governed-vocabularies). Runtime routing: #212. |
+| resolution | enum | no       | Where the event goes when it resolves: `discard` (default) or `main-top` (return to top of the owner's main deck). Absent/empty defaults to `discard`, so every built event carries a value. See [Governed vocabularies](#governed-vocabularies). Runtime routing: #212 (scoped under #231). |
 
 ## Policies
 
@@ -87,7 +87,7 @@ on any unknown value (exact spelling, case-sensitive).
 - **`location_type`** — `Palace`, `Archive`, `Arena`, `Port`, `Workshop`,
   `Hideout`, `Sanctuary`, `Monument`, `Market`, `Research`, `Fortification`.
 - **`event_type`** — `Catastrophe`, `Prosperity`.
-- **`resolution`** (events) — `discard`, `main-top`. Absent/empty defaults to `discard`. (`hand`/`exile`/`main-bottom` are deferred post-v0.1, see #239.)
+- **`resolution`** (events) — `discard`, `main-top`. Absent/empty defaults to `discard`. (`hand`/`exile` are deferred post-v0.1, see #239; `main-bottom` was rejected as ≈`discard` after reshuffle, see #231.)
 - **item `type`** — `Weapon`, `Armor`, `Tool`, `Artifact`, `Banner`, `Regalia`.
   `Weapon`/`Armor`/`Tool` are forward-looking (no card carries them yet).
 

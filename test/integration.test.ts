@@ -112,17 +112,21 @@ async function runFullGame(opts: {
 // Full game flow
 // ---------------------------------------------------------------------------
 
+// Shared pinned seed for the full-game smoke + determinism suites. Single source
+// of truth so the two describe blocks can't drift out of sync when rotating.
+const SMOKE_SEED = "seed-6";
+
 describe("full game flow", () => {
-  // seed-6 produces a decisive winner (a sole VP leader by the turn limit)
-  // across 2/3/4 player counts with the current card library and greedy bots.
-  // Greedy bots often tie at low VP, so if card behavior changes (new effects,
-  // bot tweaks) this seed may need rotating — pick one where scores differ at
-  // the turn limit and games terminate cleanly. (Rotated seed-3 → seed-6 after
-  // #230 removed Golden Age, which shifted the bot economy into 0-0 ties on
-  // seed-3 — the non-termination-on-tie behaviour is tracked in #246.)
-  // The `determinism` block below uses the same seed value as DET_SEED;
-  // keep them in sync when rotating.
-  const DECISIVE_SEED = "seed-6";
+  // SMOKE_SEED (seed-6) produces a decisive winner (a sole VP leader by the turn
+  // limit) across 2/3/4 player counts with the current card library and greedy
+  // bots. Greedy bots often tie at low VP, so if card behavior changes (new
+  // effects, bot tweaks) this seed may need rotating — pick one where scores
+  // differ at the turn limit and games terminate cleanly. (Rotated seed-3 →
+  // seed-6: after #230 removed Golden Age, seed-3's 4-player game stopped
+  // terminating within the action budget — a tie that never resolves at the turn
+  // limit, tracked in #246; seed-3's 2- and 3-player games still resolve
+  // decisively.)
+  const DECISIVE_SEED = SMOKE_SEED;
 
   it("runs a 1v1 game to completion (seeding → main → ended)", async () => {
     const controller = await runFullGame({ seed: DECISIVE_SEED });
@@ -180,8 +184,8 @@ describe("full game flow", () => {
 // ---------------------------------------------------------------------------
 
 describe("determinism", () => {
-  // Same value as DECISIVE_SEED above — when rotating, update both.
-  const DET_SEED = "seed-6";
+  // Shares the smoke suite's pinned seed via SMOKE_SEED (single source of truth).
+  const DET_SEED = SMOKE_SEED;
 
   it("same seed produces identical final state", async () => {
     const c1 = await runFullGame({ seed: DET_SEED });

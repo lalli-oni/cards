@@ -264,8 +264,11 @@ interface EventCardBase extends CardBase {
   eventType?: EventType;
   /** Where this event goes when it resolves: `discard` (default) or `main-top`
    *  (return to the top of the owner's main deck). From the CSV `resolution`
-   *  column; the build defaults an absent value to `discard`, so built cards
-   *  always carry it. Runtime routing is wired in #212. */
+   *  column; the library build defaults an absent value to `discard`, so cards
+   *  built from the library always carry it. Optional because event cards
+   *  constructed outside that build (the card-loader, test fixtures) may omit it
+   *  — treat an absent value as `discard`, the single default (don't introduce a
+   *  second one). Runtime routing is wired in #212 (scoped under #231). */
   resolution?: EventResolution;
 }
 

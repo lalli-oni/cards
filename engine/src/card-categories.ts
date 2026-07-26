@@ -31,6 +31,17 @@ export const LOCATION_TYPES = [
 export const EVENT_TYPES = ["Catastrophe", "Prosperity"] as const;
 
 /**
+ * Where an event card goes when it resolves — its lifecycle destination, a
+ * governed property of every event (peer of `timing`/`duration`, not a
+ * keyword). `discard` is the default (the normal fate); `main-top` returns the
+ * card to the top of the owner's main deck so it can be redrawn and replayed.
+ * v0.1 vocabulary — `hand`/`exile` are deferred post-v0.1 (#239); `main-bottom`
+ * was rejected as equivalent to `discard` after reshuffle (#231). Runtime
+ * routing is wired in #212 (event-resolution sub-scope tracked under #231).
+ */
+export const EVENT_RESOLUTIONS = ["discard", "main-top"] as const;
+
+/**
  * Multi-value item `type` (per the #45 equipment decision — a single `type`
  * column, not `item_type` + `slot`). `Weapon`/`Armor`/`Tool` are forward-looking
  * values (no alpha-1 item carries them yet) but are governed, so a card *may*
@@ -50,4 +61,5 @@ export const ITEM_TYPES = [
 
 export type LocationType = (typeof LOCATION_TYPES)[number];
 export type EventType = (typeof EVENT_TYPES)[number];
+export type EventResolution = (typeof EVENT_RESOLUTIONS)[number];
 export type ItemType = (typeof ITEM_TYPES)[number];

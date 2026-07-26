@@ -226,6 +226,50 @@ describe("build transform — unit passives column", () => {
   });
 });
 
+describe("build transform + validation — event resolution (#231)", () => {
+  // `resolution` is the event lifecycle destination: absent/empty defaults to
+  // `discard` in transform, and out-of-vocab values fail validation (the same
+  // governed-column gate as event_type/location_type). Both halves are pinned
+  // here — nothing else exercises them (no card CSV declares the column yet).
+  const resolutionOf = (overrides: Record<string, string>) =>
+    (transformCard("events", row({ timing: "instant", ...overrides })) as {
+      resolution?: unknown;
+    }).resolution;
+
+  test("defaults an absent resolution to `discard`", () => {
+    expect(resolutionOf({})).toBe("discard");
+  });
+
+  test("preserves an explicit `main-top`", () => {
+    expect(resolutionOf({ resolution: "main-top" })).toBe("main-top");
+  });
+
+  test("treats an empty resolution as the `discard` default", () => {
+    expect(resolutionOf({ resolution: "" })).toBe("discard");
+  });
+
+  test("trims surrounding whitespace before defaulting/validating", () => {
+    // A stray space (or CRLF `\r`) must not masquerade as an invalid value.
+    expect(resolutionOf({ resolution: "  main-top  " })).toBe("main-top");
+  });
+
+  test("accepts a card carrying a governed resolution", () => {
+    expect(
+      check("events", { timing: "instant", event_type: "Catastrophe", resolution: "main-top" }),
+    ).toEqual([]);
+  });
+
+  test("rejects an un-governed resolution", () => {
+    const errors = check("events", { timing: "instant", resolution: "main-deck" });
+    expect(errors.some((e) => e.field === "resolution" && e.message.includes("main-deck"))).toBe(true);
+  });
+
+  test("validation is case-sensitive on resolution", () => {
+    const errors = check("events", { timing: "instant", resolution: "Discard" });
+    expect(errors.some((e) => e.field === "resolution")).toBe(true);
+  });
+});
+
 describe("build validation — cost is a numeric gold amount", () => {
   test("accepts an integer cost and `|`-separated integer alternatives", () => {
     expect(check("units", { cost: "3", attributes: "Military" })).toEqual([]);

@@ -80,22 +80,22 @@ renderer to see changes. Keyword reminder prose is composed from
 ### 5. Print-and-play output (A3 cards + A4 rules)
 
 Two Penpot-independent tools produce a rough physical set from the rendered PNGs
-and the rules markdown (needs `pip install pillow markdown`; the rules tool also
-needs a Chrome/Chromium binary, and optionally `pymupdf` for the contents page +
-page numbers):
+and the rules markdown (install deps with `pip install -r design/requirements.txt`;
+the rules tool also needs a Chrome/Chromium binary, and optionally `pymupdf` for
+the contents page + page numbers):
 
 ```bash
 python3 design/impose-print.py                 # tile exports/<set>/*.png at true
-                                               # poker size onto A3 + crop marks
+                                               # physical size (poker + square) onto A3
 python3 design/impose-print.py alpha-1 --paper a4
-python3 design/rules-to-a4.py                  # rules/*.md -> A4 booklet PDF
+python3 design/rules-to-a4.py                  # core rules files -> A4 booklet PDF
 python3 design/rules-to-a4.py --html-only      # HTML only (no Chrome)
 ```
 
 `impose-print.py` writes `exports/<set>/print/<set>-cards-<paper>.pdf`;
 `rules-to-a4.py` writes `exports/rules-A4.pdf`. The rules tool strips `[design:]`
 notes, renders `[var:...]` baselines as colour-coded chips, adds a Symbols key
-reusing the card glyphs, and (with `pymupdf`) a front-page contents with page
+mirroring the card glyphs, and (with `pymupdf`) a front-page contents with page
 numbers, corner page numbers, and a PDF outline. Card backs aren't rendered, so
 sheets are single-sided (#218). Pure logic is covered by
 `design/test_print_tools.py`.

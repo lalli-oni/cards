@@ -71,22 +71,24 @@ python3 design/moderntrek-template.py library/sets/alpha-1/locations.csv
 ## Printing
 
 Turn rendered cards and the rules into a rough print-and-play set (e.g. an A3
-self-print at a library) before professional printing. Needs `Pillow` and
-`markdown` (`pip install pillow markdown`); the rules tool also needs a
-Chrome/Chromium binary for headless PDF printing, and optionally `pymupdf`
-(`pip install pymupdf`) for the front-page table of contents with page numbers,
-corner page numbers, and a PDF outline.
+self-print at a library) before professional printing. Install the Python deps
+with `pip install -r design/requirements.txt` (Pillow + markdown; pymupdf
+optional). The rules tool also needs a Chrome/Chromium binary for headless PDF
+printing; with `pymupdf` installed it additionally builds a front-page table of
+contents with page numbers, corner page numbers, and a PDF outline.
 
 ```bash
-# Card cut-sheets: tiles exports/<set>/*.png at true poker size onto A3 pages
-# with corner crop marks -> exports/<set>/print/<set>-cards-a3.pdf
+# Card cut-sheets: tiles exports/<set>/*.png at true physical size (poker portrait
+# + square locations) onto A3 pages with corner crop marks
+# -> exports/<set>/print/<set>-cards-a3.pdf
 python3 design/impose-print.py                 # alpha-1, A3
 python3 design/impose-print.py alpha-1 --paper a4
 
-# Rules booklet: typesets rules/*.md into an A4 PDF — strips [design:] notes,
-# shows [var:...] baselines as colour-coded chips, a Symbols key reusing the card
-# glyphs, a front-page contents with page numbers, and corner page numbers
-# -> exports/rules-A4.pdf
+# Rules booklet: typesets the core rules files (README, attributes, stat-contests,
+# market, policies; meta files excluded) into an A4 PDF — strips [design:] notes,
+# shows [var:...] baselines as colour-coded chips, and a Symbols key mirroring the
+# card glyphs; with pymupdf, also a front-page contents with page numbers and
+# corner page numbers -> exports/rules-A4.pdf
 python3 design/rules-to-a4.py
 python3 design/rules-to-a4.py --html-only      # emit HTML only (no Chrome needed)
 ```

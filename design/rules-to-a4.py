@@ -9,8 +9,9 @@ cleanly on paper:
   - drop [var:section-id] heading markers (variant-section flags, no value)
   - replace [var:id:baseline] -> the baseline value, colour-coded so a reader
     sees at a glance which numbers are variant-tunable
-  - reuse the card renderer's glyphs (gold cost coin, STR/CUN/CHA stat chips,
-    rarity gems, AP/VP badges) in a Symbols key and inline for AP/VP
+  - mirror the card glyphs (gold cost coin, STR/CUN/CHA stat chips, rarity gems,
+    AP/VP badges) — independently styled here to match — in a Symbols key and
+    inline for AP/VP
 
 With PyMuPDF present it also builds a front-page table of contents with real page
 numbers (two-pass render: measure heading pages, then re-render), stamps a page
@@ -52,13 +53,14 @@ def strip_design(text):
                 depth += {"[": 1, "]": -1}.get(text[j], 0)
                 j += 1
             i = j
-            while i < n and text[i] == " ":       # swallow a trailing space
+            while i < n and text[i] == " ":       # swallow any trailing spaces
                 i += 1
         else:
             out.append(text[i])
             i += 1
     text = "".join(out)
-    text = re.sub(r"(?m)^[ \t]*[-*][ \t]*$\n?", "", text)   # drop now-empty list items
+    # Drop now-empty list items of any marker (-, *, +, or an ordered "N.").
+    text = re.sub(r"(?m)^[ \t]*([-*+]|\d+\.)[ \t]*$\n?", "", text)
     return re.sub(r"\n{3,}", "\n\n", text)
 
 
@@ -91,18 +93,31 @@ def transform(text):
         vid, val = m.group(1), m.group(2)
         return (f'<span class="var" title="Variant-tunable ({vid}); baseline value shown">'
                 f'{val}</span>')
-    text = re.sub(r"\[var:([a-z_]+):([^\]]+)\]", var, text)         # [var:id:value] -> value
+    # id class matches the section-marker pattern above (digits/hyphens allowed),
+    # so a var like [var:grid_2d:5] substitutes instead of leaking raw markup.
+    text = re.sub(r"\[var:([a-z0-9_-]+):([^\]]+)\]", var, text)     # [var:id:value] -> value
 
-    # Cross-file links become in-document anchors (harmless on paper either way).
-    return re.sub(r"\]\([a-z0-9_-]+\.md(#[a-z0-9-]+)?\)",
+    # Cross-file links become in-document anchors (harmless on paper either way);
+    # the target may carry a leading path (e.g. ../library/schema.md).
+    return re.sub(r"\]\([a-z0-9_./-]+\.md(#[a-z0-9-]+)?\)",
                   lambda m: f"]({m.group(1) or '#top'})", text)
 
 
 def badge_inline_stats(html):
-    """Wrap standalone AP / VP tokens in glyph badges, skipping tag interiors."""
+    """Wrap standalone AP / VP tokens in glyph badges, skipping tag interiors and
+    the bodies of <code>/<pre> elements (a literal AP/VP in code stays verbatim)."""
     parts = re.split(r"(<[^>]+>)", html)
-    for k in range(0, len(parts), 2):                              # even = text between tags
-        parts[k] = re.sub(r"\bAP\b", '<span class="ico ap">AP</span>', parts[k])
+    depth = 0                                                      # nesting inside code/pre
+    for k, part in enumerate(parts):
+        if k % 2:                                                  # odd index = a tag
+            if re.match(r"<(code|pre)[\s>]", part.lower()):
+                depth += 1
+            elif re.match(r"</(code|pre)>", part.lower()):
+                depth = max(0, depth - 1)
+            continue
+        if depth:                                                  # text inside code/pre
+            continue
+        parts[k] = re.sub(r"\bAP\b", '<span class="ico ap">AP</span>', part)
         parts[k] = re.sub(r"\bVP\b", '<span class="ico vp">VP</span>', parts[k])
     return "".join(parts)
 
@@ -275,7 +290,10 @@ def build_chapters(rules_dir):
             walk(t.get("children", []))
 
     for fn in FILES:
-        with open(os.path.join(rules_dir, fn)) as f:
+        path = os.path.join(rules_dir, fn)
+        if not os.path.isfile(path):
+            sys.exit(f"Rules file not found: {path} (check --rules-dir).")
+        with open(path, encoding="utf-8") as f:
             md.reset()
             chapters.append(f'<section class="chapter">'
                             f'{badge_inline_stats(md.convert(transform(f.read())))}</section>')
@@ -300,35 +318,65 @@ def build_html(chapters, front_toc, set_name):
 
 
 def render_pdf(chrome, html_path, pdf_path):
-    subprocess.run([chrome, "--headless=new", "--disable-gpu", "--no-pdf-header-footer",
-                    f"--print-to-pdf={pdf_path}", f"file://{os.path.abspath(html_path)}"],
-                   check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    """Print the HTML to pdf_path via headless Chrome, verifying real output.
+
+    Chrome's --print-to-pdf can exit 0 while writing nothing/a truncated file
+    (profile lock, renderer crash, out-of-disk), so a zero exit isn't enough —
+    assert the file exists and is non-empty. stderr is captured (not discarded) so
+    a genuine failure surfaces Chrome's own diagnostic, not a bare exit code.
+    """
+    proc = subprocess.run(
+        [chrome, "--headless=new", "--disable-gpu", "--no-pdf-header-footer",
+         f"--print-to-pdf={pdf_path}", f"file://{os.path.abspath(html_path)}"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+    if proc.returncode:
+        sys.exit(f"Chrome failed to render the PDF (exit {proc.returncode}):\n"
+                 f"{proc.stderr.strip()}")
+    if not os.path.exists(pdf_path) or not os.path.getsize(pdf_path):
+        sys.exit(f"Chrome exited 0 but produced no PDF at {pdf_path} "
+                 f"(disk full, or a profile/sandbox issue?).")
+
+
+def page_heading_texts(page_dict):
+    """Heading-sized line texts on a page, from a get_text("dict") structure.
+
+    Matches on heading-sized text (h1=20pt, h2=15pt; body is 10.5pt) rather than a
+    plain text search, so the same name printed in the TOC or in body prose doesn't
+    match before the real heading. Spans are joined per line first, so a heading
+    split across spans (inline code, an em-dash, a soft wrap) still yields its full
+    name. Pure (no fitz), so it can be unit-tested with a fixture.
+    """
+    texts = set()
+    for blk in page_dict.get("blocks", []):
+        for line in blk.get("lines", []):
+            spans = line.get("spans", [])
+            if spans and max(s["size"] for s in spans) >= 13:
+                texts.add("".join(s["text"] for s in spans).strip())
+    return texts
 
 
 def locate_headings(pdf_path, headings):
     """0-based page index of each heading, found by scanning forward.
 
-    Matches on heading-sized spans (h1=20pt, h2=15pt; body is 10.5pt) rather than
-    a plain text search — otherwise the same names printed in the TOC or in body
-    prose would match before the actual heading.
+    Falls back to the previous heading's page for anything it can't find, and warns
+    (stderr) naming the misses so a wrong TOC page number / outline entry isn't
+    produced silently.
     """
     import fitz
     doc = fitz.open(pdf_path)
-    big = []                                           # per page: set of heading texts
-    for pg in doc:
-        texts = set()
-        for blk in pg.get_text("dict")["blocks"]:
-            for line in blk.get("lines", []):
-                for span in line["spans"]:
-                    if span["size"] >= 13:
-                        texts.add(span["text"].strip())
-        big.append(texts)
-    pages, cursor = [], 0
+    big = [page_heading_texts(pg.get_text("dict")) for pg in doc]
+    pages, cursor, missed = [], 0, []
     for _level, text in headings:
-        found = next((p for p in range(cursor, doc.page_count) if text in big[p]), cursor)
+        found = next((p for p in range(cursor, doc.page_count) if text in big[p]), None)
+        if found is None:
+            missed.append(text)
+            found = cursor
         pages.append(found)
         cursor = found
     doc.close()
+    if missed:
+        print(f"warning: could not locate {len(missed)} heading(s) in the PDF; their "
+              f"TOC page numbers may be wrong: {', '.join(missed)}", file=sys.stderr)
     return pages
 
 
@@ -342,9 +390,13 @@ def finalize_pdf(pdf_path, entries):
             continue                                   # front/TOC page stays unnumbered
         box = fitz.Rect(page.rect.width - 60, page.rect.height - 34,
                         page.rect.width - 18, page.rect.height - 18)
-        page.insert_textbox(box, str(i + 1), fontsize=9, fontname="helv",
-                            color=(0.42, 0.47, 0.55), align=fitz.TEXT_ALIGN_RIGHT)
-    doc.set_toc([[level, text, page] for level, text, page in entries])
+        if page.insert_textbox(box, str(i + 1), fontsize=9, fontname="helv",
+                               color=(0.42, 0.47, 0.55), align=fitz.TEXT_ALIGN_RIGHT) < 0:
+            print(f"warning: page number {i + 1} did not fit its stamp box.", file=sys.stderr)
+    toc = [[level, text, page] for level, text, page in entries]
+    if toc:
+        toc[0][0] = 1              # PyMuPDF rejects a TOC whose first entry isn't level 1
+    doc.set_toc(toc)
     tmp = pdf_path + ".tmp"
     doc.save(tmp, garbage=4, deflate=True)
     doc.close()
@@ -364,8 +416,10 @@ def main():
 
     try:
         chapters, headings = build_chapters(args.rules_dir)
-    except ModuleNotFoundError:
-        sys.exit("The 'markdown' package is required: pip install markdown")
+    except ModuleNotFoundError as e:
+        if e.name and e.name.split(".")[0] == "markdown":
+            sys.exit("The 'markdown' package is required: pip install markdown")
+        raise                          # a different missing dep — report it as itself
 
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
     html_path = os.path.splitext(args.out)[0] + ".html"
@@ -373,7 +427,7 @@ def main():
     # Without page numbers yet, the TOC lists section names only. --html-only
     # (screen use) stops here; the print path fills the page numbers below.
     plain_toc = toc_html([(lvl, txt, None) for lvl, txt in headings])
-    with open(html_path, "w") as f:
+    with open(html_path, "w", encoding="utf-8") as f:
         f.write(build_html(chapters, plain_toc, args.set))
 
     if args.html_only:
@@ -391,23 +445,30 @@ def main():
         # No PyMuPDF: still produce a PDF, just without page numbers / a paginated
         # TOC. The front page then carries the section list without numbers.
         render_pdf(chrome, html_path, args.out)
+        os.remove(html_path)                                   # intermediate; PDF is the deliverable
         print(f"Rules -> {args.out}  (install pymupdf for page numbers + TOC pages)")
         return
 
     # Pass 1: render with a number-less TOC to measure where each heading lands.
-    # The front page is forced to exactly one page (page-break-after), so filling
-    # the TOC in pass 2 can't shift any later page — the measured pages stay valid.
+    # Both passes render the same TOC rows (only the page-number text differs), so
+    # the front section's height — and every later page's position — is unchanged;
+    # the measured pages stay valid. (page-break-after:always only guarantees KEY
+    # starts fresh; it does not by itself cap the front section at one page.)
     scratch = os.path.splitext(args.out)[0] + ".pass1.pdf"
-    render_pdf(chrome, html_path, scratch)
-    pages = locate_headings(scratch, headings)                 # 0-based indices
-    os.remove(scratch)
+    try:
+        render_pdf(chrome, html_path, scratch)
+        pages = locate_headings(scratch, headings)             # 0-based indices
+    finally:
+        if os.path.exists(scratch):                            # don't leak the scratch on error
+            os.remove(scratch)
     entries = [(lvl, txt, pg + 1) for (lvl, txt), pg in zip(headings, pages)]
 
     # Pass 2: re-render with page numbers in the TOC, then stamp + outline.
-    with open(html_path, "w") as f:
+    with open(html_path, "w", encoding="utf-8") as f:
         f.write(build_html(chapters, toc_html(entries), args.set))
     render_pdf(chrome, html_path, args.out)
     finalize_pdf(args.out, entries)
+    os.remove(html_path)                                       # intermediate; PDF is the deliverable
     print(f"Rules -> {args.out}  ({len(entries)} TOC entries)")
 
 

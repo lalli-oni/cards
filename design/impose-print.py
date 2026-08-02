@@ -5,8 +5,10 @@ Reads `exports/<set>/<type>-<id>.png` (produced by moderntrek-template.py) and
 tiles the cards 1:1 — no scaling — onto A3 (default) pages with corner crop marks
 for guillotining, emitting a single print-ready PDF. The renderer emits 750x1050
 portrait cards and 750x750 square locations, which at 300 DPI are exactly
-63.5x88.9mm (standard poker) and 63.5mm square; cards of different sizes are
-grouped onto their own pages so every cell on a sheet cuts to the same size.
+63.5x88.9mm (standard poker) and 63.5mm square. Cards sharing a width share
+columns; rows of differing heights are then packed together onto each sheet
+(first-fit-decreasing) to minimise paper — so a single sheet may cut to two
+different card sizes (poker and square are the same width here).
 
 Usage:   cd design && python3 impose-print.py            # alpha-1 -> A3
          python3 impose-print.py alpha-1 --paper a4
@@ -26,6 +28,21 @@ EXPORTS = os.path.join(SCRIPT_DIR, "exports")
 
 # Paper sizes in millimetres (portrait).
 PAPER = {"a3": (297, 420), "a4": (210, 297), "letter": (215.9, 279.4)}
+
+MARGIN_MM = 8.0        # top/bottom margin kept clear of cards
+CARD_W_MM = 63.5       # every card (poker + square) is one poker-width wide
+
+
+def page_metrics(paper, dpi):
+    """Pixel page size and the usable vertical budget for a paper/DPI pair.
+
+    Extracted so tests can assert the same margin/budget math main() runs on,
+    instead of re-deriving it (and silently diverging when the formula changes).
+    """
+    mm = dpi / 25.4
+    pw, ph = (round(d * mm) for d in PAPER[paper])
+    budget_h = ph - 2 * round(MARGIN_MM * mm)
+    return pw, ph, budget_h
 
 
 def make_rows(groups, page_w, gutter):
@@ -74,11 +91,11 @@ def draw_page(rows, page_px, gutter, tick):
     draw = ImageDraw.Draw(page)
     for row in rows:
         w, h = row["w"], row["h"]
-        cols = max(1, (pw + gutter) // (w + gutter))
-        ox = (pw - (cols * w + (cols - 1) * gutter)) // 2
+        n = len(row["files"])                                 # center the row's actual
+        ox = (pw - (n * w + (n - 1) * gutter)) // 2           # cards, not a full column
         for c, path in enumerate(row["files"]):
             x = ox + c * (w + gutter)
-            page.paste(Image.open(path).convert("RGB"), (x, y))
+            page.paste(load_rgb(path), (x, y))
             for cx, cy in ((x, y), (x + w, y), (x, y + h), (x + w, y + h)):
                 sx = -1 if cx == x else 1
                 sy = -1 if cy == y else 1
@@ -96,6 +113,44 @@ def collect(set_name):
     return sorted(f for f in glob.glob(os.path.join(set_dir, "*.png")))
 
 
+def image_size(path):
+    """(w, h) of a PNG, exiting with the filename on a corrupt/truncated file."""
+    try:
+        with Image.open(path) as im:
+            return im.size
+    except (OSError, ValueError) as e:                        # incl. UnidentifiedImageError
+        sys.exit(f"Could not read card image {path}: {e}")
+
+
+def load_rgb(path):
+    """Open and decode a card PNG as RGB, exiting with the filename on error."""
+    try:
+        with Image.open(path) as im:
+            return im.convert("RGB")
+    except (OSError, ValueError) as e:
+        sys.exit(f"Could not read card image {path}: {e}")
+
+
+def validate_sizes(groups, pw, budget_h, dpi):
+    """Fail loudly on cards that can't be placed 1:1, or that look mis-scaled.
+
+    An oversized card would otherwise be silently clipped by draw_page (negative
+    offsets push it and its crop marks off the sheet); a card whose width doesn't
+    match CARD_W_MM at this DPI means the PNGs and --dpi disagree, so the "true
+    physical size" guarantee is void — warn rather than print the wrong size.
+    """
+    expected_w = round(CARD_W_MM * dpi / 25.4)
+    for (w, h), files in groups.items():
+        if w > pw or h > budget_h:
+            sys.exit(f"Card {w}x{h}px does not fit a {pw}px-wide sheet with a "
+                     f"{budget_h}px vertical budget (e.g. {files[0]}). "
+                     f"Use larger --paper or a lower --dpi.")
+        if abs(w - expected_w) > 2:
+            print(f"warning: card width {w}px != {expected_w}px expected for "
+                  f"{CARD_W_MM}mm at {dpi} DPI — cards may print at the wrong "
+                  f"physical size (e.g. {files[0]}).", file=sys.stderr)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -108,9 +163,8 @@ def main():
     args = ap.parse_args()
 
     mm = args.dpi / 25.4
-    pw, ph = (round(d * mm) for d in PAPER[args.paper])
+    pw, ph, budget_h = page_metrics(args.paper, args.dpi)
     gutter, tick = round(args.gutter_mm * mm), round(args.tick_mm * mm)
-    budget_h = ph - 2 * round(8 * mm)                          # keep an ~8mm top/bottom margin
 
     files = collect(args.set)
     if not files:
@@ -118,15 +172,18 @@ def main():
 
     groups = collections.defaultdict(list)
     for f in files:
-        groups[Image.open(f).size].append(f)
+        groups[image_size(f)].append(f)
+    validate_sizes(groups, pw, budget_h, args.dpi)
 
     layout = paginate(make_rows(groups, pw, gutter), budget_h, gutter)
     pages = [draw_page(rows, (pw, ph), gutter, tick) for rows in layout]
 
     out = args.out or os.path.join(EXPORTS, args.set, "print",
                                    f"{args.set}-cards-{args.paper}.pdf")
-    os.makedirs(os.path.dirname(out), exist_ok=True)
+    os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
     pages[0].save(out, save_all=True, append_images=pages[1:], resolution=args.dpi)
+    if not os.path.getsize(out):
+        sys.exit(f"Wrote an empty PDF to {out} — imposition produced no output.")
     print(f"{len(files)} cards -> {len(pages)} {args.paper.upper()} page(s) -> {out}")
 
 

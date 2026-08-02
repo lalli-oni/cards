@@ -9,6 +9,7 @@ import {
   getVisibleEvent,
   type InvalidActionError,
   type PlayerDescriptor,
+  type Session,
   setAutoFreeze,
   type VisibleState,
 } from "cards-engine";
@@ -403,7 +404,12 @@ function onEvent(events: GameEvent[], state: GameState): void {
   // Auto-save after every action
   if (controller) {
     try {
-      const session = structuredClone(controller.toSession(true, _eventLog));
+      // Snapshot the session for persistence. `$state.snapshot` both unwraps the
+      // reactive `_eventLog` proxy — a bare `structuredClone` throws DataCloneError
+      // on `$state` proxies (#244) — and deep-clones the whole session to detach it
+      // from live engine state, in a single pass. The rest of the session is plain
+      // engine state.
+      const session: Session = $state.snapshot(controller.toSession(true, _eventLog));
       autoSave(session)
         .then(() => {
           autoSaveFailCount = 0;
@@ -418,9 +424,9 @@ function onEvent(events: GameEvent[], state: GameState): void {
           }
         });
     } catch (err) {
-      // Serialization (structuredClone of the session, including the god-view
-      // log) failed. Manual save runs the identical clone, so don't advise it —
-      // this is likely a bug worth reporting.
+      // Serialization (the `$state.snapshot` of the session, including the
+      // god-view log) failed. Manual save runs the identical snapshot, so don't
+      // advise it — this is likely a bug worth reporting.
       console.error("Failed to serialize session for auto-save:", err);
       autoSaveFailCount++;
       if (autoSaveFailCount >= 3) {
@@ -649,7 +655,9 @@ export async function saveGame(name: string): Promise<void> {
     return;
   }
   try {
-    await saveSession(name, structuredClone(controller.toSession(true, _eventLog)));
+    // `$state.snapshot` unwraps the reactive `_eventLog` and detaches the session
+    // in one pass — see the auto-save site / #244.
+    await saveSession(name, $state.snapshot(controller.toSession(true, _eventLog)));
     await refreshSessions();
   } catch (err) {
     _error = `Failed to save game: ${err instanceof Error ? err.message : String(err)}`;

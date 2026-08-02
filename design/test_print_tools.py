@@ -90,28 +90,26 @@ def test_toc_html():
     check("None page -> blank, not 'None'", "None" not in rows and '<span class="pg"></span>' in rows)
 
 
-def test_layout_packing():
-    print("impose.layout packs true-size cells with margins on the page:")
-    # A3 @300 DPI = 3508x4961; poker cards 750x1050 pack 4x4 = 16 per sheet, so
-    # 50 cards -> 4 pages. Pins the shop-floor expectation from the issue.
-    a3 = (3508, 4961)
-    gutter = round(4 * 300 / 25.4)
-    files = [os.path.join(SCRIPT_DIR, "penpot.py")] * 50  # any readable path; not opened here
-    pages = list(_dry_layout(imp, files, 750, 1050, a3, gutter))
-    check("50 poker cards -> 4 A3 pages", len(pages) == 4)
-    square = [os.path.join(SCRIPT_DIR, "penpot.py")] * 16
-    check("16 square locations -> 1 page", len(list(_dry_layout(imp, square, 750, 750, a3, gutter))) == 1)
-
-
-def _dry_layout(imp, files, w, h, page_px, gutter):
-    """Run layout()'s pagination without opening image files: patch Image.open/paste."""
-    from PIL import Image
-    orig_open = imp.Image.open
-    imp.Image.open = lambda *_a, **_k: Image.new("RGB", (w, h), "white")
-    try:
-        yield from imp.layout(files, w, h, page_px, gutter, tick=35)
-    finally:
-        imp.Image.open = orig_open
+def test_row_packing():
+    print("row packing mixes same-width sizes onto shared sheets to save paper:")
+    # A3 @300 DPI; alpha-1 = 50 poker (750x1050) + 16 square location (750x750)
+    # cards, all the same width. The naive size-siloed layout was 4 poker pages
+    # (last holding only 2) + 1 half-empty locations page = 5 sheets. Packing rows
+    # of both heights together must fit in 4.
+    mm = 300 / 25.4
+    pw, ph = round(297 * mm), round(420 * mm)
+    gutter, budget = round(4 * mm), round(420 * mm) - 2 * round(8 * mm)
+    groups = {(750, 1050): [f"p{i}" for i in range(50)],
+              (750, 750): [f"s{i}" for i in range(16)]}
+    rows = imp.make_rows(groups, pw, gutter)
+    check("50 poker -> 13 rows + 16 square -> 4 rows", len(rows) == 17)
+    pages = imp.paginate(rows, budget, gutter)
+    check("packs into 4 sheets, not 5", len(pages) == 4)
+    # The leftover poker row shares its sheet with square rows — the whole point.
+    last_heights = {r["h"] for r in pages[-1]}
+    check("last sheet mixes 1050 + 750 rows", last_heights == {1050, 750})
+    used = lambda pg: sum(r["h"] for r in pg) + gutter * (len(pg) - 1)
+    check("no sheet exceeds the vertical budget", all(used(pg) <= budget for pg in pages))
 
 
 if __name__ == "__main__":
@@ -120,7 +118,7 @@ if __name__ == "__main__":
     test_blank_before_lists()
     test_badge_inline_stats()
     test_toc_html()
-    test_layout_packing()
+    test_row_packing()
     if _failures:
         print(f"\n{len(_failures)} FAILED: {', '.join(_failures)}")
         sys.exit(1)

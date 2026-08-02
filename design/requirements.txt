@@ -1,0 +1,8 @@
+# Python deps for the print-and-play tooling
+# (design/impose-print.py, design/rules-to-a4.py).
+Pillow
+markdown
+# Optional at runtime: enables the rules booklet's front-page TOC page numbers,
+# corner page stamps, and PDF outline. Without it a number-less booklet is still
+# produced. Installed by `pip install -r` so CI/local get the full feature set.
+pymupdf

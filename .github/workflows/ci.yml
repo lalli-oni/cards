@@ -40,5 +40,8 @@ jobs:
       - name: Test (engine/web/test suites)
         run: bun --filter '*' test
 
+      - name: Install Python print-tooling deps
+        run: python3 -m pip install -r design/requirements.txt
+
       - name: Renderer smoke tests (Python)
         run: bun run test:renderer

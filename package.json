@@ -11,7 +11,7 @@
     "build:library": "bun library/build.ts",
     "build:rules": "bun engine/src/rules-config.ts",
     "test": "bun run build:library && bun --filter '*' test",
-    "test:renderer": "python3 design/test_moderntrek_template.py",
+    "test:renderer": "python3 design/test_moderntrek_template.py && python3 design/test_print_tools.py",
     "typecheck": "bun --filter '*' typecheck"
   },
   "devDependencies": {

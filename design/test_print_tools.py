@@ -81,6 +81,15 @@ def test_badge_inline_stats():
     check("href attribute untouched", 'href="/ap"' in out)
 
 
+def test_toc_html():
+    print("toc_html renders indented rows with (or without) page numbers:")
+    rows = r2a.toc_html([(1, "Master Design Document", 3), (2, "Core Architecture", None)])
+    check("level-1 row + page number", 'class="toc-row l1"' in rows and ">3<" in rows)
+    check("level-2 row", 'class="toc-row l2"' in rows)
+    # A None page (pass 1 / no-pymupdf fallback) renders an empty number, not "None".
+    check("None page -> blank, not 'None'", "None" not in rows and '<span class="pg"></span>' in rows)
+
+
 def test_layout_packing():
     print("impose.layout packs true-size cells with margins on the page:")
     # A3 @300 DPI = 3508x4961; poker cards 750x1050 pack 4x4 = 16 per sheet, so
@@ -110,6 +119,7 @@ if __name__ == "__main__":
     test_var_substitution()
     test_blank_before_lists()
     test_badge_inline_stats()
+    test_toc_html()
     test_layout_packing()
     if _failures:
         print(f"\n{len(_failures)} FAILED: {', '.join(_failures)}")

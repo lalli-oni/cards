@@ -12,7 +12,13 @@ cleanly on paper:
   - reuse the card renderer's glyphs (gold cost coin, STR/CUN/CHA stat chips,
     rarity gems, AP/VP badges) in a Symbols key and inline for AP/VP
 
-Requires the `markdown` package and a Chrome/Chromium binary (for --print-to-pdf).
+With PyMuPDF present it also builds a front-page table of contents with real page
+numbers (two-pass render: measure heading pages, then re-render), stamps a page
+number in the bottom-right of every page, and adds a PDF outline. Without it, the
+PDF is still produced — just with a number-less contents list and no page numbers.
+
+Requires the `markdown` package and a Chrome/Chromium binary (for --print-to-pdf);
+`pymupdf` is optional (enables the TOC page numbers, page stamps, and outline).
 
 Usage:   cd design && python3 rules-to-a4.py
          python3 rules-to-a4.py --out /tmp/rules.pdf
@@ -133,8 +139,15 @@ CSS = """
 *{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
 html{ font-size:10.5pt; }
 body{ font-family:-apple-system,"Helvetica Neue",Arial,sans-serif; color:var(--ink); line-height:1.5; }
-.chapter{ page-break-before:always; }
-.chapter:first-of-type{ page-break-before:avoid; }
+/* Front matter (title+TOC, symbols key) each own a page; the rule chapters flow
+   so short files don't each waste a page. Widow/orphan + break-after control
+   stops a lone word or heading spilling onto an otherwise-blank page. */
+.front{ page-break-after:always; }
+.keypage{ page-break-after:always; }
+.chapter + .chapter h1{ margin-top:1.6em; }
+h1,h2,h3,h4{ break-after:avoid; }
+p,li{ orphans:2; widows:2; }
+table,blockquote{ break-inside:avoid; }
 h1{ font-size:20pt; color:var(--navy); margin:0 0 .5em; letter-spacing:-.01em;
   border-bottom:2.5px solid var(--limebright); padding-bottom:.18em; }
 h2{ font-size:15pt; color:var(--navy); margin:1.4em 0 .35em;
@@ -175,28 +188,40 @@ tr:nth-child(even) td{ background:#f6f8fc; }
 .lede{ color:#33435f; }
 .note{ background:var(--varbg); border:1px solid #bfe0f5; border-radius:6px; padding:.5em .9em; margin:.7em 0; }
 .note p{ margin:0; }
-.title{ page-break-before:avoid; }
-.titlewrap{ margin-top:32mm; border-top:3px solid var(--limebright);
-  border-bottom:3px solid var(--limebright); padding:14mm 0; }
+.titlewrap{ border-top:3px solid var(--limebright);
+  border-bottom:3px solid var(--limebright); padding:9mm 0; margin-bottom:8mm; }
 .kicker{ text-transform:uppercase; letter-spacing:.25em; color:var(--muted); font-size:11pt; font-weight:700; }
-.booktitle{ font-size:52pt; border:none; margin:.1em 0; color:var(--navy); letter-spacing:-.02em; }
-.subtitle{ font-size:15pt; color:#33435f; }
-.foot{ margin-top:8mm; color:var(--muted); font-size:10pt; }
+.booktitle{ font-size:42pt; border:none; margin:.08em 0; color:var(--navy); letter-spacing:-.02em; }
+.subtitle{ font-size:14pt; color:#33435f; }
+.foot{ margin-top:5mm; color:var(--muted); font-size:10pt; }
+/* front-page table of contents: name — dotted leader — page number */
+.toc-h{ font-size:12pt; text-transform:uppercase; letter-spacing:.14em;
+  color:var(--muted); font-weight:700; margin:0 0 .6em; }
+.toc-row{ display:flex; align-items:baseline; margin:.16em 0; font-size:10.5pt; }
+.toc-row .nm{ color:var(--navy); }
+.toc-row .dots{ flex:1; margin:0 .5em; border-bottom:1px dotted #b7c1d3; transform:translateY(-.18em); }
+.toc-row .pg{ color:var(--muted); font-variant-numeric:tabular-nums; }
+.toc-row.l1{ margin-top:.55em; }
+.toc-row.l1 .nm{ font-weight:700; }
+.toc-row.l2{ padding-left:1.1em; }
+.toc-row.l2 .nm{ color:#33435f; }
 """
 
-TITLE = """
-<section class="chapter title">
+FRONT = """
+<section class="front">
   <div class="titlewrap">
     <div class="kicker">Card Game &mdash; {set_name}</div>
     <h1 class="booktitle">Rules</h1>
     <div class="subtitle">Master rules, typeset for print</div>
     <div class="foot">Baseline variant &middot; values shown are the shipped defaults</div>
   </div>
+  <div class="toc-h">Contents</div>
+  {toc}
 </section>
 """
 
 KEY = """
-<section class="chapter keypage">
+<section class="keypage">
   <h1>Symbols &amp; Notation</h1>
   <p class="lede">This booklet is the game's design rules, typeset for reading.
   Two conventions to know before you start:</p>
@@ -236,18 +261,94 @@ KEY = """
 """
 
 
-def build_html(rules_dir, set_name):
+def build_chapters(rules_dir):
+    """Return (chapters_html, headings) where headings is an ordered list of
+    (level, text) for every h1/h2 — the entries the TOC is built from."""
     import markdown
     md = markdown.Markdown(extensions=["extra", "toc", "attr_list"], tab_length=2)
-    chapters = []
+    chapters, headings = [], []
+
+    def walk(tokens):
+        for t in tokens:
+            if t["level"] <= 2:
+                headings.append((t["level"], t["name"]))
+            walk(t.get("children", []))
+
     for fn in FILES:
         with open(os.path.join(rules_dir, fn)) as f:
             md.reset()
             chapters.append(f'<section class="chapter">'
                             f'{badge_inline_stats(md.convert(transform(f.read())))}</section>')
+            walk(md.toc_tokens)
+    return "".join(chapters), headings
+
+
+def toc_html(entries):
+    """entries: list of (level, text, page-or-None) -> front-page TOC rows."""
+    rows = []
+    for level, text, page in entries:
+        pg = "" if page is None else str(page)
+        rows.append(f'<div class="toc-row l{level}"><span class="nm">{text}</span>'
+                    f'<span class="dots"></span><span class="pg">{pg}</span></div>')
+    return "".join(rows)
+
+
+def build_html(chapters, front_toc, set_name):
     return (f'<!doctype html><html><head><meta charset="utf-8">'
             f'<title>Card Game — Rules ({set_name})</title><style>{CSS}</style></head>'
-            f'<body>{TITLE.format(set_name=set_name)}{KEY}{"".join(chapters)}</body></html>')
+            f'<body>{FRONT.format(set_name=set_name, toc=front_toc)}{KEY}{chapters}</body></html>')
+
+
+def render_pdf(chrome, html_path, pdf_path):
+    subprocess.run([chrome, "--headless=new", "--disable-gpu", "--no-pdf-header-footer",
+                    f"--print-to-pdf={pdf_path}", f"file://{os.path.abspath(html_path)}"],
+                   check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def locate_headings(pdf_path, headings):
+    """0-based page index of each heading, found by scanning forward.
+
+    Matches on heading-sized spans (h1=20pt, h2=15pt; body is 10.5pt) rather than
+    a plain text search — otherwise the same names printed in the TOC or in body
+    prose would match before the actual heading.
+    """
+    import fitz
+    doc = fitz.open(pdf_path)
+    big = []                                           # per page: set of heading texts
+    for pg in doc:
+        texts = set()
+        for blk in pg.get_text("dict")["blocks"]:
+            for line in blk.get("lines", []):
+                for span in line["spans"]:
+                    if span["size"] >= 13:
+                        texts.add(span["text"].strip())
+        big.append(texts)
+    pages, cursor = [], 0
+    for _level, text in headings:
+        found = next((p for p in range(cursor, doc.page_count) if text in big[p]), cursor)
+        pages.append(found)
+        cursor = found
+    doc.close()
+    return pages
+
+
+def finalize_pdf(pdf_path, entries):
+    """Stamp a page number bottom-right on every page but the front, and add a
+    PDF outline from the located headings. entries: (level, text, page1based)."""
+    import fitz
+    doc = fitz.open(pdf_path)
+    for i, page in enumerate(doc):
+        if i == 0:
+            continue                                   # front/TOC page stays unnumbered
+        box = fitz.Rect(page.rect.width - 60, page.rect.height - 34,
+                        page.rect.width - 18, page.rect.height - 18)
+        page.insert_textbox(box, str(i + 1), fontsize=9, fontname="helv",
+                            color=(0.42, 0.47, 0.55), align=fitz.TEXT_ALIGN_RIGHT)
+    doc.set_toc([[level, text, page] for level, text, page in entries])
+    tmp = pdf_path + ".tmp"
+    doc.save(tmp, garbage=4, deflate=True)
+    doc.close()
+    os.replace(tmp, pdf_path)
 
 
 def main():
@@ -262,14 +363,18 @@ def main():
     args = ap.parse_args()
 
     try:
-        html = build_html(args.rules_dir, args.set)
+        chapters, headings = build_chapters(args.rules_dir)
     except ModuleNotFoundError:
         sys.exit("The 'markdown' package is required: pip install markdown")
 
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
     html_path = os.path.splitext(args.out)[0] + ".html"
+
+    # Without page numbers yet, the TOC lists section names only. --html-only
+    # (screen use) stops here; the print path fills the page numbers below.
+    plain_toc = toc_html([(lvl, txt, None) for lvl, txt in headings])
     with open(html_path, "w") as f:
-        f.write(html)
+        f.write(build_html(chapters, plain_toc, args.set))
 
     if args.html_only:
         print(f"HTML -> {html_path}")
@@ -279,10 +384,31 @@ def main():
     if not chrome:
         sys.exit("No Chrome/Chromium found. Set CHROME_BIN or pass --chrome; "
                  f"HTML was written to {html_path}.")
-    subprocess.run([chrome, "--headless=new", "--disable-gpu", "--no-pdf-header-footer",
-                    f"--print-to-pdf={args.out}", f"file://{os.path.abspath(html_path)}"],
-                   check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    print(f"Rules -> {args.out}")
+
+    try:
+        import fitz  # noqa: F401
+    except ModuleNotFoundError:
+        # No PyMuPDF: still produce a PDF, just without page numbers / a paginated
+        # TOC. The front page then carries the section list without numbers.
+        render_pdf(chrome, html_path, args.out)
+        print(f"Rules -> {args.out}  (install pymupdf for page numbers + TOC pages)")
+        return
+
+    # Pass 1: render with a number-less TOC to measure where each heading lands.
+    # The front page is forced to exactly one page (page-break-after), so filling
+    # the TOC in pass 2 can't shift any later page — the measured pages stay valid.
+    scratch = os.path.splitext(args.out)[0] + ".pass1.pdf"
+    render_pdf(chrome, html_path, scratch)
+    pages = locate_headings(scratch, headings)                 # 0-based indices
+    os.remove(scratch)
+    entries = [(lvl, txt, pg + 1) for (lvl, txt), pg in zip(headings, pages)]
+
+    # Pass 2: re-render with page numbers in the TOC, then stamp + outline.
+    with open(html_path, "w") as f:
+        f.write(build_html(chapters, toc_html(entries), args.set))
+    render_pdf(chrome, html_path, args.out)
+    finalize_pdf(args.out, entries)
+    print(f"Rules -> {args.out}  ({len(entries)} TOC entries)")
 
 
 if __name__ == "__main__":

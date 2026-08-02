@@ -81,7 +81,8 @@ renderer to see changes. Keyword reminder prose is composed from
 
 Two Penpot-independent tools produce a rough physical set from the rendered PNGs
 and the rules markdown (needs `pip install pillow markdown`; the rules tool also
-needs a Chrome/Chromium binary):
+needs a Chrome/Chromium binary, and optionally `pymupdf` for the contents page +
+page numbers):
 
 ```bash
 python3 design/impose-print.py                 # tile exports/<set>/*.png at true
@@ -93,9 +94,11 @@ python3 design/rules-to-a4.py --html-only      # HTML only (no Chrome)
 
 `impose-print.py` writes `exports/<set>/print/<set>-cards-<paper>.pdf`;
 `rules-to-a4.py` writes `exports/rules-A4.pdf`. The rules tool strips `[design:]`
-notes, renders `[var:...]` baselines as colour-coded chips, and adds a Symbols
-key reusing the card glyphs. Card backs aren't rendered, so sheets are
-single-sided (#218). Pure logic is covered by `design/test_print_tools.py`.
+notes, renders `[var:...]` baselines as colour-coded chips, adds a Symbols key
+reusing the card glyphs, and (with `pymupdf`) a front-page contents with page
+numbers, corner page numbers, and a PDF outline. Card backs aren't rendered, so
+sheets are single-sided (#218). Pure logic is covered by
+`design/test_print_tools.py`.
 
 ### 6. Inspect current Penpot state
 

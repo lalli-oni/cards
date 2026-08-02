@@ -73,7 +73,9 @@ python3 design/moderntrek-template.py library/sets/alpha-1/locations.csv
 Turn rendered cards and the rules into a rough print-and-play set (e.g. an A3
 self-print at a library) before professional printing. Needs `Pillow` and
 `markdown` (`pip install pillow markdown`); the rules tool also needs a
-Chrome/Chromium binary for headless PDF printing.
+Chrome/Chromium binary for headless PDF printing, and optionally `pymupdf`
+(`pip install pymupdf`) for the front-page table of contents with page numbers,
+corner page numbers, and a PDF outline.
 
 ```bash
 # Card cut-sheets: tiles exports/<set>/*.png at true poker size onto A3 pages
@@ -82,8 +84,9 @@ python3 design/impose-print.py                 # alpha-1, A3
 python3 design/impose-print.py alpha-1 --paper a4
 
 # Rules booklet: typesets rules/*.md into an A4 PDF — strips [design:] notes,
-# shows [var:...] baselines as colour-coded chips, and adds a Symbols key that
-# reuses the card glyphs -> exports/rules-A4.pdf
+# shows [var:...] baselines as colour-coded chips, a Symbols key reusing the card
+# glyphs, a front-page contents with page numbers, and corner page numbers
+# -> exports/rules-A4.pdf
 python3 design/rules-to-a4.py
 python3 design/rules-to-a4.py --html-only      # emit HTML only (no Chrome needed)
 ```

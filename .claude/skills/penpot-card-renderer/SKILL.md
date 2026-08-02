@@ -77,7 +77,27 @@ renderer to see changes. Keyword reminder prose is composed from
 `library/build/keywords.json`; its templates are the source of truth in
 `engine/src/keywords.ts` (rebuild with `bun library/build.ts`).
 
-### 5. Inspect current Penpot state
+### 5. Print-and-play output (A3 cards + A4 rules)
+
+Two Penpot-independent tools produce a rough physical set from the rendered PNGs
+and the rules markdown (needs `pip install pillow markdown`; the rules tool also
+needs a Chrome/Chromium binary):
+
+```bash
+python3 design/impose-print.py                 # tile exports/<set>/*.png at true
+                                               # poker size onto A3 + crop marks
+python3 design/impose-print.py alpha-1 --paper a4
+python3 design/rules-to-a4.py                  # rules/*.md -> A4 booklet PDF
+python3 design/rules-to-a4.py --html-only      # HTML only (no Chrome)
+```
+
+`impose-print.py` writes `exports/<set>/print/<set>-cards-<paper>.pdf`;
+`rules-to-a4.py` writes `exports/rules-A4.pdf`. The rules tool strips `[design:]`
+notes, renders `[var:...]` baselines as colour-coded chips, and adds a Symbols
+key reusing the card glyphs. Card backs aren't rendered, so sheets are
+single-sided (#218). Pure logic is covered by `design/test_print_tools.py`.
+
+### 6. Inspect current Penpot state
 
 ```python
 cd design && python3 -c "

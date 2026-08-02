@@ -1,17 +1,21 @@
 #!/usr/bin/env python3
-"""Standalone tests for the print tooling's pure logic (#250).
+"""Standalone tests for the print tooling's pure logic.
 
 Like the other design/ tests these run standalone:
   python3 design/test_print_tools.py   (exit 0 = pass)
 
 Covers the rules->A4 markdown transforms (the parts most likely to silently
-mangle rules text) and the imposition grid packing. The scripts have hyphenated
-filenames, so they are loaded via importlib rather than imported by name.
+mangle rules text), the heading/TOC logic, and the imposition grid packing +
+page geometry. The scripts have hyphenated filenames, so they are loaded via
+importlib rather than imported by name. impose-print.py imports Pillow at module
+load, so its tests are skipped (not crashed) when Pillow is absent.
 """
 
 import importlib.util
 import os
 import sys
+import tempfile
+import traceback
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -24,7 +28,11 @@ def _load(mod_name, filename):
 
 
 r2a = _load("rules_to_a4", "rules-to-a4.py")
-imp = _load("impose_print", "impose-print.py")
+try:
+    imp = _load("impose_print", "impose-print.py")
+except ModuleNotFoundError as e:
+    imp = None                                 # Pillow absent — skip impose tests, don't crash
+    _imp_skip_reason = str(e)
 
 _failures = []
 
@@ -34,6 +42,8 @@ def check(name, cond):
     if not cond:
         _failures.append(name)
 
+
+# ---------------- rules-to-a4 transforms ----------------
 
 def test_strip_design_balanced():
     print("strip_design removes [design:] blocks, including nested [var:]:")
@@ -50,6 +60,18 @@ def test_strip_design_balanced():
     check("empty bullet line removed", "\n- \n" not in out2 and out2.count("- ") == 2)
 
 
+def test_strip_design_plus_and_ordered():
+    print("strip_design also clears empty '+' and ordered list items, not just -/*:")
+    # The earlier cleanup regex only matched -/* markers, so a [design:]-only '+'
+    # bullet or numbered item would leave a dangling empty marker in the rulebook.
+    plus = "+ Real\n+ [design: internal only]\n+ Keep"
+    out = r2a.strip_design(plus)
+    check("empty '+' item removed", "+ Real" in out and "+ Keep" in out and out.count("+ ") == 2)
+    ordered = "1. Real\n2. [design: internal only]\n3. Keep"
+    out2 = r2a.strip_design(ordered)
+    check("empty ordered item removed", "1. Real" in out2 and "3. Keep" in out2 and "2. \n" not in out2)
+
+
 def test_var_substitution():
     print("transform substitutes [var:id:value] as a colour-coded chip:")
     out = r2a.transform("Reach [var:vp_threshold:50] VP.")
@@ -59,6 +81,25 @@ def test_var_substitution():
     # Two-part section markers carry no value and must simply disappear.
     check("section marker dropped",
           "[var:seeding-phase]" not in r2a.transform("### Seeding Phase [var:seeding-phase]"))
+
+
+def test_var_digit_and_hyphen_id():
+    print("transform substitutes var ids with digits/hyphens (id class matches markers):")
+    # Regression: the valued-var id class was [a-z_]+, narrower than the section
+    # marker's [a-z0-9_-]+, so any id with a digit/hyphen leaked raw into the PDF.
+    out = r2a.transform("Grid [var:grid_2d:5] wide; seed [var:seed-draw:10].")
+    check("digit-id substituted", ">5<" in out and "grid_2d" in out and "[var:grid_2d" not in out)
+    check("hyphen-id substituted", ">10<" in out and "seed-draw" in out and "[var:seed-draw" not in out)
+
+
+def test_transform_links():
+    print("transform rewrites wikilinks and cross-file .md links to in-doc anchors:")
+    check("wikilink unwrapped", r2a.transform("See [[controller]] rules.") == "See controller rules.")
+    check("anchored md link -> #anchor", "](#seeding)" in r2a.transform("[x](market.md#seeding)"))
+    check("bare md link -> #top", "](#top)" in r2a.transform("[x](market.md)"))
+    # A link carrying a leading path (../library/schema.md) must rewrite too, not
+    # survive as a dead file://-relative link.
+    check("pathful md link rewritten", "](#top)" in r2a.transform("[x](../library/schema.md)"))
 
 
 def test_blank_before_lists():
@@ -71,6 +112,10 @@ def test_blank_before_lists():
     # (that would break the nesting into a sibling list).
     nested = "1. Draw:\n  - sub a\n  - sub b"
     check("nested list untouched", r2a.blank_before_lists(nested) == nested)
+    # A heading directly followed by a list must NOT gain a blank line either —
+    # the branch the docstring calls out but no case exercised.
+    heading = "# Title\n- one\n- two"
+    check("heading+list untouched", r2a.blank_before_lists(heading) == heading)
 
 
 def test_badge_inline_stats():
@@ -79,6 +124,19 @@ def test_badge_inline_stats():
     check("AP in text badged", '<span class="ico ap">AP</span>' in out)
     check("VP in text badged", '<span class="ico vp">VP</span>' in out)
     check("href attribute untouched", 'href="/ap"' in out)
+
+
+def test_badge_boundaries_and_code():
+    print("badge_inline_stats only badges standalone AP/VP, and skips code spans:")
+    # \b word boundaries: AP/VP inside a larger word must stay unbadged.
+    out = r2a.badge_inline_stats("MAPS and VAPOR cost 2 AP")
+    check("substring AP/VP untouched", "MAPS" in out and "VAPOR" in out)
+    check("standalone AP badged", '<span class="ico ap">AP</span>' in out)
+    # A literal AP/VP inside an inline <code> span must stay verbatim, not gain a
+    # styled badge injected into monospace text.
+    out2 = r2a.badge_inline_stats("<code>2 AP</code> costs 2 AP")
+    check("code-span AP stays literal", "<code>2 AP</code>" in out2)
+    check("prose AP still badged", '<span class="ico ap">AP</span>' in out2)
 
 
 def test_toc_html():
@@ -90,19 +148,43 @@ def test_toc_html():
     check("None page -> blank, not 'None'", "None" not in rows and '<span class="pg"></span>' in rows)
 
 
+def test_page_heading_texts():
+    print("page_heading_texts joins spans per line and keeps only heading-sized text:")
+    # Feed a get_text("dict")-shaped fixture: an h1 split across two spans (the
+    # wrapped-heading case that used to mislocate TOC entries), plus body prose.
+    page = {"blocks": [
+        {"lines": [{"spans": [{"text": "Core ", "size": 20}, {"text": "Architecture", "size": 20}]}]},
+        {"lines": [{"spans": [{"text": "some body prose", "size": 10.5}]}]},
+    ]}
+    texts = r2a.page_heading_texts(page)
+    check("multi-span heading joined whole", "Core Architecture" in texts)
+    check("body-sized text excluded", "some body prose" not in texts)
+
+
+# ---------------- impose-print packing + geometry ----------------
+
+def test_page_metrics():
+    print("page_metrics derives the sheet size + vertical budget main() runs on:")
+    mm = 300 / 25.4
+    pw, ph, budget = imp.page_metrics("a3", 300)
+    check("A3 width px", pw == round(297 * mm))
+    check("A3 height px", ph == round(420 * mm))
+    check("budget = height - 2*margin", budget == ph - 2 * round(imp.MARGIN_MM * mm))
+
+
 def test_row_packing():
     print("row packing mixes same-width sizes onto shared sheets to save paper:")
-    # A3 @300 DPI; alpha-1 = 50 poker (750x1050) + 16 square location (750x750)
-    # cards, all the same width. The naive size-siloed layout was 4 poker pages
-    # (last holding only 2) + 1 half-empty locations page = 5 sheets. Packing rows
-    # of both heights together must fit in 4.
-    mm = 300 / 25.4
-    pw, ph = round(297 * mm), round(420 * mm)
-    gutter, budget = round(4 * mm), round(420 * mm) - 2 * round(8 * mm)
-    groups = {(750, 1050): [f"p{i}" for i in range(50)],
+    # A3 @300 DPI; alpha-1 = 49 poker (750x1050: units 20 + items 10 + events 11 +
+    # policies 8) + 16 square location (750x750) cards, all the same width. The
+    # naive size-siloed layout was 4 poker pages (last holding only 1) + 1
+    # half-empty locations page = 5 sheets. Packing rows of both heights must fit
+    # in 4. Budget comes from page_metrics so this exercises main()'s real math.
+    pw, _ph, budget = imp.page_metrics("a3", 300)
+    gutter = round(4 * 300 / 25.4)
+    groups = {(750, 1050): [f"p{i}" for i in range(49)],
               (750, 750): [f"s{i}" for i in range(16)]}
     rows = imp.make_rows(groups, pw, gutter)
-    check("50 poker -> 13 rows + 16 square -> 4 rows", len(rows) == 17)
+    check("49 poker -> 13 rows + 16 square -> 4 rows", len(rows) == 17)
     pages = imp.paginate(rows, budget, gutter)
     check("packs into 4 sheets, not 5", len(pages) == 4)
     # The leftover poker row shares its sheet with square rows — the whole point.
@@ -112,13 +194,107 @@ def test_row_packing():
     check("no sheet exceeds the vertical budget", all(used(pg) <= budget for pg in pages))
 
 
+def test_make_rows_paginate_edges():
+    print("make_rows/paginate handle empty and single-card inputs:")
+    pw, _ph, budget = imp.page_metrics("a3", 300)
+    gutter = round(4 * 300 / 25.4)
+    check("empty groups -> no rows", imp.make_rows({}, pw, gutter) == [])
+    check("empty rows -> no pages", imp.paginate([], budget, gutter) == [])
+    one = imp.make_rows({(750, 1050): ["only.png"]}, pw, gutter)
+    check("single card -> one row", len(one) == 1 and one[0]["files"] == ["only.png"])
+    check("single row -> one page", len(imp.paginate(one, budget, gutter)) == 1)
+
+
+def test_validate_sizes_rejects_oversized():
+    print("validate_sizes exits on a card too big to place 1:1 on the sheet:")
+    # An oversized card would otherwise be silently clipped by draw_page (negative
+    # offsets push it and its crop marks off the page).
+    pw, _ph, budget = imp.page_metrics("a4", 300)
+    try:
+        imp.validate_sizes({(pw + 10, 100): ["toowide.png"]}, pw, budget, 300)
+        check("oversized card exits", False)
+    except SystemExit:
+        check("oversized card exits", True)
+    # A correctly-sized poker card (63.5mm @ 300 DPI = 750px) passes cleanly.
+    try:
+        imp.validate_sizes({(750, 1050): ["ok.png"]}, pw, budget, 300)
+        check("in-spec card accepted", True)
+    except SystemExit:
+        check("in-spec card accepted", False)
+
+
+def test_collect_errors_and_image_size():
+    print("collect exits on a missing set dir; image_size reads real PNG sizes:")
+    try:
+        imp.collect("definitely-not-a-real-set-xyz")
+        check("missing set exits", False)
+    except SystemExit:
+        check("missing set exits", True)
+    from PIL import Image
+    with tempfile.TemporaryDirectory() as d:
+        p = os.path.join(d, "card.png")
+        Image.new("RGB", (750, 1050), "white").save(p)
+        check("image_size reads dimensions", imp.image_size(p) == (750, 1050))
+
+
+def test_draw_page_renders_within_bounds():
+    print("draw_page returns a page-sized image with the cards actually pasted in:")
+    # This is the WHERE step (crop marks, centering, paste coords) that make_rows /
+    # paginate don't touch. Render two synthetic cards and confirm they land on an
+    # otherwise-white page of the requested size.
+    from PIL import Image
+    with tempfile.TemporaryDirectory() as d:
+        paths = []
+        for i in range(2):
+            p = os.path.join(d, f"c{i}.png")
+            Image.new("RGB", (50, 70), "red").save(p)
+            paths.append(p)
+        rows = [{"w": 50, "h": 70, "files": paths}]
+        page = imp.draw_page(rows, (200, 300), 10, 6)
+        check("page has the requested size", page.size == (200, 300))
+        colors = {c for _n, c in page.getcolors(maxcolors=100000)}
+        check("red cards pasted onto page", (255, 0, 0) in colors)
+        check("white background remains", (255, 255, 255) in colors)
+
+
+R2A_TESTS = [
+    test_strip_design_balanced,
+    test_strip_design_plus_and_ordered,
+    test_var_substitution,
+    test_var_digit_and_hyphen_id,
+    test_transform_links,
+    test_blank_before_lists,
+    test_badge_inline_stats,
+    test_badge_boundaries_and_code,
+    test_toc_html,
+    test_page_heading_texts,
+]
+
+IMP_TESTS = [
+    test_page_metrics,
+    test_row_packing,
+    test_make_rows_paginate_edges,
+    test_validate_sizes_rejects_oversized,
+    test_collect_errors_and_image_size,
+    test_draw_page_renders_within_bounds,
+]
+
+
 if __name__ == "__main__":
-    test_strip_design_balanced()
-    test_var_substitution()
-    test_blank_before_lists()
-    test_badge_inline_stats()
-    test_toc_html()
-    test_row_packing()
+    tests = list(R2A_TESTS)
+    if imp is None:
+        print(f"SKIP impose-print tests — Pillow not importable ({_imp_skip_reason})")
+    else:
+        tests += IMP_TESTS
+    for t in tests:
+        # A test that raises is a failure, not an abort — keep going so one broken
+        # case doesn't hide the pass/fail status of every later one.
+        try:
+            t()
+        except Exception:
+            print(f"  FAIL {t.__name__} raised:")
+            traceback.print_exc()
+            _failures.append(t.__name__)
     if _failures:
         print(f"\n{len(_failures)} FAILED: {', '.join(_failures)}")
         sys.exit(1)

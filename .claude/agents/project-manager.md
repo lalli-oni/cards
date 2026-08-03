@@ -137,6 +137,7 @@ Milestones answer "what's in this release." Labels answer "what kind of work is 
 **Principles:**
 - Assign to milestone only if strictly needed. Ask: "can we reach this milestone without this?"
 - Issues not assigned to a milestone are backlog.
+- **Sub-issues need an explicit milestone call on creation.** GitHub does not propagate a parent epic's milestone to its sub-issues — decide per issue rather than leaving it unset by omission: default to the epic's current (or next) milestone when the sub-issue is in-scope for that release, and leave it unmilestoned only as a *deliberate* backlog decision. This keeps "unmilestoned = backlog" meaningful rather than accidental.
 - Don't create future milestones prematurely — triage when the current one nears completion.
 - Each milestone should have a pinned tracking issue with a grouped checklist and dependency order. Pin via GitHub web UI. Structure: **sections by area label** (`engine`/`client`/`rules`/`visuals`/`tooling`/`cards`) so the roadmap and the routing taxonomy share one vocabulary — do NOT invent per-milestone "workstream" bucket names that don't map to labels (that pollutes context with terms that only approximately match). Then `- [ ] #N — description` checklist items under each, and an ASCII or text dependency diagram at the bottom. Cross-area coupling (e.g. the keyword→build→render hot files) is tracked by the CLAUDE.md "Branching & WIP discipline" guard, not by a roadmap section.
 

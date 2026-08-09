@@ -518,6 +518,7 @@ function handleEquip(
   itemId: string,
   unitId: string,
   emit: EmitFn,
+  queries: QueryListener[],
 ): void {
   const itemResult = findItemPosition(draft.players, draft.grid, itemId);
   if (!itemResult) {
@@ -533,7 +534,11 @@ function handleEquip(
     throw new Error(`Unit "${unitId}" not co-located with item "${itemId}"`);
   }
 
-  spendAP(draft, 1);
+  const apCost = getModifiedAPCost(
+    draft as MainGameState, queries,
+    { type: "equip", playerId, itemId, unitId }, 1,
+  );
+  spendAP(draft, apCost);
 
   const item = itemResult.item;
   if (item.equippedTo) {
@@ -1790,7 +1795,7 @@ export function applyMainAction(
         break;
 
       case "equip":
-        handleEquip(draft, action.playerId, action.itemId, action.unitId, emit);
+        handleEquip(draft, action.playerId, action.itemId, action.unitId, emit, queries);
         break;
 
       case "destroy":

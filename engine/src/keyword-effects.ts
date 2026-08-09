@@ -24,6 +24,15 @@ import type {
 } from "./listeners/types";
 import { hasAttribute } from "./attributes";
 
+/** Case-insensitive "do these two cards share at least one attribute" check —
+ *  like `hasAttribute`, but both sides may be any card type (optional
+ *  `attributes`), which `hasAttribute`'s required-`attributes` signature
+ *  doesn't accept. */
+function sharesAttribute(a: { attributes?: string[] }, b: { attributes?: string[] }): boolean {
+  const attrsB = (b.attributes ?? []).map((x) => x.toLowerCase());
+  return (a.attributes ?? []).some((x) => attrsB.includes(x.toLowerCase()));
+}
+
 export type KeywordCard = UnitCard | LocationCard | ItemCard;
 
 // Tokens are a closed, tiny vocabulary, so this cache is bounded by
@@ -163,8 +172,57 @@ export function keywordEffects(
         break;
       }
 
+      // ---- Cost / AP standalones -----------------------------------------
+      case "Patron": {
+        const sourceUnit = card as UnitCard;
+        const amount = parsed.magnitude ?? 0;
+        queries.push({
+          source,
+          query: "cost",
+          // No floor (D8) — the global Math.max(0, ...) in getModifiedCost applies.
+          modify: (_state, ctx) => {
+            if (ctx.playerId !== controllerId) return 0;
+            if (!sharesAttribute(sourceUnit, ctx.card)) return 0;
+            return -amount;
+          },
+        });
+        break;
+      }
+
+      case "Squire": {
+        // ParamSpec.default is display-only (renderer prose) — the engine
+        // supplies the omitted-arg fallback itself.
+        const amount = parsed.magnitude ?? 1;
+        queries.push({
+          source,
+          query: "ap",
+          modify: (_state, ctx) => {
+            if (ctx.playerId !== controllerId) return 0;
+            if (ctx.action.type !== "equip") return 0;
+            return -amount;
+          },
+        });
+        break;
+      }
+
+      case "Heavy":
+      case "Lightweight": {
+        const item = card as ItemCard;
+        const delta = parsed.name === "Heavy" ? 1 : -1;
+        queries.push({
+          source,
+          query: "ap",
+          modify: (_state, ctx) => {
+            if (ctx.action.type !== "move") return 0;
+            if (!item.equippedTo || ctx.action.unitId !== item.equippedTo) return 0;
+            return delta;
+          },
+        });
+        break;
+      }
+
       default:
-        // Phase 2-4 add cases here as each keyword is wired. An unhandled
+        // Phase 3-4 add cases here as each keyword is wired. An unhandled
         // governed name is caught by test/build.test.ts's exhaustiveness
         // check, not silently ignored.
         break;

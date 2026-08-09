@@ -92,7 +92,7 @@ export const KEYWORDS: readonly KeywordSpec[] = [
   { name: "Berserker", cardTypes: ["unit"], params: [],
     reminder: "When this unit wins combat and would injure the loser, it injures itself and kills the loser instead." },
   { name: "Patron", cardTypes: ["unit"], params: [{ name: "amount", kind: "magnitude" }],
-    reminder: "Cards you buy that share an attribute with this unit cost {amount} less gold." },
+    reminder: "Cards you buy or deploy that share an attribute with this unit cost {amount} less gold." },
   { name: "Loot", cardTypes: ["unit"], params: [],
     reminder: "When this unit kills an enemy in combat, draw a card." },
   { name: "Squire", cardTypes: ["unit"], params: [{ name: "amount", kind: "magnitude", optional: true, default: 1 }],

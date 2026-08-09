@@ -367,8 +367,10 @@ function getMainValidActions(
     }
   }
 
-  // equip — items to co-located units, across all positions (1 AP)
-  if (ap >= 1) {
+  // equip — items to co-located units, across all positions (1 AP, less with
+  // Squire). AP cost goes through getModifiedAPCost so Squire surfaces at a
+  // discount (or AP=0), mirroring the move / play_event blocks above.
+  {
     const positions: BoardPosition[] = [
       { type: "hq", playerId },
       ...Array.from({ length: gridRows * gridCols }, (_, i) => ({
@@ -390,7 +392,9 @@ function getMainValidActions(
         for (const unit of units) {
           // Skip if already equipped on this unit
           if (item.equippedTo === unit.id) continue;
-          actions.push({ type: "equip", playerId, itemId: item.id, unitId: unit.id });
+          const candidate: MainAction = { type: "equip", playerId, itemId: item.id, unitId: unit.id };
+          const apCost = getModifiedAPCost(state, queries, candidate, 1);
+          if (ap >= apCost) actions.push(candidate);
         }
       }
     }

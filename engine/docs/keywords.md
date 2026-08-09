@@ -31,7 +31,7 @@ token and returns a `ParsedKeyword`.
 |---|---|---|---|
 | `Untouchable` | unit | `stat` | can't be Attack-targeted while its `stat` exceeds the attacker's |
 | `Berserker` | unit | — | on winning combat, injures itself and kills the loser instead |
-| `Patron` | unit | `amount` | cards you buy sharing an attribute with it cost `amount` less gold |
+| `Patron` | unit | `amount` | cards you buy or deploy sharing an attribute with it cost `amount` less gold |
 | `Loot` | unit | — | on killing an enemy in combat, draw a card |
 | `Squire` | unit | `amount` (opt, default 1) | your Equip / Unequip actions cost `amount` less AP |
 | `Flying` | item | — | equipped unit ignores blocked edges when moving |

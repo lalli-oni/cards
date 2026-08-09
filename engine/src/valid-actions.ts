@@ -27,6 +27,7 @@ import type {
   ResolveCombatRoundAction,
   SeedingAction,
   SeedingGameState,
+  UnitCard,
 } from "./types";
 import { getActivePlayerId } from "./types";
 
@@ -370,8 +371,11 @@ function getMainValidActions(
   }
 
   // equip — items to co-located units, across all positions (1 AP, less with
-  // Squire). AP cost goes through getModifiedAPCost so Squire surfaces at a
-  // discount (or AP=0), mirroring the move / play_event blocks above.
+  // Squire). AP cost goes through getModifiedAPCost so a Squire discount
+  // (including down to 0 AP) is offered, mirroring the move / play_event
+  // blocks above. A 0-AP equip is repeatable and consumes nothing, so an
+  // automated driver looping over getValidActions must bound its own turn —
+  // the engine deliberately doesn't cap it.
   {
     const positions: BoardPosition[] = [
       { type: "hq", playerId },
@@ -422,18 +426,23 @@ function getMainValidActions(
 
   // attack — cells where player has units and at least one unshielded enemy
   // exists (1 AP). Untouchable defenders whose stat exceeds every committed
-  // attacker's stat are excluded (D5); if that leaves no targetable enemy,
-  // the action is not offered at all.
+  // attacker's stat are excluded; if that leaves no targetable enemy, the
+  // action is not offered at all.
   if (ap >= 1) {
     for (let r = 0; r < gridRows; r++) {
       for (let c = 0; c < gridCols; c++) {
         const cell = state.grid[r][c];
         const myUnits = cell.units.filter((u) => u.controllerId === playerId);
+        // Must precede the shield filter: with no attackers there is nothing
+        // for a defender's stat to exceed, and it skips a getModifiedStat
+        // sweep per enemy on cells the player isn't contesting.
+        if (myUnits.length === 0) continue;
+        const attackers = myUnits as [UnitCard, ...UnitCard[]];
         const enemyUnits = cell.units.filter((u) => u.controllerId !== playerId);
         const targetableEnemies = enemyUnits.filter(
-          (u) => !isAttackShielded(state, queries, u, { row: r, col: c }, myUnits),
+          (u) => !isAttackShielded(state, queries, u, { row: r, col: c }, attackers),
         );
-        if (myUnits.length > 0 && targetableEnemies.length > 0) {
+        if (targetableEnemies.length > 0) {
           // Offer attacking with all owned units at that cell
           actions.push({
             type: "attack",

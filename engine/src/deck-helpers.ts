@@ -12,6 +12,11 @@ import type {
  * Draw one card from a player's main deck to their hand.
  * If the main deck is empty, shuffles the discard pile into it first.
  * Returns the drawn card, or null if both are empty.
+ *
+ * An exhausted draw is deliberately silent — no event, no error — and every
+ * caller discards the null. That means a card promising "draw a card" can do
+ * nothing with no trace in the event log; if that ever needs surfacing, it
+ * wants one decision here rather than a guard at each call site.
  */
 export function drawOneCard(
   draft: Draft<MainGameState>,

@@ -656,6 +656,14 @@ function handleAttack(
     throw new Error(`Cell (${row},${col}) has no location`);
   }
 
+  // `MainAction`'s attack variant is typed `[string, ...string[]]`, but actions
+  // arrive as JSON and applyAction does no runtime shape check — without this,
+  // an empty commit reaches isAttackShielded, where `every` on [] means
+  // "shielded" and the failure surfaces as a misleading no-enemies error.
+  if (unitIds.length === 0) {
+    throw new Error(`Attack at (${row},${col}) commits no units`);
+  }
+
   // Validate all committed units are at this cell and owned by player
   const attackers: Draft<UnitCard>[] = [];
   for (const uid of unitIds) {
@@ -668,17 +676,25 @@ function handleAttack(
     }
     attackers.push(unit);
   }
+  const committed = attackers as unknown as [UnitCard, ...UnitCard[]];
 
-  // Find defender(s) — all enemy units at location, minus any Untouchable
-  // unit whose stat exceeds every committed attacker's stat (D5). Mirrors the
-  // filtering in valid-actions.ts's attack-generation block — a hand-crafted
-  // action can't bypass the shield the bot never gets offered.
-  const defenders = cell.units.filter(
-    (u) => u.controllerId !== playerId
-      && !isAttackShielded(draft as MainGameState, queries, u as UnitCard, { row, col }, attackers as UnitCard[]),
+  // Find defender(s) — all enemy units at location, minus any Untouchable unit
+  // whose stat exceeds every committed attacker's stat. The same shield rule
+  // valid-actions.ts's attack-generation block applies, but evaluated against
+  // the units actually committed here — so a hand-crafted subset attack can't
+  // bypass a shield it hasn't out-statted.
+  const enemies = cell.units.filter((u) => u.controllerId !== playerId);
+  if (enemies.length === 0) {
+    throw new Error(`No enemy units at cell (${row},${col}) to attack`);
+  }
+  const defenders = enemies.filter(
+    (u) => !isAttackShielded(draft as MainGameState, queries, u as UnitCard, { row, col }, committed),
   );
   if (defenders.length === 0) {
-    throw new Error(`No enemy units at cell (${row},${col}) to attack`);
+    throw new Error(
+      `All ${enemies.length} enemy unit(s) at (${row},${col}) are shielded by Untouchable `
+      + `against the committed attackers [${unitIds.join(", ")}]`,
+    );
   }
 
   const defenderId = defenders[0].controllerId;
@@ -999,10 +1015,9 @@ function runCombat(
       defRolls.push(buildCombatantRoll(draft, queries, u, "defender", row, col, roll));
     }
 
-    // Persist rng now: it has advanced past this round's rolls and combat
-    // resolution consumes no further randomness, so this covers both the
-    // suspend-and-return paths below and normal loop continuation. Keeps the
-    // roll stream unbroken across a `produce()` suspend boundary.
+    // Persist rng now: it has advanced past this round's rolls, so this covers
+    // both the suspend-and-return paths below and normal loop continuation.
+    // Keeps the roll stream unbroken across a `produce()` suspend boundary.
     draft.rngState = extractRngState(rng) as number[];
 
     // Rules steps 4–5 — Matchup + Resolve. `processRolledRound` either suspends
@@ -1013,6 +1028,10 @@ function runCombat(
     if (processRolledRound(draft, cell, base, atkRolls, defRolls, emit, events) === "suspended") {
       return;
     }
+    // A Loot draw during pair resolution may have reshuffled a deck and
+    // advanced draft.rngState — adopt it rather than clobbering it next
+    // iteration with a generator that never saw the shuffle.
+    rng = fromState(draft.rngState);
   }
 
   draft.rngState = extractRngState(rng) as number[];
@@ -1077,7 +1096,7 @@ function buildCombatantRoll(
     unit as UnitCard,
     "strength",
     { row, col },
-    { role, row, col },
+    { contest: { role, row, col } },
   );
   // The injury penalty is now a global stat modifier applied inside
   // getModifiedStatWithSources, so the "injured" chip already lives in
@@ -1170,8 +1189,8 @@ export function deriveCombatOutcome(
 /** Pure — upgrades an injure outcome to a kill when the winner has Berserker,
  *  flagging that the winner should injure itself too. Kill outcomes pass
  *  through untouched ("would injure the loser" — moot when already a kill).
- *  Self-injury on an already-injured berserker is intentionally left to the
- *  caller's `injureUnit` (idempotent: no further harm, it doesn't die). */
+ *  How the self-injury lands is the caller's job: an already-injured berserker
+ *  dies to it, per the standard re-injury rule. */
 export function applyBerserker(
   outcome: CombatPairOutcome,
   winnerHasBerserker: boolean,
@@ -1226,7 +1245,11 @@ function resolveCombatPair(
     killUnit(draft, cell, loser.unit, row, col, emit);
     if (hasKeyword(winner.unit, "Loot")) {
       const winnerController = getPlayerById(draft, winner.unit.controllerId);
-      drawOneCard(draft, winnerController, events);
+      // drawOneCard pushes straight into an array; replay through `emit` so the
+      // draw and any reshuffle reach listener dispatch like every other event.
+      const drawEvents: GameEvent[] = [];
+      drawOneCard(draft, winnerController, drawEvents);
+      for (const e of drawEvents) emit(e);
     }
   } else {
     // Combat-specific: drop equipped items before marking injured. Other
@@ -1237,7 +1260,14 @@ function resolveCombatPair(
   }
 
   if (injureWinner) {
-    injureUnit(winner.unit, emit);
+    // Re-injury kills (rules/README.md Unit status), same as every other
+    // injure site — an already-injured berserker pays with its life rather
+    // than getting the kill upgrade for free.
+    if (winner.unit.injured) {
+      killUnit(draft, cell, winner.unit, row, col, emit);
+    } else {
+      injureUnit(winner.unit, emit);
+    }
   }
 }
 

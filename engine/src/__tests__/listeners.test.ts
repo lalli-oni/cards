@@ -867,9 +867,9 @@ describe("stat modifier queries", () => {
     const unit = makeUnit({ ownerId: state.turn.activePlayerId, strength: 5 });
 
     expect(getModifiedStat(state, queries, unit, "strength", { row: 0, col: 0 },
-      { role: "attacker", row: 0, col: 0 })).toBe(6);
+      { contest: { role: "attacker", row: 0, col: 0 } })).toBe(6);
     expect(getModifiedStat(state, queries, unit, "strength", { row: 0, col: 0 },
-      { role: "defender", row: 0, col: 0 })).toBe(5);
+      { contest: { role: "defender", row: 0, col: 0 } })).toBe(5);
   });
 
   it("Great Wall: +1 str defender only", () => {
@@ -880,9 +880,9 @@ describe("stat modifier queries", () => {
     const unit = makeUnit({ ownerId: state.turn.activePlayerId, strength: 5 });
 
     expect(getModifiedStat(state, queries, unit, "strength", { row: 0, col: 0 },
-      { role: "defender", row: 0, col: 0 })).toBe(6);
+      { contest: { role: "defender", row: 0, col: 0 } })).toBe(6);
     expect(getModifiedStat(state, queries, unit, "strength", { row: 0, col: 0 },
-      { role: "attacker", row: 0, col: 0 })).toBe(5);
+      { contest: { role: "attacker", row: 0, col: 0 } })).toBe(5);
   });
 
   it("Ancient Scroll: +2 cunning to equipped unit", () => {
@@ -1487,7 +1487,7 @@ describe("AP modifier queries", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Keyword + bespoke effect coexistence (#212)
+// Keyword + bespoke effect coexistence
 // ---------------------------------------------------------------------------
 
 describe("keyword effects coexist with bespoke *_EFFECTS factories", () => {

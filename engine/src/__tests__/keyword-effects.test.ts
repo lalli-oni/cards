@@ -7,7 +7,7 @@ import { rebuildListeners } from "../listeners/rebuild";
 import { getModifiedStat, getModifiedStatWithSources, getModifiedCost, getModifiedAPCost, isUnitProtected } from "../listeners/query";
 import { KeywordError } from "../keywords";
 import type { Attribute } from "../attributes";
-import type { GameEvent, MainAction, MainGameState, UnitCard } from "../types";
+import type { GameEvent, ItemCard, LocationCard, MainAction, MainGameState, UnitCard } from "../types";
 import {
   DEFAULT_CONFIG,
   createTestGame,
@@ -56,12 +56,12 @@ describe("Prowess", () => {
 
     // +2 under a contest ctx...
     expect(getModifiedStat(state, queries, source, "strength", { row: 0, col: 0 },
-      { role: "attacker", row: 0, col: 0 })).toBe(7);
+      { contest: { role: "attacker", row: 0, col: 0 } })).toBe(7);
     // ...but 0 without one (context gating).
     expect(getModifiedStat(state, queries, source, "strength", { row: 0, col: 0 })).toBe(5);
     // Scope is self only — a different unit at the same cell is unaffected.
     expect(getModifiedStat(state, queries, other, "strength", { row: 0, col: 0 },
-      { role: "attacker", row: 0, col: 0 })).toBe(5);
+      { contest: { role: "attacker", row: 0, col: 0 } })).toBe(5);
   });
 
   it("mission context is a distinct discriminator from a bare read", () => {
@@ -73,8 +73,28 @@ describe("Prowess", () => {
     });
     const { queries } = rebuildListeners(state);
 
-    expect(getModifiedStat(state, queries, source, "cunning", { row: 0, col: 0 }, undefined, true)).toBe(7);
+    expect(getModifiedStat(state, queries, source, "cunning", { row: 0, col: 0 }, { mission: true })).toBe(7);
     expect(getModifiedStat(state, queries, source, "cunning", { row: 0, col: 0 })).toBe(5);
+    // ...and a mission token must not fire during a contest.
+    expect(getModifiedStat(state, queries, source, "cunning", { row: 0, col: 0 },
+      { contest: { role: "attacker", row: 0, col: 0 } })).toBe(5);
+  });
+
+  it("a contest token stays out of the mission sum (the mirror of the case above)", () => {
+    // The two occasions have to be disjoint in BOTH directions. Only the
+    // mission→contest leg was pinned, so making the contest branch answer
+    // `ctx.mission === true` broke nothing.
+    let source!: UnitCard;
+    const state = gameWith((d, p) => {
+      source = makeUnit({ ownerId: p.active, cunning: 5, keywords: ["Prowess:+2:cunning:contest"] });
+      d.grid[0][0].location = makeLocation({ ownerId: p.active });
+      d.grid[0][0].units.push(source);
+    });
+    const { queries } = rebuildListeners(state);
+
+    expect(getModifiedStat(state, queries, source, "cunning", { row: 0, col: 0 },
+      { contest: { role: "attacker", row: 0, col: 0 } })).toBe(7);
+    expect(getModifiedStat(state, queries, source, "cunning", { row: 0, col: 0 }, { mission: true })).toBe(5);
   });
 
   it("`all` scope applies to every stat; a single-stat token applies to exactly one", () => {
@@ -86,7 +106,7 @@ describe("Prowess", () => {
       d.grid[0][0].units.push(allSource, oneSource);
     });
     const { queries } = rebuildListeners(state);
-    const ctx = { role: "attacker" as const, row: 0, col: 0 };
+    const ctx = { contest: { role: "attacker" as const, row: 0, col: 0 } };
 
     expect(getModifiedStat(state, queries, allSource, "strength", { row: 0, col: 0 }, ctx)).toBe(6);
     expect(getModifiedStat(state, queries, allSource, "cunning", { row: 0, col: 0 }, ctx)).toBe(6);
@@ -107,8 +127,8 @@ describe("Prowess", () => {
       d.grid[0][0].units.push(atkOnly, defOnly, either, omitted);
     });
     const { queries } = rebuildListeners(state);
-    const atkCtx = { role: "attacker" as const, row: 0, col: 0 };
-    const defCtx = { role: "defender" as const, row: 0, col: 0 };
+    const atkCtx = { contest: { role: "attacker" as const, row: 0, col: 0 } };
+    const defCtx = { contest: { role: "defender" as const, row: 0, col: 0 } };
 
     expect(getModifiedStat(state, queries, atkOnly, "strength", { row: 0, col: 0 }, atkCtx)).toBe(6);
     expect(getModifiedStat(state, queries, atkOnly, "strength", { row: 0, col: 0 }, defCtx)).toBe(5);
@@ -123,7 +143,7 @@ describe("Prowess", () => {
     expect(getModifiedStat(state, queries, omitted, "strength", { row: 0, col: 0 }, defCtx)).toBe(6);
   });
 
-  it("a role clause on a mission token is rejected rather than silently ignored (D4)", () => {
+  it("a role clause on a mission token is rejected rather than silently ignored", () => {
     const state = gameWith((d, p) => {
       d.grid[0][0].location = makeLocation({ ownerId: p.active });
       d.grid[0][0].units.push(makeUnit({ ownerId: p.active, keywords: ["Prowess:+1:strength:mission:atk"] }));
@@ -135,6 +155,9 @@ describe("Prowess", () => {
 
 describe("Kindred", () => {
   it("buffs a friendly unit sharing an attribute, not the source itself, not a non-sharing/enemy unit", () => {
+    // Every queried unit really stands on the cell it is queried at. The query
+    // layer only reads the ctx, so synthetic positions would pass too — but
+    // then nothing would check that real board placement gives the same answer.
     let source!: UnitCard, sharer!: UnitCard, nonSharer!: UnitCard, enemySharer!: UnitCard;
     const state = gameWith((d, p) => {
       source = makeUnit({ ownerId: p.active, attributes: ["Military"], keywords: ["Kindred:+1:all:contest"] });
@@ -142,16 +165,36 @@ describe("Kindred", () => {
       nonSharer = makeUnit({ ownerId: p.active, strength: 5, attributes: ["Commerce"] });
       enemySharer = makeUnit({ ownerId: p.other, strength: 5, attributes: ["Military"] });
       d.grid[0][0].location = makeLocation({ ownerId: p.active });
-      d.grid[0][0].units.push(source);
+      d.grid[0][0].units.push(source, sharer, nonSharer, enemySharer);
     });
     const { queries } = rebuildListeners(state);
-    const ctx = { role: "attacker" as const, row: 0, col: 0 };
+    const ctx = { contest: { role: "attacker" as const, row: 0, col: 0 } };
 
     expect(getModifiedStat(state, queries, sharer, "strength", { row: 0, col: 0 }, ctx)).toBe(6);
     expect(getModifiedStat(state, queries, nonSharer, "strength", { row: 0, col: 0 }, ctx)).toBe(5);
     expect(getModifiedStat(state, queries, enemySharer, "strength", { row: 0, col: 0 }, ctx)).toBe(5);
-    // Not the source itself (D1).
+    // Excludes the source itself — contrast with Leader below, which includes it.
     expect(getModifiedStat(state, queries, source, "strength", { row: 0, col: 0 }, ctx)).toBe(5);
+  });
+
+  it("reaches kin anywhere on the board — deliberately not location-scoped like Leader", () => {
+    // Kindred's rules entry carries no location clause, unlike Leader's. That
+    // asymmetry is easy to "tidy away" into a same-cell check, so pin it: the
+    // kin stands two cells from the source and is still buffed.
+    let sharer!: UnitCard;
+    const state = gameWith((d, p) => {
+      sharer = makeUnit({ ownerId: p.active, strength: 5, attributes: ["Military"] });
+      d.grid[0][0].location = makeLocation({ ownerId: p.active });
+      d.grid[0][1].location = makeLocation({ ownerId: p.active });
+      d.grid[0][0].units.push(
+        makeUnit({ ownerId: p.active, attributes: ["Military"], keywords: ["Kindred:+1:all:contest"] }),
+      );
+      d.grid[0][1].units.push(sharer);
+    });
+    const { queries } = rebuildListeners(state);
+
+    expect(getModifiedStat(state, queries, sharer, "strength", { row: 0, col: 1 },
+      { contest: { role: "attacker", row: 0, col: 1 } })).toBe(6);
   });
 
   it("attribute matching is case-insensitive", () => {
@@ -159,18 +202,23 @@ describe("Kindred", () => {
     const state = gameWith((d, p) => {
       lowercaseSharer = makeUnit({ ownerId: p.active, strength: 5, attributes: ["military" as unknown as Attribute] });
       d.grid[0][0].location = makeLocation({ ownerId: p.active });
-      d.grid[0][0].units.push(makeUnit({ ownerId: p.active, attributes: ["Military"], keywords: ["Kindred:+1:all:contest"] }));
+      d.grid[0][0].units.push(
+        makeUnit({ ownerId: p.active, attributes: ["Military"], keywords: ["Kindred:+1:all:contest"] }),
+        lowercaseSharer,
+      );
     });
     const { queries } = rebuildListeners(state);
 
     expect(getModifiedStat(state, queries, lowercaseSharer, "strength", { row: 0, col: 0 },
-      { role: "attacker", row: 0, col: 0 })).toBe(6);
+      { contest: { role: "attacker", row: 0, col: 0 } })).toBe(6);
   });
 
   it("contributes nothing while the source sits in HQ (positional gating)", () => {
     let sharer!: UnitCard;
     const state = gameWith((d, p) => {
       sharer = makeUnit({ ownerId: p.active, strength: 5, attributes: ["Military"] });
+      d.grid[0][0].location = makeLocation({ ownerId: p.active });
+      d.grid[0][0].units.push(sharer);
       d.players[p.activeIdx].hq.push(
         makeUnit({ ownerId: p.active, attributes: ["Military"], keywords: ["Kindred:+1:all:contest"] }),
       );
@@ -178,12 +226,12 @@ describe("Kindred", () => {
     const { queries } = rebuildListeners(state);
 
     expect(getModifiedStat(state, queries, sharer, "strength", { row: 0, col: 0 },
-      { role: "attacker", row: 0, col: 0 })).toBe(5);
+      { contest: { role: "attacker", row: 0, col: 0 } })).toBe(5);
   });
 });
 
 describe("Leader", () => {
-  it("buffs friendlies at the same cell, not elsewhere, not enemies, but includes the source (D1)", () => {
+  it("buffs friendlies at the same cell, not elsewhere, not enemies, and includes the source", () => {
     let source!: UnitCard, friendlyHere!: UnitCard, friendlyElsewhere!: UnitCard, enemyHere!: UnitCard;
     const state = gameWith((d, p) => {
       source = makeUnit({ ownerId: p.active, keywords: ["Leader:+1:all:contest"] });
@@ -192,16 +240,17 @@ describe("Leader", () => {
       enemyHere = makeUnit({ ownerId: p.other, strength: 5 });
       d.grid[0][0].location = makeLocation({ ownerId: p.active });
       d.grid[0][1].location = makeLocation({ ownerId: p.active });
-      d.grid[0][0].units.push(source);
+      d.grid[0][0].units.push(source, friendlyHere, enemyHere);
+      d.grid[0][1].units.push(friendlyElsewhere);
     });
     const { queries } = rebuildListeners(state);
-    const ctx = { role: "attacker" as const, row: 0, col: 0 };
+    const ctx = { contest: { role: "attacker" as const, row: 0, col: 0 } };
 
     expect(getModifiedStat(state, queries, friendlyHere, "strength", { row: 0, col: 0 }, ctx)).toBe(6);
     expect(getModifiedStat(state, queries, friendlyElsewhere, "strength", { row: 0, col: 1 },
-      { role: "attacker", row: 0, col: 1 })).toBe(5);
+      { contest: { role: "attacker", row: 0, col: 1 } })).toBe(5);
     expect(getModifiedStat(state, queries, enemyHere, "strength", { row: 0, col: 0 }, ctx)).toBe(5);
-    // Leader includes the source itself (D1) — contrast with Kindred above.
+    // Leader includes the source itself — contrast with Kindred above.
     expect(getModifiedStat(state, queries, source, "strength", { row: 0, col: 0 }, ctx)).toBe(6);
   });
 
@@ -216,7 +265,7 @@ describe("Leader", () => {
     const { queries } = rebuildListeners(state);
 
     expect(getModifiedStat(state, queries, friendly, "strength", { row: 0, col: 0 },
-      { role: "attacker", row: 0, col: 0 })).toBe(5);
+      { contest: { role: "attacker", row: 0, col: 0 } })).toBe(5);
   });
 });
 
@@ -228,33 +277,39 @@ describe("Aura", () => {
       d.grid[0][1].location = makeLocation({ ownerId: p.active });
       friendly = makeUnit({ ownerId: p.active, strength: 5 });
       enemy = makeUnit({ ownerId: p.other, strength: 5 });
+      d.grid[0][0].units.push(friendly, enemy);
     });
     const { queries } = rebuildListeners(state);
-    const ctx = { role: "attacker" as const, row: 0, col: 0 };
+    const ctx = { contest: { role: "attacker" as const, row: 0, col: 0 } };
 
     expect(getModifiedStat(state, queries, friendly, "strength", { row: 0, col: 0 }, ctx)).toBe(4);
     expect(getModifiedStat(state, queries, enemy, "strength", { row: 0, col: 0 }, ctx)).toBe(4);
     expect(getModifiedStat(state, queries, friendly, "strength", { row: 0, col: 1 },
-      { role: "attacker", row: 0, col: 1 })).toBe(5);
+      { contest: { role: "attacker", row: 0, col: 1 } })).toBe(5);
   });
 
   it("two keyword sources plus the target's own injury penalty sum as distinct modifier entries", () => {
-    let target!: UnitCard;
+    let target!: UnitCard, auraLocation!: LocationCard, leaderSource!: UnitCard;
     const state = gameWith((d, p) => {
-      d.grid[0][0].location = makeLocation({ ownerId: p.active, keywords: ["Aura:-1:all:contest"] });
-      d.grid[0][0].units.push(makeUnit({ ownerId: p.active, keywords: ["Leader:-1:all:contest"] }));
+      auraLocation = makeLocation({ ownerId: p.active, keywords: ["Aura:-1:all:contest"] });
+      leaderSource = makeUnit({ ownerId: p.active, keywords: ["Leader:-1:all:contest"] });
       // Friendly (not the Leader source itself) so both Aura (no controller
       // filter) and Leader (friendly-only) apply to it.
       target = makeUnit({ ownerId: p.active, strength: 5, injured: true });
+      d.grid[0][0].location = auraLocation;
+      d.grid[0][0].units.push(leaderSource, target);
     });
     const { queries } = rebuildListeners(state);
-    const ctx = { role: "attacker" as const, row: 0, col: 0 };
+    const ctx = { contest: { role: "attacker" as const, row: 0, col: 0 } };
 
     const breakdown = getModifiedStatWithSources(state, queries, target, "strength", { row: 0, col: 0 }, ctx);
     expect(breakdown.base).toBe(5);
     expect(breakdown.modifiers).toHaveLength(3); // Aura, Leader, injured — each a distinct source
-    const definitionIds = breakdown.modifiers.map((m) => m.source.definitionId).sort();
-    expect(definitionIds).toEqual(["injured", "test-location", "test-unit"]);
+    // Keyed on cardId, not definitionId: makeUnit gives both the Leader source
+    // and the target `definitionId: "test-unit"`, so a definitionId assertion
+    // can't tell "the Leader contributed" from "some other test-unit did".
+    const cardIds = breakdown.modifiers.map((m) => m.source.cardId).sort();
+    expect(cardIds).toEqual([auraLocation.id, leaderSource.id, target.id].sort());
     expect(breakdown.final).toBe(2); // 5 - 1 (Aura) - 1 (Leader) - 1 (injury)
   });
 
@@ -265,7 +320,7 @@ describe("Aura", () => {
       target = makeUnit({ ownerId: p.other, strength: 0 });
     });
     const { queries } = rebuildListeners(state);
-    const ctx = { role: "attacker" as const, row: 0, col: 0 };
+    const ctx = { contest: { role: "attacker" as const, row: 0, col: 0 } };
 
     const breakdown = getModifiedStatWithSources(state, queries, target, "strength", { row: 0, col: 0 }, ctx);
     expect(breakdown.base).toBe(0);
@@ -280,7 +335,7 @@ describe("Aura", () => {
 // ---------------------------------------------------------------------------
 
 describe("Patron", () => {
-  it("discounts buy and deploy for a sharing card, not a non-sharing card, floors at 0 (D8 no explicit min, D10 buy+deploy)", () => {
+  it("discounts buy and deploy for a sharing card, not a non-sharing card, floors at 0", () => {
     const state = gameWith((d, p) => {
       d.players[p.activeIdx].hq.push(makeUnit({ ownerId: p.active, attributes: ["Military"], keywords: ["Patron:1"] }));
     });
@@ -316,6 +371,47 @@ describe("Patron", () => {
     const card = makeUnit({ ownerId: other, cost: "3", attributes: ["Military"] });
 
     expect(getModifiedCost(state, queries, card, other, "buy")).toBe(3);
+  });
+
+  it("attribute matching is case-insensitive, and a card with no attributes never matches", () => {
+    // Patron goes through `sharesAttribute`, a different helper from the
+    // `hasAttribute` path Kindred uses — so Kindred's case-insensitivity test
+    // says nothing about this one. The no-attributes case is real: the reminder
+    // says "cards you buy", and locations and items carry no attributes.
+    const state = gameWith((d, p) => {
+      d.players[p.activeIdx].hq.push(
+        makeUnit({ ownerId: p.active, attributes: ["Military"], keywords: ["Patron:1"] }),
+      );
+    });
+    const { active } = getPlayers(state);
+    const { queries } = rebuildListeners(state);
+    const lowercase = makeUnit({
+      ownerId: active, cost: "3", attributes: ["military" as unknown as Attribute],
+    });
+    const attributeless = makeLocation({ ownerId: active, cost: "3" });
+
+    expect(getModifiedCost(state, queries, lowercase, active, "buy")).toBe(2);
+    expect(getModifiedCost(state, queries, attributeless, active, "buy")).toBe(3);
+  });
+
+  it("a full applyAction(buy) actually deducts the discounted gold", () => {
+    // Squire got this regression guard for AP; Patron's gold equivalent was
+    // only ever asserted at the getModifiedCost layer, so a `buy` handler that
+    // ignored the modifier would have gone unnoticed.
+    let card!: UnitCard;
+    const state = gameWith((d, p) => {
+      d.players[p.activeIdx].hq.push(
+        makeUnit({ ownerId: p.active, attributes: ["Military"], keywords: ["Patron:1"] }),
+      );
+      card = makeUnit({ ownerId: p.active, cost: "3", attributes: ["Military"] });
+      d.market = [card];
+      d.players[p.activeIdx].gold = 10;
+    });
+    const { active, activeIdx } = getPlayers(state);
+
+    const { state: next } = applyAction(state, { type: "buy", playerId: active, cardId: card.id });
+    // Base 3, Patron -1 => 2 gold spent, not 3.
+    expect((next as MainGameState).players[activeIdx].gold).toBe(8);
   });
 });
 
@@ -386,41 +482,116 @@ describe("Squire", () => {
     expect((next as MainGameState).turn.actionPointsRemaining).toBe(apBefore);
   });
 
-  it("getValidActions still offers equip at AP 0 (mirrors the Mary Shelley free-action precedent)", () => {
-    const state = gameWith((d, p) => {
+  it("getValidActions offers equip at AP 0 only because Squire made it free", () => {
+    // The outer `if (ap >= 1)` gate on the equip block was replaced by a
+    // per-candidate `ap >= apCost` check. Asserting only the positive would
+    // pass even with no AP check at all, so both halves are pinned here:
+    // free equip is offered (the Mary Shelley free-action precedent), a
+    // 1-AP equip at 0 AP is not.
+    const withSquire = gameWith((d, p) => {
       const unit = makeUnit({ ownerId: p.active });
       const item = makeItem({ ownerId: p.active });
       d.players[p.activeIdx].hq.push(makeUnit({ ownerId: p.active, keywords: ["Squire"] }), unit, item);
       d.turn.actionPointsRemaining = 0;
     });
-    const { active } = getPlayers(state);
+    const withoutSquire = gameWith((d, p) => {
+      const unit = makeUnit({ ownerId: p.active });
+      const item = makeItem({ ownerId: p.active });
+      d.players[p.activeIdx].hq.push(unit, item);
+      d.turn.actionPointsRemaining = 0;
+    });
 
-    const actions = getValidActions(state, active);
-    expect(actions.some((a) => a.type === "equip")).toBe(true);
+    expect(getValidActions(withSquire, getPlayers(withSquire).active)
+      .some((a) => a.type === "equip")).toBe(true);
+    expect(getValidActions(withoutSquire, getPlayers(withoutSquire).active)
+      .some((a) => a.type === "equip")).toBe(false);
+  });
+
+  it("discounts a re-equip onto a different unit — the closest thing to an Unequip", () => {
+    // There is no Unequip action; re-equipping implicitly detaches, which is
+    // why the reminder promises only Equip. Pin the behaviour that carries the
+    // weight of that design note.
+    let itemCard!: ItemCard, unitA!: UnitCard, unitB!: UnitCard;
+    const state = gameWith((d, p) => {
+      unitA = makeUnit({ ownerId: p.active });
+      unitB = makeUnit({ ownerId: p.active });
+      itemCard = makeItem({ ownerId: p.active, equippedTo: unitA.id });
+      d.players[p.activeIdx].hq.push(
+        makeUnit({ ownerId: p.active, keywords: ["Squire"] }), unitA, unitB, itemCard,
+      );
+    });
+    const { active } = getPlayers(state);
+    const { queries } = rebuildListeners(state);
+    const reEquip: MainAction = { type: "equip", playerId: active, itemId: itemCard.id, unitId: unitB.id };
+    const apBefore = state.turn.actionPointsRemaining;
+
+    expect(getModifiedAPCost(state, queries, reEquip, 1)).toBe(0);
+    const { state: next } = applyAction(state, reEquip);
+    expect((next as MainGameState).turn.actionPointsRemaining).toBe(apBefore);
+    const moved = (next as MainGameState).players
+      .flatMap((pl) => pl.hq).find((c) => c.id === itemCard.id) as ItemCard;
+    expect(moved.equippedTo).toBe(unitB.id);
   });
 });
 
 describe("Heavy / Lightweight", () => {
   it("Heavy costs +1 AP, Lightweight -1 AP on the equipped unit's move; both together cancel", () => {
+    // Items live on the grid alongside their bearer — the configuration a real
+    // move happens in. The HQ-only fixtures these tests used to build left
+    // rebuildListeners' grid-item keyword hook completely uncovered, and also
+    // pointed `equippedTo` at a unit id no card in the game had.
+    let bearer!: UnitCard;
     const state = gameWith((d, p) => {
-      d.players[p.activeIdx].hq.push(
-        makeItem({ ownerId: p.active, definitionId: "heavy-armor", equippedTo: "u1", keywords: ["Heavy"] }),
+      bearer = makeUnit({ ownerId: p.active });
+      d.grid[0][0].location = makeLocation({ ownerId: p.active });
+      d.grid[0][0].units.push(bearer);
+      d.grid[0][0].items.push(
+        makeItem({ ownerId: p.active, definitionId: "heavy-armor", equippedTo: bearer.id, keywords: ["Heavy"] }),
       );
     });
     const { active } = getPlayers(state);
     const { queries } = rebuildListeners(state);
-    const moveAction: MainAction = { type: "move", playerId: active, unitId: "u1", row: 0, col: 0 };
+    const moveAction: MainAction = { type: "move", playerId: active, unitId: bearer.id, row: 0, col: 1 };
 
     expect(getModifiedAPCost(state, queries, moveAction, 1)).toBe(2);
 
+    let bothBearer!: UnitCard;
     const bothState = gameWith((d, p) => {
-      d.players[p.activeIdx].hq.push(
-        makeItem({ ownerId: p.active, definitionId: "heavy-armor", equippedTo: "u1", keywords: ["Heavy"] }),
-        makeItem({ ownerId: p.active, definitionId: "swift-boots", equippedTo: "u1", keywords: ["Lightweight"] }),
+      bothBearer = makeUnit({ ownerId: p.active });
+      d.grid[0][0].location = makeLocation({ ownerId: p.active });
+      d.grid[0][0].units.push(bothBearer);
+      d.grid[0][0].items.push(
+        makeItem({ ownerId: p.active, definitionId: "heavy-armor", equippedTo: bothBearer.id, keywords: ["Heavy"] }),
+        makeItem({ ownerId: p.active, definitionId: "swift-boots", equippedTo: bothBearer.id, keywords: ["Lightweight"] }),
       );
     });
     const { queries: bothQueries } = rebuildListeners(bothState);
-    expect(getModifiedAPCost(bothState, bothQueries, moveAction, 1)).toBe(1);
+    const bothMove: MainAction = {
+      type: "move", playerId: getPlayers(bothState).active, unitId: bothBearer.id, row: 0, col: 1,
+    };
+    expect(getModifiedAPCost(bothState, bothQueries, bothMove, 1)).toBe(1);
+  });
+
+  it("only taxes the bearer's move — not their equip, and not another action type", () => {
+    // Squire has this negative control; Heavy/Lightweight did not, so deleting
+    // the `ctx.action.type !== "move"` guard broke no test while silently
+    // taxing every action the bearer took.
+    let bearer!: UnitCard;
+    const state = gameWith((d, p) => {
+      bearer = makeUnit({ ownerId: p.active });
+      d.grid[0][0].location = makeLocation({ ownerId: p.active });
+      d.grid[0][0].units.push(bearer);
+      d.grid[0][0].items.push(
+        makeItem({ ownerId: p.active, definitionId: "heavy-armor", equippedTo: bearer.id, keywords: ["Heavy"] }),
+      );
+    });
+    const { active } = getPlayers(state);
+    const { queries } = rebuildListeners(state);
+
+    const equipAction: MainAction = { type: "equip", playerId: active, itemId: "i-other", unitId: bearer.id };
+    expect(getModifiedAPCost(state, queries, equipAction, 1)).toBe(1);
+    const razeAction: MainAction = { type: "raze", playerId: active, unitId: bearer.id, row: 0, col: 0 };
+    expect(getModifiedAPCost(state, queries, razeAction, 3)).toBe(3);
   });
 
   it("an unequipped Heavy item contributes nothing", () => {
@@ -523,7 +694,12 @@ describe("Berserker (integration)", () => {
     expect(unitInjured(events, attacker.id)).toBe(true);
   });
 
-  it("an already-injured berserker takes no further harm (D6) — loser still dies, berserker survives, still injured", () => {
+  it("an already-injured berserker dies to its own self-injury, and still takes the loser with it", () => {
+    // Re-injury kills (rules/README.md Unit status) — the same rule the trap
+    // and DSL injure paths apply. Without it an already-injured berserker
+    // would be strictly better than a healthy one: every narrow win becomes a
+    // free kill at no cost, inverting the keyword's whole drawback. Reachable
+    // because round 0 rolls injured units too (`ignoreInjured: round === 0`).
     let attacker!: UnitCard, defender!: UnitCard;
     const state = gameWith((d, p) => {
       attacker = makeUnit({
@@ -537,9 +713,31 @@ describe("Berserker (integration)", () => {
 
     const { state: next, events } = applyAction(state, { type: "attack", playerId: active, unitIds: [attacker.id], row: 0, col: 0 });
     expect(unitKilled(events, defender.id)).toBe(true);
-    const survivor = (next as MainGameState).grid[0][0].units.find((u) => u.id === attacker.id);
-    expect(survivor).toBeDefined();
-    expect(survivor?.injured).toBe(true);
+    expect(unitKilled(events, attacker.id)).toBe(true);
+    // Both leave the cell; the berserker goes to its owner's discard.
+    expect((next as MainGameState).grid[0][0].units.map((u) => u.id)).toEqual([]);
+  });
+
+  it("a winning berserker DEFENDER upgrades and self-injures, same as an attacker", () => {
+    // Every other Berserker/Loot integration case puts the keyword on the
+    // attacking side, so nothing pinned that resolveCombatPair identifies a
+    // winning defender as the winner — hardcoding `winner = atk` used to pass
+    // the whole suite.
+    let attacker!: UnitCard, defender!: UnitCard;
+    const state = gameWith((d, p) => {
+      // Roles inverted: the weak side declares the attack and loses.
+      attacker = makeUnit({ ownerId: p.active, strength: NARROW_WIN.defender });
+      defender = makeUnit({ ownerId: p.other, strength: NARROW_WIN.attacker, keywords: ["Berserker"] });
+      d.grid[0][0].location = makeLocation({ ownerId: p.active });
+      d.grid[0][0].units.push(attacker, defender);
+    });
+    const { active } = getPlayers(state);
+
+    const { events } = applyAction(state, { type: "attack", playerId: active, unitIds: [attacker.id], row: 0, col: 0 });
+    const pair = events.find((e) => e.type === "combat_pair_resolved");
+    expect(pair && pair.type === "combat_pair_resolved" && pair.outcome).toBe("kill_attacker");
+    expect(unitKilled(events, attacker.id)).toBe(true);
+    expect(unitInjured(events, defender.id)).toBe(true);
   });
 
   it("winning by 2x+ is already a kill — Berserker does not additionally self-injure", () => {
@@ -616,6 +814,29 @@ describe("Loot (integration)", () => {
     expect(cardDrawn(events)).toBe(false);
   });
 
+  it("a winning Loot DEFENDER draws — for its own controller, not the acting player", () => {
+    // resolveCombatPair picks the winner from either side; with Loot only ever
+    // tested on attackers, a hardcoded `winner = atk` passed the whole suite.
+    let attacker!: UnitCard;
+    const state = gameWith((d, p) => {
+      // Inverted roles: the weak side declares the attack and dies.
+      attacker = makeUnit({ ownerId: p.active, strength: LANDSLIDE.defender });
+      const defender = makeUnit({ ownerId: p.other, strength: LANDSLIDE.attacker, keywords: ["Loot"] });
+      d.grid[0][0].location = makeLocation({ ownerId: p.active });
+      d.grid[0][0].units.push(attacker, defender);
+      d.players[p.otherIdx].mainDeck.push(makeUnit({ ownerId: p.other }));
+    });
+    const { active, other } = getPlayers(state);
+    const defenderHandBefore = state.players.find((pl) => pl.id === other)!.hand.length;
+    const attackerHandBefore = state.players.find((pl) => pl.id === active)!.hand.length;
+
+    const { state: next, events } = applyAction(state, { type: "attack", playerId: active, unitIds: [attacker.id], row: 0, col: 0 });
+    expect(cardDrawn(events)).toBe(true);
+    const players = (next as MainGameState).players;
+    expect(players.find((pl) => pl.id === other)!.hand.length).toBe(defenderHandBefore + 1);
+    expect(players.find((pl) => pl.id === active)!.hand.length).toBe(attackerHandBefore);
+  });
+
   it("empty main deck and empty discard: no draw, no throw", () => {
     let attacker!: UnitCard;
     const state = gameWith((d, p) => {
@@ -666,8 +887,88 @@ describe("Untouchable", () => {
 
     const actions = getValidActions(state, active);
     expect(actions.some((a) => a.type === "attack")).toBe(false);
+    // Asserting the message, not just "it throws" — a bare .toThrow() also
+    // passes on an unrelated KeywordError from the fixture.
     expect(() => applyAction(state, { type: "attack", playerId: active, unitIds: [attacker.id], row: 0, col: 0 }))
-      .toThrow();
+      .toThrow(/shielded by Untouchable/);
+  });
+
+  it("shields on strictly exceeding — an equal stat leaves the defender targetable", () => {
+    // Both the reminder and the rules say "exceeds", so equality must NOT
+    // shield. Every other fixture uses a clear gap, which left `>` vs `>=`
+    // indistinguishable.
+    let attacker!: UnitCard;
+    const state = gameWith((d, p) => {
+      attacker = makeUnit({ ownerId: p.active, charisma: 9 });
+      const defender = makeUnit({ ownerId: p.other, charisma: 9, keywords: ["Untouchable:charisma"] });
+      d.grid[0][0].location = makeLocation({ ownerId: p.active });
+      d.grid[0][0].units.push(attacker, defender);
+    });
+    const { active } = getPlayers(state);
+
+    expect(getValidActions(state, active).some((a) => a.type === "attack")).toBe(true);
+    expect(() => applyAction(state, { type: "attack", playerId: active, unitIds: [attacker.id], row: 0, col: 0 }))
+      .not.toThrow();
+  });
+
+  it("reads the defender's own stat under the defender role, so a :def buff can raise the shield", () => {
+    // The Leader:+10 test above pins only the attacker-side read. Without this,
+    // flipping the defender's own query to `role: "attacker"` changed nothing
+    // in the suite — while silently dropping every `context:contest:def` buff
+    // on the shielded unit.
+    let attacker!: UnitCard;
+    const state = gameWith((d, p) => {
+      attacker = makeUnit({ ownerId: p.active, charisma: 8 });
+      const defender = makeUnit({
+        ownerId: p.other, charisma: 5,
+        keywords: ["Untouchable:charisma", "Prowess:+6:charisma:contest:def"],
+      });
+      d.grid[0][0].location = makeLocation({ ownerId: p.active });
+      d.grid[0][0].units.push(attacker, defender);
+    });
+    const { active } = getPlayers(state);
+
+    // Base 5 loses to 8; 5 + 6 (def-role Prowess) = 11 shields.
+    expect(getValidActions(state, active).some((a) => a.type === "attack")).toBe(false);
+  });
+
+  it("two committed attackers both below the shield stat — the shield holds", () => {
+    let a1!: UnitCard, a2!: UnitCard;
+    const state = gameWith((d, p) => {
+      a1 = makeUnit({ ownerId: p.active, charisma: 5 });
+      a2 = makeUnit({ ownerId: p.active, charisma: 6 });
+      const defender = makeUnit({ ownerId: p.other, charisma: 9, keywords: ["Untouchable:charisma"] });
+      d.grid[0][0].location = makeLocation({ ownerId: p.active });
+      d.grid[0][0].units.push(a1, a2, defender);
+    });
+    const { active } = getPlayers(state);
+
+    expect(getValidActions(state, active).some((a) => a.type === "attack")).toBe(false);
+    expect(() => applyAction(state, {
+      type: "attack", playerId: active, unitIds: [a1.id, a2.id], row: 0, col: 0,
+    })).toThrow(/shielded by Untouchable/);
+  });
+
+  it("a hand-crafted subset attack cannot use a strong ally it did not commit", () => {
+    // getValidActions offers all-units-at-the-cell, so the shield there is
+    // evaluated against the whole stack. handleAttack evaluates against
+    // `action.unitIds` only — committing just the weak attacker must be
+    // rejected even though a strong ally is standing right there.
+    let weak!: UnitCard, strong!: UnitCard;
+    const state = gameWith((d, p) => {
+      weak = makeUnit({ ownerId: p.active, charisma: 5 });
+      strong = makeUnit({ ownerId: p.active, charisma: 20 });
+      const defender = makeUnit({ ownerId: p.other, charisma: 9, keywords: ["Untouchable:charisma"] });
+      d.grid[0][0].location = makeLocation({ ownerId: p.active });
+      d.grid[0][0].units.push(weak, strong, defender);
+    });
+    const { active } = getPlayers(state);
+
+    expect(() => applyAction(state, { type: "attack", playerId: active, unitIds: [weak.id], row: 0, col: 0 }))
+      .toThrow(/shielded by Untouchable/);
+    expect(() => applyAction(state, {
+      type: "attack", playerId: active, unitIds: [weak.id, strong.id], row: 0, col: 0,
+    })).not.toThrow();
   });
 
   it("becomes legal once the attacker's (modified) stat is raised above the shield — pins that the comparison uses modified stats", () => {
@@ -686,7 +987,7 @@ describe("Untouchable", () => {
       .not.toThrow();
   });
 
-  it("two committed attackers, one above and one below the shield stat — attack legal, defender targetable (D5)", () => {
+  it("two committed attackers, one above and one below the shield stat — attack legal, defender targetable", () => {
     let weakAttacker!: UnitCard, strongAttacker!: UnitCard;
     const state = gameWith((d, p) => {
       weakAttacker = makeUnit({ ownerId: p.active, charisma: 5 });
@@ -720,9 +1021,12 @@ describe("Untouchable", () => {
 
     const actions = getValidActions(state, active);
     expect(actions.some((a) => a.type === "attack")).toBe(true);
-    const { state: next } = applyAction(state, { type: "attack", playerId: active, unitIds: [attacker.id], row: 0, col: 0 });
-    // Combat resolved against the ordinary defender only — the shielded unit
-    // is untouched at the cell (never entered `defenderUnitIds`).
+    const { state: next, events } = applyAction(state, { type: "attack", playerId: active, unitIds: [attacker.id], row: 0, col: 0 });
+    // combat_started names the defender that was actually engaged. Asserting
+    // only that the shielded unit survived unharmed would pass just as well if
+    // it HAD been targeted and won its roll.
+    const started = events.find((e) => e.type === "combat_started");
+    expect(started && started.type === "combat_started" && started.defenderId).not.toBe(shielded.id);
     const shieldedStill = (next as MainGameState).grid[0][0].units.find((u) => u.id === shielded.id);
     expect(shieldedStill).toBeDefined();
     expect(shieldedStill?.injured).toBe(false);
@@ -737,9 +1041,10 @@ describe("Untouchable", () => {
     });
     const { queries } = rebuildListeners(state);
 
-    // isUnitProtected has no "attack_target" caller here — Untouchable is
-    // never registered as a ProtectionListener, so DSL contests / event
-    // targeting see it exactly as if it had no protection at all.
+    // Untouchable is never registered as a ProtectionListener — it needs the
+    // whole committed-attacker list, which a per-unit protection query can't
+    // supply. So DSL contests and event targeting see the unit exactly as if
+    // it had no protection at all.
     expect(isUnitProtected(state, queries, defender, { row: 0, col: 0 }, "contest_target", "charisma")).toBe(false);
     expect(isUnitProtected(state, queries, defender, { row: 0, col: 0 }, "event_target")).toBe(false);
   });
@@ -767,14 +1072,19 @@ describe("Flying", () => {
     const state = gameWith((d, p) => {
       unit = makeUnit({ ownerId: p.active });
       d.grid[0][0].location = makeLocation({ ownerId: p.active, edges: { n: true, e: false, s: true, w: true } });
-      // grid[0][1] has no location at all.
+      // grid[0][1] has no location at all; grid[1][1] has one but is diagonal.
+      d.grid[1][1].location = makeLocation({ ownerId: p.active });
       d.grid[0][0].units.push(unit);
       d.grid[0][0].items.push(makeItem({ ownerId: p.active, equippedTo: unit.id, keywords: ["Flying"] }));
     });
     const { active } = getPlayers(state);
 
     const actions = getValidActions(state, active);
+    // No location at the destination.
     expect(actions.some((a) => a.type === "move" && a.unitId === unit.id && a.row === 0 && a.col === 1)).toBe(false);
+    // Has a location, but is not orthogonally adjacent — Flying bypasses the
+    // edge check only, never the adjacency rule.
+    expect(actions.some((a) => a.type === "move" && a.unitId === unit.id && a.row === 1 && a.col === 1)).toBe(false);
   });
 
   it("does not bypass when the Flying item is equipped to a different unit at the cell", () => {
@@ -800,14 +1110,110 @@ describe("Flying", () => {
 // Cross-cutting
 // ---------------------------------------------------------------------------
 
+describe("cards carrying more than one keyword", () => {
+  // alpha-1 already ships these shapes: mansa-musa is
+  // `Untouchable:charisma;Patron:1` and genghis-khan is
+  // `Leader:+1:all:contest;Loot`. Every other fixture in this file has exactly
+  // one token, so restricting keywordEffects' loop to the first broke nothing.
+  it("a direct-hook token and a resolver token on one unit both take effect", () => {
+    let attacker!: UnitCard, patronSource!: UnitCard;
+    const state = gameWith((d, p) => {
+      attacker = makeUnit({ ownerId: p.active, charisma: 5 });
+      patronSource = makeUnit({
+        ownerId: p.other, charisma: 9, attributes: ["Military"],
+        keywords: ["Untouchable:charisma", "Patron:1"],
+      });
+      d.grid[0][0].location = makeLocation({ ownerId: p.active });
+      d.grid[0][0].units.push(attacker, patronSource);
+    });
+    const { active, other } = getPlayers(state);
+    const { queries } = rebuildListeners(state);
+
+    // Untouchable (direct hook) shields it...
+    expect(getValidActions(state, active).some((a) => a.type === "attack")).toBe(false);
+    // ...and Patron (switch case) still discounts for its own controller.
+    const card = makeUnit({ ownerId: other, cost: "3", attributes: ["Military"] });
+    expect(getModifiedCost(state, queries, card, other, "buy")).toBe(2);
+  });
+
+  it("two resolver tokens on one unit both register their queries", () => {
+    let source!: UnitCard, friendly!: UnitCard;
+    const state = gameWith((d, p) => {
+      source = makeUnit({ ownerId: p.active, keywords: ["Leader:+1:all:contest", "Squire"] });
+      friendly = makeUnit({ ownerId: p.active, strength: 5 });
+      d.grid[0][0].location = makeLocation({ ownerId: p.active });
+      d.grid[0][0].units.push(source, friendly);
+    });
+    const { active } = getPlayers(state);
+    const { queries } = rebuildListeners(state);
+
+    expect(getModifiedStat(state, queries, friendly, "strength", { row: 0, col: 0 },
+      { contest: { role: "attacker", row: 0, col: 0 } })).toBe(6);
+    const equipAction: MainAction = { type: "equip", playerId: active, itemId: "i1", unitId: "u1" };
+    expect(getModifiedAPCost(state, queries, equipAction, 1)).toBe(0);
+  });
+});
+
+describe("keywords in a DSL stat contest", () => {
+  it("a contest-context keyword applies to executeContest, not just the Attack action", () => {
+    // StatQueryContext.contest is set by both the Attack action and the DSL's
+    // executeContest — that shared occasion is the whole reason the grammar's
+    // `combat` value was renamed to `contest`. Live on real cards:
+    // miyamoto-musashi carries Prowess:+2:strength:contest:atk alongside a
+    // `duel:1:contest.strength(enemy)` action.
+    let actor!: UnitCard, target!: UnitCard;
+    const state = gameWith((d, p) => {
+      actor = makeUnit({
+        ownerId: p.active, strength: 5,
+        keywords: ["Prowess:+4:strength:contest:atk"],
+        actions: [{ name: "duel", apCost: 1, effect: "contest.strength(enemy)" }],
+      });
+      target = makeUnit({ ownerId: p.other, strength: 6 });
+      d.grid[0][0].location = makeLocation({ ownerId: p.active });
+      d.grid[0][0].units.push(actor, target);
+    });
+    const { queries } = rebuildListeners(state);
+
+    // The acting side is read under the attacker role, so the :atk token lands.
+    expect(getModifiedStat(state, queries, actor, "strength", { row: 0, col: 0 },
+      { contest: { role: "attacker", row: 0, col: 0 } })).toBe(9);
+    // The target is read under the defender role, so it does not.
+    expect(getModifiedStat(state, queries, actor, "strength", { row: 0, col: 0 },
+      { contest: { role: "defender", row: 0, col: 0 } })).toBe(5);
+    expect(getModifiedStat(state, queries, target, "strength", { row: 0, col: 0 },
+      { contest: { role: "defender", row: 0, col: 0 } })).toBe(6);
+  });
+});
+
 describe("bad data at runtime", () => {
-  it("a malformed keyword token throws KeywordError with the offending token", () => {
+  it("a malformed keyword token throws KeywordError naming the card and the token", () => {
+    const state = gameWith((d, p) => {
+      d.grid[0][0].location = makeLocation({ ownerId: p.active });
+      d.grid[0][0].units.push(makeUnit({
+        ownerId: p.active, definitionId: "bad-card",
+        keywords: ["Prowess:not-a-number:strength:contest"],
+      }));
+    });
+
+    expect(() => rebuildListeners(state)).toThrow(KeywordError);
+    // The card, not just the keyword: rebuildListeners runs on every state
+    // read, so without the definitionId an operator has only a CSV grep.
+    expect(() => rebuildListeners(state)).toThrow(/bad-card/);
+    expect(() => rebuildListeners(state)).toThrow(/Prowess:not-a-number:strength:contest/);
+  });
+
+  it("the throw reaches the public API — one bad token bricks the whole game", () => {
+    // The blast radius is the reason a build-time gate matters (see
+    // test/build.test.ts): both entry points call rebuildListeners, so a
+    // single malformed token makes every action of the game fail, not just
+    // the card that carries it.
     const state = gameWith((d, p) => {
       d.grid[0][0].location = makeLocation({ ownerId: p.active });
       d.grid[0][0].units.push(makeUnit({ ownerId: p.active, keywords: ["Prowess:not-a-number:strength:contest"] }));
     });
+    const { active } = getPlayers(state);
 
-    expect(() => rebuildListeners(state)).toThrow(KeywordError);
-    expect(() => rebuildListeners(state)).toThrow(/Prowess/);
+    expect(() => getValidActions(state, active)).toThrow(KeywordError);
+    expect(() => applyAction(state, { type: "pass", playerId: active })).toThrow(KeywordError);
   });
 });

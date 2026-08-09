@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { produce } from "immer";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
@@ -8,9 +9,10 @@ import {
 } from "../mission-helpers";
 import { isAttribute } from "../attributes";
 import type { Attribute } from "../attributes";
-import { createTestGame } from "./helpers";
+import { createTestGame, makeLocation } from "./helpers";
 import { rebuildListeners } from "../listeners/rebuild";
-import type { UnitCard } from "../types";
+import { getValidActions } from "../valid-actions";
+import type { MainGameState, UnitCard } from "../types";
 
 function unit(attrs: Attribute[], overrides?: Partial<UnitCard>): UnitCard {
   return {
@@ -138,14 +140,28 @@ describe("checkMissionRequirements", () => {
 
   it("stat: sums across ALL friendly units", () => {
     const reqs = parseRequirements("strength_15");
+    const state = createTestGame();
+    const { queries } = rebuildListeners(state);
     const units = [unit([], { strength: 8 }), unit([], { strength: 8 })];
-    expect(checkMissionRequirements(reqs, units)).toBe(true); // 16 >= 15
+    expect(checkMissionRequirements(reqs, units, state, queries)).toBe(true); // 16 >= 15
   });
 
   it("stat: fails when sum below threshold", () => {
     const reqs = parseRequirements("strength_15");
+    const state = createTestGame();
+    const { queries } = rebuildListeners(state);
     const units = [unit([], { strength: 5 }), unit([], { strength: 5 })];
-    expect(checkMissionRequirements(reqs, units)).toBe(false); // 10 < 15
+    expect(checkMissionRequirements(reqs, units, state, queries)).toBe(false); // 10 < 15
+  });
+
+  it("stat: rejects a stat requirement evaluated without the query layer", () => {
+    // Summing base stats would silently drop every keyword and effect buff a
+    // mission was designed around, so the omission is a caller bug rather than
+    // a degraded-but-usable answer. Attribute and count requirements need no
+    // query layer and stay callable without one (see the tests above).
+    const reqs = parseRequirements("strength_15");
+    expect(() => checkMissionRequirements(reqs, [unit([], { strength: 99 })]))
+      .toThrow(/needs state and queries/);
   });
 
   it("stat: an injured contributor's penalty can flip a mission from met to unmet", () => {
@@ -167,38 +183,92 @@ describe("checkMissionRequirements", () => {
     expect(checkMissionRequirements(reqs, [healthy1, healthy2], state, queries)).toBe(true);
     // One injured → 8 + 7 = 15 < 16 (unmet) once the penalty is applied.
     expect(checkMissionRequirements(reqs, [healthy1, hurt], state, queries)).toBe(false);
-    // Without state+queries the raw fallback ignores injury → 16, still met.
-    expect(checkMissionRequirements(reqs, [healthy1, hurt])).toBe(true);
   });
 
-  it("stat: a Prowess:...:mission keyword modifies the sum when state+queries are supplied (#212)", () => {
-    // Pins the new `mission` StatQueryContext flag end-to-end: checkMissionRequirements's
-    // stat-sum path now threads `mission: true` into getModifiedStat, so a
+  it("stat: a Prowess:...:mission keyword modifies the sum", () => {
+    // Pins the `mission` StatQueryContext occasion end-to-end: the stat-sum
+    // path threads `{ mission: true }` into getModifiedStat, so a
     // mission-context keyword on a contributing unit applies here exactly like
-    // the injury penalty above — and, symmetrically, is invisible to the raw
-    // (no state/queries) fallback.
+    // the injury penalty above. The source stands at the mission's own cell —
+    // Prowess ignores position, but placing it in HQ (as this test once did)
+    // encodes a board state a real mission attempt can never produce.
     const reqs = parseRequirements("strength_7");
     const source = unit([], { id: "u1", strength: 5, keywords: ["Prowess:+2:strength:mission"] });
-    const state = createTestGame();
-    state.players[0].hq.push(source);
+    const state = produce(createTestGame(), (d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: d.players[0].id });
+      d.grid[0][0].units.push(source);
+    });
     const { queries } = rebuildListeners(state);
 
     // 5 + 2 (Prowess under the mission context) = 7 >= 7 (met).
-    expect(checkMissionRequirements(reqs, [source], state, queries)).toBe(true);
-    // Raw fallback ignores the keyword modifier entirely → 5 < 7 (unmet).
-    expect(checkMissionRequirements(reqs, [source])).toBe(false);
+    expect(checkMissionRequirements(reqs, [source], state, queries, { row: 0, col: 0 })).toBe(true);
+    // A contest-context token must not leak into the mission sum.
+    expect(checkMissionRequirements(
+      parseRequirements("strength_7"),
+      [unit([], { id: "u2", strength: 5, keywords: ["Prowess:+2:strength:contest"] })],
+      state, queries, { row: 0, col: 0 },
+    )).toBe(false);
+  });
+
+  it("stat: a location's Aura:...:mission buffs the units standing on it", () => {
+    // Aura and Leader are position-gated, unlike Prowess — so unless the
+    // caller threads `position` through (both production callers do:
+    // valid-actions.ts's attempt_mission block and apply-main.ts's
+    // handleAttemptMission), a location-scoped mission keyword contributes
+    // nothing and the omission is invisible.
+    const reqs = parseRequirements("strength_12");
+    const u1 = unit([], { id: "a1", strength: 5 });
+    const u2 = unit([], { id: "a2", strength: 5 });
+    const state = produce(createTestGame(), (d) => {
+      d.grid[0][0].location = makeLocation({
+        ownerId: d.players[0].id,
+        keywords: ["Aura:+1:strength:mission"],
+      });
+      d.grid[0][0].units.push(u1, u2);
+    });
+    const { queries } = rebuildListeners(state);
+
+    // (5+1) + (5+1) = 12 >= 12, but only with the position the Aura keys off.
+    expect(checkMissionRequirements(reqs, [u1, u2], state, queries, { row: 0, col: 0 })).toBe(true);
+    expect(checkMissionRequirements(reqs, [u1, u2], state, queries)).toBe(false);
+  });
+
+  it("attempt_mission is offered only once a mission keyword closes the stat gap", () => {
+    // The end-to-end leg: a keyword-driven mission buff has to reach
+    // getValidActions, not just checkMissionRequirements in isolation.
+    const withoutBuff = produce(createTestGame(), (d) => {
+      d.grid[0][0].location = makeLocation({
+        ownerId: d.players[0].id,
+        requirements: "strength_7",
+        rewards: "3vp",
+      });
+      d.grid[0][0].units.push(unit([], {
+        id: "m1", strength: 5,
+        ownerId: d.turn.activePlayerId, controllerId: d.turn.activePlayerId,
+      }));
+    });
+    const withBuff = produce(withoutBuff, (d) => {
+      d.grid[0][0].units[0].keywords = ["Prowess:+2:strength:mission"];
+    });
+    const offers = (s: MainGameState): boolean =>
+      getValidActions(s, s.turn.activePlayerId).some((a) => a.type === "attempt_mission");
+
+    expect(offers(withoutBuff)).toBe(false);
+    expect(offers(withBuff)).toBe(true);
   });
 
   it("stat: non-attribute units still contribute to stat sum", () => {
     // With decoupled model, ALL units contribute to stat checks
     const reqs = parseRequirements("military_1;strength_15");
+    const state = createTestGame();
+    const { queries } = rebuildListeners(state);
     const units = [
       unit(["Military"], { strength: 5 }),
       unit(["Knowledge"], { strength: 11 }),
     ];
     // military_1: 1 Military unit present ✓
     // strength_15: 5 + 11 = 16 ✓ (both units contribute)
-    expect(checkMissionRequirements(reqs, units)).toBe(true);
+    expect(checkMissionRequirements(reqs, units, state, queries)).toBe(true);
   });
 
   it("units: passes with enough units", () => {

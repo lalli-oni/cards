@@ -132,9 +132,8 @@ function buildFamilyModifier(
  * keywords. Cards in hand, market and discard are never visited.
  *
  * `position` is absent for HQ cards. Positional keywords (Leader, Kindred,
- * Aura) key off it and contribute no queries when it's absent. Patron and
- * Squire apply from HQ too — "while in play" includes HQ, unlike the
- * positional keywords.
+ * Aura) key off it and contribute no queries when it's absent; the rest apply
+ * anywhere in play, HQ included.
  */
 export function keywordEffects(
   card: KeywordCard,

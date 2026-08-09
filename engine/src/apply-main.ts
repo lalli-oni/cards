@@ -28,6 +28,7 @@ import { getModifiedStatWithSources, getModifiedCost, getModifiedAPCost } from "
 import type { EmitFn, QueryListener } from "./listeners/types";
 import { needsLocationTarget } from "./valid-actions";
 import { killUnit, injureUnit, dropEquippedItems, decideKillVsInjure, computeContestPower } from "./unit-helpers";
+import { hasKeyword } from "./keyword-effects";
 import type {
   ActionDef,
   ActivePassiveEvent,
@@ -644,6 +645,7 @@ function handleAttack(
   row: number,
   col: number,
   emit: EmitFn,
+  events: GameEvent[],
   queries: QueryListener[],
 ): void {
   const cell = draft.grid[row][col];
@@ -692,6 +694,7 @@ function handleAttack(
       defenderUnitIds: defenders.map((u) => u.id),
     },
     emit,
+    events,
     queries,
   );
 }
@@ -843,12 +846,13 @@ function processRolledRound(
   atkRolls: CombatantRoll[],
   defRolls: CombatantRoll[],
   emit: EmitFn,
+  events: GameEvent[],
 ): "suspended" | "resolved" {
   if (atkRolls.length !== defRolls.length) {
     draft.combatPrompt = castDraft(makeCombatPrompt(base, atkRolls, defRolls));
     return "suspended";
   }
-  return resolveOrSuspendMatchup(draft, cell, base, atkRolls, defRolls, emit);
+  return resolveOrSuspendMatchup(draft, cell, base, atkRolls, defRolls, emit, events);
 }
 
 /**
@@ -869,6 +873,7 @@ function resolveOrSuspendMatchup(
   atkParticipants: CombatantRoll[],
   defParticipants: CombatantRoll[],
   emit: EmitFn,
+  events: GameEvent[],
 ): "suspended" | "resolved" {
   atkParticipants.sort((a, b) => b.power - a.power);
   defParticipants.sort((a, b) => b.power - a.power);
@@ -882,7 +887,7 @@ function resolveOrSuspendMatchup(
   // Rules step 5 — Resolve: auto-resolve the participants greedily (the sort
   // above already lined them up highest vs highest).
   for (let i = 0; i < n; i++) {
-    resolveCombatPair(draft, cell, atkParticipants[i], defParticipants[i], base.row, base.col, emit);
+    resolveCombatPair(draft, cell, atkParticipants[i], defParticipants[i], base.row, base.col, emit, events);
   }
   return "resolved";
 }
@@ -917,6 +922,7 @@ function runCombat(
   draft: Draft<MainGameState>,
   state: CombatLoopState,
   emit: EmitFn,
+  events: GameEvent[],
   queries: QueryListener[],
   settledRound?: number,
 ): void {
@@ -995,7 +1001,7 @@ function runCombat(
     // and NOT emitting `combat_resolved` — combat is paused, not over) or
     // auto-resolves the round's pairs in place.
     const base: CombatLoopState = { ...state, round };
-    if (processRolledRound(draft, cell, base, atkRolls, defRolls, emit) === "suspended") {
+    if (processRolledRound(draft, cell, base, atkRolls, defRolls, emit, events) === "suspended") {
       return;
     }
   }
@@ -1152,6 +1158,21 @@ export function deriveCombatOutcome(
     : (loserKilled ? "kill_attacker" : "injure_attacker");
 }
 
+/** Pure — upgrades an injure outcome to a kill when the winner has Berserker,
+ *  flagging that the winner should injure itself too. Kill outcomes pass
+ *  through untouched ("would injure the loser" — moot when already a kill).
+ *  Self-injury on an already-injured berserker is intentionally left to the
+ *  caller's `injureUnit` (idempotent: no further harm, it doesn't die). */
+export function applyBerserker(
+  outcome: CombatPairOutcome,
+  winnerHasBerserker: boolean,
+): { outcome: CombatPairOutcome; injureWinner: boolean } {
+  if (!winnerHasBerserker) return { outcome, injureWinner: false };
+  if (outcome === "injure_defender") return { outcome: "kill_defender", injureWinner: true };
+  if (outcome === "injure_attacker") return { outcome: "kill_attacker", injureWinner: true };
+  return { outcome, injureWinner: false };
+}
+
 /** Resolve a single 1v1 combat pair. */
 function resolveCombatPair(
   draft: Draft<MainGameState>,
@@ -1161,13 +1182,14 @@ function resolveCombatPair(
   row: number,
   col: number,
   emit: EmitFn,
+  events: GameEvent[],
 ): void {
   const attackerSide = toCombatSide(atk);
   const defenderSide = toCombatSide(def);
   const attackerPlayerId = atk.unit.controllerId;
   const defenderPlayerId = def.unit.controllerId;
   const killRatio = getConfigNumber(draft, "combat_kill_ratio", 2);
-  const outcome = deriveCombatOutcome(
+  const baseOutcome = deriveCombatOutcome(
     atk.power,
     def.power,
     atk.unit.injured,
@@ -1176,7 +1198,9 @@ function resolveCombatPair(
   );
 
   const attackerWins = atk.power > def.power;
+  const winner = attackerWins ? atk : def;
   const loser = attackerWins ? def : atk;
+  const { outcome, injureWinner } = applyBerserker(baseOutcome, hasKeyword(winner.unit, "Berserker"));
   const loserKilled = outcome === "kill_attacker" || outcome === "kill_defender";
 
   emit({
@@ -1191,12 +1215,20 @@ function resolveCombatPair(
   if (loserKilled) {
     // Kill: remove unit from grid, drop items, send to owner's discard
     killUnit(draft, cell, loser.unit, row, col, emit);
+    if (hasKeyword(winner.unit, "Loot")) {
+      const winnerController = getPlayerById(draft, winner.unit.controllerId);
+      drawOneCard(draft, winnerController, events);
+    }
   } else {
     // Combat-specific: drop equipped items before marking injured. Other
     // injure sources (DSL injure, traps, contest default consequence) leave
     // equipment in place — see injureUnit doc.
     dropEquippedItems(cell, loser.unit, row, col, emit);
     injureUnit(loser.unit, emit);
+  }
+
+  if (injureWinner) {
+    injureUnit(winner.unit, emit);
   }
 }
 
@@ -1491,6 +1523,7 @@ function resolveAssignedMatchups(
   prompt: CombatPrompt,
   decision: CombatDecision,
   emit: EmitFn,
+  events: GameEvent[],
 ): void {
   // Defensive guard: `handleResolveCombatRound` already dispatches on `kind` and
   // only routes an `assign_matchups` decision here, so this is unreachable in
@@ -1533,7 +1566,7 @@ function resolveAssignedMatchups(
       draft, cell,
       combatantRollFromSide(cell, atkSide),
       combatantRollFromSide(cell, defSide),
-      prompt.row, prompt.col, emit,
+      prompt.row, prompt.col, emit, events,
     );
   }
 }
@@ -1592,6 +1625,7 @@ function handleResolveCombatRound(
   playerId: string,
   decision: CombatDecision,
   emit: EmitFn,
+  events: GameEvent[],
   queries: QueryListener[],
 ): void {
   const promptDraft = draft.combatPrompt;
@@ -1663,7 +1697,7 @@ function handleResolveCombatRound(
       // retreat rolls no dice and produces no combat_pair_resolved).
       emit({ type: "combat_retreated", row: prompt.row, col: prompt.col, playerId });
       retreatUnitsToHQ(draft, cell, playerId, retreatingIds, prompt.row, prompt.col, emit);
-      runCombat(draft, base, emit, queries, prompt.round);
+      runCombat(draft, base, emit, events, queries, prompt.round);
       return;
     }
 
@@ -1676,7 +1710,7 @@ function handleResolveCombatRound(
 
     // Both sides have now declined — roll this round. `settledRound` stops
     // runCombat from re-offering the retreat it just resolved.
-    runCombat(draft, base, emit, queries, prompt.round);
+    runCombat(draft, base, emit, events, queries, prompt.round);
     return;
   }
 
@@ -1688,11 +1722,11 @@ function handleResolveCombatRound(
     // two live prompts.
     const { atkParticipants, defParticipants } = resolveSitOut(cell, prompt, decision);
     draft.combatPrompt = undefined;
-    if (resolveOrSuspendMatchup(draft, cell, base, atkParticipants, defParticipants, emit) === "suspended") {
+    if (resolveOrSuspendMatchup(draft, cell, base, atkParticipants, defParticipants, emit, events) === "suspended") {
       return;
     }
     // Round fully resolved — resume from the next round.
-    runCombat(draft, { ...base, round: prompt.round + 1 }, emit, queries);
+    runCombat(draft, { ...base, round: prompt.round + 1 }, emit, events, queries);
     return;
   }
 
@@ -1700,9 +1734,9 @@ function handleResolveCombatRound(
   // suspend (no re-roll, so the outcome matches what the defender saw), then
   // resume from the next round. Clear the prompt before resuming so `runCombat`
   // is the single writer of any later prompt (one live `combatPrompt` per fight).
-  resolveAssignedMatchups(draft, cell, prompt, decision, emit);
+  resolveAssignedMatchups(draft, cell, prompt, decision, emit, events);
   draft.combatPrompt = undefined;
-  runCombat(draft, { ...base, round: prompt.round + 1 }, emit, queries);
+  runCombat(draft, { ...base, round: prompt.round + 1 }, emit, events, queries);
 }
 
 // ---------------------------------------------------------------------------
@@ -1810,7 +1844,7 @@ export function applyMainAction(
         break;
 
       case "attack":
-        handleAttack(draft, action.playerId, action.unitIds, action.row, action.col, emit, queries);
+        handleAttack(draft, action.playerId, action.unitIds, action.row, action.col, emit, events, queries);
         break;
 
       case "activate":
@@ -1835,7 +1869,7 @@ export function applyMainAction(
         break;
 
       case "resolve_combat_round":
-        handleResolveCombatRound(draft, action.playerId, action.decision, emit, queries);
+        handleResolveCombatRound(draft, action.playerId, action.decision, emit, events, queries);
         break;
 
       default: {

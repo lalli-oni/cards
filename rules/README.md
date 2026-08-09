@@ -530,7 +530,7 @@ takes −1 to all stats in a contest (including combat).
 | Keyword | Timing | Definition |
 |---------|--------|------------|
 | Untouchable | Static | Cannot be targeted by an Attack while this unit's [stat] exceeds every attacking unit's [stat]. Written `Untouchable:STAT` (v0.1: charisma). |
-| Berserker | Triggered | When this unit wins combat and would injure the loser, it injures itself and kills the loser instead. |
+| Berserker | Triggered | When this unit wins combat, it kills the loser and is injured. (An already-injured Berserker is therefore killed by its own injury — see [Unit status](#unit-status).) |
 | Patron | Static | While in play, cards you buy or deploy that share an attribute with this unit cost X less gold. Written `Patron:X`. |
 | Loot | Triggered | When this unit kills an enemy in combat, draw a card. |
 | Squire | Static | Your Equip actions cost X less AP (default 1). Written `Squire` or `Squire:X`. [design: there is no separate Unequip action — re-equipping implicitly detaches — so this discounts Equip only.] |

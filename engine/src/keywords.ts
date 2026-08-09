@@ -92,7 +92,7 @@ export const KEYWORDS = [
   { name: "Untouchable", cardTypes: ["unit"], params: [{ name: "stat", kind: "stat" }],
     reminder: "Cannot be targeted by an Attack while this unit's {stat} exceeds every attacking unit's {stat}." },
   { name: "Berserker", cardTypes: ["unit"], params: [],
-    reminder: "When this unit wins combat and would injure the loser, it injures itself and kills the loser instead." },
+    reminder: "When this unit wins combat, it kills the loser and is injured." },
   { name: "Patron", cardTypes: ["unit"], params: [{ name: "amount", kind: "magnitude" }],
     reminder: "Cards you buy or deploy that share an attribute with this unit cost {amount} less gold." },
   { name: "Loot", cardTypes: ["unit"], params: [],

@@ -44,7 +44,7 @@ VOCAB_JSON = [
     {"name": "Untouchable", "cardTypes": ["unit"], "params": [{"name": "stat", "kind": "stat"}],
      "reminder": "Cannot be targeted by an Attack while this unit's {stat} exceeds every attacking unit's {stat}."},
     {"name": "Berserker", "cardTypes": ["unit"], "params": [],
-     "reminder": "When this unit wins combat and would injure the loser, it injures itself and kills the loser instead."},
+     "reminder": "When this unit wins combat, it kills the loser and is injured."},
     {"name": "Squire", "cardTypes": ["unit"],
      "params": [{"name": "amount", "kind": "magnitude", "optional": True, "default": 1}],
      "reminder": "Your Equip actions cost {amount} less AP."},
@@ -141,7 +141,7 @@ def test_keyword_reminder():
     label, reminder = mt.keyword_reminder("Berserker", VOCAB)
     check("value-less standalone → label", label == "BERSERKER")
     check("value-less standalone → static reminder",
-          reminder == "When this unit wins combat and would injure the loser, it injures itself and kills the loser instead.")
+          reminder == "When this unit wins combat, it kills the loser and is injured.")
 
     # Omitted optional param falls back to its declared default (Squire → 1 AP).
     label, reminder = mt.keyword_reminder("Squire", VOCAB)

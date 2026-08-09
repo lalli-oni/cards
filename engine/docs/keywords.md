@@ -30,7 +30,7 @@ token and returns a `ParsedKeyword`.
 | Keyword | Card type | Params | Meaning |
 |---|---|---|---|
 | `Untouchable` | unit | `stat` | can't be Attack-targeted while its `stat` exceeds every attacking unit's |
-| `Berserker` | unit | — | on winning combat, injures itself and kills the loser instead |
+| `Berserker` | unit | — | on winning combat, kills the loser and is injured |
 | `Patron` | unit | `amount` | cards you buy or deploy sharing an attribute with it cost `amount` less gold |
 | `Loot` | unit | — | on killing an enemy in combat, draw a card |
 | `Squire` | unit | `amount` (opt, default 1) | your Equip actions cost `amount` less AP |

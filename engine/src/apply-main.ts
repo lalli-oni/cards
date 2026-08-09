@@ -1186,19 +1186,20 @@ export function deriveCombatOutcome(
     : (loserKilled ? "kill_attacker" : "injure_attacker");
 }
 
-/** Pure — upgrades an injure outcome to a kill when the winner has Berserker,
- *  flagging that the winner should injure itself too. Kill outcomes pass
- *  through untouched ("would injure the loser" — moot when already a kill).
- *  How the self-injury lands is the caller's job: an already-injured berserker
- *  dies to it, per the standard re-injury rule. */
+/** Pure — a Berserker's win is always a kill, and always costs it an injury.
+ *  Unconditional on the base outcome: it does not matter whether the loser
+ *  would merely have been injured. How the self-injury lands is the caller's
+ *  job — an already-injured berserker dies to it, per the re-injury rule. */
 export function applyBerserker(
   outcome: CombatPairOutcome,
+  attackerWins: boolean,
   winnerHasBerserker: boolean,
 ): { outcome: CombatPairOutcome; injureWinner: boolean } {
   if (!winnerHasBerserker) return { outcome, injureWinner: false };
-  if (outcome === "injure_defender") return { outcome: "kill_defender", injureWinner: true };
-  if (outcome === "injure_attacker") return { outcome: "kill_attacker", injureWinner: true };
-  return { outcome, injureWinner: false };
+  return {
+    outcome: attackerWins ? "kill_defender" : "kill_attacker",
+    injureWinner: true,
+  };
 }
 
 /** Resolve a single 1v1 combat pair. */
@@ -1228,7 +1229,9 @@ function resolveCombatPair(
   const attackerWins = atk.power > def.power;
   const winner = attackerWins ? atk : def;
   const loser = attackerWins ? def : atk;
-  const { outcome, injureWinner } = applyBerserker(baseOutcome, hasKeyword(winner.unit, "Berserker"));
+  const { outcome, injureWinner } = applyBerserker(
+    baseOutcome, attackerWins, hasKeyword(winner.unit, "Berserker"),
+  );
   const loserKilled = outcome === "kill_attacker" || outcome === "kill_defender";
 
   emit({

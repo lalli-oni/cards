@@ -641,21 +641,22 @@ describe("Heavy / Lightweight", () => {
 // ---------------------------------------------------------------------------
 
 describe("applyBerserker (pure)", () => {
-  it("upgrades injure_defender to kill_defender and flags self-injury", () => {
-    expect(applyBerserker("injure_defender", true)).toEqual({ outcome: "kill_defender", injureWinner: true });
+  it("turns an injure outcome into a kill and flags self-injury", () => {
+    expect(applyBerserker("injure_defender", true, true)).toEqual({ outcome: "kill_defender", injureWinner: true });
+    expect(applyBerserker("injure_attacker", false, true)).toEqual({ outcome: "kill_attacker", injureWinner: true });
   });
 
-  it("upgrades injure_attacker to kill_attacker and flags self-injury", () => {
-    expect(applyBerserker("injure_attacker", true)).toEqual({ outcome: "kill_attacker", injureWinner: true });
-  });
-
-  it("passes kill outcomes through untouched (would injure the loser, moot on an existing kill)", () => {
-    expect(applyBerserker("kill_defender", true)).toEqual({ outcome: "kill_defender", injureWinner: false });
-    expect(applyBerserker("kill_attacker", true)).toEqual({ outcome: "kill_attacker", injureWinner: false });
+  it("still costs an injury when the win was already a kill", () => {
+    // The old wording ("...and would injure the loser") exempted landslide
+    // wins, so a berserker that overwhelmed its target paid nothing. That
+    // counterfactual is gone: every win costs an injury, whatever the margin.
+    expect(applyBerserker("kill_defender", true, true)).toEqual({ outcome: "kill_defender", injureWinner: true });
+    expect(applyBerserker("kill_attacker", false, true)).toEqual({ outcome: "kill_attacker", injureWinner: true });
   });
 
   it("is the identity without Berserker", () => {
-    expect(applyBerserker("injure_defender", false)).toEqual({ outcome: "injure_defender", injureWinner: false });
+    expect(applyBerserker("injure_defender", true, false)).toEqual({ outcome: "injure_defender", injureWinner: false });
+    expect(applyBerserker("kill_attacker", false, false)).toEqual({ outcome: "kill_attacker", injureWinner: false });
   });
 });
 
@@ -718,6 +719,27 @@ describe("Berserker (integration)", () => {
     expect((next as MainGameState).grid[0][0].units.map((u) => u.id)).toEqual([]);
   });
 
+  it("an injured berserker dies even on a landslide — the margin no longer exempts it", () => {
+    // Newly lethal: the old wording exempted 2x+ wins from self-injury, so an
+    // injured berserker could keep overwhelming targets indefinitely. Now any
+    // win injures, and injuring an already-injured unit kills it. The practical
+    // shape of the card is "wins twice, then dies" unless healed at HQ.
+    let attacker!: UnitCard, defender!: UnitCard;
+    const state = gameWith((d, p) => {
+      attacker = makeUnit({
+        ownerId: p.active, strength: LANDSLIDE.attacker, injured: true, keywords: ["Berserker"],
+      });
+      defender = makeUnit({ ownerId: p.other, strength: LANDSLIDE.defender });
+      d.grid[0][0].location = makeLocation({ ownerId: p.active });
+      d.grid[0][0].units.push(attacker, defender);
+    });
+    const { active } = getPlayers(state);
+
+    const { events } = applyAction(state, { type: "attack", playerId: active, unitIds: [attacker.id], row: 0, col: 0 });
+    expect(unitKilled(events, defender.id)).toBe(true);
+    expect(unitKilled(events, attacker.id)).toBe(true);
+  });
+
   it("a winning berserker DEFENDER upgrades and self-injures, same as an attacker", () => {
     // Every other Berserker/Loot integration case puts the keyword on the
     // attacking side, so nothing pinned that resolveCombatPair identifies a
@@ -740,7 +762,7 @@ describe("Berserker (integration)", () => {
     expect(unitInjured(events, defender.id)).toBe(true);
   });
 
-  it("winning by 2x+ is already a kill — Berserker does not additionally self-injure", () => {
+  it("winning by 2x+ still costs the berserker an injury", () => {
     let attacker!: UnitCard, defender!: UnitCard;
     const state = gameWith((d, p) => {
       attacker = makeUnit({ ownerId: p.active, strength: LANDSLIDE.attacker, keywords: ["Berserker"] });
@@ -752,7 +774,9 @@ describe("Berserker (integration)", () => {
 
     const { events } = applyAction(state, { type: "attack", playerId: active, unitIds: [attacker.id], row: 0, col: 0 });
     expect(unitKilled(events, defender.id)).toBe(true);
-    expect(unitInjured(events, attacker.id)).toBe(false);
+    // Under the old "would injure the loser" wording this was false — a
+    // landslide was a free kill. The margin no longer matters.
+    expect(unitInjured(events, attacker.id)).toBe(true);
   });
 
   it("control: without Berserker, a narrow win only injures — no self-injury", () => {

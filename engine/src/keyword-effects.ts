@@ -12,7 +12,7 @@
 // silently-inert keyword reads as doing something and does nothing, which is
 // worse than a loud failure (see `mission-helpers.ts`'s parse-error precedent).
 
-import type { CardType, ItemCard, LocationCard, UnitCard } from "./types";
+import type { CardType, ItemCard, LocationCard, MainGameState, UnitCard } from "./types";
 import { KeywordError, parseKeyword, type ParsedKeyword } from "./keywords";
 import type {
   EffectDefinition,
@@ -22,6 +22,7 @@ import type {
   StatModifierListener,
   StatQueryContext,
 } from "./listeners/types";
+import { getModifiedStat } from "./listeners/query";
 import { hasAttribute } from "./attributes";
 
 /** Case-insensitive "do these two cards share at least one attribute" check —
@@ -221,13 +222,65 @@ export function keywordEffects(
         break;
       }
 
+      // Berserker, Loot, Untouchable, and Flying are intentionally absent
+      // here — none fit the query/listener shape. Berserker and Loot are
+      // direct hooks in apply-main.ts's combat resolution (via `hasKeyword`);
+      // Untouchable and Flying are the `isAttackShielded` /
+      // `unitIgnoresBlockedEdges` helpers below, called directly from
+      // valid-actions.ts and apply-main.ts. See test/build.test.ts's
+      // exhaustiveness check for the full accounting.
       default:
-        // Phase 3-4 add cases here as each keyword is wired. An unhandled
-        // governed name is caught by test/build.test.ts's exhaustiveness
-        // check, not silently ignored.
         break;
     }
   }
 
   return { listeners, queries };
+}
+
+// ---------------------------------------------------------------------------
+// Legality-gated standalones (Untouchable, Flying)
+//
+// Neither fits the query/listener shape above: Untouchable needs the full
+// committed-attacker list (not just one queried unit), and Flying is a
+// boolean edge-bypass check, not a modifier. Callers ask these directly
+// rather than going through `rebuildListeners`.
+// ---------------------------------------------------------------------------
+
+/**
+ * Is `defender` shielded from an Attack committing `attackers`? Per #212's
+ * D5: shielded only if its (modified) Untouchable stat exceeds EVERY
+ * committed attacker's (modified) same stat — i.e. exceeds the max. Both
+ * sides are read under the same contest role/position `buildCombatantRoll`
+ * uses for the real roll, so context:contest buffs (Leader, Prowess, ...)
+ * apply identically here and in combat itself.
+ */
+export function isAttackShielded(
+  state: MainGameState,
+  queries: QueryListener[],
+  defender: UnitCard,
+  position: { row: number; col: number },
+  attackers: readonly UnitCard[],
+): boolean {
+  const token = (defender.keywords ?? []).find((t) => t.split(":")[0] === "Untouchable");
+  if (!token) return false;
+  const { stat } = parseCached(token, "unit");
+  if (!stat) return false;
+  const defenderStat = getModifiedStat(
+    state, queries, defender, stat, position,
+    { role: "defender", row: position.row, col: position.col },
+  );
+  return attackers.every((attacker) => {
+    const attackerStat = getModifiedStat(
+      state, queries, attacker, stat, position,
+      { role: "attacker", row: position.row, col: position.col },
+    );
+    return defenderStat > attackerStat;
+  });
+}
+
+/** Does `unitId` have a Flying item equipped to it at `cell`? Flying bypasses
+ *  only the edge-facing check — the destination must still have a location
+ *  and be orthogonally adjacent; callers enforce those separately. */
+export function unitIgnoresBlockedEdges(cell: { items: ItemCard[] }, unitId: string): boolean {
+  return cell.items.some((item) => item.equippedTo === unitId && hasKeyword(item, "Flying"));
 }

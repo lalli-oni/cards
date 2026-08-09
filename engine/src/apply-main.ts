@@ -28,7 +28,7 @@ import { getModifiedStatWithSources, getModifiedCost, getModifiedAPCost } from "
 import type { EmitFn, QueryListener } from "./listeners/types";
 import { needsLocationTarget } from "./valid-actions";
 import { killUnit, injureUnit, dropEquippedItems, decideKillVsInjure, computeContestPower } from "./unit-helpers";
-import { hasKeyword } from "./keyword-effects";
+import { hasKeyword, isAttackShielded, unitIgnoresBlockedEdges } from "./keyword-effects";
 import type {
   ActionDef,
   ActivePassiveEvent,
@@ -401,7 +401,10 @@ function handleMove(
     throw new Error(`Cell (${toRow},${toCol}) has no location`);
   }
 
-  if (!areFacingEdgesOpen(draft.grid, fromRow, fromCol, toRow, toCol)) {
+  if (
+    !areFacingEdgesOpen(draft.grid, fromRow, fromCol, toRow, toCol) &&
+    !unitIgnoresBlockedEdges(draft.grid[fromRow][fromCol], unitId)
+  ) {
     throw new Error(
       `Facing edges between (${fromRow},${fromCol}) and (${toRow},${toCol}) are blocked`,
     );
@@ -666,8 +669,14 @@ function handleAttack(
     attackers.push(unit);
   }
 
-  // Find defender(s) — all enemy units at location
-  const defenders = cell.units.filter((u) => u.controllerId !== playerId);
+  // Find defender(s) — all enemy units at location, minus any Untouchable
+  // unit whose stat exceeds every committed attacker's stat (D5). Mirrors the
+  // filtering in valid-actions.ts's attack-generation block — a hand-crafted
+  // action can't bypass the shield the bot never gets offered.
+  const defenders = cell.units.filter(
+    (u) => u.controllerId !== playerId
+      && !isAttackShielded(draft as MainGameState, queries, u as UnitCard, { row, col }, attackers as UnitCard[]),
+  );
   if (defenders.length === 0) {
     throw new Error(`No enemy units at cell (${row},${col}) to attack`);
   }

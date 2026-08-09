@@ -15,6 +15,7 @@ import { getConfigNumber, getPlayerById } from "./state-helpers";
 import { rebuildListeners } from "./listeners/rebuild";
 import { PASSIVE_EVENTS_NEEDING_LOCATION_TARGET, POLICY_ACTIONS } from "./listeners/effects";
 import { getModifiedCost, getModifiedAPCost } from "./listeners/query";
+import { isAttackShielded, unitIgnoresBlockedEdges } from "./keyword-effects";
 import type {
   Action,
   CombatPrompt,
@@ -311,7 +312,8 @@ function getMainValidActions(
         for (const adj of getAdjacentCells(gridRows, gridCols, r, c)) {
           if (
             state.grid[adj.row][adj.col].location &&
-            areFacingEdgesOpen(state.grid, r, c, adj.row, adj.col)
+            (areFacingEdgesOpen(state.grid, r, c, adj.row, adj.col) ||
+              unitIgnoresBlockedEdges(state.grid[r][c], unit.id))
           ) {
             const moveAction: MainAction = { type: "move", playerId, unitId: unit.id, row: adj.row, col: adj.col };
             const moveCost = getModifiedAPCost(state, queries, moveAction, baseMoveCost);
@@ -418,14 +420,20 @@ function getMainValidActions(
     }
   }
 
-  // attack — cells where player has units and enemies exist (1 AP)
+  // attack — cells where player has units and at least one unshielded enemy
+  // exists (1 AP). Untouchable defenders whose stat exceeds every committed
+  // attacker's stat are excluded (D5); if that leaves no targetable enemy,
+  // the action is not offered at all.
   if (ap >= 1) {
     for (let r = 0; r < gridRows; r++) {
       for (let c = 0; c < gridCols; c++) {
         const cell = state.grid[r][c];
         const myUnits = cell.units.filter((u) => u.controllerId === playerId);
         const enemyUnits = cell.units.filter((u) => u.controllerId !== playerId);
-        if (myUnits.length > 0 && enemyUnits.length > 0) {
+        const targetableEnemies = enemyUnits.filter(
+          (u) => !isAttackShielded(state, queries, u, { row: r, col: c }, myUnits),
+        );
+        if (myUnits.length > 0 && targetableEnemies.length > 0) {
           // Offer attacking with all owned units at that cell
           actions.push({
             type: "attack",

@@ -49,7 +49,7 @@ it.
 
 **Current runtime status:** keywords are **parsed, validated, rendered, and
 resolved**. `engine/src/keyword-effects.ts` converts a card's `keywords` tokens
-into the same `EffectDefinition` shape surface 2's factories produce;
+into the same `EffectDefinition` shape that surface 2's factories produce;
 `rebuildListeners` calls it for every card it visits, alongside the
 `definitionId` registry lookup — so a card can carry both a bespoke factory and
 keywords. See [keywords.md](keywords.md).

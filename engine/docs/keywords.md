@@ -29,12 +29,12 @@ token and returns a `ParsedKeyword`.
 
 | Keyword | Card type | Params | Meaning |
 |---|---|---|---|
-| `Untouchable` | unit | `stat` | can't be Attack-targeted while its `stat` exceeds the attacker's |
+| `Untouchable` | unit | `stat` | can't be Attack-targeted while its `stat` exceeds every attacking unit's |
 | `Berserker` | unit | — | on winning combat, injures itself and kills the loser instead |
 | `Patron` | unit | `amount` | cards you buy or deploy sharing an attribute with it cost `amount` less gold |
 | `Loot` | unit | — | on killing an enemy in combat, draw a card |
-| `Squire` | unit | `amount` (opt, default 1) | your Equip / Unequip actions cost `amount` less AP |
-| `Flying` | item | — | equipped unit ignores blocked edges when moving |
+| `Squire` | unit | `amount` (opt, default 1) | your Equip actions cost `amount` less AP |
+| `Flying` | item | — | equipped unit ignores blocked edges between locations when moving |
 | `Heavy` | item | — | equipped unit's Move action costs +1 AP |
 | `Lightweight` | item | — | equipped unit's Move action costs 1 less AP |
 
@@ -91,6 +91,8 @@ future architectural reconsideration, not a plan to remove keywords.
    sync with the `reminder`.
 3. Rebuild (`bun library/build.ts`) — the build validates it and emits it to
    `keywords.json` for the renderer.
-4. Add a case for the new keyword's `name` in `keyword-effects.ts` (the
-   dispatch is exhaustive over `KEYWORDS` — an unhandled name is caught by
-   `test/build.test.ts`, not silently inert).
+4. Wire its runtime semantics: either add a case in `keyword-effects.ts`'s
+   `keywordEffects` switch, or — if it doesn't fit the query/listener shape —
+   implement it as a direct hook and list it in `DIRECT_HOOK_KEYWORDS`.
+   `test/build.test.ts` fails on a keyword that is neither, so it can't ship
+   inert.

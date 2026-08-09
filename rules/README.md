@@ -511,7 +511,7 @@ A modifier is written `Family:±MAG:STAT:CONTEXT[:ROLE]`, where STAT ∈
 {strength, cunning, charisma, all}, CONTEXT ∈ {contest, mission}, and ROLE ∈
 {atk, def, either} (default either). `contest` covers any 1v1 stat contest —
 combat matchups included, since [each combat matchup is one strength
-contest](stat-contests.md#resolution). The families differ only in scope:
+contest](stat-contests.md#consequences). The families differ only in scope:
 
 | Family | Affects |
 |--------|---------|
@@ -529,16 +529,16 @@ takes −1 to all stats in a contest (including combat).
 #### Unit keywords
 | Keyword | Timing | Definition |
 |---------|--------|------------|
-| Untouchable | Static | Cannot be targeted by an Attack while this unit's [stat] exceeds the attacker's [stat]. Written `Untouchable:STAT` (v0.1: charisma). |
+| Untouchable | Static | Cannot be targeted by an Attack while this unit's [stat] exceeds every attacking unit's [stat]. Written `Untouchable:STAT` (v0.1: charisma). |
 | Berserker | Triggered | When this unit wins combat and would injure the loser, it injures itself and kills the loser instead. |
-| Patron | Static | While in play, cards you buy or deploy that share an attribute with this unit cost X less gold. Written `Patron:X`. |
+| Patron | Static | While in play — including from your HQ — cards you buy or deploy that share an attribute with this unit cost X less gold. Written `Patron:X`. |
 | Loot | Triggered | When this unit kills an enemy in combat, draw a card. |
-| Squire | Static | Your Equip/Unequip actions cost X less AP (default 1). Written `Squire` or `Squire:X`. [design: no separate Unequip action exists in the engine yet (re-equipping implicitly detaches) — Squire currently discounts Equip only; see #212.] |
+| Squire | Static | While in play — including from your HQ — your Equip actions cost X less AP (default 1). Written `Squire` or `Squire:X`. [design: there is no separate Unequip action — re-equipping implicitly detaches — so this discounts Equip only.] |
 
 #### Equipment keywords
 | Keyword | Timing | Definition |
 |---------|--------|------------|
-| Flying | Static | Equipped unit ignores blocked edges when moving. |
+| Flying | Static | Equipped unit ignores blocked edges between locations when moving. The HQ boundary edges (entering the grid, retreating) are not bypassed. |
 | Heavy | Static | The equipped unit's Move action costs +1 AP. |
 | Lightweight | Static | The equipped unit's Move action costs 1 less AP. |
 

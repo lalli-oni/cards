@@ -21,8 +21,8 @@ token and returns a `ParsedKeyword`.
 | Keyword | Card type | Affects |
 |---|---|---|
 | `Prowess` | unit | this unit |
-| `Kindred` | unit | friendly units sharing an attribute with this unit |
-| `Leader` | unit | friendly units at this location |
+| `Kindred` | unit | other friendly units sharing an attribute with this unit |
+| `Leader` | unit | friendly units at this location, including this unit |
 | `Aura` | location | every unit at this location — friend or foe |
 
 **Standalone keywords:**

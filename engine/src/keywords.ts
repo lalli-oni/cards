@@ -79,9 +79,9 @@ export const KEYWORDS: readonly KeywordSpec[] = [
   // share FAMILY_PARAMS and differ only in the scope clause of their reminder:
   { name: "Prowess", cardTypes: ["unit"], params: FAMILY_PARAMS, // self
     reminder: "This unit gets {magnitude} to {stat} {context}{role}." },
-  { name: "Kindred", cardTypes: ["unit"], params: FAMILY_PARAMS, // attribute-kin
-    reminder: "Friendly units sharing an attribute with this unit get {magnitude} to {stat} {context}{role}." },
-  { name: "Leader", cardTypes: ["unit"], params: FAMILY_PARAMS, // all friendly here
+  { name: "Kindred", cardTypes: ["unit"], params: FAMILY_PARAMS, // attribute-kin, excludes self
+    reminder: "Other friendly units sharing an attribute with this unit get {magnitude} to {stat} {context}{role}." },
+  { name: "Leader", cardTypes: ["unit"], params: FAMILY_PARAMS, // all friendly here, including self
     reminder: "Friendly units at this location get {magnitude} to {stat} {context}{role}." },
   { name: "Aura", cardTypes: ["location"], params: FAMILY_PARAMS, // every unit here (friend + foe)
     reminder: "Every unit at this location — friend or foe — gets {magnitude} to {stat} {context}{role}." },

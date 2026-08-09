@@ -516,8 +516,8 @@ contest](stat-contests.md#resolution). The families differ only in scope:
 | Family | Affects |
 |--------|---------|
 | Prowess | this unit only |
-| Kindred | friendly units sharing an attribute with this unit |
-| Leader | all friendly units at this location |
+| Kindred | other friendly units sharing an attribute with this unit |
+| Leader | all friendly units at this location, including this unit |
 | Aura | every unit at this location — friend and foe (a location keyword) |
 
 Examples: `Prowess:+2:strength:contest:def` — +2 strength when defending in

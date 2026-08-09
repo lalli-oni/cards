@@ -1485,3 +1485,30 @@ describe("AP modifier queries", () => {
     expect(after2.turn.actionPointsRemaining).toBe(apBefore - 1); // 1 AP for second event
   });
 });
+
+// ---------------------------------------------------------------------------
+// Keyword + bespoke effect coexistence (#212)
+// ---------------------------------------------------------------------------
+
+describe("keyword effects coexist with bespoke *_EFFECTS factories", () => {
+  it("a card with both a definitionId factory and keywords contributes both sets of modifiers", () => {
+    // mary-shelley (bespoke): first play_event each turn is free.
+    // Squire (keyword): equip actions cost 1 less AP. Same card, both fire.
+    const state = gameWith((d, p) => {
+      d.players[p.activeIdx].hq.push(
+        makeUnit({ ownerId: p.active, definitionId: "mary-shelley", keywords: ["Squire"] }),
+      );
+      d.players[p.activeIdx].hand.push(makeInstantEvent({ ownerId: p.active, cost: "0" }));
+    });
+    const { active, activeIdx } = getPlayers(state);
+    const { queries } = rebuildListeners(state);
+
+    // Bespoke factory still fires: first play_event is free.
+    const playEventAction = { type: "play_event" as const, playerId: active, cardId: state.players[activeIdx].hand[0].id };
+    expect(getModifiedAPCost(state, queries, playEventAction, 1)).toBe(0);
+
+    // Keyword also fires on the very same card: Squire discounts equip.
+    const equipAction = { type: "equip" as const, playerId: active, itemId: "i1", unitId: "u1" };
+    expect(getModifiedAPCost(state, queries, equipAction, 1)).toBe(0);
+  });
+});

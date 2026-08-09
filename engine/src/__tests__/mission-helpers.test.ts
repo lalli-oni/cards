@@ -171,6 +171,24 @@ describe("checkMissionRequirements", () => {
     expect(checkMissionRequirements(reqs, [healthy1, hurt])).toBe(true);
   });
 
+  it("stat: a Prowess:...:mission keyword modifies the sum when state+queries are supplied (#212)", () => {
+    // Pins the new `mission` StatQueryContext flag end-to-end: checkMissionRequirements's
+    // stat-sum path now threads `mission: true` into getModifiedStat, so a
+    // mission-context keyword on a contributing unit applies here exactly like
+    // the injury penalty above — and, symmetrically, is invisible to the raw
+    // (no state/queries) fallback.
+    const reqs = parseRequirements("strength_7");
+    const source = unit([], { id: "u1", strength: 5, keywords: ["Prowess:+2:strength:mission"] });
+    const state = createTestGame();
+    state.players[0].hq.push(source);
+    const { queries } = rebuildListeners(state);
+
+    // 5 + 2 (Prowess under the mission context) = 7 >= 7 (met).
+    expect(checkMissionRequirements(reqs, [source], state, queries)).toBe(true);
+    // Raw fallback ignores the keyword modifier entirely → 5 < 7 (unmet).
+    expect(checkMissionRequirements(reqs, [source])).toBe(false);
+  });
+
   it("stat: non-attribute units still contribute to stat sum", () => {
     // With decoupled model, ALL units contribute to stat checks
     const reqs = parseRequirements("military_1;strength_15");

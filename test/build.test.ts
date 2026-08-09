@@ -9,7 +9,9 @@ import {
   type BuildWarning,
   type CardType,
 } from "../library/build";
-import { KEYWORDS } from "../engine/src/keywords";
+import { KEYWORDS, type KeywordSpec } from "../engine/src/keywords";
+import { DIRECT_HOOK_KEYWORDS, keywordEffects, type KeywordCard } from "../engine/src/keyword-effects";
+import type { CardType as EngineCardType } from "../engine/src/types";
 
 // ---------------------------------------------------------------------------
 // Build-time governed-vocabulary validation (#119)
@@ -173,6 +175,76 @@ describe("build validation — governed keywords", () => {
           expect(["magnitude", "signedMagnitude"]).toContain(p.kind);
         }
       }
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Keyword runtime exhaustiveness (#212)
+//
+// A vocabulary entry with no keyword-effects.ts case is a card that reads as
+// doing something and does nothing — exactly the gap #212 closes. Pin that
+// every governed keyword is either resolved by keywordEffects's switch or is
+// a documented direct hook (Berserker/Loot/Untouchable/Flying), so adding a
+// keyword to KEYWORDS without wiring its runtime semantics fails loud here
+// instead of shipping an inert card.
+// ---------------------------------------------------------------------------
+
+function minimalCard(type: EngineCardType): KeywordCard {
+  const base = {
+    id: "t1", definitionId: "t", name: "T", cost: "1",
+    rarity: "common" as const, ownerId: "p1", controllerId: "p1",
+  };
+  if (type === "unit") {
+    return { ...base, type: "unit", strength: 1, cunning: 1, charisma: 1, attributes: [], injured: false };
+  }
+  if (type === "location") {
+    return { ...base, type: "location", edges: { n: true, e: true, s: true, w: true } };
+  }
+  if (type === "item") {
+    return { ...base, type: "item" };
+  }
+  throw new Error(`keyword exhaustiveness test: unsupported card type "${type}"`);
+}
+
+/** Builds a minimally-valid token for `spec` from its grammar alone (skipping
+ *  optional params), so this stays accurate as the grammar evolves rather
+ *  than hardcoding a token string per keyword name. */
+function minimalToken(spec: KeywordSpec): string {
+  const parts = [spec.name];
+  for (const param of spec.params) {
+    if (param.optional) continue;
+    switch (param.kind) {
+      case "signedMagnitude": parts.push("+1"); break;
+      case "magnitude": parts.push("1"); break;
+      case "statScope": parts.push("strength"); break;
+      case "stat": parts.push("strength"); break;
+      case "context": parts.push("contest"); break;
+      case "role": parts.push("either"); break;
+    }
+  }
+  return parts.join(":");
+}
+
+describe("keyword runtime exhaustiveness", () => {
+  test("every governed keyword is resolved by keywordEffects or is a documented direct hook", () => {
+    const unhandled: string[] = [];
+    for (const spec of KEYWORDS) {
+      if (DIRECT_HOOK_KEYWORDS.includes(spec.name)) continue;
+      const card = minimalCard(spec.cardTypes[0]);
+      card.keywords = [minimalToken(spec)];
+      const result = keywordEffects(card, "p1", { row: 0, col: 0 });
+      if (result.listeners.length === 0 && result.queries.length === 0) {
+        unhandled.push(spec.name);
+      }
+    }
+    expect(unhandled).toEqual([]);
+  });
+
+  test("DIRECT_HOOK_KEYWORDS only names governed keywords", () => {
+    const names = new Set(KEYWORDS.map((k) => k.name));
+    for (const name of DIRECT_HOOK_KEYWORDS) {
+      expect(names.has(name)).toBe(true);
     }
   });
 });

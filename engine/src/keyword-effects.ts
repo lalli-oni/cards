@@ -36,6 +36,14 @@ function sharesAttribute(a: { attributes?: string[] }, b: { attributes?: string[
 
 export type KeywordCard = UnitCard | LocationCard | ItemCard;
 
+/** Keywords resolved via a direct hook/helper rather than a `keywordEffects`
+ *  switch case — Berserker/Loot (apply-main.ts combat resolution via
+ *  `hasKeyword`) and Untouchable/Flying (`isAttackShielded` /
+ *  `unitIgnoresBlockedEdges` below). Exported so test/build.test.ts's
+ *  exhaustiveness check can tell "intentionally a direct hook" apart from
+ *  "forgotten case". */
+export const DIRECT_HOOK_KEYWORDS: readonly string[] = ["Berserker", "Loot", "Untouchable", "Flying"];
+
 // Tokens are a closed, tiny vocabulary, so this cache is bounded by
 // KEYWORDS.length — no eviction needed.
 const parsedCache = new Map<string, ParsedKeyword>();

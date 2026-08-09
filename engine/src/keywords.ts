@@ -97,8 +97,6 @@ export const KEYWORDS = [
     reminder: "Cards you buy or deploy that share an attribute with this unit cost {amount} less gold." },
   { name: "Loot", cardTypes: ["unit"], params: [],
     reminder: "When this unit kills an enemy in combat, draw a card." },
-  // There is no Unequip action in the engine (re-equipping implicitly
-  // detaches), so the reminder names only what the engine can discount.
   { name: "Squire", cardTypes: ["unit"], params: [{ name: "amount", kind: "magnitude", optional: true, default: 1 }],
     reminder: "Your Equip actions cost {amount} less AP." },
   { name: "Flying", cardTypes: ["item"], params: [],

@@ -507,10 +507,10 @@ describe("Squire", () => {
       .some((a) => a.type === "equip")).toBe(false);
   });
 
-  it("discounts a re-equip onto a different unit — the closest thing to an Unequip", () => {
-    // There is no Unequip action; re-equipping implicitly detaches, which is
-    // why the reminder promises only Equip. Pin the behaviour that carries the
-    // weight of that design note.
+  it("discounts moving an item between units (the Equip action's swap mode)", () => {
+    // Equip covers attach, swap and unequip-to-location (rules/README.md
+    // Actions). Swap is the mode with the most moving parts — the item detaches
+    // and re-attaches in one action — so it is the one worth pinning.
     let itemCard!: ItemCard, unitA!: UnitCard, unitB!: UnitCard;
     const state = gameWith((d, p) => {
       unitA = makeUnit({ ownerId: p.active });

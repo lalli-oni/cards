@@ -9,7 +9,7 @@ import {
   type BuildWarning,
   type CardType,
 } from "../library/build";
-import { KEYWORDS, type KeywordSpec } from "../engine/src/keywords";
+import { KEYWORDS, KeywordError, type KeywordSpec, parseKeyword } from "../engine/src/keywords";
 import { DIRECT_HOOK_KEYWORDS, keywordEffects, type KeywordCard } from "../engine/src/keyword-effects";
 import type { CardType as EngineCardType } from "../engine/src/types";
 
@@ -180,10 +180,10 @@ describe("build validation — governed keywords", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Keyword runtime exhaustiveness (#212)
+// Keyword runtime exhaustiveness
 //
 // A vocabulary entry with no keyword-effects.ts case is a card that reads as
-// doing something and does nothing — exactly the gap #212 closes. Pin that
+// doing something and does nothing. Pin that
 // every governed keyword is either resolved by keywordEffects's switch or is
 // a documented direct hook (Berserker/Loot/Untouchable/Flying), so adding a
 // keyword to KEYWORDS without wiring its runtime semantics fails loud here
@@ -204,7 +204,11 @@ function minimalCard(type: EngineCardType): KeywordCard {
   if (type === "item") {
     return { ...base, type: "item" };
   }
-  throw new Error(`keyword exhaustiveness test: unsupported card type "${type}"`);
+  // A keyword declared on `event`/`policy` has no card shape to build here.
+  // Surfaced as an assertion rather than a thrown Error so the failure names
+  // the gap instead of aborting the suite with a stack trace.
+  expect(`unsupported card type for keyword exhaustiveness: ${type}`).toBe("");
+  throw new Error("unreachable");
 }
 
 /** Builds a minimally-valid token for `spec` from its grammar alone (skipping
@@ -230,15 +234,28 @@ describe("keyword runtime exhaustiveness", () => {
   test("every governed keyword is resolved by keywordEffects or is a documented direct hook", () => {
     const unhandled: string[] = [];
     for (const spec of KEYWORDS) {
-      if (DIRECT_HOOK_KEYWORDS.includes(spec.name)) continue;
-      const card = minimalCard(spec.cardTypes[0]);
-      card.keywords = [minimalToken(spec)];
-      const result = keywordEffects(card, "p1", { row: 0, col: 0 });
-      if (result.listeners.length === 0 && result.queries.length === 0) {
-        unhandled.push(spec.name);
+      if ((DIRECT_HOOK_KEYWORDS as readonly string[]).includes(spec.name)) continue;
+      // Every supported card type, not just the first: a keyword allowed on
+      // two types with a resolver for only one would otherwise pass.
+      for (const cardType of spec.cardTypes) {
+        const card = minimalCard(cardType);
+        card.keywords = [minimalToken(spec)];
+        const result = keywordEffects(card, "p1", { row: 0, col: 0 });
+        if (result.listeners.length === 0 && result.queries.length === 0) {
+          unhandled.push(`${spec.name} (${cardType})`);
+        }
       }
     }
     expect(unhandled).toEqual([]);
+  });
+
+  // Frozen rather than merely validated. The exhaustiveness test above skips
+  // anything in this list, so a contributor could otherwise silence it by
+  // adding a name here and never writing the hook — shipping exactly the inert
+  // keyword the check exists to prevent. Growing the list now requires editing
+  // this assertion, which a reviewer sees.
+  test("DIRECT_HOOK_KEYWORDS is exactly the four hand-wired keywords", () => {
+    expect([...DIRECT_HOOK_KEYWORDS].sort()).toEqual(["Berserker", "Flying", "Loot", "Untouchable"]);
   });
 
   test("DIRECT_HOOK_KEYWORDS only names governed keywords", () => {
@@ -246,6 +263,14 @@ describe("keyword runtime exhaustiveness", () => {
     for (const name of DIRECT_HOOK_KEYWORDS) {
       expect(names.has(name)).toBe(true);
     }
+  });
+
+  // The mission+role cross-parameter rule lives in parseKeyword, so the build
+  // rejects the token. It used to be enforced at resolution time instead,
+  // which meant a CSV could build green and then throw on every engine action.
+  test("the build rejects a role on a mission-context token", () => {
+    expect(() => parseKeyword("Prowess:+2:cunning:mission:def", "unit")).toThrow(KeywordError);
+    expect(() => parseKeyword("Prowess:+2:cunning:mission", "unit")).not.toThrow();
   });
 });
 

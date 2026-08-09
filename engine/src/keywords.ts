@@ -73,8 +73,10 @@ const FAMILY_PARAMS: readonly ParamSpec[] = [
 ];
 
 // The closed keyword vocabulary. Source of truth; keep in sync with the rules
-// Keyword Glossary.
-export const KEYWORDS: readonly KeywordSpec[] = [
+// Keyword Glossary. `as const` is load-bearing: it makes `KeywordName` below a
+// literal union, so a misspelled keyword at a call site is a compile error
+// rather than a silent no-match.
+export const KEYWORDS = [
   // Modifier families (parameterized stat effects), by who they affect. They
   // share FAMILY_PARAMS and differ only in the scope clause of their reminder:
   { name: "Prowess", cardTypes: ["unit"], params: FAMILY_PARAMS, // self
@@ -82,28 +84,35 @@ export const KEYWORDS: readonly KeywordSpec[] = [
   { name: "Kindred", cardTypes: ["unit"], params: FAMILY_PARAMS, // attribute-kin, excludes self
     reminder: "Other friendly units sharing an attribute with this unit get {magnitude} to {stat} {context}{role}." },
   { name: "Leader", cardTypes: ["unit"], params: FAMILY_PARAMS, // all friendly here, including self
-    reminder: "Friendly units at this location get {magnitude} to {stat} {context}{role}." },
+    reminder: "Friendly units at this location, including this one, get {magnitude} to {stat} {context}{role}." },
   { name: "Aura", cardTypes: ["location"], params: FAMILY_PARAMS, // every unit here (friend + foe)
     reminder: "Every unit at this location — friend or foe — gets {magnitude} to {stat} {context}{role}." },
 
   // Standalone effect keywords:
   { name: "Untouchable", cardTypes: ["unit"], params: [{ name: "stat", kind: "stat" }],
-    reminder: "Cannot be targeted by an Attack while this unit's {stat} exceeds the attacker's {stat}." },
+    reminder: "Cannot be targeted by an Attack while this unit's {stat} exceeds every attacking unit's {stat}." },
   { name: "Berserker", cardTypes: ["unit"], params: [],
     reminder: "When this unit wins combat and would injure the loser, it injures itself and kills the loser instead." },
   { name: "Patron", cardTypes: ["unit"], params: [{ name: "amount", kind: "magnitude" }],
     reminder: "Cards you buy or deploy that share an attribute with this unit cost {amount} less gold." },
   { name: "Loot", cardTypes: ["unit"], params: [],
     reminder: "When this unit kills an enemy in combat, draw a card." },
+  // There is no Unequip action in the engine (re-equipping implicitly
+  // detaches), so the reminder names only what the engine can discount.
   { name: "Squire", cardTypes: ["unit"], params: [{ name: "amount", kind: "magnitude", optional: true, default: 1 }],
-    reminder: "Your Equip and Unequip actions cost {amount} less AP." },
+    reminder: "Your Equip actions cost {amount} less AP." },
+  // Scoped to edges between locations: the boundary gates (HQ→perimeter enter,
+  // perimeter→HQ retreat) are deliberately not bypassed.
   { name: "Flying", cardTypes: ["item"], params: [],
-    reminder: "While equipped, this unit ignores blocked edges when moving." },
+    reminder: "While equipped, this unit ignores blocked edges between locations when moving." },
   { name: "Heavy", cardTypes: ["item"], params: [],
     reminder: "The equipped unit's Move action costs +1 AP." },
   { name: "Lightweight", cardTypes: ["item"], params: [],
     reminder: "The equipped unit's Move action costs 1 less AP." },
-];
+] as const satisfies readonly KeywordSpec[];
+
+/** Every governed keyword name, as a literal union. */
+export type KeywordName = (typeof KEYWORDS)[number]["name"];
 
 const KEYWORD_BY_NAME: ReadonlyMap<string, KeywordSpec> = new Map(
   KEYWORDS.map((k) => [k.name, k]),
@@ -112,6 +121,20 @@ const KEYWORD_BY_NAME: ReadonlyMap<string, KeywordSpec> = new Map(
 // Whether `name` is a governed keyword (exact CamelCase, like attributes).
 export function isKeyword(name: string): boolean {
   return KEYWORD_BY_NAME.has(name);
+}
+
+/** The keyword name a token leads with, params stripped. */
+export function keywordName(token: string): string {
+  return token.split(":")[0];
+}
+
+/** The card's token for keyword `name`, or undefined. Callers that only need a
+ *  yes/no use `hasKeyword`; this is for the ones that need the params too. */
+export function findKeywordToken(
+  card: { keywords?: string[] },
+  name: KeywordName,
+): string | undefined {
+  return (card.keywords ?? []).find((token) => keywordName(token) === name);
 }
 
 // Structured result of parsing a keyword token. NB: this keys parsed values by
@@ -135,6 +158,47 @@ export class KeywordError extends Error {
     super(message);
     this.name = "KeywordError";
   }
+}
+
+// Every field on ParsedKeyword is optional because one shape covers all twelve
+// keywords, but each keyword's grammar guarantees its own. The accessors below
+// convert "the grammar says this is present" into a checked fact. They throw
+// rather than defaulting on purpose: a `?? 0` here would turn a grammar
+// regression into a keyword that renders its full reminder and contributes
+// nothing, which is the silent-inertness this module refuses elsewhere.
+
+/** The guaranteed parameter shape of a modifier-family token. */
+export interface FamilyParams {
+  signedMagnitude: number;
+  statScope: StatScope;
+  context: Context;
+  role?: Role;
+}
+
+export function asFamily(p: ParsedKeyword): FamilyParams {
+  if (p.signedMagnitude === undefined || p.statScope === undefined || p.context === undefined) {
+    throw new KeywordError(`keyword ${p.name}: expected magnitude, stat scope and context`);
+  }
+  return {
+    signedMagnitude: p.signedMagnitude,
+    statScope: p.statScope,
+    context: p.context,
+    role: p.role,
+  };
+}
+
+export function requireMagnitude(p: ParsedKeyword): number {
+  if (p.magnitude === undefined) {
+    throw new KeywordError(`keyword ${p.name}: expected a magnitude parameter`);
+  }
+  return p.magnitude;
+}
+
+export function requireStat(p: ParsedKeyword): Stat {
+  if (p.stat === undefined) {
+    throw new KeywordError(`keyword ${p.name}: expected a stat parameter`);
+  }
+  return p.stat;
 }
 
 // Parse and validate a single `keywords`-column token (e.g. `Leader:+1:all:contest`)
@@ -169,6 +233,17 @@ export function parseKeyword(token: string, cardType: CardType): ParsedKeyword {
     if (raw === undefined) return; // an omitted optional trailing param
     assignParam(name, param.kind, raw, result);
   });
+
+  // Cross-parameter rule: `role` only ever gates a contest, so pairing it with
+  // `mission` is meaningless. Rejected here rather than at resolution time so
+  // the build is the single validation gate — a token the build accepts must
+  // never be one the engine refuses.
+  if (result.context === "mission" && result.role !== undefined) {
+    throw new KeywordError(
+      `keyword ${name}: role "${result.role}" is meaningless with context "mission"`,
+    );
+  }
+
   return result;
 }
 

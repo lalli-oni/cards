@@ -180,12 +180,16 @@ function checkSingleRequirement(
     }
 
     case "stat": {
-      const total = units.reduce((sum, u) => {
-        if (state && queries) {
-          return sum + getModifiedStat(state, queries, u, req.stat, position, undefined, true);
-        }
-        return sum + u[req.stat];
-      }, 0);
+      // Summing base stats instead would silently fail missions that keyword
+      // and effect buffs were meant to carry, so a stat requirement without the
+      // query layer is a caller bug, not a fallback.
+      if (!state || !queries) {
+        throw new Error("checkMissionRequirements: a stat requirement needs state and queries");
+      }
+      const total = units.reduce(
+        (sum, u) => sum + getModifiedStat(state, queries, u, req.stat, position, { mission: true }),
+        0,
+      );
       return total >= req.threshold;
     }
 

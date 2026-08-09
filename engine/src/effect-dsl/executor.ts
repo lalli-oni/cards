@@ -548,12 +548,12 @@ function executeContest(step: Step, ctx: ExecutionContext): void {
   const atkBreakdown = getModifiedStatWithSources(
     ctx.draft as MainGameState, ctx.queries, attacker as UnitCard, stat,
     { row: actingPos.row, col: actingPos.col },
-    { role: "attacker", row: actingPos.row, col: actingPos.col },
+    { contest: { role: "attacker", row: actingPos.row, col: actingPos.col } },
   );
   const defBreakdown = getModifiedStatWithSources(
     ctx.draft as MainGameState, ctx.queries, target as UnitCard, stat,
     { row: targetPos.row, col: targetPos.col },
-    { role: "defender", row: targetPos.row, col: targetPos.col },
+    { contest: { role: "defender", row: targetPos.row, col: targetPos.col } },
   );
 
   const [atkRoll, rng1] = uniformIntDistribution(1, 6, ctx.rng);

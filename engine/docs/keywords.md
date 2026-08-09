@@ -66,12 +66,13 @@ placeholders).
 
 ## Runtime status (current)
 
-Keywords are **parsed, validated, and rendered** today. The engine does **not
-yet resolve** keyword *effects* at runtime — e.g. `Prowess:+2:strength:contest` is
-not yet applied as a stat modifier during a contest. That wiring is tracked in
-[#212](https://github.com/lalli-oni/cards/issues/212) (v0.1). **This is a known
-implementation gap, not a deprecation** — the keyword system is the intended home
-for this shared, governed vocabulary.
+Keywords are **parsed, validated, rendered, and resolved**. `keyword-effects.ts`
+converts a card's `keywords` tokens into the same `{listeners, queries}` shape
+the bespoke `*_EFFECTS` factories produce, and `rebuildListeners` calls it for
+every card it visits — so e.g. `Prowess:+2:strength:contest` applies as a stat
+modifier during a contest exactly like a hand-written effect factory would.
+See [effect-system.md](effect-system.md) for how this fits the other two
+effect surfaces.
 
 ## Relationship to the wider effect system
 
@@ -90,4 +91,6 @@ future architectural reconsideration, not a plan to remove keywords.
    sync with the `reminder`.
 3. Rebuild (`bun library/build.ts`) — the build validates it and emits it to
    `keywords.json` for the renderer.
-4. Runtime resolution of the new keyword's effect follows the #212 wiring.
+4. Add a case for the new keyword's `name` in `keyword-effects.ts` (the
+   dispatch is exhaustive over `KEYWORDS` — an unhandled name is caught by
+   `test/build.test.ts`, not silently inert).

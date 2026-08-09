@@ -47,10 +47,12 @@ truth for what exists and how each token parses. The build validates every token
 and emits `library/build/keywords.json`; the renderer draws keyword pills from
 it.
 
-**Current runtime status:** keywords are **parsed, validated, and rendered**
-today, but the engine does not yet **resolve** their effects at runtime — that
-wiring is tracked in [#212](https://github.com/lalli-oni/cards/issues/212). See
-[keywords.md](keywords.md).
+**Current runtime status:** keywords are **parsed, validated, rendered, and
+resolved**. `engine/src/keyword-effects.ts` converts a card's `keywords` tokens
+into the same `EffectDefinition` shape surface 2's factories produce;
+`rebuildListeners` calls it for every card it visits, alongside the
+`definitionId` registry lookup — so a card can carry both a bespoke factory and
+keywords. See [keywords.md](keywords.md).
 
 ## How the three relate
 
@@ -74,4 +76,5 @@ and unless it lands, pick the surface by the table above.
 | `engine/src/listeners/effects.ts` | effect factories + registries |
 | `engine/src/listeners/query.ts` | query aggregation (stat / cost / AP / protection) |
 | `engine/src/keywords.ts` | governed keyword vocabulary |
+| `engine/src/keyword-effects.ts` | keyword runtime semantics — tokens → `EffectDefinition` |
 | `library/build/keywords.json` | build artifact consumed by the renderer |

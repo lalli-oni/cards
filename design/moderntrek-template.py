@@ -172,7 +172,7 @@ def load_keyword_vocab(path=None):
 _PARAM_DISPLAY = {
     "statScope": {"all": "all stats", "strength": "strength",
                   "cunning": "cunning", "charisma": "charisma"},
-    "context": {"combat": "in combat", "mission": "on missions"},
+    "context": {"contest": "in a contest", "mission": "on missions"},
     "role": {"atk": " when attacking", "def": " when defending", "either": ""},
 }
 
@@ -243,7 +243,7 @@ def _pill_label(token, entry):
 
 def keyword_reminder(token, vocab):
     """Split a `keywords` token into (pill_label, reminder). Handles the family
-    grammar (`Leader:+1:all:combat`), parameterized standalones
+    grammar (`Leader:+1:all:contest`), parameterized standalones
     (`Untouchable:charisma`), and value-less standalones (`Berserker`): the pill
     label is NAME + primary value (see
     _pill_label); the reminder is card-facing prose composed from the governed

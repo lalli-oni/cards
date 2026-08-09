@@ -15,8 +15,8 @@ token and returns a `ParsedKeyword`.
 ## The vocabulary
 
 **Modifier families** — parameterized stat effects sharing the shape
-`Name:±MAG:STAT-SCOPE:CONTEXT[:ROLE]` (e.g. `Prowess:+2:strength:combat`,
-`Leader:+1:all:combat`, `Aura:-1:all:combat:def`):
+`Name:±MAG:STAT-SCOPE:CONTEXT[:ROLE]` (e.g. `Prowess:+2:strength:contest`,
+`Leader:+1:all:contest`, `Aura:-1:all:contest:def`):
 
 | Keyword | Card type | Affects |
 |---|---|---|
@@ -48,7 +48,7 @@ token and returns a `ParsedKeyword`.
 | `magnitude` | positive integer |
 | `statScope` | a stat, or `all` |
 | `stat` | a stat (no `all`) |
-| `context` | `combat` \| `mission` |
+| `context` | `contest` \| `mission` |
 | `role` | `atk` \| `def` \| `either` |
 
 Names and enum params are **case-sensitive**, so card data and code can't drift
@@ -67,7 +67,7 @@ placeholders).
 ## Runtime status (current)
 
 Keywords are **parsed, validated, and rendered** today. The engine does **not
-yet resolve** keyword *effects* at runtime — e.g. `Prowess:+2:strength:combat` is
+yet resolve** keyword *effects* at runtime — e.g. `Prowess:+2:strength:contest` is
 not yet applied as a stat modifier during a contest. That wiring is tracked in
 [#212](https://github.com/lalli-oni/cards/issues/212) (v0.1). **This is a known
 implementation gap, not a deprecation** — the keyword system is the intended home

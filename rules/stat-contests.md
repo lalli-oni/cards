@@ -41,9 +41,10 @@ injury penalties, etc.) apply to the relevant stat in a contest. A
 any other use of that stat.
 
 Some modifiers are scoped to specific contexts by their own text — for
-example, a modifier keyword scoped to combat and defending (`…:combat:def`)
-grants its bonus only when the unit defends in combat. This scoping comes
-from the card or keyword text, not from a blanket rule about contests.
+example, a modifier keyword scoped to a contest and defending (`…:contest:def`)
+grants its bonus only when the unit defends in a contest (combat matchups
+included). This scoping comes from the card or keyword text, not from a
+blanket rule about contests.
 
 ## Stat contests vs. stat checks
 

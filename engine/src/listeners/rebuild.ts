@@ -8,6 +8,7 @@ import {
   ITEM_EFFECTS,
   UNIT_EFFECTS,
 } from "./effects";
+import { keywordEffects } from "../keyword-effects";
 
 export interface RebuildResult {
   listeners: EffectListener[];
@@ -41,6 +42,9 @@ export function rebuildListeners(state: MainGameState): RebuildResult {
           listeners.push(...result.listeners);
           queries.push(...result.queries);
         }
+        const kwResult = keywordEffects(cell.location, cell.location.controllerId, { row: r, col: c });
+        listeners.push(...kwResult.listeners);
+        queries.push(...kwResult.queries);
       }
 
       // Stored / equipped item effects (items sitting at a grid location)
@@ -51,6 +55,9 @@ export function rebuildListeners(state: MainGameState): RebuildResult {
           listeners.push(...result.listeners);
           queries.push(...result.queries);
         }
+        const kwResult = keywordEffects(item, item.controllerId, { row: r, col: c });
+        listeners.push(...kwResult.listeners);
+        queries.push(...kwResult.queries);
       }
 
       // Unit effects (units on the grid)
@@ -61,6 +68,9 @@ export function rebuildListeners(state: MainGameState): RebuildResult {
           listeners.push(...result.listeners);
           queries.push(...result.queries);
         }
+        const kwResult = keywordEffects(unit, unit.controllerId, { row: r, col: c });
+        listeners.push(...kwResult.listeners);
+        queries.push(...kwResult.queries);
       }
     }
   }
@@ -106,6 +116,9 @@ export function rebuildListeners(state: MainGameState): RebuildResult {
           listeners.push(...result.listeners);
           queries.push(...result.queries);
         }
+        const kwResult = keywordEffects(card, card.controllerId);
+        listeners.push(...kwResult.listeners);
+        queries.push(...kwResult.queries);
       } else if (card.type === "unit") {
         const factory = UNIT_EFFECTS[card.definitionId];
         if (factory) {
@@ -113,6 +126,9 @@ export function rebuildListeners(state: MainGameState): RebuildResult {
           listeners.push(...result.listeners);
           queries.push(...result.queries);
         }
+        const kwResult = keywordEffects(card, card.controllerId);
+        listeners.push(...kwResult.listeners);
+        queries.push(...kwResult.queries);
       }
     }
   }

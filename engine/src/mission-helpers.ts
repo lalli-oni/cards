@@ -182,7 +182,7 @@ function checkSingleRequirement(
     case "stat": {
       const total = units.reduce((sum, u) => {
         if (state && queries) {
-          return sum + getModifiedStat(state, queries, u, req.stat, position);
+          return sum + getModifiedStat(state, queries, u, req.stat, position, undefined, true);
         }
         return sum + u[req.stat];
       }, 0);

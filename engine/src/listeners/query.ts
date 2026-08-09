@@ -35,10 +35,11 @@ export function getModifiedStatWithSources(
   unit: UnitCard,
   stat: StatName,
   position?: { row: number; col: number },
-  combat?: { role: "attacker" | "defender"; row: number; col: number },
+  contest?: { role: "attacker" | "defender"; row: number; col: number },
+  mission?: true,
 ): ModifiedStatBreakdown {
   const base = unit[stat];
-  const ctx: StatQueryContext = { unit, stat, position, combat };
+  const ctx: StatQueryContext = { unit, stat, position, contest, mission };
   const modifiers: ModifierEntry[] = [];
 
   for (const q of queries) {
@@ -89,9 +90,10 @@ export function getModifiedStat(
   unit: UnitCard,
   stat: StatName,
   position?: { row: number; col: number },
-  combat?: { role: "attacker" | "defender"; row: number; col: number },
+  contest?: { role: "attacker" | "defender"; row: number; col: number },
+  mission?: true,
 ): number {
-  return getModifiedStatWithSources(state, queries, unit, stat, position, combat).final;
+  return getModifiedStatWithSources(state, queries, unit, stat, position, contest, mission).final;
 }
 
 /**

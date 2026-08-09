@@ -17,7 +17,7 @@ def threshold-of [types: list] {
   if ("item" in $types) { 1 } else { 2 }
 }
 
-# The keyword name of a token ("Leader:+1:all:combat" -> "Leader").
+# The keyword name of a token ("Leader:+1:all:contest" -> "Leader").
 def token-name [tok: string] {
   $tok | split row ":" | first
 }

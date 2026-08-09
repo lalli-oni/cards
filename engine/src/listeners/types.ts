@@ -53,8 +53,12 @@ export interface StatQueryContext {
   stat: StatName;
   /** Grid position of the unit, if on grid. */
   position?: { row: number; col: number };
-  /** Present when queried during combat. */
-  combat?: { role: "attacker" | "defender"; row: number; col: number };
+  /** Present when queried during a stat contest — both the Attack action
+   *  (`apply-main.ts:buildCombatantRoll`) and DSL stat contests
+   *  (`executor.ts:executeContest`) set this. */
+  contest?: { role: "attacker" | "defender"; row: number; col: number };
+  /** Set by `checkMissionRequirements`' stat-sum path. */
+  mission?: true;
 }
 
 export interface CostQueryContext {
@@ -64,7 +68,7 @@ export interface CostQueryContext {
   costIndex?: number;
 }
 
-export type ProtectionKind = "event_target" | "event_injury" | "contest_target";
+export type ProtectionKind = "event_target" | "event_injury" | "contest_target" | "attack_target";
 
 export interface ProtectionQueryContext {
   unit: UnitCard;

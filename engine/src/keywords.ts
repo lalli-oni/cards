@@ -11,11 +11,11 @@
 import { type CardType, type Stat, STAT_NAMES } from "./types";
 
 export type StatScope = Stat | "all";
-export type Context = "combat" | "mission";
+export type Context = "contest" | "mission";
 export type Role = "atk" | "def" | "either";
 
 const STAT_SCOPES = [...STAT_NAMES, "all"] as const;
-const CONTEXTS = ["combat", "mission"] as const;
+const CONTEXTS = ["contest", "mission"] as const;
 const ROLES = ["atk", "def", "either"] as const;
 
 // A positional parameter a keyword token carries after its name.
@@ -24,7 +24,7 @@ type ParamKind =
   | "magnitude" // positive integer
   | "statScope" // a stat, or `all`
   | "stat" // a stat (no `all`)
-  | "context" // combat | mission
+  | "context" // contest | mission
   | "role"; // atk | def | either
 
 interface ParamSpec {
@@ -64,7 +64,7 @@ export interface KeywordSpec {
 }
 
 // The four modifier families share one parameter shape:
-//   Name:±MAG:STAT-SCOPE:CONTEXT[:ROLE]   e.g. Prowess:+2:strength:combat:def
+//   Name:±MAG:STAT-SCOPE:CONTEXT[:ROLE]   e.g. Prowess:+2:strength:contest:def
 const FAMILY_PARAMS: readonly ParamSpec[] = [
   { name: "magnitude", kind: "signedMagnitude" },
   { name: "stat", kind: "statScope" },
@@ -137,7 +137,7 @@ export class KeywordError extends Error {
   }
 }
 
-// Parse and validate a single `keywords`-column token (e.g. `Leader:+1:all:combat`)
+// Parse and validate a single `keywords`-column token (e.g. `Leader:+1:all:contest`)
 // against the keyword grammar and the card type it appears on. Throws
 // `KeywordError` on an unknown name, an unsupported card type, wrong arity, or a
 // malformed parameter. Case-sensitive on the name and enum params so card data

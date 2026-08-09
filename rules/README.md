@@ -508,8 +508,10 @@ are tracked post-v0.1 in the rules-design epic — #210 → #209, #208.]
 ### Modifier families
 
 A modifier is written `Family:±MAG:STAT:CONTEXT[:ROLE]`, where STAT ∈
-{strength, cunning, charisma, all}, CONTEXT ∈ {combat, mission}, and ROLE ∈
-{atk, def, either} (default either). The families differ only in scope:
+{strength, cunning, charisma, all}, CONTEXT ∈ {contest, mission}, and ROLE ∈
+{atk, def, either} (default either). `contest` covers any 1v1 stat contest —
+combat matchups included, since [each combat matchup is one strength
+contest](stat-contests.md#resolution). The families differ only in scope:
 
 | Family | Affects |
 |--------|---------|
@@ -518,8 +520,9 @@ A modifier is written `Family:±MAG:STAT:CONTEXT[:ROLE]`, where STAT ∈
 | Leader | all friendly units at this location |
 | Aura | every unit at this location — friend and foe (a location keyword) |
 
-Examples: `Prowess:+2:strength:combat:def` — +2 strength when defending in
-combat. `Aura:-1:all:combat` — every unit here takes −1 to all stats in combat.
+Examples: `Prowess:+2:strength:contest:def` — +2 strength when defending in
+a strength contest (including combat). `Aura:-1:all:contest` — every unit here
+takes −1 to all stats in a contest (including combat).
 
 ### Standalone keywords
 

@@ -54,7 +54,7 @@ wiring is tracked in [#212](https://github.com/lalli-oni/cards/issues/212). See
 
 ## How the three relate
 
-They overlap by design pressure, not accident: `Prowess:+2:strength:combat` (a
+They overlap by design pressure, not accident: `Prowess:+2:strength:contest` (a
 keyword) is conceptually the same as a stat-modifier query (surface 2) or a DSL
 `buff` (surface 1) — the keyword is just the *named, governed, reusable, iconed*
 form of that effect.

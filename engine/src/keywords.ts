@@ -101,10 +101,8 @@ export const KEYWORDS = [
   // detaches), so the reminder names only what the engine can discount.
   { name: "Squire", cardTypes: ["unit"], params: [{ name: "amount", kind: "magnitude", optional: true, default: 1 }],
     reminder: "Your Equip actions cost {amount} less AP." },
-  // Scoped to edges between locations: the boundary gates (HQ→perimeter enter,
-  // perimeter→HQ retreat) are deliberately not bypassed.
   { name: "Flying", cardTypes: ["item"], params: [],
-    reminder: "While equipped, this unit ignores blocked edges between locations when moving." },
+    reminder: "While equipped, this unit ignores blocked edges when moving." },
   { name: "Heavy", cardTypes: ["item"], params: [],
     reminder: "The equipped unit's Move action costs +1 AP." },
   { name: "Lightweight", cardTypes: ["item"], params: [],

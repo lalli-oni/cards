@@ -315,9 +315,8 @@ export function isAttackShielded(
 }
 
 /** Does `unitId` have a Flying item equipped to it at `cell`? Flying bypasses
- *  only the edge-facing check between two locations — the destination must
- *  still have a location and be orthogonally adjacent, and the HQ boundary
- *  gates (enter / retreat) are not bypassed; callers enforce those separately. */
+ *  only the edge-facing check — the destination must still have a location
+ *  and be orthogonally adjacent; callers enforce those separately. */
 export function unitIgnoresBlockedEdges(cell: { items: ItemCard[] }, unitId: string): boolean {
   return cell.items.some((item) => item.equippedTo === unitId && hasKeyword(item, "Flying"));
 }

@@ -34,7 +34,7 @@ token and returns a `ParsedKeyword`.
 | `Patron` | unit | `amount` | cards you buy or deploy sharing an attribute with it cost `amount` less gold |
 | `Loot` | unit | — | on killing an enemy in combat, draw a card |
 | `Squire` | unit | `amount` (opt, default 1) | your Equip actions cost `amount` less AP |
-| `Flying` | item | — | equipped unit ignores blocked edges between locations when moving |
+| `Flying` | item | — | equipped unit ignores blocked edges when moving |
 | `Heavy` | item | — | equipped unit's Move action costs +1 AP |
 | `Lightweight` | item | — | equipped unit's Move action costs 1 less AP |
 

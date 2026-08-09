@@ -49,7 +49,7 @@ VOCAB_JSON = [
      "params": [{"name": "amount", "kind": "magnitude", "optional": True, "default": 1}],
      "reminder": "Your Equip actions cost {amount} less AP."},
     {"name": "Flying", "cardTypes": ["item"], "params": [],
-     "reminder": "While equipped, this unit ignores blocked edges between locations when moving."},
+     "reminder": "While equipped, this unit ignores blocked edges when moving."},
 ]
 VOCAB = {k["name"]: k for k in VOCAB_JSON}
 

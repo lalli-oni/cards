@@ -538,7 +538,7 @@ takes −1 to all stats in a contest (including combat).
 #### Equipment keywords
 | Keyword | Timing | Definition |
 |---------|--------|------------|
-| Flying | Static | Equipped unit ignores blocked edges between locations when moving. The HQ boundary edges (entering the grid, retreating) are not bypassed. |
+| Flying | Static | Equipped unit ignores blocked edges when moving. |
 | Heavy | Static | The equipped unit's Move action costs +1 AP. |
 | Lightweight | Static | The equipped unit's Move action costs 1 less AP. |
 

@@ -9,7 +9,7 @@ import {
   type BuildWarning,
   type CardType,
 } from "../library/build";
-import { KEYWORDS, KeywordError, type KeywordSpec, parseKeyword } from "../engine/src/keywords";
+import { KEYWORD_SPECS, KeywordError, type KeywordSpec, parseKeyword } from "../engine/src/keywords";
 import { DIRECT_HOOK_KEYWORDS, keywordEffects, type KeywordCard } from "../engine/src/keyword-effects";
 import type { CardType as EngineCardType } from "../engine/src/types";
 
@@ -117,7 +117,7 @@ describe("build validation — governed keywords", () => {
     // a prior `bun library/build.ts`, which the `test` script runs first.)
     const artifact = JSON.parse(readFileSync(join(import.meta.dir, "../library/build/keywords.json"), "utf-8"));
     expect(Array.isArray(artifact)).toBe(true);
-    expect(artifact.length).toBe(KEYWORDS.length);
+    expect(artifact.length).toBe(KEYWORD_SPECS.length);
     for (const entry of artifact) {
       expect(Object.keys(entry).sort()).toEqual(["cardTypes", "name", "params", "reminder"]);
       expect(typeof entry.name).toBe("string");
@@ -155,9 +155,9 @@ describe("build validation — governed keywords", () => {
   test("keyword names and each keyword's param names are unique", () => {
     // Duplicate keyword names silently collapse in KEYWORD_BY_NAME (last wins);
     // duplicate param names within a keyword make placeholder binding ambiguous.
-    const names = KEYWORDS.map((k) => k.name);
+    const names = KEYWORD_SPECS.map((k) => k.name);
     expect(new Set(names).size).toBe(names.length);
-    for (const k of KEYWORDS) {
+    for (const k of KEYWORD_SPECS) {
       const paramNames = k.params.map((p) => p.name);
       expect(new Set(paramNames).size).toBe(paramNames.length);
     }
@@ -168,7 +168,7 @@ describe("build validation — governed keywords", () => {
     // omitted optional arg — meaningful only on an optional magnitude/
     // signedMagnitude param. ParamSpec doesn't encode that pairing in the type
     // ("keep new keywords honest"), so enforce the invariant here instead.
-    for (const k of KEYWORDS) {
+    for (const k of KEYWORD_SPECS) {
       for (const p of k.params) {
         if (p.default !== undefined) {
           expect(p.optional).toBe(true);
@@ -186,7 +186,7 @@ describe("build validation — governed keywords", () => {
 // doing something and does nothing. Pin that
 // every governed keyword is either resolved by keywordEffects's switch or is
 // a documented direct hook (Berserker/Loot/Untouchable/Flying), so adding a
-// keyword to KEYWORDS without wiring its runtime semantics fails loud here
+// keyword to the vocabulary without wiring its runtime semantics fails loud here
 // instead of shipping an inert card.
 // ---------------------------------------------------------------------------
 
@@ -233,7 +233,7 @@ function minimalToken(spec: KeywordSpec): string {
 describe("keyword runtime exhaustiveness", () => {
   test("every governed keyword is resolved by keywordEffects or is a documented direct hook", () => {
     const unhandled: string[] = [];
-    for (const spec of KEYWORDS) {
+    for (const spec of KEYWORD_SPECS) {
       if ((DIRECT_HOOK_KEYWORDS as readonly string[]).includes(spec.name)) continue;
       // Every supported card type, not just the first: a keyword allowed on
       // two types with a resolver for only one would otherwise pass.
@@ -259,7 +259,7 @@ describe("keyword runtime exhaustiveness", () => {
   });
 
   test("DIRECT_HOOK_KEYWORDS only names governed keywords", () => {
-    const names = new Set(KEYWORDS.map((k) => k.name));
+    const names = new Set(KEYWORD_SPECS.map((k) => k.name));
     for (const name of DIRECT_HOOK_KEYWORDS) {
       expect(names.has(name)).toBe(true);
     }

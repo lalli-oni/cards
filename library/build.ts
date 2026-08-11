@@ -13,7 +13,7 @@ import { readdirSync, readFileSync, mkdirSync, writeFileSync, existsSync } from 
 import { join } from "path";
 import { parse as parseDSL, DSLParseError, DSLValidationError } from "../engine/src/effect-dsl";
 import { ATTRIBUTES } from "../engine/src/attributes";
-import { KEYWORDS, KeywordError, parseKeyword } from "../engine/src/keywords";
+import { KEYWORD_SPECS, KeywordError, parseKeyword } from "../engine/src/keywords";
 import type { CardType as EngineCardType } from "../engine/src/types";
 import {
   LOCATION_TYPES,
@@ -464,7 +464,7 @@ function main() {
   writeFileSync(
     join(BUILD_DIR, "keywords.json"),
     JSON.stringify(
-      KEYWORDS.map((k) => ({
+      KEYWORD_SPECS.map((k) => ({
         name: k.name,
         cardTypes: k.cardTypes,
         params: k.params.map((p) => ({

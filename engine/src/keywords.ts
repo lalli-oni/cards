@@ -110,6 +110,12 @@ export const KEYWORDS = [
 /** Every governed keyword name, as a literal union. */
 export type KeywordName = (typeof KEYWORDS)[number]["name"];
 
+/** `KEYWORDS` widened to the declared interface. `as const` narrows each param
+ *  to its own literal type, so a param that omits `optional`/`default` doesn't
+ *  carry those keys at all — iterate this view when reading params generically,
+ *  and `KEYWORDS` when you want the literal names. */
+export const KEYWORD_SPECS: readonly KeywordSpec[] = KEYWORDS;
+
 const KEYWORD_BY_NAME: ReadonlyMap<string, KeywordSpec> = new Map(
   KEYWORDS.map((k) => [k.name, k]),
 );

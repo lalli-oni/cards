@@ -508,29 +508,32 @@ are tracked post-v0.1 in the rules-design epic — #210 → #209, #208.]
 ### Modifier families
 
 A modifier is written `Family:±MAG:STAT:CONTEXT[:ROLE]`, where STAT ∈
-{strength, cunning, charisma, all}, CONTEXT ∈ {combat, mission}, and ROLE ∈
-{atk, def, either} (default either). The families differ only in scope:
+{strength, cunning, charisma, all}, CONTEXT ∈ {contest, mission}, and ROLE ∈
+{atk, def, either} (default either). `contest` covers any 1v1 stat contest —
+combat matchups included, since [each combat matchup is one strength
+contest](stat-contests.md#consequences). The families differ only in scope:
 
 | Family | Affects |
 |--------|---------|
 | Prowess | this unit only |
-| Kindred | friendly units sharing an attribute with this unit |
-| Leader | all friendly units at this location |
+| Kindred | other friendly units sharing an attribute with this unit |
+| Leader | all friendly units at this location, including this unit |
 | Aura | every unit at this location — friend and foe (a location keyword) |
 
-Examples: `Prowess:+2:strength:combat:def` — +2 strength when defending in
-combat. `Aura:-1:all:combat` — every unit here takes −1 to all stats in combat.
+Examples: `Prowess:+2:strength:contest:def` — +2 strength when defending in
+a strength contest (including combat). `Aura:-1:all:contest` — every unit here
+takes −1 to all stats in a contest (including combat).
 
 ### Standalone keywords
 
 #### Unit keywords
 | Keyword | Timing | Definition |
 |---------|--------|------------|
-| Untouchable | Static | Cannot be targeted by an Attack while this unit's [stat] exceeds the attacker's [stat]. Written `Untouchable:STAT` (v0.1: charisma). |
-| Berserker | Triggered | When this unit wins combat and would injure the loser, it injures itself and kills the loser instead. |
-| Patron | Static | While in play, cards you buy that share an attribute with this unit cost X less gold. Written `Patron:X`. |
+| Untouchable | Static | Cannot be targeted by an Attack while this unit's [stat] exceeds every attacking unit's [stat]. Written `Untouchable:STAT` (v0.1: charisma). |
+| Berserker | Triggered | When this unit wins combat, it kills the loser and is injured. (An already-injured Berserker is therefore killed by its own injury — see [Unit status](#unit-status).) |
+| Patron | Static | While in play, cards you buy or deploy that share an attribute with this unit cost X less gold. Written `Patron:X`. |
 | Loot | Triggered | When this unit kills an enemy in combat, draw a card. |
-| Squire | Static | Your Equip/Unequip actions cost X less AP (default 1). Written `Squire` or `Squire:X`. |
+| Squire | Static | Your Equip actions cost X less AP (default 1). Written `Squire` or `Squire:X`. |
 
 #### Equipment keywords
 | Keyword | Timing | Definition |

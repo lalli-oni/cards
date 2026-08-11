@@ -13,7 +13,7 @@ import { readdirSync, readFileSync, mkdirSync, writeFileSync, existsSync } from 
 import { join } from "path";
 import { parse as parseDSL, DSLParseError, DSLValidationError } from "../engine/src/effect-dsl";
 import { ATTRIBUTES } from "../engine/src/attributes";
-import { KEYWORDS, KeywordError, parseKeyword } from "../engine/src/keywords";
+import { KEYWORD_SPECS, KeywordError, parseKeyword } from "../engine/src/keywords";
 import type { CardType as EngineCardType } from "../engine/src/types";
 import {
   LOCATION_TYPES,
@@ -297,9 +297,16 @@ export function validate(
   // parameter, wrong arity, or an unsupported card type all fail the build,
   // mirroring the attribute gate above so keyword data and code can't drift.
   const keywords = (card.keywords as string[] | undefined) ?? [];
+  const seenKeywords = new Set<string>();
   for (const token of keywords) {
     try {
-      parseKeyword(token, card.type as EngineCardType);
+      const { name } = parseKeyword(token, card.type as EngineCardType);
+      // Resolvers read the first token of a given name and ignore the rest, so
+      // a repeat would print a reminder the engine never honours.
+      if (seenKeywords.has(name)) {
+        errors.push(err("keywords", `keyword ${name} appears more than once`));
+      }
+      seenKeywords.add(name);
     } catch (e) {
       // Only a KeywordError is card-data (a bad token). Let anything else — an
       // engine fault in parseKeyword — propagate with its stack rather than
@@ -457,7 +464,7 @@ function main() {
   writeFileSync(
     join(BUILD_DIR, "keywords.json"),
     JSON.stringify(
-      KEYWORDS.map((k) => ({
+      KEYWORD_SPECS.map((k) => ({
         name: k.name,
         cardTypes: k.cardTypes,
         params: k.params.map((p) => ({

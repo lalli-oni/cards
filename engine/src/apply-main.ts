@@ -28,6 +28,7 @@ import { getModifiedStatWithSources, getModifiedCost, getModifiedAPCost } from "
 import type { EmitFn, QueryListener } from "./listeners/types";
 import { needsLocationTarget } from "./valid-actions";
 import { killUnit, injureUnit, dropEquippedItems, decideKillVsInjure, computeContestPower } from "./unit-helpers";
+import { hasKeyword, isAttackShielded, unitIgnoresBlockedEdges } from "./keyword-effects";
 import type {
   ActionDef,
   ActivePassiveEvent,
@@ -400,7 +401,10 @@ function handleMove(
     throw new Error(`Cell (${toRow},${toCol}) has no location`);
   }
 
-  if (!areFacingEdgesOpen(draft.grid, fromRow, fromCol, toRow, toCol)) {
+  if (
+    !areFacingEdgesOpen(draft.grid, fromRow, fromCol, toRow, toCol) &&
+    !unitIgnoresBlockedEdges(draft.grid[fromRow][fromCol], unitId)
+  ) {
     throw new Error(
       `Facing edges between (${fromRow},${fromCol}) and (${toRow},${toCol}) are blocked`,
     );
@@ -518,6 +522,7 @@ function handleEquip(
   itemId: string,
   unitId: string,
   emit: EmitFn,
+  queries: QueryListener[],
 ): void {
   const itemResult = findItemPosition(draft.players, draft.grid, itemId);
   if (!itemResult) {
@@ -533,7 +538,11 @@ function handleEquip(
     throw new Error(`Unit "${unitId}" not co-located with item "${itemId}"`);
   }
 
-  spendAP(draft, 1);
+  const apCost = getModifiedAPCost(
+    draft as MainGameState, queries,
+    { type: "equip", playerId, itemId, unitId }, 1,
+  );
+  spendAP(draft, apCost);
 
   const item = itemResult.item;
   if (item.equippedTo) {
@@ -639,11 +648,20 @@ function handleAttack(
   row: number,
   col: number,
   emit: EmitFn,
+  events: GameEvent[],
   queries: QueryListener[],
 ): void {
   const cell = draft.grid[row][col];
   if (!cell.location) {
     throw new Error(`Cell (${row},${col}) has no location`);
+  }
+
+  // `MainAction`'s attack variant is typed `[string, ...string[]]`, but actions
+  // arrive as JSON and applyAction does no runtime shape check — without this,
+  // an empty commit reaches isAttackShielded, where `every` on [] means
+  // "shielded" and the failure surfaces as a misleading no-enemies error.
+  if (unitIds.length === 0) {
+    throw new Error(`Attack at (${row},${col}) commits no units`);
   }
 
   // Validate all committed units are at this cell and owned by player
@@ -658,11 +676,25 @@ function handleAttack(
     }
     attackers.push(unit);
   }
+  const committed = attackers as unknown as [UnitCard, ...UnitCard[]];
 
-  // Find defender(s) — all enemy units at location
-  const defenders = cell.units.filter((u) => u.controllerId !== playerId);
-  if (defenders.length === 0) {
+  // Find defender(s) — all enemy units at location, minus any Untouchable unit
+  // whose stat exceeds every committed attacker's stat. The same shield rule
+  // valid-actions.ts's attack-generation block applies, but evaluated against
+  // the units actually committed here — so a hand-crafted subset attack can't
+  // bypass a shield it hasn't out-statted.
+  const enemies = cell.units.filter((u) => u.controllerId !== playerId);
+  if (enemies.length === 0) {
     throw new Error(`No enemy units at cell (${row},${col}) to attack`);
+  }
+  const defenders = enemies.filter(
+    (u) => !isAttackShielded(draft as MainGameState, queries, u as UnitCard, { row, col }, committed),
+  );
+  if (defenders.length === 0) {
+    throw new Error(
+      `All ${enemies.length} enemy unit(s) at (${row},${col}) are shielded by Untouchable `
+      + `against the committed attackers [${unitIds.join(", ")}]`,
+    );
   }
 
   const defenderId = defenders[0].controllerId;
@@ -687,6 +719,7 @@ function handleAttack(
       defenderUnitIds: defenders.map((u) => u.id),
     },
     emit,
+    events,
     queries,
   );
 }
@@ -838,12 +871,13 @@ function processRolledRound(
   atkRolls: CombatantRoll[],
   defRolls: CombatantRoll[],
   emit: EmitFn,
+  events: GameEvent[],
 ): "suspended" | "resolved" {
   if (atkRolls.length !== defRolls.length) {
     draft.combatPrompt = castDraft(makeCombatPrompt(base, atkRolls, defRolls));
     return "suspended";
   }
-  return resolveOrSuspendMatchup(draft, cell, base, atkRolls, defRolls, emit);
+  return resolveOrSuspendMatchup(draft, cell, base, atkRolls, defRolls, emit, events);
 }
 
 /**
@@ -864,6 +898,7 @@ function resolveOrSuspendMatchup(
   atkParticipants: CombatantRoll[],
   defParticipants: CombatantRoll[],
   emit: EmitFn,
+  events: GameEvent[],
 ): "suspended" | "resolved" {
   atkParticipants.sort((a, b) => b.power - a.power);
   defParticipants.sort((a, b) => b.power - a.power);
@@ -877,7 +912,7 @@ function resolveOrSuspendMatchup(
   // Rules step 5 — Resolve: auto-resolve the participants greedily (the sort
   // above already lined them up highest vs highest).
   for (let i = 0; i < n; i++) {
-    resolveCombatPair(draft, cell, atkParticipants[i], defParticipants[i], base.row, base.col, emit);
+    resolveCombatPair(draft, cell, atkParticipants[i], defParticipants[i], base.row, base.col, emit, events);
   }
   return "resolved";
 }
@@ -912,6 +947,7 @@ function runCombat(
   draft: Draft<MainGameState>,
   state: CombatLoopState,
   emit: EmitFn,
+  events: GameEvent[],
   queries: QueryListener[],
   settledRound?: number,
 ): void {
@@ -979,10 +1015,9 @@ function runCombat(
       defRolls.push(buildCombatantRoll(draft, queries, u, "defender", row, col, roll));
     }
 
-    // Persist rng now: it has advanced past this round's rolls and combat
-    // resolution consumes no further randomness, so this covers both the
-    // suspend-and-return paths below and normal loop continuation. Keeps the
-    // roll stream unbroken across a `produce()` suspend boundary.
+    // Persist rng now: it has advanced past this round's rolls, so this covers
+    // both the suspend-and-return paths below and normal loop continuation.
+    // Keeps the roll stream unbroken across a `produce()` suspend boundary.
     draft.rngState = extractRngState(rng) as number[];
 
     // Rules steps 4–5 — Matchup + Resolve. `processRolledRound` either suspends
@@ -990,9 +1025,13 @@ function runCombat(
     // and NOT emitting `combat_resolved` — combat is paused, not over) or
     // auto-resolves the round's pairs in place.
     const base: CombatLoopState = { ...state, round };
-    if (processRolledRound(draft, cell, base, atkRolls, defRolls, emit) === "suspended") {
+    if (processRolledRound(draft, cell, base, atkRolls, defRolls, emit, events) === "suspended") {
       return;
     }
+    // A Loot draw during pair resolution may have reshuffled a deck and
+    // advanced draft.rngState — adopt it rather than clobbering it next
+    // iteration with a generator that never saw the shuffle.
+    rng = fromState(draft.rngState);
   }
 
   draft.rngState = extractRngState(rng) as number[];
@@ -1057,7 +1096,7 @@ function buildCombatantRoll(
     unit as UnitCard,
     "strength",
     { row, col },
-    { role, row, col },
+    { contest: { role, row, col } },
   );
   // The injury penalty is now a global stat modifier applied inside
   // getModifiedStatWithSources, so the "injured" chip already lives in
@@ -1147,6 +1186,22 @@ export function deriveCombatOutcome(
     : (loserKilled ? "kill_attacker" : "injure_attacker");
 }
 
+/** Pure — a Berserker's win is always a kill, and always costs it an injury.
+ *  Unconditional on the base outcome: it does not matter whether the loser
+ *  would merely have been injured. How the self-injury lands is the caller's
+ *  job — an already-injured berserker dies to it, per the re-injury rule. */
+export function applyBerserker(
+  outcome: CombatPairOutcome,
+  attackerWins: boolean,
+  winnerHasBerserker: boolean,
+): { outcome: CombatPairOutcome; injureWinner: boolean } {
+  if (!winnerHasBerserker) return { outcome, injureWinner: false };
+  return {
+    outcome: attackerWins ? "kill_defender" : "kill_attacker",
+    injureWinner: true,
+  };
+}
+
 /** Resolve a single 1v1 combat pair. */
 function resolveCombatPair(
   draft: Draft<MainGameState>,
@@ -1156,13 +1211,14 @@ function resolveCombatPair(
   row: number,
   col: number,
   emit: EmitFn,
+  events: GameEvent[],
 ): void {
   const attackerSide = toCombatSide(atk);
   const defenderSide = toCombatSide(def);
   const attackerPlayerId = atk.unit.controllerId;
   const defenderPlayerId = def.unit.controllerId;
   const killRatio = getConfigNumber(draft, "combat_kill_ratio", 2);
-  const outcome = deriveCombatOutcome(
+  const baseOutcome = deriveCombatOutcome(
     atk.power,
     def.power,
     atk.unit.injured,
@@ -1171,7 +1227,11 @@ function resolveCombatPair(
   );
 
   const attackerWins = atk.power > def.power;
+  const winner = attackerWins ? atk : def;
   const loser = attackerWins ? def : atk;
+  const { outcome, injureWinner } = applyBerserker(
+    baseOutcome, attackerWins, hasKeyword(winner.unit, "Berserker"),
+  );
   const loserKilled = outcome === "kill_attacker" || outcome === "kill_defender";
 
   emit({
@@ -1186,12 +1246,31 @@ function resolveCombatPair(
   if (loserKilled) {
     // Kill: remove unit from grid, drop items, send to owner's discard
     killUnit(draft, cell, loser.unit, row, col, emit);
+    if (hasKeyword(winner.unit, "Loot")) {
+      const winnerController = getPlayerById(draft, winner.unit.controllerId);
+      // drawOneCard pushes straight into an array; replay through `emit` so the
+      // draw and any reshuffle reach listener dispatch like every other event.
+      const drawEvents: GameEvent[] = [];
+      drawOneCard(draft, winnerController, drawEvents);
+      for (const e of drawEvents) emit(e);
+    }
   } else {
     // Combat-specific: drop equipped items before marking injured. Other
     // injure sources (DSL injure, traps, contest default consequence) leave
     // equipment in place — see injureUnit doc.
     dropEquippedItems(cell, loser.unit, row, col, emit);
     injureUnit(loser.unit, emit);
+  }
+
+  if (injureWinner) {
+    // Re-injury kills (rules/README.md Unit status), same as every other
+    // injure site — an already-injured berserker pays with its life rather
+    // than getting the kill upgrade for free.
+    if (winner.unit.injured) {
+      killUnit(draft, cell, winner.unit, row, col, emit);
+    } else {
+      injureUnit(winner.unit, emit);
+    }
   }
 }
 
@@ -1486,6 +1565,7 @@ function resolveAssignedMatchups(
   prompt: CombatPrompt,
   decision: CombatDecision,
   emit: EmitFn,
+  events: GameEvent[],
 ): void {
   // Defensive guard: `handleResolveCombatRound` already dispatches on `kind` and
   // only routes an `assign_matchups` decision here, so this is unreachable in
@@ -1528,7 +1608,7 @@ function resolveAssignedMatchups(
       draft, cell,
       combatantRollFromSide(cell, atkSide),
       combatantRollFromSide(cell, defSide),
-      prompt.row, prompt.col, emit,
+      prompt.row, prompt.col, emit, events,
     );
   }
 }
@@ -1587,6 +1667,7 @@ function handleResolveCombatRound(
   playerId: string,
   decision: CombatDecision,
   emit: EmitFn,
+  events: GameEvent[],
   queries: QueryListener[],
 ): void {
   const promptDraft = draft.combatPrompt;
@@ -1658,7 +1739,7 @@ function handleResolveCombatRound(
       // retreat rolls no dice and produces no combat_pair_resolved).
       emit({ type: "combat_retreated", row: prompt.row, col: prompt.col, playerId });
       retreatUnitsToHQ(draft, cell, playerId, retreatingIds, prompt.row, prompt.col, emit);
-      runCombat(draft, base, emit, queries, prompt.round);
+      runCombat(draft, base, emit, events, queries, prompt.round);
       return;
     }
 
@@ -1671,7 +1752,7 @@ function handleResolveCombatRound(
 
     // Both sides have now declined — roll this round. `settledRound` stops
     // runCombat from re-offering the retreat it just resolved.
-    runCombat(draft, base, emit, queries, prompt.round);
+    runCombat(draft, base, emit, events, queries, prompt.round);
     return;
   }
 
@@ -1683,11 +1764,11 @@ function handleResolveCombatRound(
     // two live prompts.
     const { atkParticipants, defParticipants } = resolveSitOut(cell, prompt, decision);
     draft.combatPrompt = undefined;
-    if (resolveOrSuspendMatchup(draft, cell, base, atkParticipants, defParticipants, emit) === "suspended") {
+    if (resolveOrSuspendMatchup(draft, cell, base, atkParticipants, defParticipants, emit, events) === "suspended") {
       return;
     }
     // Round fully resolved — resume from the next round.
-    runCombat(draft, { ...base, round: prompt.round + 1 }, emit, queries);
+    runCombat(draft, { ...base, round: prompt.round + 1 }, emit, events, queries);
     return;
   }
 
@@ -1695,9 +1776,9 @@ function handleResolveCombatRound(
   // suspend (no re-roll, so the outcome matches what the defender saw), then
   // resume from the next round. Clear the prompt before resuming so `runCombat`
   // is the single writer of any later prompt (one live `combatPrompt` per fight).
-  resolveAssignedMatchups(draft, cell, prompt, decision, emit);
+  resolveAssignedMatchups(draft, cell, prompt, decision, emit, events);
   draft.combatPrompt = undefined;
-  runCombat(draft, { ...base, round: prompt.round + 1 }, emit, queries);
+  runCombat(draft, { ...base, round: prompt.round + 1 }, emit, events, queries);
 }
 
 // ---------------------------------------------------------------------------
@@ -1790,7 +1871,7 @@ export function applyMainAction(
         break;
 
       case "equip":
-        handleEquip(draft, action.playerId, action.itemId, action.unitId, emit);
+        handleEquip(draft, action.playerId, action.itemId, action.unitId, emit, queries);
         break;
 
       case "destroy":
@@ -1805,7 +1886,7 @@ export function applyMainAction(
         break;
 
       case "attack":
-        handleAttack(draft, action.playerId, action.unitIds, action.row, action.col, emit, queries);
+        handleAttack(draft, action.playerId, action.unitIds, action.row, action.col, emit, events, queries);
         break;
 
       case "activate":
@@ -1830,7 +1911,7 @@ export function applyMainAction(
         break;
 
       case "resolve_combat_round":
-        handleResolveCombatRound(draft, action.playerId, action.decision, emit, queries);
+        handleResolveCombatRound(draft, action.playerId, action.decision, emit, events, queries);
         break;
 
       default: {

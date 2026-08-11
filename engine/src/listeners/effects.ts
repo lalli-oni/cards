@@ -151,8 +151,8 @@ export const LOCATION_EFFECTS: Record<string, LocationEffectFactory> = {
       source: { type: "location", cardId: _loc.id, definitionId: "the-arena", controllerId: _controllerId, position: { row, col } },
       query: "stat",
       modify: (_state, ctx) =>
-        ctx.stat === "strength" && ctx.combat?.role === "attacker"
-        && ctx.combat.row === row && ctx.combat.col === col ? 1 : 0,
+        ctx.stat === "strength" && ctx.contest?.role === "attacker"
+        && ctx.contest.row === row && ctx.contest.col === col ? 1 : 0,
     } satisfies StatModifierListener],
   }),
 
@@ -162,8 +162,8 @@ export const LOCATION_EFFECTS: Record<string, LocationEffectFactory> = {
       source: { type: "location", cardId: _loc.id, definitionId: "the-great-wall", controllerId: _controllerId, position: { row, col } },
       query: "stat",
       modify: (_state, ctx) =>
-        ctx.stat === "strength" && ctx.combat?.role === "defender"
-        && ctx.combat.row === row && ctx.combat.col === col ? 1 : 0,
+        ctx.stat === "strength" && ctx.contest?.role === "defender"
+        && ctx.contest.row === row && ctx.contest.col === col ? 1 : 0,
     } satisfies StatModifierListener],
   }),
 
@@ -484,8 +484,8 @@ export const ITEM_EFFECTS: Record<string, ItemEffectFactory> = {
         query: "stat",
         modify: (_state, ctx) => {
           if (item.equippedTo || ctx.stat !== "strength" || !position) return 0;
-          return ctx.combat?.role === "attacker"
-            && ctx.combat.row === position.row && ctx.combat.col === position.col ? 2 : 0;
+          return ctx.contest?.role === "attacker"
+            && ctx.contest.row === position.row && ctx.contest.col === position.col ? 2 : 0;
         },
       } satisfies StatModifierListener,
     ],

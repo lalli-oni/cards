@@ -38,16 +38,16 @@ _FAMILY_PARAMS = [
 ]
 VOCAB_JSON = [
     {"name": "Leader", "cardTypes": ["unit"], "params": _FAMILY_PARAMS,
-     "reminder": "Friendly units at this location get {magnitude} to {stat} {context}{role}."},
+     "reminder": "Friendly units at this location, including this one, get {magnitude} to {stat} {context}{role}."},
     {"name": "Aura", "cardTypes": ["location"], "params": _FAMILY_PARAMS,
      "reminder": "Every unit at this location — friend or foe — gets {magnitude} to {stat} {context}{role}."},
     {"name": "Untouchable", "cardTypes": ["unit"], "params": [{"name": "stat", "kind": "stat"}],
-     "reminder": "Cannot be targeted by an Attack while this unit's {stat} exceeds the attacker's {stat}."},
+     "reminder": "Cannot be targeted by an Attack while this unit's {stat} exceeds every attacking unit's {stat}."},
     {"name": "Berserker", "cardTypes": ["unit"], "params": [],
-     "reminder": "When this unit wins combat and would injure the loser, it injures itself and kills the loser instead."},
+     "reminder": "When this unit wins combat, it kills the loser and is injured."},
     {"name": "Squire", "cardTypes": ["unit"],
      "params": [{"name": "amount", "kind": "magnitude", "optional": True, "default": 1}],
-     "reminder": "Your Equip and Unequip actions cost {amount} less AP."},
+     "reminder": "Your Equip actions cost {amount} less AP."},
     {"name": "Flying", "cardTypes": ["item"], "params": [],
      "reminder": "While equipped, this unit ignores blocked edges when moving."},
 ]
@@ -117,42 +117,42 @@ def test_load_keyword_vocab():
 
 def test_keyword_reminder():
     print("keyword_reminder:")
-    (label, reminder), err = _quiet(mt.keyword_reminder, "Leader:+1:all:combat", VOCAB)
+    (label, reminder), err = _quiet(mt.keyword_reminder, "Leader:+1:all:contest", VOCAB)
     check("family token → name + primary value pill", label == "LEADER +1")
     check("family token → composed prose reminder",
-          reminder == "Friendly units at this location get +1 to all stats in combat.")
+          reminder == "Friendly units at this location, including this one, get +1 to all stats in a contest.")
     check("governed keyword in a populated vocab → no warning", err == "")
 
     # Pill shows only the magnitude value; stat/context/role live in the reminder.
-    label, _ = mt.keyword_reminder("Aura:-1:all:combat", VOCAB)
+    label, _ = mt.keyword_reminder("Aura:-1:all:contest", VOCAB)
     check("family pill drops stat/context, keeps signed magnitude", label == "AURA -1")
 
     # Specific stat + mission context + role clause all format through.
     _, reminder = mt.keyword_reminder("Leader:+1:strength:mission:def", VOCAB)
     check("family with role → mission/stat/role formatted",
-          reminder == "Friendly units at this location get +1 to strength on missions when defending.")
+          reminder == "Friendly units at this location, including this one, get +1 to strength on missions when defending.")
 
     label, reminder = mt.keyword_reminder("Untouchable:charisma", VOCAB)
     check("stat-param standalone → name-only pill (stat is not a value)",
           label == "UNTOUCHABLE")
     check("parameterised standalone → reminder repeats the stat",
-          reminder == "Cannot be targeted by an Attack while this unit's charisma exceeds the attacker's charisma.")
+          reminder == "Cannot be targeted by an Attack while this unit's charisma exceeds every attacking unit's charisma.")
 
     label, reminder = mt.keyword_reminder("Berserker", VOCAB)
     check("value-less standalone → label", label == "BERSERKER")
     check("value-less standalone → static reminder",
-          reminder == "When this unit wins combat and would injure the loser, it injures itself and kills the loser instead.")
+          reminder == "When this unit wins combat, it kills the loser and is injured.")
 
     # Omitted optional param falls back to its declared default (Squire → 1 AP).
     label, reminder = mt.keyword_reminder("Squire", VOCAB)
     check("bare optional-magnitude → name-only pill", label == "SQUIRE")
     check("omitted optional param → default substituted",
-          reminder == "Your Equip and Unequip actions cost 1 less AP.")
+          reminder == "Your Equip actions cost 1 less AP.")
     label, _ = mt.keyword_reminder("Squire:2", VOCAB)
     check("optional-magnitude with value → name + value pill", label == "SQUIRE 2")
 
     # A degraded/empty vocab still renders the pill but composes no reminder.
-    _, reminder = mt.keyword_reminder("Leader:+1:all:combat", {})
+    _, reminder = mt.keyword_reminder("Leader:+1:all:contest", {})
     check("empty vocab → blank reminder, pill still renders", reminder == "")
 
     # Degenerate tokens: no crash, sensible label, clear signal on an empty name.
@@ -169,8 +169,8 @@ def test_keyword_reminder():
     check("unknown keyword → warns", "not in the governed vocab" in err.lower())
 
     # Empty vocab (degraded load) → no warning, still renders.
-    (label, _), err = _quiet(mt.keyword_reminder, "Leader:+1:all:combat", {})
-    check("empty vocab → renders label", label == "LEADER +1 ALL COMBAT")
+    (label, _), err = _quiet(mt.keyword_reminder, "Leader:+1:all:contest", {})
+    check("empty vocab → renders label", label == "LEADER +1 ALL CONTEST")
     check("empty vocab → no warning", err == "")
 
 
@@ -237,8 +237,8 @@ def test_nonunit_keywords():
     print("non-unit keywords:")
     # parse_location / parse_item now carry the keywords column so their builders
     # can render pills (Aura on locations, Flying/Heavy/Lightweight on items).
-    loc = mt.parse_location({"id": "x", "name": "X", "keywords": "Aura:-1:all:combat"}, 0)
-    check("parse_location carries keywords", loc["keywords"] == ["Aura:-1:all:combat"])
+    loc = mt.parse_location({"id": "x", "name": "X", "keywords": "Aura:-1:all:contest"}, 0)
+    check("parse_location carries keywords", loc["keywords"] == ["Aura:-1:all:contest"])
     item = mt.parse_item({"id": "y", "name": "Y", "keywords": "Flying;Heavy"}, 0)
     check("parse_item carries keywords", item["keywords"] == ["Flying", "Heavy"])
 
@@ -247,7 +247,7 @@ def test_nonunit_keywords():
     check("kw lines: empty reminder → 1", mt._kw_reminder_lines("FLYING", "", 26, 716, 14) == 1)
     n = mt._kw_reminder_lines(
         "AURA -1",
-        "Every unit at this location — friend or foe — gets -1 to all stats in combat.",
+        "Every unit at this location — friend or foe — gets -1 to all stats in a contest.",
         59, 691, 14)
     check("kw lines: long reminder wraps to >= 2 lines", n >= 2)
 
@@ -327,20 +327,20 @@ def test_real_vocab_reminders():
     vocab = _real_vocab()
     check("real vocab loaded", bool(vocab) and "Leader" in vocab)
 
-    _, r = mt.keyword_reminder("Leader:+1:all:combat", vocab)
+    _, r = mt.keyword_reminder("Leader:+1:all:contest", vocab)
     check("real Leader reminder composes",
-          r == "Friendly units at this location get +1 to all stats in combat.")
+          r == "Friendly units at this location, including this one, get +1 to all stats in a contest.")
     _, r = mt.keyword_reminder("Squire", vocab)
     check("real Squire omitted-arg → default 1",
-          r == "Your Equip and Unequip actions cost 1 less AP.")
+          r == "Your Equip actions cost 1 less AP.")
     # Patron: a required, unsigned magnitude standalone — never exercised by the mock.
     label, r = mt.keyword_reminder("Patron:2", vocab)
     check("real Patron pill shows the value", label == "PATRON 2")
     check("real Patron reminder composes",
-          r == "Cards you buy that share an attribute with this unit cost 2 less gold.")
-    _, r = mt.keyword_reminder("Aura:-1:all:combat", vocab)
+          r == "Cards you buy or deploy that share an attribute with this unit cost 2 less gold.")
+    _, r = mt.keyword_reminder("Aura:-1:all:contest", vocab)
     check("real Aura reminder composes",
-          r == "Every unit at this location — friend or foe — gets -1 to all stats in combat.")
+          r == "Every unit at this location — friend or foe — gets -1 to all stats in a contest.")
 
 
 def test_compose_reminder_degradation():
@@ -394,7 +394,7 @@ def test_keyword_pill_row():
           [c[0] for c in calls] == ["rect", "text"])
 
     calls.clear()
-    long_r = "Every unit at this location — friend or foe — gets -1 to all stats in combat."
+    long_r = "Every unit at this location — friend or foe — gets -1 to all stats in a contest."
     h2 = mt._keyword_pill_row(fake_rect, fake_text, 1, "AURA -1", long_r, 59, 691, 100)
     n = mt._kw_reminder_lines("AURA -1", long_r, 59, 691, 14)
     check("pill row (reminder) → height == max(25, n*line_h)", h2 == max(25, n * 18))

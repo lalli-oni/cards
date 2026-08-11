@@ -16,7 +16,7 @@ Every card type includes these columns:
 | cost     | string | yes      | Gold cost to deploy/play. Multiple costs separated by `\|` (player pays one) |
 | text     | string | no       | Card text — rules text, keywords, effects |
 | flavor   | string | no       | Flavor text |
-| keywords   | string | no     | Semicolon-separated mechanical **keywords** — things the card *does* (e.g. `Berserker;Leader:+1:all:combat`). Drawn from the governed keyword vocabulary; see [Governed vocabularies](#governed-vocabularies) and the Keyword Glossary in `rules/README.md`. Vocabulary-validated: the build fails on unknown or malformed tokens. |
+| keywords   | string | no     | Semicolon-separated mechanical **keywords** — things the card *does* (e.g. `Berserker;Leader:+1:all:contest`). Drawn from the governed keyword vocabulary; see [Governed vocabularies](#governed-vocabularies) and the Keyword Glossary in `rules/README.md`. Vocabulary-validated: the build fails on unknown or malformed tokens. |
 | attributes | string | no     | Semicolon-separated cross-type synergy labels (e.g. `Knowledge;Engineering`). Governed closed set — see [Governed vocabularies](#governed-vocabularies). |
 
 ## Units

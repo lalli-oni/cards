@@ -15,6 +15,7 @@ import { getConfigNumber, getPlayerById } from "./state-helpers";
 import { rebuildListeners } from "./listeners/rebuild";
 import { PASSIVE_EVENTS_NEEDING_LOCATION_TARGET, POLICY_ACTIONS } from "./listeners/effects";
 import { getModifiedCost, getModifiedAPCost } from "./listeners/query";
+import { isAttackShielded, unitIgnoresBlockedEdges } from "./keyword-effects";
 import type {
   Action,
   CombatPrompt,
@@ -26,6 +27,7 @@ import type {
   ResolveCombatRoundAction,
   SeedingAction,
   SeedingGameState,
+  UnitCard,
 } from "./types";
 import { getActivePlayerId } from "./types";
 
@@ -311,7 +313,8 @@ function getMainValidActions(
         for (const adj of getAdjacentCells(gridRows, gridCols, r, c)) {
           if (
             state.grid[adj.row][adj.col].location &&
-            areFacingEdgesOpen(state.grid, r, c, adj.row, adj.col)
+            (areFacingEdgesOpen(state.grid, r, c, adj.row, adj.col) ||
+              unitIgnoresBlockedEdges(state.grid[r][c], unit.id))
           ) {
             const moveAction: MainAction = { type: "move", playerId, unitId: unit.id, row: adj.row, col: adj.col };
             const moveCost = getModifiedAPCost(state, queries, moveAction, baseMoveCost);
@@ -367,8 +370,13 @@ function getMainValidActions(
     }
   }
 
-  // equip — items to co-located units, across all positions (1 AP)
-  if (ap >= 1) {
+  // equip — items to co-located units, across all positions (1 AP, less with
+  // Squire). AP cost goes through getModifiedAPCost so a Squire discount
+  // (including down to 0 AP) is offered, mirroring the move / play_event
+  // blocks above. A 0-AP equip is repeatable and consumes nothing, so an
+  // automated driver looping over getValidActions must bound its own turn —
+  // the engine deliberately doesn't cap it.
+  {
     const positions: BoardPosition[] = [
       { type: "hq", playerId },
       ...Array.from({ length: gridRows * gridCols }, (_, i) => ({
@@ -390,7 +398,9 @@ function getMainValidActions(
         for (const unit of units) {
           // Skip if already equipped on this unit
           if (item.equippedTo === unit.id) continue;
-          actions.push({ type: "equip", playerId, itemId: item.id, unitId: unit.id });
+          const candidate: MainAction = { type: "equip", playerId, itemId: item.id, unitId: unit.id };
+          const apCost = getModifiedAPCost(state, queries, candidate, 1);
+          if (ap >= apCost) actions.push(candidate);
         }
       }
     }
@@ -414,14 +424,25 @@ function getMainValidActions(
     }
   }
 
-  // attack — cells where player has units and enemies exist (1 AP)
+  // attack — cells where player has units and at least one unshielded enemy
+  // exists (1 AP). Untouchable defenders whose stat exceeds every committed
+  // attacker's stat are excluded; if that leaves no targetable enemy, the
+  // action is not offered at all.
   if (ap >= 1) {
     for (let r = 0; r < gridRows; r++) {
       for (let c = 0; c < gridCols; c++) {
         const cell = state.grid[r][c];
         const myUnits = cell.units.filter((u) => u.controllerId === playerId);
+        // Must precede the shield filter: with no attackers there is nothing
+        // for a defender's stat to exceed, and it skips a getModifiedStat
+        // sweep per enemy on cells the player isn't contesting.
+        if (myUnits.length === 0) continue;
+        const attackers = myUnits as [UnitCard, ...UnitCard[]];
         const enemyUnits = cell.units.filter((u) => u.controllerId !== playerId);
-        if (myUnits.length > 0 && enemyUnits.length > 0) {
+        const targetableEnemies = enemyUnits.filter(
+          (u) => !isAttackShielded(state, queries, u, { row: r, col: c }, attackers),
+        );
+        if (targetableEnemies.length > 0) {
           // Offer attacking with all owned units at that cell
           actions.push({
             type: "attack",

@@ -9,6 +9,7 @@ import type {
   ProtectionQueryContext,
   QueryListener,
   StatName,
+  StatOccasion,
   StatQueryContext,
 } from "./types";
 
@@ -35,10 +36,13 @@ export function getModifiedStatWithSources(
   unit: UnitCard,
   stat: StatName,
   position?: { row: number; col: number },
-  combat?: { role: "attacker" | "defender"; row: number; col: number },
+  /** What the stat is being read for. One argument rather than a pair of
+   *  optional flags, so a call site states its intent by name and the mutually
+   *  exclusive cases can't both be set. */
+  occasion: StatOccasion = {},
 ): ModifiedStatBreakdown {
   const base = unit[stat];
-  const ctx: StatQueryContext = { unit, stat, position, combat };
+  const ctx: StatQueryContext = { unit, stat, position, ...occasion };
   const modifiers: ModifierEntry[] = [];
 
   for (const q of queries) {
@@ -89,9 +93,9 @@ export function getModifiedStat(
   unit: UnitCard,
   stat: StatName,
   position?: { row: number; col: number },
-  combat?: { role: "attacker" | "defender"; row: number; col: number },
+  occasion: StatOccasion = {},
 ): number {
-  return getModifiedStatWithSources(state, queries, unit, stat, position, combat).final;
+  return getModifiedStatWithSources(state, queries, unit, stat, position, occasion).final;
 }
 
 /**
@@ -134,9 +138,15 @@ export function isUnitProtected(
   unit: UnitCard,
   position: { row: number; col: number },
   kind: ProtectionKind,
+  /** Required for `contest_target`, meaningless otherwise. */
   contestStat?: StatName,
 ): boolean {
-  const ctx: ProtectionQueryContext = { unit, position, kind, contestStat };
+  if (kind === "contest_target" && contestStat === undefined) {
+    throw new Error("isUnitProtected: a contest_target query needs contestStat");
+  }
+  const ctx: ProtectionQueryContext = kind === "contest_target"
+    ? { unit, position, kind, contestStat: contestStat as StatName }
+    : { unit, position, kind };
 
   for (const q of queries) {
     if (q.query !== "protection") continue;

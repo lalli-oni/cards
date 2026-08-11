@@ -15,25 +15,25 @@ token and returns a `ParsedKeyword`.
 ## The vocabulary
 
 **Modifier families** — parameterized stat effects sharing the shape
-`Name:±MAG:STAT-SCOPE:CONTEXT[:ROLE]` (e.g. `Prowess:+2:strength:combat`,
-`Leader:+1:all:combat`, `Aura:-1:all:combat:def`):
+`Name:±MAG:STAT-SCOPE:CONTEXT[:ROLE]` (e.g. `Prowess:+2:strength:contest`,
+`Leader:+1:all:contest`, `Aura:-1:all:contest:def`):
 
 | Keyword | Card type | Affects |
 |---|---|---|
 | `Prowess` | unit | this unit |
-| `Kindred` | unit | friendly units sharing an attribute with this unit |
-| `Leader` | unit | friendly units at this location |
+| `Kindred` | unit | other friendly units sharing an attribute with this unit |
+| `Leader` | unit | friendly units at this location, including this unit |
 | `Aura` | location | every unit at this location — friend or foe |
 
 **Standalone keywords:**
 
 | Keyword | Card type | Params | Meaning |
 |---|---|---|---|
-| `Untouchable` | unit | `stat` | can't be Attack-targeted while its `stat` exceeds the attacker's |
-| `Berserker` | unit | — | on winning combat, injures itself and kills the loser instead |
-| `Patron` | unit | `amount` | cards you buy sharing an attribute with it cost `amount` less gold |
+| `Untouchable` | unit | `stat` | can't be Attack-targeted while its `stat` exceeds every attacking unit's |
+| `Berserker` | unit | — | on winning combat, kills the loser and is injured |
+| `Patron` | unit | `amount` | cards you buy or deploy sharing an attribute with it cost `amount` less gold |
 | `Loot` | unit | — | on killing an enemy in combat, draw a card |
-| `Squire` | unit | `amount` (opt, default 1) | your Equip / Unequip actions cost `amount` less AP |
+| `Squire` | unit | `amount` (opt, default 1) | your Equip actions cost `amount` less AP |
 | `Flying` | item | — | equipped unit ignores blocked edges when moving |
 | `Heavy` | item | — | equipped unit's Move action costs +1 AP |
 | `Lightweight` | item | — | equipped unit's Move action costs 1 less AP |
@@ -48,7 +48,7 @@ token and returns a `ParsedKeyword`.
 | `magnitude` | positive integer |
 | `statScope` | a stat, or `all` |
 | `stat` | a stat (no `all`) |
-| `context` | `combat` \| `mission` |
+| `context` | `contest` \| `mission` |
 | `role` | `atk` \| `def` \| `either` |
 
 Names and enum params are **case-sensitive**, so card data and code can't drift
@@ -66,12 +66,13 @@ placeholders).
 
 ## Runtime status (current)
 
-Keywords are **parsed, validated, and rendered** today. The engine does **not
-yet resolve** keyword *effects* at runtime — e.g. `Prowess:+2:strength:combat` is
-not yet applied as a stat modifier during a contest. That wiring is tracked in
-[#212](https://github.com/lalli-oni/cards/issues/212) (v0.1). **This is a known
-implementation gap, not a deprecation** — the keyword system is the intended home
-for this shared, governed vocabulary.
+Keywords are **parsed, validated, rendered, and resolved**. `keyword-effects.ts`
+converts a card's `keywords` tokens into the same `{listeners, queries}` shape
+the bespoke `*_EFFECTS` factories produce, and `rebuildListeners` calls it for
+every card it visits — so e.g. `Prowess:+2:strength:contest` applies as a stat
+modifier during a contest exactly like a hand-written effect factory would.
+See [effect-system.md](effect-system.md) for how this fits the other two
+effect surfaces.
 
 ## Relationship to the wider effect system
 
@@ -90,4 +91,8 @@ future architectural reconsideration, not a plan to remove keywords.
    sync with the `reminder`.
 3. Rebuild (`bun library/build.ts`) — the build validates it and emits it to
    `keywords.json` for the renderer.
-4. Runtime resolution of the new keyword's effect follows the #212 wiring.
+4. Wire its runtime semantics: either add a case in `keyword-effects.ts`'s
+   `keywordEffects` switch, or — if it doesn't fit the query/listener shape —
+   implement it as a direct hook and list it in `DIRECT_HOOK_KEYWORDS`.
+   `test/build.test.ts` fails on a keyword that is neither, so it can't ship
+   inert.

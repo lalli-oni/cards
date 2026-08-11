@@ -87,7 +87,9 @@ interface CardBase {
   controllerId: string;
 }
 
-export type StatName = "strength" | "cunning" | "charisma";
+/** Alias, not a second declaration — a hand-written copy of this union would
+ *  silently drift from STAT_NAMES the day a fourth stat is added. */
+export type StatName = Stat;
 
 /**
  * An activatable action defined on a card.

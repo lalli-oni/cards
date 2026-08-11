@@ -11,34 +11,34 @@ describe("keyword vocabulary", () => {
 
   describe("modifier families", () => {
     test("parses a full family token (with role)", () => {
-      expect(parseKeyword("Prowess:+2:strength:combat:def", "unit")).toEqual({
+      expect(parseKeyword("Prowess:+2:strength:contest:def", "unit")).toEqual({
         name: "Prowess",
         signedMagnitude: 2,
         statScope: "strength",
-        context: "combat",
+        context: "contest",
         role: "def",
       });
     });
 
     test("role is optional", () => {
-      expect(parseKeyword("Leader:+1:all:combat", "unit")).toEqual({
+      expect(parseKeyword("Leader:+1:all:contest", "unit")).toEqual({
         name: "Leader",
         signedMagnitude: 1,
         statScope: "all",
-        context: "combat",
+        context: "contest",
       });
     });
 
     test("negative magnitude (Aura debuff)", () => {
-      expect(parseKeyword("Aura:-1:all:combat", "location").signedMagnitude).toBe(-1);
+      expect(parseKeyword("Aura:-1:all:contest", "location").signedMagnitude).toBe(-1);
     });
 
     test("rejects an unsigned magnitude", () => {
-      expect(() => parseKeyword("Leader:1:all:combat", "unit")).toThrow(KeywordError);
+      expect(() => parseKeyword("Leader:1:all:contest", "unit")).toThrow(KeywordError);
     });
 
     test("rejects a bad stat scope", () => {
-      expect(() => parseKeyword("Leader:+1:power:combat", "unit")).toThrow(/stat must be/);
+      expect(() => parseKeyword("Leader:+1:power:contest", "unit")).toThrow(/stat must be/);
     });
 
     test("rejects a bad context", () => {
@@ -52,8 +52,8 @@ describe("keyword vocabulary", () => {
 
   describe("per-type scoping", () => {
     test("Aura is a location keyword, not supported on units", () => {
-      expect(() => parseKeyword("Aura:-1:all:combat", "unit")).toThrow(/not supported on unit/);
-      expect(parseKeyword("Aura:-1:all:combat", "location").name).toBe("Aura");
+      expect(() => parseKeyword("Aura:-1:all:contest", "unit")).toThrow(/not supported on unit/);
+      expect(parseKeyword("Aura:-1:all:contest", "location").name).toBe("Aura");
     });
 
     test("Flying is an equipment keyword, not supported on locations", () => {

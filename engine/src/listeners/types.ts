@@ -48,14 +48,26 @@ export interface EffectListener {
 // ---------------------------------------------------------------------------
 
 
-export interface StatQueryContext {
+/** What a stat is being read *for*. The three cases are mutually exclusive —
+ *  spelling them as a union rather than two independent optional fields is what
+ *  stops a caller setting both, and lets `contextAndRoleMatch` switch
+ *  exhaustively. `?: never` keeps every existing `ctx.contest?.role` reader
+ *  working unchanged. */
+export type StatOccasion =
+  /** A stat contest — both the Attack action (`apply-main.ts:buildCombatantRoll`)
+   *  and DSL stat contests (`executor.ts:executeContest`) set this. */
+  | { contest: { role: "attacker" | "defender"; row: number; col: number }; mission?: never }
+  /** A mission stat-sum check — set by `checkSingleRequirement`'s `"stat"` case. */
+  | { contest?: never; mission: true }
+  /** A bare read with no occasion (display, un-contextualised queries). */
+  | { contest?: never; mission?: never };
+
+export type StatQueryContext = {
   unit: UnitCard;
   stat: StatName;
   /** Grid position of the unit, if on grid. */
   position?: { row: number; col: number };
-  /** Present when queried during combat. */
-  combat?: { role: "attacker" | "defender"; row: number; col: number };
-}
+} & StatOccasion;
 
 export interface CostQueryContext {
   card: Card;
@@ -66,12 +78,19 @@ export interface CostQueryContext {
 
 export type ProtectionKind = "event_target" | "event_injury" | "contest_target";
 
-export interface ProtectionQueryContext {
+/** `contestStat` is only meaningful for a contest, so it rides on that variant
+ *  rather than being an optional field every kind carries.
+ *
+ *  Untouchable deliberately does not go through here — it needs the whole
+ *  committed-attacker list, which a per-unit protection query can't supply, so
+ *  it lives in `keyword-effects.ts:isAttackShielded` instead. */
+export type ProtectionQueryContext = {
   unit: UnitCard;
   position: { row: number; col: number };
-  kind: ProtectionKind;
-  contestStat?: StatName;
-}
+} & (
+  | { kind: "contest_target"; contestStat: StatName }
+  | { kind: "event_target" | "event_injury"; contestStat?: never }
+);
 
 export interface APQueryContext {
   action: MainAction;

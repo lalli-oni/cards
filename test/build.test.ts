@@ -9,7 +9,9 @@ import {
   type BuildWarning,
   type CardType,
 } from "../library/build";
-import { KEYWORDS } from "../engine/src/keywords";
+import { KEYWORD_SPECS, KeywordError, type KeywordSpec, parseKeyword } from "../engine/src/keywords";
+import { DIRECT_HOOK_KEYWORDS, keywordEffects, type KeywordCard } from "../engine/src/keyword-effects";
+import type { CardType as EngineCardType } from "../engine/src/types";
 
 // ---------------------------------------------------------------------------
 // Build-time governed-vocabulary validation (#119)
@@ -86,9 +88,9 @@ describe("build validation — governed vocabularies", () => {
 
 describe("build validation — governed keywords", () => {
   test("accepts governed keyword tokens on the right card type", () => {
-    expect(check("units", { attributes: "Military", keywords: "Berserker;Leader:+1:all:combat" })).toEqual([]);
+    expect(check("units", { attributes: "Military", keywords: "Berserker;Leader:+1:all:contest" })).toEqual([]);
     expect(check("items", { type: "Banner", keywords: "Flying" })).toEqual([]);
-    expect(check("locations", { location_type: "Market", keywords: "Aura:-1:all:combat" })).toEqual([]);
+    expect(check("locations", { location_type: "Market", keywords: "Aura:-1:all:contest" })).toEqual([]);
   });
 
   test("rejects an unknown keyword", () => {
@@ -97,12 +99,12 @@ describe("build validation — governed keywords", () => {
   });
 
   test("rejects a malformed family token (unsigned magnitude)", () => {
-    const errors = check("units", { attributes: "Military", keywords: "Leader:1:all:combat" });
+    const errors = check("units", { attributes: "Military", keywords: "Leader:1:all:contest" });
     expect(errors.some((e) => e.field === "keywords" && e.message.includes("magnitude"))).toBe(true);
   });
 
   test("rejects an unsupported card type (Aura on a unit)", () => {
-    const errors = check("units", { attributes: "Military", keywords: "Aura:-1:all:combat" });
+    const errors = check("units", { attributes: "Military", keywords: "Aura:-1:all:contest" });
     expect(errors.some((e) => e.field === "keywords" && e.message.includes("not supported on unit"))).toBe(true);
   });
 
@@ -115,7 +117,7 @@ describe("build validation — governed keywords", () => {
     // a prior `bun library/build.ts`, which the `test` script runs first.)
     const artifact = JSON.parse(readFileSync(join(import.meta.dir, "../library/build/keywords.json"), "utf-8"));
     expect(Array.isArray(artifact)).toBe(true);
-    expect(artifact.length).toBe(KEYWORDS.length);
+    expect(artifact.length).toBe(KEYWORD_SPECS.length);
     for (const entry of artifact) {
       expect(Object.keys(entry).sort()).toEqual(["cardTypes", "name", "params", "reminder"]);
       expect(typeof entry.name).toBe("string");
@@ -153,9 +155,9 @@ describe("build validation — governed keywords", () => {
   test("keyword names and each keyword's param names are unique", () => {
     // Duplicate keyword names silently collapse in KEYWORD_BY_NAME (last wins);
     // duplicate param names within a keyword make placeholder binding ambiguous.
-    const names = KEYWORDS.map((k) => k.name);
+    const names = KEYWORD_SPECS.map((k) => k.name);
     expect(new Set(names).size).toBe(names.length);
-    for (const k of KEYWORDS) {
+    for (const k of KEYWORD_SPECS) {
       const paramNames = k.params.map((p) => p.name);
       expect(new Set(paramNames).size).toBe(paramNames.length);
     }
@@ -166,7 +168,7 @@ describe("build validation — governed keywords", () => {
     // omitted optional arg — meaningful only on an optional magnitude/
     // signedMagnitude param. ParamSpec doesn't encode that pairing in the type
     // ("keep new keywords honest"), so enforce the invariant here instead.
-    for (const k of KEYWORDS) {
+    for (const k of KEYWORD_SPECS) {
       for (const p of k.params) {
         if (p.default !== undefined) {
           expect(p.optional).toBe(true);
@@ -174,6 +176,101 @@ describe("build validation — governed keywords", () => {
         }
       }
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Keyword runtime exhaustiveness
+//
+// A vocabulary entry with no keyword-effects.ts case is a card that reads as
+// doing something and does nothing. Pin that
+// every governed keyword is either resolved by keywordEffects's switch or is
+// a documented direct hook (Berserker/Loot/Untouchable/Flying), so adding a
+// keyword to the vocabulary without wiring its runtime semantics fails loud here
+// instead of shipping an inert card.
+// ---------------------------------------------------------------------------
+
+function minimalCard(type: EngineCardType): KeywordCard {
+  const base = {
+    id: "t1", definitionId: "t", name: "T", cost: "1",
+    rarity: "common" as const, ownerId: "p1", controllerId: "p1",
+  };
+  if (type === "unit") {
+    return { ...base, type: "unit", strength: 1, cunning: 1, charisma: 1, attributes: [], injured: false };
+  }
+  if (type === "location") {
+    return { ...base, type: "location", edges: { n: true, e: true, s: true, w: true } };
+  }
+  if (type === "item") {
+    return { ...base, type: "item" };
+  }
+  // A keyword declared on `event`/`policy` has no card shape to build here.
+  // Surfaced as an assertion rather than a thrown Error so the failure names
+  // the gap instead of aborting the suite with a stack trace.
+  expect(`unsupported card type for keyword exhaustiveness: ${type}`).toBe("");
+  throw new Error("unreachable");
+}
+
+/** Builds a minimally-valid token for `spec` from its grammar alone (skipping
+ *  optional params), so this stays accurate as the grammar evolves rather
+ *  than hardcoding a token string per keyword name. */
+function minimalToken(spec: KeywordSpec): string {
+  const parts = [spec.name];
+  for (const param of spec.params) {
+    if (param.optional) continue;
+    switch (param.kind) {
+      case "signedMagnitude": parts.push("+1"); break;
+      case "magnitude": parts.push("1"); break;
+      case "statScope": parts.push("strength"); break;
+      case "stat": parts.push("strength"); break;
+      case "context": parts.push("contest"); break;
+      case "role": parts.push("either"); break;
+    }
+  }
+  return parts.join(":");
+}
+
+describe("keyword runtime exhaustiveness", () => {
+  test("every governed keyword is resolved by keywordEffects or is a documented direct hook", () => {
+    const unhandled: string[] = [];
+    for (const spec of KEYWORD_SPECS) {
+      if ((DIRECT_HOOK_KEYWORDS as readonly string[]).includes(spec.name)) continue;
+      // Every supported card type, not just the first: a keyword allowed on
+      // two types with a resolver for only one would otherwise pass.
+      for (const cardType of spec.cardTypes) {
+        const card = minimalCard(cardType);
+        card.keywords = [minimalToken(spec)];
+        const result = keywordEffects(card, "p1", { row: 0, col: 0 });
+        if (result.listeners.length === 0 && result.queries.length === 0) {
+          unhandled.push(`${spec.name} (${cardType})`);
+        }
+      }
+    }
+    expect(unhandled).toEqual([]);
+  });
+
+  // Frozen rather than merely validated. The exhaustiveness test above skips
+  // anything in this list, so a contributor could otherwise silence it by
+  // adding a name here and never writing the hook — shipping exactly the inert
+  // keyword the check exists to prevent. Growing the list now requires editing
+  // this assertion, which a reviewer sees.
+  test("DIRECT_HOOK_KEYWORDS is exactly the four hand-wired keywords", () => {
+    expect([...DIRECT_HOOK_KEYWORDS].sort()).toEqual(["Berserker", "Flying", "Loot", "Untouchable"]);
+  });
+
+  test("DIRECT_HOOK_KEYWORDS only names governed keywords", () => {
+    const names = new Set(KEYWORD_SPECS.map((k) => k.name));
+    for (const name of DIRECT_HOOK_KEYWORDS) {
+      expect(names.has(name)).toBe(true);
+    }
+  });
+
+  // The mission+role cross-parameter rule lives in parseKeyword, so the build
+  // rejects the token. It used to be enforced at resolution time instead,
+  // which meant a CSV could build green and then throw on every engine action.
+  test("the build rejects a role on a mission-context token", () => {
+    expect(() => parseKeyword("Prowess:+2:cunning:mission:def", "unit")).toThrow(KeywordError);
+    expect(() => parseKeyword("Prowess:+2:cunning:mission", "unit")).not.toThrow();
   });
 });
 

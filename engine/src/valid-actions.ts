@@ -370,12 +370,13 @@ function getMainValidActions(
     }
   }
 
-  // equip — items to co-located units, across all positions (1 AP, less with
-  // Squire). AP cost goes through getModifiedAPCost so a Squire discount
-  // (including down to 0 AP) is offered, mirroring the move / play_event
-  // blocks above. A 0-AP equip is repeatable and consumes nothing, so an
-  // automated driver looping over getValidActions must bound its own turn —
-  // the engine deliberately doesn't cap it.
+  // equip / unequip / transfer — items and co-located units, across all
+  // positions (1 AP each, less with Squire). AP cost goes through
+  // getModifiedAPCost so a Squire discount (including down to 0 AP) is
+  // offered, mirroring the move / play_event blocks above. At 0 AP these
+  // consume nothing and equip/unequip invert each other, so an automated
+  // driver looping over getValidActions must bound its own turn — the engine
+  // deliberately doesn't cap it.
   {
     const positions: BoardPosition[] = [
       { type: "hq", playerId },
@@ -395,10 +396,19 @@ function getMainValidActions(
       const units = getUnitsAtPosition(state.players, state.grid, pos)
         .filter((u) => ownerFilter || u.controllerId === playerId);
       for (const item of items) {
+        // An item is either loose (offer equip, to any unit here) or borne
+        // (offer unequip, plus transfer to every *other* unit here). The two
+        // sets are disjoint, which is the point of the split — no action in
+        // this list has a field that means nothing.
+        if (item.equippedTo) {
+          const drop: MainAction = { type: "unequip", playerId, itemId: item.id };
+          if (ap >= getModifiedAPCost(state, queries, drop, 1)) actions.push(drop);
+        }
         for (const unit of units) {
-          // Skip if already equipped on this unit
           if (item.equippedTo === unit.id) continue;
-          const candidate: MainAction = { type: "equip", playerId, itemId: item.id, unitId: unit.id };
+          const candidate: MainAction = item.equippedTo
+            ? { type: "transfer", playerId, itemId: item.id, unitId: unit.id }
+            : { type: "equip", playerId, itemId: item.id, unitId: unit.id };
           const apCost = getModifiedAPCost(state, queries, candidate, 1);
           if (ap >= apCost) actions.push(candidate);
         }

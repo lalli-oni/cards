@@ -89,7 +89,12 @@ export function dropEquippedItems(
   for (const item of cell.items) {
     if (item.equippedTo === unit.id) {
       item.equippedTo = undefined;
-      emit({ type: "item_dropped", itemId: item.id, row, col });
+      emit({
+        type: "item_dropped",
+        itemId: item.id,
+        position: { type: "grid", row, col },
+        cause: "death",
+      });
     }
   }
 }

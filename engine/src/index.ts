@@ -44,6 +44,7 @@ export type {
   Action,
   ActionDef,
   ActionForState,
+  BoardPosition,
   Card,
   CardType,
   CombatPairOutcome,

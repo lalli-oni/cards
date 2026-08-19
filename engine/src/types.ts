@@ -59,6 +59,14 @@ export interface GridPosition {
   col: number;
 }
 
+/**
+ * A place on the board where units/items can be in play.
+ * When #59 lands (HQ on grid), this collapses to just { row, col }.
+ */
+export type BoardPosition =
+  | { type: "hq"; playerId: string }
+  | { type: "grid"; row: number; col: number };
+
 /** Edge state for location cards. */
 export interface LocationEdges {
   n: boolean; // true = open, false = blocked
@@ -692,7 +700,14 @@ export type MainAction =
     }
   | { type: "move"; playerId: string; unitId: string; row: number; col: number }
   | { type: "play_event"; playerId: string; cardId: string; targetId?: string }
+  /** Attach a loose item to a co-located unit. */
   | { type: "equip"; playerId: string; itemId: string; unitId: string }
+  /** Detach an item, leaving it where its bearer stands. No unit argument —
+   *  the separate variants keep every field required, and let cards discount
+   *  or trigger on one mode without inspecting field presence. */
+  | { type: "unequip"; playerId: string; itemId: string }
+  /** Move an item from its current bearer to another co-located unit. */
+  | { type: "transfer"; playerId: string; itemId: string; unitId: string }
   | { type: "destroy"; playerId: string; cardId: string }
   | {
       type: "raze";
@@ -889,7 +904,16 @@ export type GameEvent =
       targetId?: string;
     }
   | { type: "item_equipped"; playerId: string; itemId: string; unitId: string }
-  | { type: "item_dropped"; itemId: string; row: number; col: number }
+  | {
+      type: "item_dropped";
+      itemId: string;
+      position: BoardPosition;
+      /** Why the item came loose. `death` is the bearer being killed;
+       *  `unequip` is the owner paying AP to put it down. Both leave the item
+       *  in the same state, so a listener that only wants one must check this
+       *  — `EffectListener.on` matches a single event type. */
+      cause: "death" | "unequip";
+    }
   | { type: "location_placed"; row: number; col: number; cardId: string }
   | { type: "location_razed"; row: number; col: number; cardId: string }
   | {

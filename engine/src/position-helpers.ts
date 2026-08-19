@@ -1,12 +1,8 @@
-import type { Grid, ItemCard, PlayerState, UnitCard } from "./types";
+import type { BoardPosition, Grid, ItemCard, PlayerState, UnitCard } from "./types";
 
-/**
- * A place on the board where units/items can be in play.
- * When #59 lands (HQ on grid), this collapses to just { row, col }.
- */
-export type BoardPosition =
-  | { type: "hq"; playerId: string }
-  | { type: "grid"; row: number; col: number };
+// Defined in types.ts because GameEvent carries one; re-exported here so the
+// position helpers stay the obvious import site for it.
+export type { BoardPosition };
 
 /** True if two positions refer to the same place. */
 export function samePosition(a: BoardPosition, b: BoardPosition): boolean {

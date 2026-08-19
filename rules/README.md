@@ -164,7 +164,9 @@ Each player has [var:action_points_per_turn:3] **action points (AP)** per turn. 
 | Enter | 1 | Move a unit from HQ to any perimeter location on the grid. The location's edge facing the grid boundary must be open (the boundary is treated as blocked). |
 | Move | 1 | Move a unit to an orthogonally adjacent location (or from an edge location back to HQ — edge facing boundary must be open). Both facing edges must be open (see Location borders). |
 | Play Event | 1 | Play an event card from hand. Instants resolve immediately; passives enter play; traps go face-down to your active trap area. |
-| Equip | 1 | Manage items on units: attach, swap between units, or unequip (leave at location). Units and items must be at the same place (HQ or grid location). Items must be deployed to HQ before equipping — not directly from hand. |
+| Equip | 1 | Attach an item to one of your units at the same place (HQ or grid location). Items must be deployed to HQ before equipping — not directly from hand. |
+| Unequip | 1 | Detach an item from one of your units, leaving it where the unit stands. See [Items](#items). |
+| Transfer | 1 | Move an item from one of your units to another of your units at the same place. |
 | Destroy | 1 | Remove a card from your hand from the game permanently. |
 | Attempt Mission | 1 | Initiate a mission attempt at a location where you have at least one unit. All friendly units at the location contribute to requirement checks. Dilemmas are resolved one at a time (top first). If all dilemmas are overcome, mission requirements are checked — if met, mission completes. See Missions for details. |
 | Attack | 1 | Initiate combat at a location where you have at least one unit and an opponent has at least one unit. See Combat for details. |
@@ -304,7 +306,7 @@ Actions: Units can have various actions that players can activate.
     controller for all purposes (actions, mission attempts, stat
     checks, etc.).
   - The controller may use the controlled unit's actions, move it,
-    and manage its equipment (equip, unequip, swap).
+    and manage its items (Equip, Unequip, Transfer).
   - **Leaving the board**: Any effect that would move a controlled
     unit off the board instead returns the unit to its **owner's HQ**.
     Control ends immediately. Equipped items are dropped at the unit's
@@ -405,12 +407,32 @@ Dilemmas are revealed and resolved during the **Attempt Mission**
 action. See Missions for the full resolution sequence.
 
 ### Items
-Items are equipped to units via the Equip action. Unequipped items sit
-at a location and can be picked up by any player's unit there. Items
-end up at locations when unequipped via Equip, or dropped by a killed
-unit.
+Items are attached to units with the **Equip** action, detached and left
+behind with **Unequip**, and moved between units with **Transfer**. All
+three require the unit and the item to be at the same place (HQ or grid
+location).
 
-#### Equipment slots
+An item is either **equipped** or **stored**, and a card may print a
+different effect for each state:
+
+- **Equipped** — attached to a unit. The item's equip effect applies.
+- **Stored** — unattached at a location. The item's stored effect
+  applies, and any player's unit at that location may take it with the
+  Equip action.
+
+An item becomes stored when unequipped, or when its bearer is killed. A
+stored item is exposed — an opponent's unit at that location can take
+it — so leaving one behind is a real cost weighed against its stored
+effect.
+
+Items deployed to HQ start unattached, waiting to be equipped or
+carried out to the grid.
+
+#### Item slots
+[design: Forward-looking — no item card prints a slot and the engine
+enforces no capacity, so a unit can currently carry any number of items.
+Whether a carry constraint is wanted at all is being decided in #273.]
+
 Each item occupies a slot on the unit. A unit has the following slots:
 
 | Slot | Capacity |
@@ -430,11 +452,18 @@ Each item has one type.
 
 | Type | Description |
 |------|-------------|
-| Weapon | Offensive equipment (sword, rifle, bow) |
+| Weapon | Offensive gear (sword, rifle, bow) |
 | Armor | Protective wearables (helmet, vest, boots) |
 | Tool | Utility items (toolkit, lockpick, binoculars) |
-| Vehicle | Transport (helicopter, horse, car) |
-| Accessory | Miscellaneous (crown, goggles, compass) |
+| Artifact | Objects of knowledge or power (scroll, relic, stone) |
+| Banner | Standards that affect a whole location |
+| Regalia | Symbols of office and status (crown, jewel) |
+
+[design: Weapon, Armor and Tool are governed but unused — no card
+carries them yet. Vehicle and Accessory were dropped: they are not in
+the governed vocabulary, so the build rejects any card using them.
+Whether to promote a vehicle- or accessory-like type is tracked on #45,
+alongside the policy discounts that would depend on it.]
 
 ### Events
 Cards that produce a wide range of effects. Events are part of the
@@ -533,9 +562,9 @@ takes −1 to all stats in a contest (including combat).
 | Berserker | Triggered | When this unit wins combat, it kills the loser and is injured. (An already-injured Berserker is therefore killed by its own injury — see [Unit status](#unit-status).) |
 | Patron | Static | While in play, cards you buy or deploy that share an attribute with this unit cost X less gold. Written `Patron:X`. |
 | Loot | Triggered | When this unit kills an enemy in combat, draw a card. |
-| Squire | Static | Your Equip actions cost X less AP (default 1). Written `Squire` or `Squire:X`. |
+| Squire | Static | Your Equip, Unequip and Transfer actions cost X less AP (default 1). Written `Squire` or `Squire:X`. |
 
-#### Equipment keywords
+#### Item keywords
 | Keyword | Timing | Definition |
 |---------|--------|------------|
 | Flying | Static | Equipped unit ignores blocked edges when moving. |

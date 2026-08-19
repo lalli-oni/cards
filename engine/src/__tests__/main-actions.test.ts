@@ -3,7 +3,7 @@ import { produce } from "immer";
 import { applyAction } from "../apply-action";
 import { rebuildListeners } from "../listeners/rebuild";
 import { getModifiedStat } from "../listeners/query";
-import type { GameEvent, MainAction, MainGameState, UnitCard } from "../types";
+import type { GameEvent, ItemCard, MainAction, MainGameState, UnitCard } from "../types";
 import { getValidActions } from "../valid-actions";
 import {
   createTestGame,
@@ -667,6 +667,203 @@ describe("equip", () => {
 
     expect(() =>
       applyAction(state, { type: "equip", playerId: ACTIVE, itemId: item.id, unitId: unit.id }),
+    ).toThrow("not co-located");
+  });
+
+  it("rejects equipping an item that is already borne — that is transfer", () => {
+    // The split exists so each action states its own precondition. Routing a
+    // re-attach through equip used to silently work (handleEquip cleared
+    // equippedTo first); now it is rejected so the two cases stay distinct for
+    // anything keying off action.type.
+    const bearer = makeUnit({ ownerId: ACTIVE });
+    const other = makeUnit({ ownerId: ACTIVE });
+    const item = makeItem({ ownerId: ACTIVE, equippedTo: bearer.id });
+    const state = gameWith((d) => {
+      d.players[ACTIVE_IDX].hq.push(bearer, other, item);
+    });
+
+    expect(() =>
+      applyAction(state, { type: "equip", playerId: ACTIVE, itemId: item.id, unitId: other.id }),
+    ).toThrow("already equipped");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// unequip
+// ---------------------------------------------------------------------------
+
+describe("unequip", () => {
+  it("detaches an item on the grid and leaves it in the cell", () => {
+    const bearer = makeUnit({ ownerId: ACTIVE });
+    const item = makeItem({ ownerId: ACTIVE, equippedTo: bearer.id });
+    const state = gameWith((d) => {
+      d.grid[1][2].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[1][2].units.push(bearer);
+      d.grid[1][2].items.push(item);
+    });
+
+    const { state: next, events } = applyAction(state, {
+      type: "unequip", playerId: ACTIVE, itemId: item.id,
+    });
+    const ns = next as MainGameState;
+    const dropped = ns.grid[1][2].items.find((i) => i.id === item.id);
+
+    // The card does not move — only the attachment goes away.
+    expect(dropped).toBeDefined();
+    expect(dropped?.equippedTo).toBeUndefined();
+    expect(ns.grid[1][2].units.some((u) => u.id === bearer.id)).toBe(true);
+
+    const drop = events.find((e) => e.type === "item_dropped");
+    expect(drop).toEqual({
+      type: "item_dropped",
+      itemId: item.id,
+      position: { type: "grid", row: 1, col: 2 },
+      cause: "unequip",
+    });
+  });
+
+  it("detaches an item at HQ", () => {
+    // The case that had no event shape before this change: item_dropped
+    // carried mandatory row/col, and HQ has no grid cell to name. Pins that a
+    // detach at HQ is expressible at all.
+    const bearer = makeUnit({ ownerId: ACTIVE });
+    const item = makeItem({ ownerId: ACTIVE, equippedTo: bearer.id });
+    const state = gameWith((d) => {
+      d.players[ACTIVE_IDX].hq.push(bearer, item);
+    });
+
+    const { state: next, events } = applyAction(state, {
+      type: "unequip", playerId: ACTIVE, itemId: item.id,
+    });
+    const ns = next as MainGameState;
+    const dropped = ns.players[ACTIVE_IDX].hq.find((c) => c.id === item.id) as ItemCard;
+
+    expect(dropped.equippedTo).toBeUndefined();
+    expect(events.find((e) => e.type === "item_dropped")).toEqual({
+      type: "item_dropped",
+      itemId: item.id,
+      position: { type: "hq", playerId: ACTIVE },
+      cause: "unequip",
+    });
+  });
+
+  it("rejects unequipping a loose item", () => {
+    const item = makeItem({ ownerId: ACTIVE });
+    const state = gameWith((d) => {
+      d.players[ACTIVE_IDX].hq.push(item);
+    });
+
+    expect(() =>
+      applyAction(state, { type: "unequip", playerId: ACTIVE, itemId: item.id }),
+    ).toThrow("not equipped");
+  });
+
+  it("costs 1 AP, discounted by Squire", () => {
+    // Squire covers all three item actions (rules/README.md glossary). The
+    // transfer discount is pinned in keyword-effects.test.ts; this covers the
+    // action that did not exist when Squire was written.
+    const build = (squire: boolean): MainGameState => gameWith((d) => {
+      const bearer = makeUnit({ ownerId: ACTIVE, id: "bearer" });
+      const item = makeItem({ ownerId: ACTIVE, id: "item", equippedTo: "bearer" });
+      d.players[ACTIVE_IDX].hq.push(bearer, item);
+      if (squire) d.players[ACTIVE_IDX].hq.push(makeUnit({ ownerId: ACTIVE, keywords: ["Squire"] }));
+    });
+
+    const plain = applyAction(build(false), { type: "unequip", playerId: ACTIVE, itemId: "item" });
+    const discounted = applyAction(build(true), { type: "unequip", playerId: ACTIVE, itemId: "item" });
+
+    expect((plain.state as MainGameState).turn.actionPointsRemaining).toBe(2);
+    // Squire's default magnitude is 1, taking this action to 0 AP.
+    expect((discounted.state as MainGameState).turn.actionPointsRemaining).toBe(3);
+  });
+
+  it("switches a War Banner from its equipped effect to its stored effect", () => {
+    // The reason this action exists. War Banner gives +1 strength to friendly
+    // units at its location while borne, and +2 to attackers in a contest
+    // there while stored (listeners/effects.ts). Before unequip existed the
+    // stored half was unreachable except by the bearer being killed.
+    const bearer = makeUnit({ ownerId: ACTIVE, strength: 5 });
+    const banner = makeItem({
+      ownerId: ACTIVE, definitionId: "war-banner", equippedTo: bearer.id,
+    });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][0].units.push(bearer);
+      d.grid[0][0].items.push(banner);
+    });
+    const at = { row: 0, col: 0 };
+    const attacking = { contest: { role: "attacker" as const, row: 0, col: 0 } };
+
+    const before = rebuildListeners(state).queries;
+    expect(getModifiedStat(state, before, bearer, "strength", at)).toBe(6);
+    // Stored half is inert while the banner is borne.
+    expect(getModifiedStat(state, before, bearer, "strength", at, attacking)).toBe(6);
+
+    const { state: next } = applyAction(state, {
+      type: "unequip", playerId: ACTIVE, itemId: banner.id,
+    });
+    const ns = next as MainGameState;
+    const after = rebuildListeners(ns).queries;
+    const stillThere = ns.grid[0][0].units.find((u) => u.id === bearer.id) as UnitCard;
+
+    // Equipped half goes silent, stored half comes live.
+    expect(getModifiedStat(ns, after, stillThere, "strength", at)).toBe(5);
+    expect(getModifiedStat(ns, after, stillThere, "strength", at, attacking)).toBe(7);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// transfer
+// ---------------------------------------------------------------------------
+
+describe("transfer", () => {
+  it("moves an item between two co-located units without dropping it", () => {
+    const from = makeUnit({ ownerId: ACTIVE });
+    const to = makeUnit({ ownerId: ACTIVE });
+    const item = makeItem({ ownerId: ACTIVE, equippedTo: from.id });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][0].units.push(from, to);
+      d.grid[0][0].items.push(item);
+    });
+
+    const { state: next, events } = applyAction(state, {
+      type: "transfer", playerId: ACTIVE, itemId: item.id, unitId: to.id,
+    });
+    const ns = next as MainGameState;
+
+    expect(ns.grid[0][0].items.find((i) => i.id === item.id)?.equippedTo).toBe(to.id);
+    expect(events.some((e) => e.type === "item_equipped")).toBe(true);
+    // The item never passes through a loose state, so nothing was dropped.
+    expect(events.some((e) => e.type === "item_dropped")).toBe(false);
+  });
+
+  it("rejects transferring a loose item — that is equip", () => {
+    const unit = makeUnit({ ownerId: ACTIVE });
+    const item = makeItem({ ownerId: ACTIVE });
+    const state = gameWith((d) => {
+      d.players[ACTIVE_IDX].hq.push(unit, item);
+    });
+
+    expect(() =>
+      applyAction(state, { type: "transfer", playerId: ACTIVE, itemId: item.id, unitId: unit.id }),
+    ).toThrow("not equipped");
+  });
+
+  it("rejects transferring to a unit elsewhere", () => {
+    // Co-location is enforced for transfer exactly as for equip.
+    const bearer = makeUnit({ ownerId: ACTIVE });
+    const distant = makeUnit({ ownerId: ACTIVE });
+    const item = makeItem({ ownerId: ACTIVE, equippedTo: bearer.id });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][0].units.push(bearer);
+      d.grid[0][0].items.push(item);
+      d.players[ACTIVE_IDX].hq.push(distant);
+    });
+
+    expect(() =>
+      applyAction(state, { type: "transfer", playerId: ACTIVE, itemId: item.id, unitId: distant.id }),
     ).toThrow("not co-located");
   });
 });
@@ -2408,7 +2605,14 @@ describe("combat details", () => {
     });
     const ns = next as MainGameState;
 
-    expect(events.some((e) => e.type === "item_dropped")).toBe(true);
+    // Pin the payload, not just the type — the kill path is the other emitter
+    // of item_dropped, so a shape change here has to stay visible.
+    expect(events.find((e) => e.type === "item_dropped")).toEqual({
+      type: "item_dropped",
+      itemId: sword.id,
+      position: { type: "grid", row: 0, col: 0 },
+      cause: "death",
+    });
     // Item is unequipped and remains at location
     const item = ns.grid[0][0].items.find((i) => i.id === sword.id);
     expect(item).toBeDefined();

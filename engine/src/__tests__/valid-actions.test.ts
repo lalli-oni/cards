@@ -11,6 +11,7 @@ import {
   makeLocation,
   makePassiveEvent,
   makeTrapEvent,
+  makeItem,
   makeUnit,
 } from "./helpers";
 
@@ -309,5 +310,75 @@ describe("play_event enumeration", () => {
     const candidates = playEventActions(state).filter((a) => a.cardId === instant.id);
     expect(candidates).toHaveLength(1);
     expect(candidates[0].targetId).toBeUndefined();
+  });
+});
+
+describe("item action enumeration", () => {
+  // The three actions partition the possibilities: a loose item offers equip
+  // to each co-located unit, a borne item offers unequip once plus transfer to
+  // each *other* unit there. No action in the list carries a field that means
+  // nothing, which is the point of splitting them.
+  const gameAt00 = (fn: (d: MainGameState, playerId: string) => void): MainGameState =>
+    produce(createTestGame(), (d: MainGameState) => {
+      d.grid[0][0].location = makeLocation({ ownerId: d.turn.activePlayerId });
+      fn(d, d.turn.activePlayerId);
+    });
+
+  it("offers equip to every co-located unit for a loose item, and no unequip", () => {
+    let itemId = "";
+    const state = gameAt00((d, playerId) => {
+      const item = makeItem({ ownerId: playerId });
+      itemId = item.id;
+      d.grid[0][0].units.push(makeUnit({ ownerId: playerId }), makeUnit({ ownerId: playerId }));
+      d.grid[0][0].items.push(item);
+    });
+
+    const actions = getValidActions(state, state.turn.activePlayerId)
+      .filter((a) => "itemId" in a && a.itemId === itemId);
+
+    expect(actions.filter((a) => a.type === "equip")).toHaveLength(2);
+    expect(actions.some((a) => a.type === "unequip")).toBe(false);
+    expect(actions.some((a) => a.type === "transfer")).toBe(false);
+  });
+
+  it("offers one unequip and a transfer per other unit for a borne item, and no equip", () => {
+    let itemId = "";
+    let bearerId = "";
+    const state = gameAt00((d, playerId) => {
+      const bearer = makeUnit({ ownerId: playerId });
+      const item = makeItem({ ownerId: playerId, equippedTo: bearer.id });
+      itemId = item.id;
+      bearerId = bearer.id;
+      d.grid[0][0].units.push(bearer, makeUnit({ ownerId: playerId }), makeUnit({ ownerId: playerId }));
+      d.grid[0][0].items.push(item);
+    });
+
+    const actions = getValidActions(state, state.turn.activePlayerId)
+      .filter((a) => "itemId" in a && a.itemId === itemId);
+
+    expect(actions.filter((a) => a.type === "unequip")).toHaveLength(1);
+    // Two other units at the cell; the bearer itself is never a transfer target.
+    const transfers = actions.filter((a) => a.type === "transfer");
+    expect(transfers).toHaveLength(2);
+    expect(transfers.some((a) => "unitId" in a && a.unitId === bearerId)).toBe(false);
+    expect(actions.some((a) => a.type === "equip")).toBe(false);
+  });
+
+  it("offers unequip for a borne item even with no other unit to transfer to", () => {
+    // The action that has no unit dimension at all — it must not depend on a
+    // second unit being present, which the old equip-only enumeration did.
+    let itemId = "";
+    const state = gameAt00((d, playerId) => {
+      const bearer = makeUnit({ ownerId: playerId });
+      const item = makeItem({ ownerId: playerId, equippedTo: bearer.id });
+      itemId = item.id;
+      d.grid[0][0].units.push(bearer);
+      d.grid[0][0].items.push(item);
+    });
+
+    const actions = getValidActions(state, state.turn.activePlayerId)
+      .filter((a) => "itemId" in a && a.itemId === itemId);
+
+    expect(actions.map((a) => a.type)).toEqual(["unequip"]);
   });
 });

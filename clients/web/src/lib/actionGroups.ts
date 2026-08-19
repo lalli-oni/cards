@@ -16,6 +16,8 @@ const LABELS: Record<string, string> = {
   attack: "Attack",
   play_event: "Play Event",
   equip: "Equip",
+  unequip: "Unequip",
+  transfer: "Transfer",
   destroy: "Destroy",
   raze: "Raze",
   attempt_mission: "Attempt Mission",
@@ -84,6 +86,10 @@ export function describeAction(
       return `Play ${idOrName(action.cardId, n)}${action.targetId ? ` on ${idOrName(action.targetId, n)}` : ""}`;
     case "equip":
       return `Equip ${idOrName(action.itemId, n)} on ${idOrName(action.unitId, n)}`;
+    case "unequip":
+      return `Unequip ${idOrName(action.itemId, n)}`;
+    case "transfer":
+      return `Transfer ${idOrName(action.itemId, n)} to ${idOrName(action.unitId, n)}`;
     case "destroy":
       return `Destroy ${idOrName(action.cardId, n)}`;
     case "raze":

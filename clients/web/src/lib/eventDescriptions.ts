@@ -124,7 +124,9 @@ export function describeEvent(event: GameEvent, r?: NameResolvers): string {
     case "item_equipped":
       return `${p(event.playerId, r)} equipped ${c(event.itemId, r)} on ${c(event.unitId, r)}`;
     case "item_dropped":
-      return `${c(event.itemId, r)} dropped at ${cell(event.row, event.col, r)}`;
+      return event.position.type === "grid"
+        ? `${c(event.itemId, r)} dropped at ${cell(event.position.row, event.position.col, r)}`
+        : `${c(event.itemId, r)} dropped at ${p(event.position.playerId, r)}'s HQ`;
     case "location_placed":
       return `${c(event.cardId, r)} placed at ${cell(event.row, event.col, r)}`;
     case "location_razed":

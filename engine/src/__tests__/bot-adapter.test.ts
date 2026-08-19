@@ -3,9 +3,13 @@ import { produce } from "immer";
 import { BotAdapter } from "../bot-adapter";
 import type { Action, VisibleState } from "../types";
 import { getVisibleState } from "../visible-state";
+import { applyAction } from "../apply-action";
+import { getValidActions } from "../valid-actions";
+import type { MainAction, MainGameState } from "../types";
 import {
   createTestGame,
   expectRejects,
+  makeItem,
   makeLocation,
   makeUnit,
 } from "./helpers";
@@ -201,5 +205,64 @@ describe("BotAdapter greedy strategy", () => {
     }
 
     expect(choices1).toEqual(choices2);
+  });
+});
+
+describe("greedy strategy terminates on free item actions", () => {
+  // The greedy strategy returns the first non-empty GREEDY_PRIORITY tier and
+  // never falls through to `pass` while that tier has members. A `Squire`
+  // discounts item actions to 0 AP, so a tier that can keep re-offering an item
+  // action never drains and the game makes no progress. `run`'s
+  // DEFAULT_MAX_ACTIONS budget eventually aborts it, but that is a circuit
+  // breaker, not a diagnosis — it burns 10k actions and throws naming only the
+  // phase, round and active player, so the livelock has to be caught here.
+  //
+  // This held before the equip/unequip/transfer split: `equip` was offered for
+  // every (item, unit) pair where the unit wasn't the current bearer, so a
+  // borne item kept offering equip to the *other* co-located unit and the tier
+  // was self-sustaining. Two things close it now — `equip` only applies to a
+  // loose item, so each one drains the tier; and re-attaching is `transfer`,
+  // which is deliberately absent from GREEDY_PRIORITY.
+  //
+  // Adding "unequip" or "transfer" to GREEDY_PRIORITY would reopen it: an
+  // unequip/equip pair oscillates the same way. This test is the guard.
+  it("reaches pass with a Squire making every item action free", async () => {
+    // Two co-located units, one item, a Squire, and nothing else available:
+    // no hand, gold, decks or market, one location on an otherwise empty grid,
+    // and its boundary edges closed so even the retreat-to-HQ move is gone.
+    let state = produce(createTestGame(), (d: MainGameState) => {
+      const pid = d.turn.activePlayerId;
+      for (const pl of d.players) {
+        pl.hand = []; pl.gold = 0;
+        pl.mainDeck = []; pl.discardPile = []; pl.marketDeck = []; pl.prospectDeck = [];
+      }
+      d.market = [];
+      for (const row of d.grid) {
+        for (const cell of row) { cell.location = null; cell.units = []; cell.items = []; }
+      }
+      d.grid[0][0].location = makeLocation({
+        ownerId: pid, edges: { n: false, e: true, s: true, w: false },
+      });
+      d.grid[0][0].units.push(
+        makeUnit({ ownerId: pid }),
+        makeUnit({ ownerId: pid }),
+        makeUnit({ ownerId: pid, keywords: ["Squire"] }),
+      );
+      d.grid[0][0].items.push(makeItem({ ownerId: pid }));
+    }) as MainGameState;
+
+    const pid: string = state.turn.activePlayerId;
+    const bot = new BotAdapter(42, "greedy");
+
+    // Generous bound: the point is that it terminates at all, not how fast.
+    for (let i = 0; i < 50; i++) {
+      const actions = getValidActions(state, pid);
+      const chosen = await bot.chooseAction(getVisibleState(state, pid), actions);
+      if (chosen.type === "pass") return;
+      // The fixture never leaves the main phase, so anything the bot can pick
+      // here is a MainAction — chooseAction's return type spans every phase.
+      state = applyAction(state, chosen as MainAction).state as MainGameState;
+    }
+    throw new Error("greedy strategy never offered pass — item action tier did not drain");
   });
 });

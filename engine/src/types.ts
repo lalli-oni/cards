@@ -700,11 +700,14 @@ export type MainAction =
     }
   | { type: "move"; playerId: string; unitId: string; row: number; col: number }
   | { type: "play_event"; playerId: string; cardId: string; targetId?: string }
+  /* The three item actions are separate variants rather than one variant with
+   * an optional `unitId`, so that every field stays required. A single variant
+   * would make equip and transfer structurally identical, and an APQueryContext
+   * modifier sees only `{ action, playerId }` — so a card discounting one mode
+   * could not tell them apart at all. See `ItemAction` below. */
   /** Attach a loose item to a co-located unit. */
   | { type: "equip"; playerId: string; itemId: string; unitId: string }
-  /** Detach an item, leaving it where its bearer stands. No unit argument —
-   *  the separate variants keep every field required, and let cards discount
-   *  or trigger on one mode without inspecting field presence. */
+  /** Detach an item, leaving it where its bearer stands. */
   | { type: "unequip"; playerId: string; itemId: string }
   /** Move an item from its current bearer to another co-located unit. */
   | { type: "transfer"; playerId: string; itemId: string; unitId: string }
@@ -730,6 +733,19 @@ export type MainAction =
   | ResolvePickAction
   | DismissViewAction
   | ResolveCombatRoundAction;
+
+/**
+ * The three actions that move an item around. Declared once so the set has a
+ * single home: Squire's discount, the shared 1-AP cost helper and the
+ * enumeration all key off it, and adding a fourth mode (`disarm`) touches only
+ * this declaration.
+ */
+export type ItemAction = Extract<MainAction, { type: "equip" | "unequip" | "transfer" }>;
+
+/** Narrows any action to the item-action set. */
+export function isItemAction(action: MainAction): action is ItemAction {
+  return action.type === "equip" || action.type === "unequip" || action.type === "transfer";
+}
 
 /**
  * Submitted by the viewer to dismiss a pending `viewPrompt`. The view is
@@ -909,9 +925,9 @@ export type GameEvent =
       itemId: string;
       position: BoardPosition;
       /** Why the item came loose. `death` is the bearer being killed;
-       *  `unequip` is the owner paying AP to put it down. Both leave the item
-       *  in the same state, so a listener that only wants one must check this
-       *  — `EffectListener.on` matches a single event type. */
+       *  `unequip` is its controller spending an action on it. Both leave the
+       *  item in the same state, so a listener that only wants one must check
+       *  this — `EffectListener.on` matches a single event type. */
       cause: "death" | "unequip";
     }
   | { type: "location_placed"; row: number; col: number; cardId: string }

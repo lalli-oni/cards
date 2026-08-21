@@ -507,8 +507,29 @@ describe("Squire", () => {
       .some((a) => a.type === "equip")).toBe(false);
   });
 
+  it("getValidActions offers unequip at AP 0 only because Squire made it free", () => {
+    // unequip is enumerated behind its OWN `ap >= cost` gate, not the shared
+    // one the equip/transfer candidates use — deleting that line leaves every
+    // other engine test green. Both halves are pinned for the same reason as
+    // the equip case above.
+    const build = (squire: boolean): MainGameState => gameWith((d, p) => {
+      const bearer = makeUnit({ ownerId: p.active });
+      const item = makeItem({ ownerId: p.active, equippedTo: bearer.id });
+      d.players[p.activeIdx].hq.push(bearer, item);
+      if (squire) d.players[p.activeIdx].hq.push(makeUnit({ ownerId: p.active, keywords: ["Squire"] }));
+      d.turn.actionPointsRemaining = 0;
+    });
+    const withSquireUnequip = build(true);
+    const withoutSquireUnequip = build(false);
+
+    expect(getValidActions(withSquireUnequip, getPlayers(withSquireUnequip).active)
+      .some((a) => a.type === "unequip")).toBe(true);
+    expect(getValidActions(withoutSquireUnequip, getPlayers(withoutSquireUnequip).active)
+      .some((a) => a.type === "unequip")).toBe(false);
+  });
+
   it("discounts transferring an item between units", () => {
-    // Squire covers all three item actions (rules/README.md Actions).
+    // Squire covers all three item actions (rules/README.md → Unit keywords).
     // Transfer is the one with the most moving parts — the item detaches and
     // re-attaches in a single action — so it is the one worth pinning here;
     // the unequip discount is covered in main-actions.test.ts alongside the

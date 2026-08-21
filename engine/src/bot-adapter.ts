@@ -1,6 +1,6 @@
 import { mersenne, uniformIntDistribution, type RandomGenerator } from "./rng";
 import { fillAction } from "./action-helpers";
-import type { Action, Grid, PlayerAdapter, VisibleState } from "./types";
+import type { Action, Grid, MainAction, PlayerAdapter, VisibleState } from "./types";
 
 export type BotStrategy = "random" | "greedy";
 
@@ -65,7 +65,7 @@ export class BotAdapter implements PlayerAdapter {
 }
 
 /** Action types in priority order (excluding attempt_mission and move, handled separately). */
-const GREEDY_PRIORITY: readonly string[] = [
+const GREEDY_PRIORITY: readonly MainAction["type"][] = [
   "enter",
   "deploy",
   "play_event",

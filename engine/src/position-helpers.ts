@@ -1,9 +1,5 @@
 import type { BoardPosition, Grid, ItemCard, PlayerState, UnitCard } from "./types";
 
-// Defined in types.ts because GameEvent carries one; re-exported here so the
-// position helpers stay the obvious import site for it.
-export type { BoardPosition };
-
 /** True if two positions refer to the same place. */
 export function samePosition(a: BoardPosition, b: BoardPosition): boolean {
   if (a.type !== b.type) return false;

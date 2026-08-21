@@ -3,15 +3,15 @@ import { produce } from "immer";
 import type { Action, EndedGameState, MainGameState } from "../types";
 import { getActivePlayerId } from "../types";
 import { getValidActions, inferActivateTargets } from "../valid-actions";
-import type { BoardPosition } from "../position-helpers";
+import type { BoardPosition } from "../types";
 import {
   createSeedingGame,
   createTestGame,
   makeInstantEvent,
+  makeItem,
   makeLocation,
   makePassiveEvent,
   makeTrapEvent,
-  makeItem,
   makeUnit,
 } from "./helpers";
 
@@ -325,7 +325,7 @@ describe("item action enumeration", () => {
     });
 
   it("offers equip to every co-located unit for a loose item, and no unequip", () => {
-    let itemId = "";
+    let itemId: string = "";
     const state = gameAt00((d, playerId) => {
       const item = makeItem({ ownerId: playerId });
       itemId = item.id;
@@ -342,8 +342,8 @@ describe("item action enumeration", () => {
   });
 
   it("offers one unequip and a transfer per other unit for a borne item, and no equip", () => {
-    let itemId = "";
-    let bearerId = "";
+    let itemId: string = "";
+    let bearerId: string = "";
     const state = gameAt00((d, playerId) => {
       const bearer = makeUnit({ ownerId: playerId });
       const item = makeItem({ ownerId: playerId, equippedTo: bearer.id });
@@ -357,7 +357,6 @@ describe("item action enumeration", () => {
       .filter((a) => "itemId" in a && a.itemId === itemId);
 
     expect(actions.filter((a) => a.type === "unequip")).toHaveLength(1);
-    // Two other units at the cell; the bearer itself is never a transfer target.
     const transfers = actions.filter((a) => a.type === "transfer");
     expect(transfers).toHaveLength(2);
     expect(transfers.some((a) => "unitId" in a && a.unitId === bearerId)).toBe(false);
@@ -367,7 +366,7 @@ describe("item action enumeration", () => {
   it("offers unequip for a borne item even with no other unit to transfer to", () => {
     // The action that has no unit dimension at all — it must not depend on a
     // second unit being present, which the old equip-only enumeration did.
-    let itemId = "";
+    let itemId: string = "";
     const state = gameAt00((d, playerId) => {
       const bearer = makeUnit({ ownerId: playerId });
       const item = makeItem({ ownerId: playerId, equippedTo: bearer.id });

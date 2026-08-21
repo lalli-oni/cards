@@ -3,6 +3,71 @@ import { getVisibleEvent, type GameEvent } from "cards-engine";
 import { categorizeEvent, describeEvent } from "../eventDescriptions";
 
 describe("describeEvent", () => {
+  describe("item_dropped", () => {
+    // The event carries a BoardPosition discriminated union — this is the only
+    // place in the client that consumes one — plus a `cause` that separates a
+    // kill-drop from a deliberate Unequip. Both branches of each are pinned.
+
+    it("renders a grid drop through the cell resolver", () => {
+      const event: GameEvent = {
+        type: "item_dropped",
+        itemId: "item-3",
+        position: { type: "grid", row: 1, col: 2 },
+        cause: "death",
+      };
+
+      expect(describeEvent(event, {
+        card: (id) => (id === "item-3" ? "Excalibur" : id),
+        cell: (row, col) => (row === 1 && col === 2 ? "Camelot" : null),
+      })).toBe("Excalibur dropped at Camelot (1,2)");
+    });
+
+    it("renders an HQ drop by owner name — the path unequip newly made reachable", () => {
+      // Before unequip existed, item_dropped carried mandatory row/col and only
+      // ever fired on a bearer's death on the grid, so an HQ drop had no shape.
+      const event: GameEvent = {
+        type: "item_dropped",
+        itemId: "item-3",
+        position: { type: "hq", playerId: "p1" },
+        cause: "unequip",
+      };
+
+      expect(describeEvent(event, {
+        card: (id) => (id === "item-3" ? "Excalibur" : id),
+        player: (id) => (id === "p1" ? "Alice" : id),
+      })).toBe("Excalibur was left at Alice's HQ");
+    });
+
+    it("distinguishes a deliberate unequip from a kill-drop at the same place", () => {
+      // Both leave the item in an identical state, so `cause` is the only thing
+      // that can separate them for a reader of the log.
+      const at = { type: "grid", row: 0, col: 0 } as const;
+      const dropped = describeEvent(
+        { type: "item_dropped", itemId: "i", position: at, cause: "death" },
+      );
+      const left = describeEvent(
+        { type: "item_dropped", itemId: "i", position: at, cause: "unequip" },
+      );
+
+      expect(dropped).not.toBe(left);
+    });
+
+    it("does not throw on a pre-position save that still carries flat row/col", () => {
+      // restoreEventLogState only validates that `type` is a string, so an
+      // event persisted before the position/cause reshape reaches this renderer
+      // intact. It must degrade to a bare line, not crash the whole event log.
+      const legacy = {
+        type: "item_dropped",
+        itemId: "item-3",
+        row: 1,
+        col: 2,
+      } as unknown as GameEvent;
+
+      expect(() => describeEvent(legacy)).not.toThrow();
+      expect(describeEvent(legacy)).toContain("item-3");
+    });
+  });
+
   describe("trap_triggered", () => {
     it("renders cardName directly without consulting the card resolver", () => {
       const cardResolver = mock((id: string) => `SHOULD_NOT_BE_CALLED_FOR_${id}`);

@@ -164,9 +164,9 @@ Each player has [var:action_points_per_turn:3] **action points (AP)** per turn. 
 | Enter | 1 | Move a unit from HQ to any perimeter location on the grid. The location's edge facing the grid boundary must be open (the boundary is treated as blocked). |
 | Move | 1 | Move a unit to an orthogonally adjacent location (or from an edge location back to HQ — edge facing boundary must be open). Both facing edges must be open (see Location borders). |
 | Play Event | 1 | Play an event card from hand. Instants resolve immediately; passives enter play; traps go face-down to your active trap area. |
-| Equip | 1 | Attach an item to one of your units at the same place (HQ or grid location). Items must be deployed to HQ before equipping — not directly from hand. |
+| Equip | 1 | Attach an item to one of your units at the same place (HQ or grid location). Items must be deployed to HQ before equipping — not directly from hand. See [Items](#items). |
 | Unequip | 1 | Detach an item from one of your units, leaving it where the unit stands. See [Items](#items). |
-| Transfer | 1 | Move an item from one of your units to another of your units at the same place. |
+| Transfer | 1 | Move an item from one of your units to another of your units at the same place. See [Items](#items). |
 | Destroy | 1 | Remove a card from your hand from the game permanently. |
 | Attempt Mission | 1 | Initiate a mission attempt at a location where you have at least one unit. All friendly units at the location contribute to requirement checks. Dilemmas are resolved one at a time (top first). If all dilemmas are overcome, mission requirements are checked — if met, mission completes. See Missions for details. |
 | Attack | 1 | Initiate combat at a location where you have at least one unit and an opponent has at least one unit. See Combat for details. |
@@ -420,13 +420,20 @@ different effect for each state:
   applies, and any player's unit at that location may take it with the
   Equip action.
 
-An item becomes stored when unequipped, or when its bearer is killed. A
-stored item is exposed — an opponent's unit at that location can take
-it — so leaving one behind is a real cost weighed against its stored
-effect.
+An item becomes stored when unequipped at a location, or when its bearer
+is killed. A stored item is exposed — an opponent's unit at that location
+can take it — so leaving one behind is a real cost weighed against its
+stored effect.
 
-Items deployed to HQ start unattached, waiting to be equipped or
-carried out to the grid.
+[design: The engine does not yet offer an opponent's stored item for
+Equip — enumeration filters items by controller, and equipping does not
+transfer control. Until it does, Unequip carries no exposure risk and the
+tradeoff above is not live.]
+
+Items deployed to HQ start unattached; they reach the grid only by being
+equipped to a unit that moves out. An unattached item in HQ is neither
+equipped nor stored — "stored" requires a location, so a stored effect
+does not apply while the item sits in HQ.
 
 #### Item slots
 [design: Forward-looking — no item card prints a slot and the engine
@@ -448,7 +455,8 @@ Each item card prints which slot it occupies.
 
 #### Item types
 Items have a type used for targeting by other cards and abilities.
-Each item has one type.
+Each item has one type. The build enforces this vocabulary — see
+[`library/schema.md`](../library/schema.md).
 
 | Type | Description |
 |------|-------------|
@@ -460,8 +468,10 @@ Each item has one type.
 | Regalia | Symbols of office and status (crown, jewel) |
 
 [design: Weapon, Armor and Tool are governed but unused — no card
-carries them yet. Vehicle and Accessory were dropped: they are not in
-the governed vocabulary, so the build rejects any card using them.
+carries them yet. Vehicle and Accessory were dropped as item *types*
+(the Vehicle **slot** above is a different axis and is unaffected): they
+are not in the governed vocabulary, so the build rejects any card using
+them.
 Whether to promote a vehicle- or accessory-like type is tracked on #45,
 alongside the policy discounts that would depend on it.]
 

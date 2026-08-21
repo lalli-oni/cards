@@ -759,9 +759,9 @@ describe("unequip", () => {
   });
 
   it("costs 1 AP, discounted by Squire", () => {
-    // Squire covers all three item actions (rules/README.md glossary). The
-    // transfer discount is pinned in keyword-effects.test.ts; this covers the
-    // action that did not exist when Squire was written.
+    // Squire covers all three item actions (rules/README.md → Unit keywords).
+    // The transfer discount is pinned in keyword-effects.test.ts; this covers
+    // the action that did not exist when Squire was written.
     const build = (squire: boolean): MainGameState => gameWith((d) => {
       const bearer = makeUnit({ ownerId: ACTIVE, id: "bearer" });
       const item = makeItem({ ownerId: ACTIVE, id: "item", equippedTo: "bearer" });
@@ -769,12 +769,13 @@ describe("unequip", () => {
       if (squire) d.players[ACTIVE_IDX].hq.push(makeUnit({ ownerId: ACTIVE, keywords: ["Squire"] }));
     });
 
+    const apBefore: number = build(false).turn.actionPointsRemaining;
     const plain = applyAction(build(false), { type: "unequip", playerId: ACTIVE, itemId: "item" });
     const discounted = applyAction(build(true), { type: "unequip", playerId: ACTIVE, itemId: "item" });
 
-    expect((plain.state as MainGameState).turn.actionPointsRemaining).toBe(2);
+    expect((plain.state as MainGameState).turn.actionPointsRemaining).toBe(apBefore - 1);
     // Squire's default magnitude is 1, taking this action to 0 AP.
-    expect((discounted.state as MainGameState).turn.actionPointsRemaining).toBe(3);
+    expect((discounted.state as MainGameState).turn.actionPointsRemaining).toBe(apBefore);
   });
 
   it("switches a War Banner from its equipped effect to its stored effect", () => {
@@ -791,8 +792,9 @@ describe("unequip", () => {
       d.grid[0][0].units.push(bearer);
       d.grid[0][0].items.push(banner);
     });
-    const at = { row: 0, col: 0 };
-    const attacking = { contest: { role: "attacker" as const, row: 0, col: 0 } };
+    const at: { row: number; col: number } = { row: 0, col: 0 };
+    const attacking: { contest: { role: "attacker"; row: number; col: number } } =
+      { contest: { role: "attacker" as const, row: 0, col: 0 } };
 
     const before = rebuildListeners(state).queries;
     expect(getModifiedStat(state, before, bearer, "strength", at)).toBe(6);
@@ -865,6 +867,97 @@ describe("transfer", () => {
     expect(() =>
       applyAction(state, { type: "transfer", playerId: ACTIVE, itemId: item.id, unitId: distant.id }),
     ).toThrow("not co-located");
+  });
+
+  it("rejects transferring an item to the unit already bearing it", () => {
+    // Unreachable via getValidActions — the enumeration skips the bearer as a
+    // transfer target (pinned in valid-actions.test.ts). This is the only guard
+    // on the apply-side check if that enumeration ever changes.
+    const bearer = makeUnit({ ownerId: ACTIVE });
+    const item = makeItem({ ownerId: ACTIVE, equippedTo: bearer.id });
+    const state = gameWith((d) => {
+      d.players[ACTIVE_IDX].hq.push(bearer, item);
+    });
+
+    expect(() =>
+      applyAction(state, { type: "transfer", playerId: ACTIVE, itemId: item.id, unitId: bearer.id }),
+    ).toThrow("already equipped to unit");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Item actions — shared preconditions
+// ---------------------------------------------------------------------------
+
+describe("item actions — locate and control", () => {
+  // These guards live in the shared locateItemAction, so one test per throw
+  // covers equip, unequip and transfer alike.
+
+  it("rejects an item id that is on no board or HQ", () => {
+    const state = gameWith(() => {});
+
+    expect(() =>
+      applyAction(state, { type: "unequip", playerId: ACTIVE, itemId: "no-such-item" }),
+    ).toThrow("not found in HQ or on grid");
+  });
+
+  it("rejects a unit id that is on no board or HQ", () => {
+    const item = makeItem({ ownerId: ACTIVE });
+    const state = gameWith((d) => {
+      d.players[ACTIVE_IDX].hq.push(item);
+    });
+
+    expect(() =>
+      applyAction(state, { type: "equip", playerId: ACTIVE, itemId: item.id, unitId: "no-such-unit" }),
+    ).toThrow("not found in HQ or on grid");
+  });
+
+  it("rejects unequipping an item you do not control", () => {
+    // unequip names no unit, so before the control check any item anywhere —
+    // including one borne by an enemy unit across the grid — was a legal target
+    // for 1 AP. getValidActions never offered it, but the engine is the
+    // authority and clients submit actions directly.
+    const enemyBearer = makeUnit({ ownerId: OTHER });
+    const enemyItem = makeItem({ ownerId: OTHER, equippedTo: enemyBearer.id });
+    const state = gameWith((d) => {
+      d.grid[1][1].location = makeLocation({ ownerId: OTHER });
+      d.grid[1][1].units.push(enemyBearer);
+      d.grid[1][1].items.push(enemyItem);
+    });
+
+    expect(() =>
+      applyAction(state, { type: "unequip", playerId: ACTIVE, itemId: enemyItem.id }),
+    ).toThrow("not controlled by");
+  });
+
+  it("rejects transferring an item you do not control onto your own unit", () => {
+    // The steal case: co-location holds, so only the control check stops it.
+    const enemyBearer = makeUnit({ ownerId: OTHER });
+    const enemyItem = makeItem({ ownerId: OTHER, equippedTo: enemyBearer.id });
+    const mine = makeUnit({ ownerId: ACTIVE });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][0].units.push(enemyBearer, mine);
+      d.grid[0][0].items.push(enemyItem);
+    });
+
+    expect(() =>
+      applyAction(state, { type: "transfer", playerId: ACTIVE, itemId: enemyItem.id, unitId: mine.id }),
+    ).toThrow("not controlled by");
+  });
+
+  it("rejects equipping your item onto a unit you do not control", () => {
+    const enemyUnit = makeUnit({ ownerId: OTHER });
+    const item = makeItem({ ownerId: ACTIVE });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][0].units.push(enemyUnit);
+      d.grid[0][0].items.push(item);
+    });
+
+    expect(() =>
+      applyAction(state, { type: "equip", playerId: ACTIVE, itemId: item.id, unitId: enemyUnit.id }),
+    ).toThrow('Unit "' + enemyUnit.id + '" is not controlled by');
   });
 });
 
@@ -2747,7 +2840,12 @@ describe("combat details", () => {
     // Tie → attacker loses; already-injured loser is killed, not injured again.
     expect(pair.outcome).toBe("kill_attacker");
     expect(events.some((e) => e.type === "unit_killed")).toBe(true);
-    expect(events.some((e) => e.type === "item_dropped")).toBe(true);
+    expect(events.find((e) => e.type === "item_dropped")).toEqual({
+      type: "item_dropped",
+      itemId: sword.id,
+      position: { type: "grid", row: 0, col: 0 },
+      cause: "death",
+    });
     // Attacker removed from the grid; its item stays behind, unequipped.
     expect(ns.grid[0][0].units.every((u) => u.id !== attacker.id)).toBe(true);
     expect(ns.grid[0][0].items.find((i) => i.id === sword.id)?.equippedTo).toBeUndefined();

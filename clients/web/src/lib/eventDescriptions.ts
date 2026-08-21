@@ -1,4 +1,4 @@
-import type { CombatSide, ContestSide, GameEvent, ModifierEntry } from "cards-engine";
+import type { BoardPosition, CombatSide, ContestSide, GameEvent, ModifierEntry } from "cards-engine";
 
 export type EventCategory = "player" | "opponent" | "system";
 
@@ -123,10 +123,31 @@ export function describeEvent(event: GameEvent, r?: NameResolvers): string {
       return `${event.cardName} triggered${event.targetId ? ` on ${c(event.targetId, r)}` : ""}`;
     case "item_equipped":
       return `${p(event.playerId, r)} equipped ${c(event.itemId, r)} on ${c(event.unitId, r)}`;
-    case "item_dropped":
-      return event.position.type === "grid"
-        ? `${c(event.itemId, r)} dropped at ${cell(event.position.row, event.position.col, r)}`
-        : `${c(event.itemId, r)} dropped at ${p(event.position.playerId, r)}'s HQ`;
+    case "item_dropped": {
+      // Saves written before item_dropped carried a position hold flat row/col.
+      // restoreEventLogState only validates that `type` is a string, so such an
+      // entry reaches this switch and would throw on `.type` below.
+      const pos: BoardPosition | undefined = event.position;
+      if (!pos) return `${c(event.itemId, r)} dropped`;
+      let where: string;
+      switch (pos.type) {
+        case "grid":
+          where = cell(pos.row, pos.col, r);
+          break;
+        case "hq":
+          where = `${p(pos.playerId, r)}'s HQ`;
+          break;
+        default: {
+          const _exhaustive: never = pos;
+          return `${c(event.itemId, r)} dropped`;
+        }
+      }
+      // `cause` is the whole reason the field exists — a kill-drop and a
+      // deliberate one leave identical state, so only the wording separates them.
+      return event.cause === "unequip"
+        ? `${c(event.itemId, r)} was left at ${where}`
+        : `${c(event.itemId, r)} dropped at ${where}`;
+    }
     case "location_placed":
       return `${c(event.cardId, r)} placed at ${cell(event.row, event.col, r)}`;
     case "location_razed":

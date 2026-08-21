@@ -2,7 +2,7 @@ import { parse, DSLParseError, DSLValidationError, isHqSafeVerb } from "./effect
 import type { Primitive } from "./effect-dsl/types";
 import { tryParseCost } from "./cost-helpers";
 import { checkMissionRequirements, parseRequirements } from "./mission-helpers";
-import type { BoardPosition } from "./position-helpers";
+import type { BoardPosition } from "./types";
 import { getItemsAtPosition, getUnitsAtPosition, hasControllingUnitAt } from "./position-helpers";
 import {
   areFacingEdgesOpen,
@@ -371,12 +371,15 @@ function getMainValidActions(
   }
 
   // equip / unequip / transfer — items and co-located units, across all
-  // positions (1 AP each, less with Squire). AP cost goes through
-  // getModifiedAPCost so a Squire discount (including down to 0 AP) is
-  // offered, mirroring the move / play_event blocks above. At 0 AP these
-  // consume nothing and equip/unequip invert each other, so an automated
-  // driver looping over getValidActions must bound its own turn — the engine
-  // deliberately doesn't cap it.
+  // positions (1 AP each before modifiers, so a Squire discount — including
+  // down to 0 AP — is offered, as in the move / play_event blocks above).
+  //
+  // At 0 AP these consume nothing, and they undo each other: equip/unequip
+  // invert, and transfer can ping-pong between two units. So a driver looping
+  // over getValidActions must bound its own turn — there is no per-turn cap
+  // here, and run()'s maxActions is a circuit breaker, not a bound. The
+  // bundled greedy bot survives only because unequip/transfer are absent from
+  // GREEDY_PRIORITY; see bot-adapter.test.ts.
   {
     const positions: BoardPosition[] = [
       { type: "hq", playerId },
@@ -388,18 +391,19 @@ function getMainValidActions(
     ];
 
     for (const pos of positions) {
-      // HQ: all items/units belong to the player by definition.
-      // Grid: filter by controllerId since multiple players share cells.
+      // HQ: units belong to the player by definition. Grid: filter by
+      // controllerId since multiple players share cells. Unlike units, an
+      // item's controllerId can diverge from where it sits, so items are
+      // filtered by controllerId even in HQ (no ownerFilter shortcut) — the
+      // same rule the activate block below applies.
       const ownerFilter = pos.type === "hq";
       const items = getItemsAtPosition(state.players, state.grid, pos)
-        .filter((i) => ownerFilter || i.controllerId === playerId);
+        .filter((i) => i.controllerId === playerId);
       const units = getUnitsAtPosition(state.players, state.grid, pos)
         .filter((u) => ownerFilter || u.controllerId === playerId);
       for (const item of items) {
-        // An item is either loose (offer equip, to any unit here) or borne
-        // (offer unequip, plus transfer to every *other* unit here). The two
-        // sets are disjoint, which is the point of the split — no action in
-        // this list has a field that means nothing.
+        // A loose item offers equip to each unit here; a borne one offers
+        // unequip plus transfer to every *other* unit here.
         if (item.equippedTo) {
           const drop: MainAction = { type: "unequip", playerId, itemId: item.id };
           if (ap >= getModifiedAPCost(state, queries, drop, 1)) actions.push(drop);

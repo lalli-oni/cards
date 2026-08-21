@@ -41,6 +41,7 @@ import type {
   CombatSide,
   GameEvent,
   GridCell,
+  ItemAction,
   ItemCard,
   MainAction,
   ModifierEntry,
@@ -517,11 +518,13 @@ function handlePlayEvent(
 
 }
 
-/** Locate the item and, when the action names a unit, require the two to be at
- *  the same place. Shared by the three item actions; each caller then checks
- *  the attachment state its own action requires before spending AP. */
+/** Locate the item, require the actor to control it, and — when the action names
+ *  a unit — require that unit to be controlled too and to stand in the same
+ *  place. Shared by the three item actions; each caller then checks the
+ *  attachment state its own action requires. */
 function locateItemAction(
   draft: Draft<MainGameState>,
+  playerId: string,
   itemId: string,
   unitId?: string,
 ): { item: ItemCard; position: BoardPosition } {
@@ -529,11 +532,20 @@ function locateItemAction(
   if (!itemResult) {
     throw new Error(`Item "${itemId}" not found in HQ or on grid`);
   }
+  // findItemPosition scans every player's HQ and the whole grid, so without a
+  // control check an item action could name any item on the board. unequip is
+  // the sharp case: it carries no unit, so nothing else constrains its target.
+  if (itemResult.item.controllerId !== playerId) {
+    throw new Error(`Item "${itemId}" is not controlled by "${playerId}"`);
+  }
 
   if (unitId !== undefined) {
     const unitResult = findUnitPosition(draft.players, draft.grid, unitId);
     if (!unitResult) {
       throw new Error(`Unit "${unitId}" not found in HQ or on grid`);
+    }
+    if (unitResult.unit.controllerId !== playerId) {
+      throw new Error(`Unit "${unitId}" is not controlled by "${playerId}"`);
     }
     if (!samePosition(itemResult.position, unitResult.position)) {
       throw new Error(`Unit "${unitId}" not co-located with item "${itemId}"`);
@@ -543,11 +555,13 @@ function locateItemAction(
   return itemResult;
 }
 
-/** All three item actions cost 1 AP before modifiers. Charged only after the
- *  action's preconditions hold, so a rejected action is free. */
+/** All three item actions cost 1 AP before modifiers. Called after the action's
+ *  own precondition check so a player at 0 AP gets that action's error rather
+ *  than "Not enough AP" — state-wise the order is moot, since a throw discards
+ *  the enclosing immer draft either way. */
 function spendItemActionAP(
   draft: Draft<MainGameState>,
-  action: MainAction,
+  action: ItemAction,
   queries: QueryListener[],
 ): void {
   spendAP(draft, getModifiedAPCost(draft as MainGameState, queries, action, 1));
@@ -555,31 +569,29 @@ function spendItemActionAP(
 
 function handleEquip(
   draft: Draft<MainGameState>,
-  playerId: string,
-  itemId: string,
-  unitId: string,
+  action: Extract<ItemAction, { type: "equip" }>,
   emit: EmitFn,
   queries: QueryListener[],
 ): void {
-  const { item } = locateItemAction(draft, itemId, unitId);
+  const { playerId, itemId, unitId } = action;
+  const { item } = locateItemAction(draft, playerId, itemId, unitId);
   if (item.equippedTo) {
     throw new Error(`Item "${itemId}" is already equipped — use transfer`);
   }
 
-  spendItemActionAP(draft, { type: "equip", playerId, itemId, unitId }, queries);
+  spendItemActionAP(draft, action, queries);
   item.equippedTo = unitId;
   emit({ type: "item_equipped", playerId, itemId, unitId });
 }
 
 function handleTransfer(
   draft: Draft<MainGameState>,
-  playerId: string,
-  itemId: string,
-  unitId: string,
+  action: Extract<ItemAction, { type: "transfer" }>,
   emit: EmitFn,
   queries: QueryListener[],
 ): void {
-  const { item } = locateItemAction(draft, itemId, unitId);
+  const { playerId, itemId, unitId } = action;
+  const { item } = locateItemAction(draft, playerId, itemId, unitId);
   if (!item.equippedTo) {
     throw new Error(`Item "${itemId}" is not equipped — use equip`);
   }
@@ -587,25 +599,25 @@ function handleTransfer(
     throw new Error(`Item "${itemId}" is already equipped to unit "${unitId}"`);
   }
 
-  spendItemActionAP(draft, { type: "transfer", playerId, itemId, unitId }, queries);
+  spendItemActionAP(draft, action, queries);
   item.equippedTo = unitId;
   emit({ type: "item_equipped", playerId, itemId, unitId });
 }
 
 function handleUnequip(
   draft: Draft<MainGameState>,
-  playerId: string,
-  itemId: string,
+  action: Extract<ItemAction, { type: "unequip" }>,
   emit: EmitFn,
   queries: QueryListener[],
 ): void {
-  const { item, position } = locateItemAction(draft, itemId);
+  const { playerId, itemId } = action;
+  const { item, position } = locateItemAction(draft, playerId, itemId);
   if (!item.equippedTo) {
     throw new Error(`Item "${itemId}" is not equipped`);
   }
 
-  spendItemActionAP(draft, { type: "unequip", playerId, itemId }, queries);
-  // The card is already in the cell's `items` array or the owner's HQ — only
+  spendItemActionAP(draft, action, queries);
+  // The card is already in the cell's `items` array or a player's HQ — only
   // the attachment goes away, so there is nothing to move.
   item.equippedTo = undefined;
   emit({ type: "item_dropped", itemId, position, cause: "unequip" });
@@ -1929,15 +1941,15 @@ export function applyMainAction(
         break;
 
       case "equip":
-        handleEquip(draft, action.playerId, action.itemId, action.unitId, emit, queries);
+        handleEquip(draft, action, emit, queries);
         break;
 
       case "unequip":
-        handleUnequip(draft, action.playerId, action.itemId, emit, queries);
+        handleUnequip(draft, action, emit, queries);
         break;
 
       case "transfer":
-        handleTransfer(draft, action.playerId, action.itemId, action.unitId, emit, queries);
+        handleTransfer(draft, action, emit, queries);
         break;
 
       case "destroy":

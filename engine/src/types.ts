@@ -919,16 +919,35 @@ export type GameEvent =
       cardName: string;
       targetId?: string;
     }
-  | { type: "item_equipped"; playerId: string; itemId: string; unitId: string }
+  | {
+      type: "item_equipped";
+      playerId: string;
+      itemId: string;
+      /** The unit now bearing the item. */
+      unitId: string;
+      /** How it got there. `equip` takes a loose item off the ground or out of
+       *  HQ; `transfer` moves it between two units. Both end in the same state,
+       *  so a listener that wants only one must check this — `EffectListener.on`
+       *  matches a single event type. Mirrors `item_dropped.cause`. */
+      cause: { kind: "equip" } | { kind: "transfer"; fromUnitId: string };
+    }
   | {
       type: "item_dropped";
       itemId: string;
-      position: BoardPosition;
-      /** Why the item came loose. `death` is the bearer being killed;
-       *  `unequip` is its controller spending an action on it. Both leave the
-       *  item in the same state, so a listener that only wants one must check
-       *  this — `EffectListener.on` matches a single event type. */
-      cause: "death" | "unequip";
+      /** Why the item came loose, and where it landed. A bearer can only die on
+       *  the grid, so `death` narrows to a `GridPosition` — that is why the
+       *  position rides on the cause rather than sitting alongside it. Same
+       *  single-event-type reasoning as `item_equipped.cause`. */
+      cause:
+        | { kind: "death"; position: GridPosition; unitId: string }
+        | {
+            kind: "unequip";
+            position: BoardPosition;
+            /** The player who spent the action, and the unit that was carrying
+             *  it. Neither is recoverable from state afterwards. */
+            playerId: string;
+            fromUnitId: string;
+          };
     }
   | { type: "location_placed"; row: number; col: number; cardId: string }
   | { type: "location_razed"; row: number; col: number; cardId: string }

@@ -589,7 +589,7 @@ function handleEquip(
   // captured item from still working for its previous owner.
   item.controllerId = playerId;
   item.equippedTo = unitId;
-  emit({ type: "item_equipped", playerId, itemId, unitId });
+  emit({ type: "item_equipped", playerId, itemId, unitId, cause: { kind: "equip" } });
 }
 
 function handleTransfer(
@@ -608,8 +608,9 @@ function handleTransfer(
   }
 
   spendItemActionAP(draft, action, queries);
+  const fromUnitId: string = item.equippedTo;
   item.equippedTo = unitId;
-  emit({ type: "item_equipped", playerId, itemId, unitId });
+  emit({ type: "item_equipped", playerId, itemId, unitId, cause: { kind: "transfer", fromUnitId } });
 }
 
 function handleUnequip(
@@ -627,8 +628,13 @@ function handleUnequip(
   spendItemActionAP(draft, action, queries);
   // The card is already in the cell's `items` array or a player's HQ — only
   // the attachment goes away, so there is nothing to move.
+  const fromUnitId: string = item.equippedTo;
   item.equippedTo = undefined;
-  emit({ type: "item_dropped", itemId, position, cause: "unequip" });
+  emit({
+    type: "item_dropped",
+    itemId,
+    cause: { kind: "unequip", position, playerId, fromUnitId },
+  });
 }
 
 function handleDestroy(
@@ -1335,7 +1341,7 @@ function resolveCombatPair(
   } else {
     // Combat-specific: drop equipped items before marking injured. Other
     // injure sources (DSL injure, traps, contest default consequence) leave
-    // equipment in place — see injureUnit doc.
+    // items in place — see injureUnit doc.
     dropEquippedItems(cell, loser.unit, row, col, emit);
     injureUnit(loser.unit, emit);
   }

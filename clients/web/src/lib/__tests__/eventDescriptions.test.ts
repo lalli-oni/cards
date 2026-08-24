@@ -3,6 +3,27 @@ import { getVisibleEvent, type GameEvent } from "cards-engine";
 import { categorizeEvent, describeEvent } from "../eventDescriptions";
 
 describe("describeEvent", () => {
+  describe("item_equipped", () => {
+    it("names the previous bearer on a transfer, not on a plain equip", () => {
+      // Both modes emit item_equipped; without `cause` the log rendered them
+      // identically and the transfer's origin unit was simply lost.
+      const n = (id: string) => ({ i: "Excalibur", a: "Arthur", b: "Lancelot" })[id] ?? id;
+
+      expect(describeEvent(
+        { type: "item_equipped", playerId: "p1", itemId: "i", unitId: "b", cause: { kind: "equip" } },
+        { card: n, player: (id) => id },
+      )).toBe("p1 equipped Excalibur on Lancelot");
+
+      expect(describeEvent(
+        {
+          type: "item_equipped", playerId: "p1", itemId: "i", unitId: "b",
+          cause: { kind: "transfer", fromUnitId: "a" },
+        },
+        { card: n, player: (id) => id },
+      )).toBe("p1 moved Excalibur from Arthur to Lancelot");
+    });
+  });
+
   describe("item_dropped", () => {
     // The event carries a BoardPosition discriminated union — this is the only
     // place in the client that consumes one — plus a `cause` that separates a
@@ -12,8 +33,9 @@ describe("describeEvent", () => {
       const event: GameEvent = {
         type: "item_dropped",
         itemId: "item-3",
-        position: { type: "grid", row: 1, col: 2 },
-        cause: "death",
+        // A bearer can only die on the grid, so the death cause narrows to a
+        // GridPosition — there is no HQ death-drop to render.
+        cause: { kind: "death", position: { row: 1, col: 2 }, unitId: "u-9" },
       };
 
       expect(describeEvent(event, {
@@ -28,26 +50,38 @@ describe("describeEvent", () => {
       const event: GameEvent = {
         type: "item_dropped",
         itemId: "item-3",
-        position: { type: "hq", playerId: "p1" },
-        cause: "unequip",
+        cause: {
+          kind: "unequip",
+          position: { type: "hq", playerId: "p1" },
+          playerId: "p1",
+          fromUnitId: "u-9",
+        },
       };
 
       expect(describeEvent(event, {
         card: (id) => (id === "item-3" ? "Excalibur" : id),
         player: (id) => (id === "p1" ? "Alice" : id),
-      })).toBe("Excalibur was left at Alice's HQ");
+      })).toBe("Alice left Excalibur at Alice's HQ");
     });
 
     it("distinguishes a deliberate unequip from a kill-drop at the same place", () => {
       // Both leave the item in an identical state, so `cause` is the only thing
       // that can separate them for a reader of the log.
-      const at = { type: "grid", row: 0, col: 0 } as const;
-      const dropped = describeEvent(
-        { type: "item_dropped", itemId: "i", position: at, cause: "death" },
-      );
-      const left = describeEvent(
-        { type: "item_dropped", itemId: "i", position: at, cause: "unequip" },
-      );
+      const dropped = describeEvent({
+        type: "item_dropped",
+        itemId: "i",
+        cause: { kind: "death", position: { row: 0, col: 0 }, unitId: "u-1" },
+      });
+      const left = describeEvent({
+        type: "item_dropped",
+        itemId: "i",
+        cause: {
+          kind: "unequip",
+          position: { type: "grid", row: 0, col: 0 },
+          playerId: "p1",
+          fromUnitId: "u-1",
+        },
+      });
 
       expect(dropped).not.toBe(left);
     });
@@ -484,5 +518,38 @@ describe("describeEvent", () => {
       expect(out).toContain("Foe: 4 + 3🎲 = 7");
       expect(out).toContain("Cleopatra wins");
     });
+  });
+});
+
+describe("categorizeEvent — item_dropped", () => {
+  // The acting player moved inside `cause`, so the generic `"playerId" in event`
+  // probe no longer sees it. Without a dedicated branch every drop — including
+  // your own deliberate one — was classified "system" and rendered as neutral
+  // chrome rather than as a player action.
+
+  it("attributes a deliberate drop to the player who made it", () => {
+    const drop: GameEvent = {
+      type: "item_dropped",
+      itemId: "i",
+      cause: {
+        kind: "unequip",
+        position: { type: "grid", row: 0, col: 0 },
+        playerId: "p1",
+        fromUnitId: "u1",
+      },
+    };
+
+    expect(categorizeEvent(drop, "p1")).toBe("player");
+    expect(categorizeEvent(drop, "p2")).toBe("opponent");
+  });
+
+  it("leaves a death-drop as system — nobody chose it", () => {
+    const drop: GameEvent = {
+      type: "item_dropped",
+      itemId: "i",
+      cause: { kind: "death", position: { row: 0, col: 0 }, unitId: "u1" },
+    };
+
+    expect(categorizeEvent(drop, "p1")).toBe("system");
   });
 });

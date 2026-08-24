@@ -1024,8 +1024,8 @@ describe("contest_resolved per-side breakdown", () => {
   });
 
   it("contest.strength default consequence does NOT drop equipped items on injure", () => {
-    // Equipment-on-injure is combat-specific. A DSL contest that injures the
-    // loser must leave equipment in place.
+    // Item-drop-on-injure is combat-specific. A DSL contest that injures the
+    // loser must leave items in place.
     const hannibal = makeUnit({
       ownerId: ACTIVE,
       definitionId: "hannibal-barca",

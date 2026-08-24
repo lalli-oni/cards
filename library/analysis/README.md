@@ -43,7 +43,7 @@ reports gaps/violations with a `pass` flag:
 
 | Script | Checks |
 |---|---|
-| `keyword-coverage.nu` | governed keywords meet coverage tier (2 unit/location, 1 equipment) |
+| `keyword-coverage.nu` | governed keywords meet coverage tier (2 unit/location, 1 item) |
 | `dsl-verb-coverage.nu` | ≥1 card per engine DSL verb |
 | `negative-value.nu` | payout screen (advisory review list) |
 | `rarity-distribution.nu` | rarity spread + dup-prone locations |
@@ -56,7 +56,7 @@ reports gaps/violations with a `pass` flag:
 
 - **Two coverage checks, two axes.** `keyword-coverage.nu` checks the governed
   mechanical-keyword vocabulary (from `keywords.json`) against the `keywords`
-  column, tiered (2 unit/location, 1 equipment). `dsl-verb-coverage.nu` checks
+  column, tiered (2 unit/location, 1 item). `dsl-verb-coverage.nu` checks
   effect-DSL verb coverage (the `DSL_VERBS` list, mirroring the engine) against
   action effects — a separate axis of "card mechanics".
 - **No blended value number.** `gold-out`/`vp-out`/`ap-cost`/`gold-cost` are kept

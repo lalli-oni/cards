@@ -110,3 +110,63 @@ describe("actionMatchesCell", () => {
     expect(actionMatchesCell(action, grid, 1, 1)).toBe(false);
   });
 });
+
+describe("actionMatchesCell — item actions", () => {
+  // equip/unequip/transfer identify their target by card instance id only, so
+  // before this they matched no cell and the grid could never highlight them.
+  // Resolved against the item's own cell, the same way play_event resolves
+  // against its target location.
+
+  /** A 3x3 grid with one item instance sitting at (row, col). */
+  function gridWithItem(itemId: string, row: number, col: number): Grid {
+    const grid: Grid = Array.from({ length: 3 }, () =>
+      Array.from({ length: 3 }, () => emptyCell()),
+    );
+    grid[row][col] = {
+      ...emptyCell(),
+      items: [{
+        id: itemId,
+        definitionId: "test-item",
+        type: "item",
+        name: "Test Item",
+        cost: "1",
+        rarity: "common",
+        ownerId: "p1",
+        controllerId: "p1",
+      }],
+    };
+    return grid;
+  }
+
+  it("matches the cell holding the item", () => {
+    const grid = gridWithItem("sword", 1, 2);
+
+    expect(actionMatchesCell(
+      { type: "unequip", playerId: "p1", itemId: "sword" }, grid, 1, 2,
+    )).toBe(true);
+    expect(actionMatchesCell(
+      { type: "unequip", playerId: "p1", itemId: "sword" }, grid, 0, 0,
+    )).toBe(false);
+  });
+
+  it("matches for equip and transfer too, keyed on the item rather than the unit", () => {
+    const grid = gridWithItem("sword", 1, 2);
+
+    expect(actionMatchesCell(
+      { type: "equip", playerId: "p1", itemId: "sword", unitId: "u1" }, grid, 1, 2,
+    )).toBe(true);
+    expect(actionMatchesCell(
+      { type: "transfer", playerId: "p1", itemId: "sword", unitId: "u2" }, grid, 1, 2,
+    )).toBe(true);
+  });
+
+  it("matches no cell for an item in HQ", () => {
+    // HQ is off-grid, so there is no cell to light up — the item is nowhere on
+    // the grid and every lookup misses.
+    const grid = gridWithItem("elsewhere", 0, 0);
+
+    expect(actionMatchesCell(
+      { type: "unequip", playerId: "p1", itemId: "sword" }, grid, 0, 0,
+    )).toBe(false);
+  });
+});

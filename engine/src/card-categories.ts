@@ -42,11 +42,11 @@ export const EVENT_TYPES = ["Catastrophe", "Prosperity"] as const;
 export const EVENT_RESOLUTIONS = ["discard", "main-top"] as const;
 
 /**
- * Multi-value item `type` (per the #45 equipment decision — a single `type`
+ * Multi-value item `type` (per the #45 item-type decision — a single `type`
  * column, not `item_type` + `slot`). `Weapon`/`Armor`/`Tool` are forward-looking
  * values (no alpha-1 item carries them yet) but are governed, so a card *may*
  * carry them and validate. `Accessory` is intentionally NOT in this set — it is
- * an ungoverned, aspirational value pending the #45 equipment decision, so a
+ * an ungoverned, aspirational value pending the #45 item-type decision, so a
  * card carrying it fails the build. Effect code therefore cannot key off
  * `"Accessory"` (the union would reject it) until #45 promotes it here.
  */

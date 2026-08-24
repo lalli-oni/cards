@@ -717,8 +717,12 @@ describe("unequip", () => {
     expect(drop).toEqual({
       type: "item_dropped",
       itemId: item.id,
-      position: { type: "grid", row: 1, col: 2 },
-      cause: "unequip",
+      cause: {
+        kind: "unequip",
+        position: { type: "grid", row: 1, col: 2 },
+        playerId: ACTIVE,
+        fromUnitId: bearer.id,
+      },
     });
   });
 
@@ -742,8 +746,12 @@ describe("unequip", () => {
     expect(events.find((e) => e.type === "item_dropped")).toEqual({
       type: "item_dropped",
       itemId: item.id,
-      position: { type: "hq", playerId: ACTIVE },
-      cause: "unequip",
+      cause: {
+        kind: "unequip",
+        position: { type: "hq", playerId: ACTIVE },
+        playerId: ACTIVE,
+        fromUnitId: bearer.id,
+      },
     });
   });
 
@@ -835,7 +843,17 @@ describe("transfer", () => {
     const ns = next as MainGameState;
 
     expect(ns.grid[0][0].items.find((i) => i.id === item.id)?.equippedTo).toBe(to.id);
-    expect(events.some((e) => e.type === "item_equipped")).toBe(true);
+    // equip and transfer both end with the item on a unit and both emit
+    // item_equipped, so `cause` is the only thing a listener or a log line can
+    // separate them by. It also carries the previous bearer, which is gone from
+    // state the moment the attachment moves.
+    expect(events.find((e) => e.type === "item_equipped")).toEqual({
+      type: "item_equipped",
+      playerId: ACTIVE,
+      itemId: item.id,
+      unitId: to.id,
+      cause: { kind: "transfer", fromUnitId: from.id },
+    });
     // The item never passes through a loose state, so nothing was dropped.
     expect(events.some((e) => e.type === "item_dropped")).toBe(false);
   });
@@ -960,12 +978,13 @@ describe("item actions — locate and control", () => {
       d.grid[0][0].items.push(loose);
     });
 
-    const { state: next } = applyAction(
+    const { state: next, events } = applyAction(
       state, { type: "equip", playerId: ACTIVE, itemId: loose.id, unitId: mine.id },
     );
 
     const taken = (next as MainGameState).grid[0][0].items.find((i) => i.id === loose.id);
     expect(taken?.equippedTo).toBe(mine.id);
+    expect(events.find((e) => e.type === "item_equipped")?.cause).toEqual({ kind: "equip" });
     expect(taken?.controllerId).toBe(ACTIVE);
     // ownerId is the seeding origin and never moves — only control does.
     expect(taken?.ownerId).toBe(OTHER);
@@ -2744,12 +2763,12 @@ describe("combat details", () => {
     const ns = next as MainGameState;
 
     // Pin the payload, not just the type — the kill path is the other emitter
-    // of item_dropped, so a shape change here has to stay visible.
+    // of item_dropped, so a shape change here has to stay visible. `unitId` is
+    // the unit that died carrying it, which here is the defender.
     expect(events.find((e) => e.type === "item_dropped")).toEqual({
       type: "item_dropped",
       itemId: sword.id,
-      position: { type: "grid", row: 0, col: 0 },
-      cause: "death",
+      cause: { kind: "death", position: { row: 0, col: 0 }, unitId: defender.id },
     });
     // Item is unequipped and remains at location
     const item = ns.grid[0][0].items.find((i) => i.id === sword.id);
@@ -2888,8 +2907,7 @@ describe("combat details", () => {
     expect(events.find((e) => e.type === "item_dropped")).toEqual({
       type: "item_dropped",
       itemId: sword.id,
-      position: { type: "grid", row: 0, col: 0 },
-      cause: "death",
+      cause: { kind: "death", position: { row: 0, col: 0 }, unitId: attacker.id },
     });
     // Attacker removed from the grid; its item stays behind, unequipped.
     expect(ns.grid[0][0].units.every((u) => u.id !== attacker.id)).toBe(true);

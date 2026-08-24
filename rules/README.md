@@ -425,10 +425,8 @@ is killed. A stored item is exposed — an opponent's unit at that location
 can take it — so leaving one behind is a real cost weighed against its
 stored effect.
 
-[design: The engine does not yet offer an opponent's stored item for
-Equip — enumeration filters items by controller, and equipping does not
-transfer control. Until it does, Unequip carries no exposure risk and the
-tradeoff above is not live.]
+Taking a stored item makes it yours — its equipped effect then works for
+its new bearer's side.
 
 Items deployed to HQ start unattached; they reach the grid only by being
 equipped to a unit that moves out. An unattached item in HQ is neither

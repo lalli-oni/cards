@@ -392,13 +392,17 @@ function getMainValidActions(
 
     for (const pos of positions) {
       // HQ: units belong to the player by definition. Grid: filter by
-      // controllerId since multiple players share cells. Unlike units, an
-      // item's controllerId can diverge from where it sits, so items are
-      // filtered by controllerId even in HQ (no ownerFilter shortcut) — the
-      // same rule the activate block below applies.
+      // controllerId since multiple players share cells.
+      //
+      // Items don't take the ownerFilter shortcut — an item's controllerId can
+      // diverge from where it sits. A *borne* item is offered only to its
+      // controller; a *loose* one is offered to everyone here, because the
+      // rules expose a stored item to any co-located unit. (The activate block
+      // below stays controller-only: exposure is a pickup rule, not a licence
+      // to use someone's dropped item in place.)
       const ownerFilter = pos.type === "hq";
       const items = getItemsAtPosition(state.players, state.grid, pos)
-        .filter((i) => i.controllerId === playerId);
+        .filter((i) => !i.equippedTo || i.controllerId === playerId);
       const units = getUnitsAtPosition(state.players, state.grid, pos)
         .filter((u) => ownerFilter || u.controllerId === playerId);
       for (const item of items) {

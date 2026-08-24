@@ -946,6 +946,51 @@ describe("item actions — locate and control", () => {
     ).toThrow("not controlled by");
   });
 
+  it("lets any co-located unit take a loose item, and control follows it", () => {
+    // The rules expose a stored item to any co-located unit — that risk is the
+    // whole reason putting an item down is a decision rather than free upside.
+    // Control moves with the pickup so a captured item's equip effect stops
+    // working for its previous holder (war-banner's equipped half keys off the
+    // item's controller). #278 replaces this with control derived from the bearer.
+    const mine = makeUnit({ ownerId: ACTIVE });
+    const loose = makeItem({ ownerId: OTHER });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][0].units.push(mine);
+      d.grid[0][0].items.push(loose);
+    });
+
+    const { state: next } = applyAction(
+      state, { type: "equip", playerId: ACTIVE, itemId: loose.id, unitId: mine.id },
+    );
+
+    const taken = (next as MainGameState).grid[0][0].items.find((i) => i.id === loose.id);
+    expect(taken?.equippedTo).toBe(mine.id);
+    expect(taken?.controllerId).toBe(ACTIVE);
+    // ownerId is the seeding origin and never moves — only control does.
+    expect(taken?.ownerId).toBe(OTHER);
+  });
+
+  it("offers an opponent's loose item for equip but not their borne one", () => {
+    // The enumeration counterpart of the rule above: loose is public, borne is
+    // not. Both halves, so neither direction can regress unnoticed.
+    const theirBearer = makeUnit({ ownerId: OTHER });
+    const borne = makeItem({ ownerId: OTHER, equippedTo: theirBearer.id });
+    const loose = makeItem({ ownerId: OTHER });
+    const mine = makeUnit({ ownerId: ACTIVE });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][0].units.push(theirBearer, mine);
+      d.grid[0][0].items.push(borne, loose);
+    });
+
+    const forItem = (id: string): string[] => getValidActions(state, ACTIVE)
+      .filter((a) => "itemId" in a && a.itemId === id).map((a) => a.type);
+
+    expect(forItem(loose.id)).toContain("equip");
+    expect(forItem(borne.id)).toEqual([]);
+  });
+
   it("rejects equipping your item onto a unit you do not control", () => {
     const enemyUnit = makeUnit({ ownerId: OTHER });
     const item = makeItem({ ownerId: ACTIVE });

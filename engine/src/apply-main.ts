@@ -532,10 +532,13 @@ function locateItemAction(
   if (!itemResult) {
     throw new Error(`Item "${itemId}" not found in HQ or on grid`);
   }
-  // findItemPosition scans every player's HQ and the whole grid, so without a
-  // control check an item action could name any item on the board. unequip is
-  // the sharp case: it carries no unit, so nothing else constrains its target.
-  if (itemResult.item.controllerId !== playerId) {
+  // findItemPosition scans every player's HQ and the whole grid, so a borne
+  // item needs a control check or any item on the board would be a legal
+  // target — unequip is the sharp case, carrying no unit to constrain it. A
+  // loose item is deliberately public: the rules expose a stored item to any
+  // co-located unit, which is what makes putting one down a real cost. Only
+  // equip can name a loose item, so this one rule covers all three actions.
+  if (itemResult.item.equippedTo && itemResult.item.controllerId !== playerId) {
     throw new Error(`Item "${itemId}" is not controlled by "${playerId}"`);
   }
 
@@ -580,6 +583,11 @@ function handleEquip(
   }
 
   spendItemActionAP(draft, action, queries);
+  // Taking a loose item takes control of it, so its equip effect keys off the
+  // new bearer's side rather than whoever last carried it. Until an item's
+  // control is derived from its bearer (#278), this is the write that keeps a
+  // captured item from still working for its previous owner.
+  item.controllerId = playerId;
   item.equippedTo = unitId;
   emit({ type: "item_equipped", playerId, itemId, unitId });
 }

@@ -102,12 +102,10 @@ C = {
 # lime; rarity is conveyed by the gem symbol (+ the unit side-bar gradient).
 RARITY = {
     "legendary": ("#8a6515", "#f4c24a"),
-    "epic":      ("#5b2a8a", "#b07cf1"),
     "rare":      ("#1e4a7a", "#4a8fd1"),
-    "uncommon":  ("#1e4a7a", "#4a8fd1"),
     "common":    ("#4a5263", "#6c7486"),
 }
-RARITY_GEM = {"common": "●", "uncommon": "◇", "rare": "◈", "epic": "◆", "legendary": "★"}
+RARITY_GEM = {"common": "●", "rare": "◆", "legendary": "★"}
 
 
 def _fill(color, opacity=1):
@@ -921,7 +919,7 @@ def parse_policy(row, index):
     attrs = [a.strip() for a in row.get("attributes", "").split(";") if a.strip()]
     return {
         "id": row["id"], "name": row["name"], "number": f"P{index + 1:02d}",
-        "set": row.get("set", ""), "rarity": (row.get("rarity") or "epic").lower(),
+        "set": row.get("set", ""), "rarity": (row.get("rarity") or "common").lower(),
         "attribute": attrs[0] if attrs else "",
         "effect": (row.get("effect") or "").strip(),
         "seeding": (row.get("seeding_effect") or "").strip(),

@@ -55,7 +55,7 @@
 
     
     <line x1="61" y1="972" x2="689" y2="972" stroke="#1a2540" stroke-width="1"></line>
-    <text x="61" y="991" font-family="JetBrains Mono" font-size="9" font-weight="700" letter-spacing="1.98" fill="#c8f562">◆ EPIC</text>
+    <text x="61" y="991" font-family="JetBrains Mono" font-size="9" font-weight="700" letter-spacing="1.98" fill="#c8f562">◆ RARE</text>
     <text x="689" y="991.5" text-anchor="end" font-family="JetBrains Mono" font-size="11" letter-spacing="2.42" fill="#7a8aa6">POLICY // ALPHA-1 · P03</text>
   </g>
 </svg>

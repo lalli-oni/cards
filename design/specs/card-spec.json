@@ -30,8 +30,7 @@
     { "role": "stat CUN",               "hex": "#6bb6ff", "glow": "#2e7bd6" },
     { "role": "stat CHA",               "hex": "#c8f562", "glow": "#c8f562" },
     { "role": "side bar legendary",     "gradient": "#8a6515 → #f4c24a" },
-    { "role": "side bar epic",          "gradient": "#5b2a8a → #b07cf1" },
-    { "role": "side bar uncommon",      "gradient": "#1e4a7a → #4a8fd1" },
+    { "role": "side bar rare",          "gradient": "#1e4a7a → #4a8fd1" },
     { "role": "side bar common",        "gradient": "#4a5263 → #6c7486" }
   ],
 

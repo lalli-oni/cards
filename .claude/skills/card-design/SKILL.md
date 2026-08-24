@@ -51,16 +51,19 @@ Every card should have a reason to exist in a deck.
 
 #### Cost guidelines
 - **0-cost**: Policies (free by design) and locations (placed during seeding, not purchased). No other card type should cost 0 unless there's a strong design reason.
-- **1-2 cost**: Commons and cheap uncommons. Simple effects, modest stats.
+- **1-2 cost**: Commons and cheap rares. Simple effects, modest stats.
 - **3-4 cost**: Core of most decks. Bread-and-butter units, useful items, tactical events.
-- **5-6 cost**: Strong cards with impactful abilities. Epics and some rares.
+- **5-6 cost**: Strong cards with impactful abilities. Rares at the top of their band.
 - **7+ cost**: Build-around legendaries. Should feel like a payoff.
 
 #### Rarity guidelines
-- **Common**: Simple, efficient, low decision complexity. The backbone of decks. Limited or no actions.
-- **Uncommon**: One interesting mechanic or mild synergy hook. May have a simple action.
-- **Epic**: Distinctive ability, clear strategic role. Usually has an action.
-- **Legendary**: Unique, build-around potential. High stats or powerful action. Should feel like a centerpiece.
+Which tier a card belongs to is settled first by **how singular its subject is** —
+see [Rarity Reflects Singularity](../../../rules/design-principles.md#rarity-reflects-singularity).
+The mechanical weight below follows from that, it does not override it.
+
+- **Common**: a common noun — a role or place-type. Simple, efficient, low decision complexity. The backbone of decks, and the card you are happy to see repeat. Limited or no actions.
+- **Rare**: named but not unique. One interesting mechanic or a clear strategic role; usually has an action.
+- **Legendary**: a proper noun — one of it in history. Build-around potential, high stats or a powerful action. Should feel like a centerpiece, and like an event when it arrives.
 
 ### 4. Historical figure selection
 
@@ -91,7 +94,7 @@ nu -c "glob library/sets/alpha-1/*.csv | each { |f| open $f | insert type ($f | 
 
 Identify:
 - Which card types are underrepresented
-- Which rarities are missing (especially commons/uncommons)
+- Which rarities are missing (especially commons)
 - Which attributes/keywords lack support
 - Which strategies lack cards
 

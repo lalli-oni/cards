@@ -47,7 +47,7 @@ export interface PlayerState {
 // ---------------------------------------------------------------------------
 
 export type CardType = "unit" | "location" | "item" | "event" | "policy";
-export type Rarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
+export type Rarity = "common" | "rare" | "legendary";
 
 // The named stats a unit card carries, contested/checked by mechanics.
 export const STAT_NAMES = ["strength", "cunning", "charisma"] as const;

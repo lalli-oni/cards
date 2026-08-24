@@ -12,7 +12,7 @@ Every card type includes these columns:
 | id       | string | yes      | Unique identifier. Kebab-case of card name (e.g. `cleopatra`, `nikola-tesla`) |
 | name     | string | yes      | Display name |
 | set      | string | yes      | Set identifier (e.g. `baseline`) |
-| rarity   | enum   | yes      | `common`, `uncommon`, `epic`, `legendary` |
+| rarity   | enum   | yes      | `common`, `rare`, `legendary` — see [Rarity Reflects Singularity](../rules/design-principles.md#rarity-reflects-singularity) for which tier a card belongs in |
 | cost     | string | yes      | Gold cost to deploy/play. Multiple costs separated by `\|` (player pays one) |
 | text     | string | no       | Card text — rules text, keywords, effects |
 | flavor   | string | no       | Flavor text |

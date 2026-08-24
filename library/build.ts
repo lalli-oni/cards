@@ -32,7 +32,7 @@ const BUILD_DIR = process.env.CARDS_BUILD_DIR ?? join(LIBRARY_DIR, "build");
 const CARD_TYPES = ["units", "locations", "items", "events", "policies"] as const;
 export type CardType = (typeof CARD_TYPES)[number];
 
-const RARITIES = ["common", "uncommon", "rare", "epic", "legendary"] as const;
+const RARITIES = ["common", "rare", "legendary"] as const;
 const EVENT_TIMINGS = ["instant", "passive", "trap"] as const;
 
 // Governed per-type category vocabularies (`LOCATION_TYPES`/`EVENT_TYPES`/

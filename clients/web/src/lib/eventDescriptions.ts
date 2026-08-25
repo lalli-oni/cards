@@ -20,6 +20,13 @@ export function categorizeEvent(
   selfPlayerId: string,
 ): EventCategory {
   if (SYSTEM_EVENT_TYPES.has(event.type)) return "system";
+  // `item_dropped` carries its actor inside `cause` — a deliberate drop is a
+  // player action, a death-drop is nobody's. Checked before the generic probe
+  // below, which would otherwise class every drop as "system".
+  if (event.type === "item_dropped") {
+    if (event.cause?.kind !== "unequip") return "system";
+    return event.cause.playerId === selfPlayerId ? "player" : "opponent";
+  }
   // Standard playerId field
   if ("playerId" in event && event.playerId === selfPlayerId) return "player";
   if ("playerId" in event) return "opponent";
@@ -122,9 +129,30 @@ export function describeEvent(event: GameEvent, r?: NameResolvers): string {
     case "trap_triggered":
       return `${event.cardName} triggered${event.targetId ? ` on ${c(event.targetId, r)}` : ""}`;
     case "item_equipped":
-      return `${p(event.playerId, r)} equipped ${c(event.itemId, r)} on ${c(event.unitId, r)}`;
-    case "item_dropped":
-      return `${c(event.itemId, r)} dropped at ${cell(event.row, event.col, r)}`;
+      return event.cause?.kind === "transfer"
+        ? `${p(event.playerId, r)} moved ${c(event.itemId, r)} from ${c(event.cause.fromUnitId, r)} to ${c(event.unitId, r)}`
+        : `${p(event.playerId, r)} equipped ${c(event.itemId, r)} on ${c(event.unitId, r)}`;
+    case "item_dropped": {
+      // Saves predating the position/cause reshape carry flat row/col and no
+      // cause. restoreEventLogState only validates that `type` is a string, so
+      // such an entry reaches this switch and would throw on `.kind` below.
+      const cause = event.cause;
+      if (!cause) return `${c(event.itemId, r)} dropped`;
+      switch (cause.kind) {
+        case "death":
+          return `${c(event.itemId, r)} dropped at ${cell(cause.position.row, cause.position.col, r)}`;
+        case "unequip": {
+          const where: string = cause.position.type === "grid"
+            ? cell(cause.position.row, cause.position.col, r)
+            : `${p(cause.position.playerId, r)}'s HQ`;
+          return `${p(cause.playerId, r)} left ${c(event.itemId, r)} at ${where}`;
+        }
+        default: {
+          const _exhaustive: never = cause;
+          return `${c(event.itemId, r)} dropped`;
+        }
+      }
+    }
     case "location_placed":
       return `${c(event.cardId, r)} placed at ${cell(event.row, event.col, r)}`;
     case "location_razed":

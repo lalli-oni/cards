@@ -56,7 +56,7 @@ describe("keyword vocabulary", () => {
       expect(parseKeyword("Aura:-1:all:contest", "location").name).toBe("Aura");
     });
 
-    test("Flying is an equipment keyword, not supported on locations", () => {
+    test("Flying is an item keyword, not supported on locations", () => {
       expect(() => parseKeyword("Flying", "location")).toThrow(/not supported on location/);
       expect(parseKeyword("Flying", "item").name).toBe("Flying");
     });

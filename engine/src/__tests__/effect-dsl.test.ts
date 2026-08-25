@@ -230,7 +230,7 @@ describe("Effect DSL executor", () => {
   });
 
   it("injure(enemy) does NOT drop equipped items (combat-injure-only by design)", () => {
-    // Companion regression to the contest-injure equipment test in
+    // Companion regression to the contest-injure item test in
     // contest-surfacing.test.ts. The DSL `injure` verb is one of the three
     // non-combat injure sites whose item-drop side effect was intentionally
     // removed when injureUnit was narrowed.
@@ -437,7 +437,7 @@ describe("equipped items follow units", () => {
     expect(ns.grid[0][1].items).toHaveLength(1);
   });
 
-  it("unit without equipment moves without affecting other items", () => {
+  it("unit carrying nothing moves without affecting other items", () => {
     const state = gameWith((d, p) => {
       const unit = makeUnit({ ownerId: p.active });
       const looseItem = makeItem({ ownerId: p.active }); // not equipped

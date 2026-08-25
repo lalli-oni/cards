@@ -26,7 +26,7 @@ Trade-offs:
 - Keywords like Duelist become redundant in a 1v1 system
 Playtest both and compare.
 
-## Items & Equipment
+## Items
 
 ### Multiple item types per card
 Allow items to have more than one type (e.g. a bayonet that is both

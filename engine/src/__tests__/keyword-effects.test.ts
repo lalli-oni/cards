@@ -507,10 +507,33 @@ describe("Squire", () => {
       .some((a) => a.type === "equip")).toBe(false);
   });
 
-  it("discounts moving an item between units (the Equip action's swap mode)", () => {
-    // Equip covers attach, swap and unequip-to-location (rules/README.md
-    // Actions). Swap is the mode with the most moving parts — the item detaches
-    // and re-attaches in one action — so it is the one worth pinning.
+  it("getValidActions offers unequip at AP 0 only because Squire made it free", () => {
+    // unequip is enumerated behind its OWN `ap >= cost` gate, not the shared
+    // one the equip/transfer candidates use — deleting that line leaves every
+    // other engine test green. Both halves are pinned for the same reason as
+    // the equip case above.
+    const build = (squire: boolean): MainGameState => gameWith((d, p) => {
+      const bearer = makeUnit({ ownerId: p.active });
+      const item = makeItem({ ownerId: p.active, equippedTo: bearer.id });
+      d.players[p.activeIdx].hq.push(bearer, item);
+      if (squire) d.players[p.activeIdx].hq.push(makeUnit({ ownerId: p.active, keywords: ["Squire"] }));
+      d.turn.actionPointsRemaining = 0;
+    });
+    const withSquireUnequip = build(true);
+    const withoutSquireUnequip = build(false);
+
+    expect(getValidActions(withSquireUnequip, getPlayers(withSquireUnequip).active)
+      .some((a) => a.type === "unequip")).toBe(true);
+    expect(getValidActions(withoutSquireUnequip, getPlayers(withoutSquireUnequip).active)
+      .some((a) => a.type === "unequip")).toBe(false);
+  });
+
+  it("discounts transferring an item between units", () => {
+    // Squire covers all three item actions (rules/README.md → Unit keywords).
+    // Transfer is the one with the most moving parts — the item detaches and
+    // re-attaches in a single action — so it is the one worth pinning here;
+    // the unequip discount is covered in main-actions.test.ts alongside the
+    // other unequip behaviour.
     let itemCard!: ItemCard, unitA!: UnitCard, unitB!: UnitCard;
     const state = gameWith((d, p) => {
       unitA = makeUnit({ ownerId: p.active });
@@ -522,11 +545,11 @@ describe("Squire", () => {
     });
     const { active } = getPlayers(state);
     const { queries } = rebuildListeners(state);
-    const reEquip: MainAction = { type: "equip", playerId: active, itemId: itemCard.id, unitId: unitB.id };
+    const transfer: MainAction = { type: "transfer", playerId: active, itemId: itemCard.id, unitId: unitB.id };
     const apBefore = state.turn.actionPointsRemaining;
 
-    expect(getModifiedAPCost(state, queries, reEquip, 1)).toBe(0);
-    const { state: next } = applyAction(state, reEquip);
+    expect(getModifiedAPCost(state, queries, transfer, 1)).toBe(0);
+    const { state: next } = applyAction(state, transfer);
     expect((next as MainGameState).turn.actionPointsRemaining).toBe(apBefore);
     const moved = (next as MainGameState).players
       .flatMap((pl) => pl.hq).find((c) => c.id === itemCard.id) as ItemCard;
@@ -1071,6 +1094,79 @@ describe("Untouchable", () => {
     // it had no protection at all.
     expect(isUnitProtected(state, queries, defender, { row: 0, col: 0 }, "contest_target", "charisma")).toBe(false);
     expect(isUnitProtected(state, queries, defender, { row: 0, col: 0 }, "event_target")).toBe(false);
+  });
+});
+
+describe("item keywords stop contributing once the item is put down", () => {
+  // Heavy, Lightweight and Flying all gate on `equippedTo`, so unequipping has
+  // to silence them. Before the unequip action existed the only way to reach
+  // this state was the bearer being killed — which also removes the unit, so
+  // the "same unit, item now loose" case was never exercised.
+
+  it("Heavy stops taxing the former bearer's move", () => {
+    let bearer!: UnitCard, anvil!: ItemCard;
+    const state = gameWith((d, p) => {
+      bearer = makeUnit({ ownerId: p.active });
+      anvil = makeItem({ ownerId: p.active, equippedTo: bearer.id, keywords: ["Heavy"] });
+      d.grid[0][0].location = makeLocation({ ownerId: p.active });
+      d.grid[0][1].location = makeLocation({ ownerId: p.active });
+      d.grid[0][0].units.push(bearer);
+      d.grid[0][0].items.push(anvil);
+    });
+    const { active } = getPlayers(state);
+    const move: MainAction = { type: "move", playerId: active, unitId: bearer.id, row: 0, col: 1 };
+
+    expect(getModifiedAPCost(state, rebuildListeners(state).queries, move, 1)).toBe(2);
+
+    const next = applyAction(state, { type: "unequip", playerId: active, itemId: anvil.id })
+      .state as MainGameState;
+    expect(getModifiedAPCost(next, rebuildListeners(next).queries, move, 1)).toBe(1);
+  });
+
+  it("Lightweight stops discounting the former bearer's move", () => {
+    let bearer!: UnitCard, boots!: ItemCard;
+    const state = gameWith((d, p) => {
+      bearer = makeUnit({ ownerId: p.active });
+      boots = makeItem({ ownerId: p.active, equippedTo: bearer.id, keywords: ["Lightweight"] });
+      d.grid[0][0].location = makeLocation({ ownerId: p.active });
+      d.grid[0][1].location = makeLocation({ ownerId: p.active });
+      d.grid[0][0].units.push(bearer);
+      d.grid[0][0].items.push(boots);
+    });
+    const { active } = getPlayers(state);
+    const move: MainAction = { type: "move", playerId: active, unitId: bearer.id, row: 0, col: 1 };
+
+    expect(getModifiedAPCost(state, rebuildListeners(state).queries, move, 1)).toBe(0);
+
+    const next = applyAction(state, { type: "unequip", playerId: active, itemId: boots.id })
+      .state as MainGameState;
+    expect(getModifiedAPCost(next, rebuildListeners(next).queries, move, 1)).toBe(1);
+  });
+
+  it("Flying stops bypassing a blocked edge", () => {
+    // Mirrors the equipped-case fixture below: grid[0][0]'s east edge and
+    // grid[0][1]'s west edge are both blocked, so the move is legal only while
+    // the Flying item is borne.
+    let unit!: UnitCard, wings!: ItemCard;
+    const state = gameWith((d, p) => {
+      unit = makeUnit({ ownerId: p.active });
+      wings = makeItem({ ownerId: p.active, equippedTo: unit.id, keywords: ["Flying"] });
+      d.grid[0][0].location = makeLocation({ ownerId: p.active, edges: { n: true, e: false, s: true, w: true } });
+      d.grid[0][1].location = makeLocation({ ownerId: p.active, edges: { n: true, e: true, s: true, w: false } });
+      d.grid[0][0].units.push(unit);
+      d.grid[0][0].items.push(wings);
+    });
+    const { active } = getPlayers(state);
+    const crossesBlockedEdge = (s: MainGameState): boolean =>
+      getValidActions(s, active).some((a) => a.type === "move" && a.unitId === unit.id && a.row === 0 && a.col === 1);
+
+    expect(crossesBlockedEdge(state)).toBe(true);
+
+    const next = applyAction(state, { type: "unequip", playerId: active, itemId: wings.id })
+      .state as MainGameState;
+    expect(crossesBlockedEdge(next)).toBe(false);
+    expect(() => applyAction(next, { type: "move", playerId: active, unitId: unit.id, row: 0, col: 1 }))
+      .toThrow();
   });
 });
 

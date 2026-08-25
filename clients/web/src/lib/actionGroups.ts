@@ -6,7 +6,7 @@ export interface ActionGroup {
   actions: Action[];
 }
 
-const LABELS: Record<string, string> = {
+const LABELS: Record<Action["type"], string> = {
   pass: "Pass",
   draw: "Draw",
   deploy: "Deploy",
@@ -16,6 +16,8 @@ const LABELS: Record<string, string> = {
   attack: "Attack",
   play_event: "Play Event",
   equip: "Equip",
+  unequip: "Unequip",
+  transfer: "Transfer",
   destroy: "Destroy",
   raze: "Raze",
   attempt_mission: "Attempt Mission",
@@ -25,6 +27,12 @@ const LABELS: Record<string, string> = {
   seed_steal: "Steal",
   seed_place_location: "Place Location",
   policy_select: "Select Policy",
+  // Prompt-driven actions. They never reach the action panel — the combat,
+  // pick and view overlays submit them — but the union is exhaustive so a new
+  // action type can't be added without deciding on its label.
+  resolve_pick: "Resolve Pick",
+  dismiss_view: "Dismiss",
+  resolve_combat_round: "Resolve Combat",
 };
 
 export function groupActions(actions: Action[]): ActionGroup[] {
@@ -41,7 +49,7 @@ export function groupActions(actions: Action[]): ActionGroup[] {
 
   return Array.from(groups.entries()).map(([type, acts]) => ({
     type,
-    label: LABELS[type] ?? type,
+    label: LABELS[type as Action["type"]] ?? type,
     actions: acts,
   }));
 }
@@ -60,10 +68,14 @@ function cellLabel(row: number, col: number, c?: CellNameResolver): string {
   return name ? `${name} (${row},${col})` : `(${row},${col})`;
 }
 
+/** Name of the unit bearing an item, for actions that don't carry a unitId. */
+export type BearerResolver = (itemId: string) => string | null;
+
 export function describeAction(
   action: Action,
   n?: NameResolver,
   c?: CellNameResolver,
+  b?: BearerResolver,
 ): string {
   switch (action.type) {
     case "pass":
@@ -84,6 +96,15 @@ export function describeAction(
       return `Play ${idOrName(action.cardId, n)}${action.targetId ? ` on ${idOrName(action.targetId, n)}` : ""}`;
     case "equip":
       return `Equip ${idOrName(action.itemId, n)} on ${idOrName(action.unitId, n)}`;
+    case "unequip": {
+      // No unitId on the action, so two co-located units each bearing a
+      // same-named item would otherwise produce identical rows. Same reason
+      // the activate case below surfaces its target.
+      const bearer = b?.(action.itemId);
+      return `Unequip ${idOrName(action.itemId, n)}${bearer ? ` from ${bearer}` : ""}`;
+    }
+    case "transfer":
+      return `Transfer ${idOrName(action.itemId, n)} to ${idOrName(action.unitId, n)}`;
     case "destroy":
       return `Destroy ${idOrName(action.cardId, n)}`;
     case "raze":
@@ -114,7 +135,15 @@ export function describeAction(
       return `Place location at ${cellLabel(action.row, action.col, c)}`;
     case "policy_select":
       return "Confirm policy";
-    default:
+    // Submitted by the overlays, never listed in the action panel — named here
+    // only so the exhaustiveness guard below stays satisfiable.
+    case "resolve_pick":
+    case "dismiss_view":
+    case "resolve_combat_round":
+      return LABELS[action.type];
+    default: {
+      const _exhaustive: never = action;
       return (action as { type: string }).type;
+    }
   }
 }

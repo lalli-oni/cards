@@ -33,6 +33,7 @@ import type {
   ActionDef,
   ActivePassiveEvent,
   ApplyResult,
+  BoardPosition,
   CombatDecision,
   CombatLoopState,
   CombatPairOutcome,
@@ -40,6 +41,7 @@ import type {
   CombatSide,
   GameEvent,
   GridCell,
+  ItemAction,
   ItemCard,
   MainAction,
   ModifierEntry,
@@ -516,41 +518,123 @@ function handlePlayEvent(
 
 }
 
-function handleEquip(
+/** Locate the item, require the actor to control it, and — when the action names
+ *  a unit — require that unit to be controlled too and to stand in the same
+ *  place. Shared by the three item actions; each caller then checks the
+ *  attachment state its own action requires. */
+function locateItemAction(
   draft: Draft<MainGameState>,
   playerId: string,
   itemId: string,
-  unitId: string,
-  emit: EmitFn,
-  queries: QueryListener[],
-): void {
+  unitId?: string,
+): { item: ItemCard; position: BoardPosition } {
   const itemResult = findItemPosition(draft.players, draft.grid, itemId);
   if (!itemResult) {
     throw new Error(`Item "${itemId}" not found in HQ or on grid`);
   }
-
-  const unitResult = findUnitPosition(draft.players, draft.grid, unitId);
-  if (!unitResult) {
-    throw new Error(`Unit "${unitId}" not found in HQ or on grid`);
+  // findItemPosition scans every player's HQ and the whole grid, so a borne
+  // item needs a control check or any item on the board would be a legal
+  // target — unequip is the sharp case, carrying no unit to constrain it. A
+  // loose item is deliberately public: the rules expose a stored item to any
+  // co-located unit, which is what makes putting one down a real cost. Only
+  // equip can name a loose item, so this one rule covers all three actions.
+  if (itemResult.item.equippedTo && itemResult.item.controllerId !== playerId) {
+    throw new Error(`Item "${itemId}" is not controlled by "${playerId}"`);
   }
 
-  if (!samePosition(itemResult.position, unitResult.position)) {
-    throw new Error(`Unit "${unitId}" not co-located with item "${itemId}"`);
+  if (unitId !== undefined) {
+    const unitResult = findUnitPosition(draft.players, draft.grid, unitId);
+    if (!unitResult) {
+      throw new Error(`Unit "${unitId}" not found in HQ or on grid`);
+    }
+    if (unitResult.unit.controllerId !== playerId) {
+      throw new Error(`Unit "${unitId}" is not controlled by "${playerId}"`);
+    }
+    if (!samePosition(itemResult.position, unitResult.position)) {
+      throw new Error(`Unit "${unitId}" not co-located with item "${itemId}"`);
+    }
   }
 
-  const apCost = getModifiedAPCost(
-    draft as MainGameState, queries,
-    { type: "equip", playerId, itemId, unitId }, 1,
-  );
-  spendAP(draft, apCost);
+  return itemResult;
+}
 
-  const item = itemResult.item;
+/** All three item actions cost 1 AP before modifiers. Called after the action's
+ *  own precondition check so a player at 0 AP gets that action's error rather
+ *  than "Not enough AP" — state-wise the order is moot, since a throw discards
+ *  the enclosing immer draft either way. */
+function spendItemActionAP(
+  draft: Draft<MainGameState>,
+  action: ItemAction,
+  queries: QueryListener[],
+): void {
+  spendAP(draft, getModifiedAPCost(draft as MainGameState, queries, action, 1));
+}
+
+function handleEquip(
+  draft: Draft<MainGameState>,
+  action: Extract<ItemAction, { type: "equip" }>,
+  emit: EmitFn,
+  queries: QueryListener[],
+): void {
+  const { playerId, itemId, unitId } = action;
+  const { item } = locateItemAction(draft, playerId, itemId, unitId);
   if (item.equippedTo) {
-    item.equippedTo = undefined;
+    throw new Error(`Item "${itemId}" is already equipped — use transfer`);
   }
 
+  spendItemActionAP(draft, action, queries);
+  // Taking a loose item takes control of it, so its equip effect keys off the
+  // new bearer's side rather than whoever last carried it. Until an item's
+  // control is derived from its bearer (#278), this is the write that keeps a
+  // captured item from still working for its previous owner.
+  item.controllerId = playerId;
   item.equippedTo = unitId;
-  emit({ type: "item_equipped", playerId, itemId, unitId });
+  emit({ type: "item_equipped", playerId, itemId, unitId, cause: { kind: "equip" } });
+}
+
+function handleTransfer(
+  draft: Draft<MainGameState>,
+  action: Extract<ItemAction, { type: "transfer" }>,
+  emit: EmitFn,
+  queries: QueryListener[],
+): void {
+  const { playerId, itemId, unitId } = action;
+  const { item } = locateItemAction(draft, playerId, itemId, unitId);
+  if (!item.equippedTo) {
+    throw new Error(`Item "${itemId}" is not equipped — use equip`);
+  }
+  if (item.equippedTo === unitId) {
+    throw new Error(`Item "${itemId}" is already equipped to unit "${unitId}"`);
+  }
+
+  spendItemActionAP(draft, action, queries);
+  const fromUnitId: string = item.equippedTo;
+  item.equippedTo = unitId;
+  emit({ type: "item_equipped", playerId, itemId, unitId, cause: { kind: "transfer", fromUnitId } });
+}
+
+function handleUnequip(
+  draft: Draft<MainGameState>,
+  action: Extract<ItemAction, { type: "unequip" }>,
+  emit: EmitFn,
+  queries: QueryListener[],
+): void {
+  const { playerId, itemId } = action;
+  const { item, position } = locateItemAction(draft, playerId, itemId);
+  if (!item.equippedTo) {
+    throw new Error(`Item "${itemId}" is not equipped`);
+  }
+
+  spendItemActionAP(draft, action, queries);
+  // The card is already in the cell's `items` array or a player's HQ — only
+  // the attachment goes away, so there is nothing to move.
+  const fromUnitId: string = item.equippedTo;
+  item.equippedTo = undefined;
+  emit({
+    type: "item_dropped",
+    itemId,
+    cause: { kind: "unequip", position, playerId, fromUnitId },
+  });
 }
 
 function handleDestroy(
@@ -1257,7 +1341,7 @@ function resolveCombatPair(
   } else {
     // Combat-specific: drop equipped items before marking injured. Other
     // injure sources (DSL injure, traps, contest default consequence) leave
-    // equipment in place — see injureUnit doc.
+    // items in place — see injureUnit doc.
     dropEquippedItems(cell, loser.unit, row, col, emit);
     injureUnit(loser.unit, emit);
   }
@@ -1871,7 +1955,15 @@ export function applyMainAction(
         break;
 
       case "equip":
-        handleEquip(draft, action.playerId, action.itemId, action.unitId, emit, queries);
+        handleEquip(draft, action, emit, queries);
+        break;
+
+      case "unequip":
+        handleUnequip(draft, action, emit, queries);
+        break;
+
+      case "transfer":
+        handleTransfer(draft, action, emit, queries);
         break;
 
       case "destroy":

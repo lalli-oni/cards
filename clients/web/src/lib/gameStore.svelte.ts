@@ -8,6 +8,7 @@ import {
   type GameState,
   getVisibleEvent,
   type InvalidActionError,
+  type ItemCard,
   type PlayerDescriptor,
   type Session,
   setAutoFreeze,
@@ -161,6 +162,29 @@ export function resolveCardName(id: string): string {
 export function resolveCellName(row: number, col: number): string | null {
   const cell = _visibleState?.grid[row]?.[col];
   return cell?.location?.name ?? null;
+}
+
+/**
+ * Name of the unit currently bearing `itemId`, or null if it is loose or
+ * unknown. An `unequip` action carries no unitId, so two co-located units each
+ * bearing a same-named item would otherwise produce identical action rows.
+ */
+export function resolveItemBearer(itemId: string): string | null {
+  const vs = _visibleState;
+  if (!vs) return null;
+  const search = (cards: readonly Card[]): string | undefined =>
+    (cards.find((card) => card.id === itemId && card.type === "item") as ItemCard | undefined)
+      ?.equippedTo;
+  const zones: readonly Card[][] = [
+    vs.self.hq as Card[],
+    ...(vs.opponents ?? []).map((o) => o.hq as Card[]),
+    ...vs.grid.flatMap((row) => row.map((cell) => cell.items as Card[])),
+  ];
+  for (const zone of zones) {
+    const bearerId = search(zone);
+    if (bearerId) return resolveCardName(bearerId);
+  }
+  return null;
 }
 
 /**

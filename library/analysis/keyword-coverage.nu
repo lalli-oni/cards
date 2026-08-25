@@ -1,7 +1,7 @@
 #!/usr/bin/env nu
 # keyword-coverage.nu — assert governed mechanical-keyword coverage against the
 # `keywords` column, with a tiered threshold: unit/location keywords need ≥2
-# cards, equipment (item) keywords need ≥1. The governed vocabulary is read from
+# cards, item keywords need ≥1. The governed vocabulary is read from
 # the build's `keywords.json` (emitted by library/build.ts from
 # engine/src/keywords.ts), so the check can't drift from the source of truth.
 #
@@ -12,7 +12,7 @@ use selectors.nu *
 
 const ANALYSIS_DIR = (path self | path dirname)
 
-# Coverage tier: equipment (item-scoped) keywords need 1 card, others need 2.
+# Coverage tier: item-scoped keywords need 1 card, others need 2.
 def threshold-of [types: list] {
   if ("item" in $types) { 1 } else { 2 }
 }

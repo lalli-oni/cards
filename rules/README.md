@@ -475,7 +475,7 @@ more expensive or powerful than a legendary.
 
 Which tier a card belongs to follows from **how singular its subject is**, and
 what the tier buys is **how often a repeat turns up**. See
-[Rarity Reflects Singularity](design-principles.md#rarity-reflects-singularity).
+[Rarity Reflects Repeat Tolerance](design-principles.md#rarity-reflects-repeat-tolerance).
 
 Caps apply **per sub-deck**, not across the seeding deck as a whole. The
 location and dilemma blocks are fixed-size and do a different job from the main

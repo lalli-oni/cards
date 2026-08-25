@@ -121,22 +121,23 @@ synergies an opponent can still disrupt — deny a piece, race the setup, or
 punish the commitment. This is the card-craft echo of **Every Mechanic Needs
 Counterplay**.
 
-### Rarity Reflects Singularity
+### Rarity Reflects Repeat Tolerance
 
 Rarity is not a power dial — cost and effect are independent of it. It answers a
-different question: **how singular is this card's subject?**
+different question: **how often should seeing this card twice feel normal?**
 
 - **Common** — a common noun. A role or a place-type, many of which exist in the
   world: Doctor, Soldier, Engineer; Market, Hospital, Overgrown Grove.
-- **Rare** — notable, and repeated only occasionally. A distinguished instance
-  of a category (Plague Doctor; Silk Road Bazaar), or a named figure who is not
-  one of the set's marquee few (Nikola Tesla).
-- **Legendary** — a proper noun. There is exactly one of it in history:
-  Cleopatra; The Pyramids.
+- **Rare** — a *specialised* role: the distinguished cousin of a common.
+  Samurai, Berserker, Neurosurgeon. It may instead be a named figure, but only
+  an obscure one — Durable Mike Malloy, Wrong Way Corrigan — and the tier should
+  hold more roles than names.
+- **Legendary** — a name everyone knows, or a landmark there is one of:
+  Cleopatra, Nikola Tesla; The Pyramids.
 
-What the tier buys is **how often a repeat turns up**, not whether one is
-logically possible. A second Tesla is a good moment because it is infrequent; if
-it were routine it would stop being one. So commons are the backbone a deck
-leans on and repeats happily, rares repeat occasionally and notably, and a
-legendary arriving reads as an event. Deck-building limits are what hold that
-frequency in place — the tier only names the intent.
+Two axes, depending on the subject. For roles it is **how specialised** the role
+is; for names it is **how widely known** the figure is. Both land in the same
+place: how often a repeat should turn up. Commons are the backbone a deck leans
+on and repeats happily, a rare repeating is occasional and notable, and a
+legendary arriving at all reads as an event. Deck-building limits are what hold
+that frequency in place — the tier only names the intent.

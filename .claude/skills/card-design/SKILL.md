@@ -57,22 +57,26 @@ Every card should have a reason to exist in a deck.
 - **7+ cost**: Build-around legendaries. Should feel like a payoff.
 
 #### Rarity guidelines
-Which tier a card belongs to is settled first by **how singular its subject is** —
-see [Rarity Reflects Singularity](../../../rules/design-principles.md#rarity-reflects-singularity).
+Which tier a card belongs to is settled first by **how often seeing it twice
+should feel normal** — see
+[Rarity Reflects Repeat Tolerance](../../../rules/design-principles.md#rarity-reflects-repeat-tolerance).
 The mechanical weight below follows from that, it does not override it.
 
 - **Common**: a common noun — a role or place-type. Simple, efficient, low decision complexity. The backbone of decks, and the card you are happy to see repeat. Limited or no actions.
-- **Rare**: named but not unique. One interesting mechanic or a clear strategic role; usually has an action.
-- **Legendary**: a proper noun — one of it in history. Build-around potential, high stats or a powerful action. Should feel like a centerpiece, and like an event when it arrives.
+- **Rare**: a specialised role — Samurai, Berserker, Neurosurgeon — or an obscure named figure. One interesting mechanic or a clear strategic role; usually has an action.
+- **Legendary**: a name everyone knows, or a landmark there is one of. Build-around potential, high stats or a powerful action. Should feel like a centerpiece, and like an event when it arrives.
 
 ### 4. Unit subjects
 
 A unit's subject and its rarity are the same decision — see
-[Rarity Reflects Singularity](../../../rules/design-principles.md#rarity-reflects-singularity).
-Commons are **roles**, not people: Doctor, Soldier, Engineer, Merchant. Only rare
-and legendary units name a figure.
+[Rarity Reflects Repeat Tolerance](../../../rules/design-principles.md#rarity-reflects-repeat-tolerance).
+Commons are **roles**, not people: Doctor, Soldier, Engineer, Merchant. Rare is
+mostly *specialised* roles — Samurai, Berserker, Neurosurgeon — and should hold
+more roles than names. A named figure belongs at legendary if it is a name
+everyone knows, and at rare only if it is genuinely obscure (Durable Mike
+Malloy, Wrong Way Corrigan).
 
-When picking figures for those named tiers:
+When picking figures for the named slots:
 
 - **Diversity of era and region.** Don't cluster in one time period or geography. Mix ancient, medieval, early modern, modern. Mix continents.
 - **Recognizability spectrum.** Include well-known figures (everyone knows Leonardo da Vinci) and interesting obscure ones (fewer know Hypatia or Mansa Musa). The mix creates discovery moments.
@@ -81,7 +85,7 @@ When picking figures for those named tiers:
 
 ### 5. Non-unit cards
 
-- **Locations**: Common locations are place-*types* (Market, Hospital, Overgrown Grove) — the grid should read fine with two of them on it. Rare and legendary locations reference real places. Mission requirements should connect thematically to the place (The Great Library needs Knowledge units; The Colosseum needs Military units). Passive effects should feel like "being at this place helps you do X." Locations can have blocked edges (N, S, E, W) that restrict unit movement — use sparingly to create tactical chokepoints. Locations can also have actions usable by any player with a unit there, using the same `name:ap_cost:effect` format as unit actions.
+- **Locations**: Common locations are place-*types* (Market, Hospital, Overgrown Grove) — the grid should read fine with two of them on it. Rare locations are specialised place-types; legendary locations are the landmark there is one of. Mission requirements should connect thematically to the place (The Great Library needs Knowledge units; The Colosseum needs Military units). Passive effects should feel like "being at this place helps you do X." Locations can have blocked edges (N, S, E, W) that restrict unit movement — use sparingly to create tactical chokepoints. Locations can also have actions usable by any player with a unit there, using the same `name:ap_cost:effect` format as unit actions.
 - **Items**: Can be historical artifacts, inventions, or concepts. Equip effects apply at the equipped unit's location; stored effects apply at the item's location. Items can have both.
 - **Events**: Name after historical events, natural phenomena, or strategic concepts. Instant/passive/trap timing should match the event's nature (an earthquake is instant; a plague is passive; an ambush is a trap).
 - **Policies**: Name after real doctrines, philosophies, or economic systems. Effect should be a global modifier that shapes strategy without being mandatory.

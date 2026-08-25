@@ -128,12 +128,15 @@ different question: **how singular is this card's subject?**
 
 - **Common** — a common noun. A role or a place-type, many of which exist in the
   world: Doctor, Soldier, Engineer; Market, Hospital, Overgrown Grove.
-- **Rare** — named, but not unique. A distinguished instance of a category:
-  Plague Doctor; Silk Road Bazaar.
+- **Rare** — notable, and repeated only occasionally. A distinguished instance
+  of a category (Plague Doctor; Silk Road Bazaar), or a named figure who is not
+  one of the set's marquee few (Nikola Tesla).
 - **Legendary** — a proper noun. There is exactly one of it in history:
   Cleopatra; The Pyramids.
 
-The test earns its keep by settling duplicate-tolerance as a property of the
-card rather than a hope: two Hospitals on the grid is a city, two Cleopatras is
-absurd. Commons are therefore the backbone a deck leans on and repeats happily,
-and a legendary arriving on the grid reads as an event.
+What the tier buys is **how often a repeat turns up**, not whether one is
+logically possible. A second Tesla is a good moment because it is infrequent; if
+it were routine it would stop being one. So commons are the backbone a deck
+leans on and repeats happily, rares repeat occasionally and notably, and a
+legendary arriving reads as an event. Deck-building limits are what hold that
+frequency in place — the tier only names the intent.

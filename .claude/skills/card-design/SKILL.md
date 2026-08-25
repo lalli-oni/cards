@@ -65,9 +65,14 @@ The mechanical weight below follows from that, it does not override it.
 - **Rare**: named but not unique. One interesting mechanic or a clear strategic role; usually has an action.
 - **Legendary**: a proper noun — one of it in history. Build-around potential, high stats or a powerful action. Should feel like a centerpiece, and like an event when it arrives.
 
-### 4. Historical figure selection
+### 4. Unit subjects
 
-When picking figures for units:
+A unit's subject and its rarity are the same decision — see
+[Rarity Reflects Singularity](../../../rules/design-principles.md#rarity-reflects-singularity).
+Commons are **roles**, not people: Doctor, Soldier, Engineer, Merchant. Only rare
+and legendary units name a figure.
+
+When picking figures for those named tiers:
 
 - **Diversity of era and region.** Don't cluster in one time period or geography. Mix ancient, medieval, early modern, modern. Mix continents.
 - **Recognizability spectrum.** Include well-known figures (everyone knows Leonardo da Vinci) and interesting obscure ones (fewer know Hypatia or Mansa Musa). The mix creates discovery moments.
@@ -76,7 +81,7 @@ When picking figures for units:
 
 ### 5. Non-unit cards
 
-- **Locations**: Should reference real places. Mission requirements should connect thematically to the place (The Great Library needs Knowledge units; The Colosseum needs Military units). Passive effects should feel like "being at this place helps you do X." Locations can have blocked edges (N, S, E, W) that restrict unit movement — use sparingly to create tactical chokepoints. Locations can also have actions usable by any player with a unit there, using the same `name:ap_cost:effect` format as unit actions.
+- **Locations**: Common locations are place-*types* (Market, Hospital, Overgrown Grove) — the grid should read fine with two of them on it. Rare and legendary locations reference real places. Mission requirements should connect thematically to the place (The Great Library needs Knowledge units; The Colosseum needs Military units). Passive effects should feel like "being at this place helps you do X." Locations can have blocked edges (N, S, E, W) that restrict unit movement — use sparingly to create tactical chokepoints. Locations can also have actions usable by any player with a unit there, using the same `name:ap_cost:effect` format as unit actions.
 - **Items**: Can be historical artifacts, inventions, or concepts. Equip effects apply at the equipped unit's location; stored effects apply at the item's location. Items can have both.
 - **Events**: Name after historical events, natural phenomena, or strategic concepts. Instant/passive/trap timing should match the event's nature (an earthquake is instant; a plague is passive; an ambush is a trap).
 - **Policies**: Name after real doctrines, philosophies, or economic systems. Effect should be a global modifier that shapes strategy without being mandatory.
@@ -101,12 +106,12 @@ Identify:
 ### Step 2: Design cards
 
 For each card:
-1. Pick the historical reference (for units) or thematic concept (for other types)
+1. Pick the subject at the tier you are designing for — a role or place-type for a common, a named figure or place for a rare or legendary
 2. Assign stats based on the guidelines above and the figure's identity
 3. Write the action (if any) — `name:ap_cost:effect` format, where effect is a snake_case identifier (e.g. `strength_contest_injure`, `buy_item_free`, `move_and_gain_gold`)
 4. Write card text that explains the mechanic clearly
 5. Write flavor text (short, punchy, historically grounded)
-6. Assign rarity based on complexity and power level
+6. Confirm the rarity follows from how singular the subject is, not from its power level
 7. Assign cost based on overall power budget
 
 Present designs as a table matching the CSV columns before writing to files. Always show the full row so the user can review before committing.

@@ -131,7 +131,7 @@ different question: **how singular is this card's subject?**
 - **Rare** — named, but not unique. A distinguished instance of a category:
   Plague Doctor; Silk Road Bazaar.
 - **Legendary** — a proper noun. There is exactly one of it in history:
-  Cleopatra; The Great Wall.
+  Cleopatra; The Pyramids.
 
 The test earns its keep by settling duplicate-tolerance as a property of the
 card rather than a hope: two Hospitals on the grid is a city, two Cleopatras is

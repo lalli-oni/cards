@@ -59,6 +59,14 @@ export interface GridPosition {
   col: number;
 }
 
+/**
+ * A place on the board where units/items can be in play.
+ * When #59 lands (HQ on grid), this collapses to just { row, col }.
+ */
+export type BoardPosition =
+  | { type: "hq"; playerId: string }
+  | { type: "grid"; row: number; col: number };
+
 /** Edge state for location cards. */
 export interface LocationEdges {
   n: boolean; // true = open, false = blocked
@@ -692,7 +700,17 @@ export type MainAction =
     }
   | { type: "move"; playerId: string; unitId: string; row: number; col: number }
   | { type: "play_event"; playerId: string; cardId: string; targetId?: string }
+  /* The three item actions are separate variants rather than one variant with
+   * an optional `unitId`, so that every field stays required. A single variant
+   * would make equip and transfer structurally identical, and an APQueryContext
+   * modifier sees only `{ action, playerId }` — so a card discounting one mode
+   * could not tell them apart at all. See `ItemAction` below. */
+  /** Attach a loose item to a co-located unit. */
   | { type: "equip"; playerId: string; itemId: string; unitId: string }
+  /** Detach an item, leaving it where its bearer stands. */
+  | { type: "unequip"; playerId: string; itemId: string }
+  /** Move an item from its current bearer to another co-located unit. */
+  | { type: "transfer"; playerId: string; itemId: string; unitId: string }
   | { type: "destroy"; playerId: string; cardId: string }
   | {
       type: "raze";
@@ -715,6 +733,19 @@ export type MainAction =
   | ResolvePickAction
   | DismissViewAction
   | ResolveCombatRoundAction;
+
+/**
+ * The three actions that move an item around. Declared once so the set has a
+ * single home: Squire's discount, the shared 1-AP cost helper and the
+ * enumeration all key off it, and adding a fourth mode (`disarm`) touches only
+ * this declaration.
+ */
+export type ItemAction = Extract<MainAction, { type: "equip" | "unequip" | "transfer" }>;
+
+/** Narrows any action to the item-action set. */
+export function isItemAction(action: MainAction): action is ItemAction {
+  return action.type === "equip" || action.type === "unequip" || action.type === "transfer";
+}
 
 /**
  * Submitted by the viewer to dismiss a pending `viewPrompt`. The view is
@@ -888,8 +919,36 @@ export type GameEvent =
       cardName: string;
       targetId?: string;
     }
-  | { type: "item_equipped"; playerId: string; itemId: string; unitId: string }
-  | { type: "item_dropped"; itemId: string; row: number; col: number }
+  | {
+      type: "item_equipped";
+      playerId: string;
+      itemId: string;
+      /** The unit now bearing the item. */
+      unitId: string;
+      /** How it got there. `equip` takes a loose item off the ground or out of
+       *  HQ; `transfer` moves it between two units. Both end in the same state,
+       *  so a listener that wants only one must check this — `EffectListener.on`
+       *  matches a single event type. Mirrors `item_dropped.cause`. */
+      cause: { kind: "equip" } | { kind: "transfer"; fromUnitId: string };
+    }
+  | {
+      type: "item_dropped";
+      itemId: string;
+      /** Why the item came loose, and where it landed. A bearer can only die on
+       *  the grid, so `death` narrows to a `GridPosition` — that is why the
+       *  position rides on the cause rather than sitting alongside it. Same
+       *  single-event-type reasoning as `item_equipped.cause`. */
+      cause:
+        | { kind: "death"; position: GridPosition; unitId: string }
+        | {
+            kind: "unequip";
+            position: BoardPosition;
+            /** The player who spent the action, and the unit that was carrying
+             *  it. Neither is recoverable from state afterwards. */
+            playerId: string;
+            fromUnitId: string;
+          };
+    }
   | { type: "location_placed"; row: number; col: number; cardId: string }
   | { type: "location_razed"; row: number; col: number; cardId: string }
   | {

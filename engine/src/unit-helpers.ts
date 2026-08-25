@@ -24,10 +24,10 @@ export function killUnit(
   emit({ type: "unit_killed", unitId: unit.id, controllerId: unit.controllerId });
 }
 
-/** Injure a unit: set injured flag and emit. Equipment is NOT dropped here —
+/** Injure a unit: set injured flag and emit. Items are NOT dropped here —
  *  item drops on injure are combat-specific (apply-main.ts:resolveCombatPair
  *  calls dropEquippedItems itself). Other injure sources (DSL `injure` verb,
- *  trap effects, contest default consequence) leave equipment in place. */
+ *  trap effects, contest default consequence) leave items in place. */
 export function injureUnit(unit: Draft<UnitCard>, emit: EmitFn): void {
   unit.injured = true;
   emit({ type: "unit_injured", unitId: unit.id, controllerId: unit.controllerId });
@@ -89,7 +89,11 @@ export function dropEquippedItems(
   for (const item of cell.items) {
     if (item.equippedTo === unit.id) {
       item.equippedTo = undefined;
-      emit({ type: "item_dropped", itemId: item.id, row, col });
+      emit({
+        type: "item_dropped",
+        itemId: item.id,
+        cause: { kind: "death", position: { row, col }, unitId: unit.id },
+      });
     }
   }
 }

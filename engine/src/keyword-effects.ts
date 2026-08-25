@@ -14,6 +14,7 @@
 // `mission-helpers.ts`'s parse-error precedent).
 
 import type { CardType, ItemCard, LocationCard, MainGameState, UnitCard } from "./types";
+import { isItemAction } from "./types";
 import {
   asFamily,
   type FamilyParams,
@@ -240,7 +241,9 @@ export function keywordEffects(
           query: "ap",
           modify: (_state, ctx) => {
             if (ctx.playerId !== controllerId) return 0;
-            if (ctx.action.type !== "equip") return 0;
+            // Discounts the concept rather than one verb, matching the wording
+            // in rules/README.md → Unit keywords.
+            if (!isItemAction(ctx.action)) return 0;
             return -amount;
           },
         } satisfies APModifierListener);

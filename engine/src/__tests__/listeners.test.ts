@@ -1493,7 +1493,7 @@ describe("AP modifier queries", () => {
 describe("keyword effects coexist with bespoke *_EFFECTS factories", () => {
   it("a card with both a definitionId factory and keywords contributes both sets of modifiers", () => {
     // mary-shelley (bespoke): first play_event each turn is free.
-    // Squire (keyword): equip actions cost 1 less AP. Same card, both fire.
+    // Squire (keyword): item actions cost 1 less AP. Same card, both fire.
     const state = gameWith((d, p) => {
       d.players[p.activeIdx].hq.push(
         makeUnit({ ownerId: p.active, definitionId: "mary-shelley", keywords: ["Squire"] }),

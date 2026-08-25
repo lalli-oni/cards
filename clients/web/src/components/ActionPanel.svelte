@@ -5,6 +5,7 @@
     resolveActionTooltip,
     resolveCardName,
     resolveCellName,
+    resolveItemBearer,
     selectAction,
   } from "../lib/gameStore.svelte";
 
@@ -61,7 +62,7 @@
             : 'bg-surface-raised text-text-secondary hover:bg-surface-hover'}"
         >
           {#if group.actions.length === 1}
-            {describeAction(group.actions[0], resolveCardName, resolveCellName)}
+            {describeAction(group.actions[0], resolveCardName, resolveCellName, resolveItemBearer)}
           {:else}
             {group.label}
             <span class="text-text-muted">({group.actions.length})</span>
@@ -76,7 +77,7 @@
                 title={resolveActionTooltip(action)}
                 class="w-full rounded px-3 py-1 text-left text-xs text-text-secondary bg-surface-raised/50 hover:bg-surface-hover"
               >
-                {describeAction(action, resolveCardName, resolveCellName)}
+                {describeAction(action, resolveCardName, resolveCellName, resolveItemBearer)}
               </button>
             {/each}
           </div>

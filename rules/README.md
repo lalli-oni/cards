@@ -473,9 +473,9 @@ Rarity affects deck-building limits and pack distribution only. It has
 no direct effect on gameplay mechanics or card cost — a common can be
 more expensive or powerful than a legendary.
 
-Which tier a card belongs to follows from **how singular its subject is**, and
-what the tier buys is **how often a repeat turns up**. See
-[Rarity Reflects Repeat Tolerance](design-principles.md#rarity-reflects-repeat-tolerance).
+Which tier a card belongs to follows from **how specialised a role is**, or
+**how widely known a name is** — both answering how often a repeat should turn
+up. See [Rarity Reflects Repeat Tolerance](design-principles.md#rarity-reflects-repeat-tolerance).
 
 Caps apply **per sub-deck**, not across the seeding deck as a whole. The
 location and dilemma blocks are fixed-size and do a different job from the main
@@ -487,9 +487,9 @@ body, so a scarce location does not compete with a scarce unit for one budget.
 | Locations | [var:seeding_locations:16] | max [var:max_legendary_locations:2] | max [var:max_rare_locations:6] | no cap |
 | Dilemmas | 16 | not permitted | no cap | no cap |
 
-A tier cap is not a copy limit: it bounds how many *cards of a tier* a deck may
-carry, not how many copies of one card. Bounding repeats needs a per-card limit,
-which the game does not yet define.
+A tier cap is not a copy limit: it bounds how many cards of a tier you may
+**bring**, not how many copies of one card. Bounding repeats needs a per-card
+limit, which the game does not yet define.
 
 ## Keyword System
 

@@ -93,7 +93,7 @@
 
     
     <line x1="59" y1="681.5" x2="691" y2="681.5" stroke="#1a2540" stroke-width="1"></line>
-    <text x="59" y="698.5" font-family="JetBrains Mono" font-size="9" font-weight="700" letter-spacing="1.98" fill="#c8f562">◆ EPIC</text>
+    <text x="59" y="698.5" font-family="JetBrains Mono" font-size="9" font-weight="700" letter-spacing="1.98" fill="#c8f562">◆ RARE</text>
     <text x="691" y="698.5" text-anchor="end" font-family="JetBrains Mono" font-size="9" letter-spacing="1.98" fill="#7a8aa6">MISSION // ALPHA-1 · L09</text>
   </g>
 </svg>

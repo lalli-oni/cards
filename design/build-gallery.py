@@ -27,8 +27,7 @@ TYPE_LABEL = {"unit": "Units", "location": "Locations", "item": "Items",
               "event": "Events", "policy": "Policies"}
 TYPE_STEM = {"unit": "units", "location": "locations", "item": "items",
              "event": "events", "policy": "policies"}
-RARITY_COLOR = {"common": "#6c7486", "uncommon": "#4a8fd1", "rare": "#4a8fd1",
-                "epic": "#b07cf1", "legendary": "#f4c24a"}
+RARITY_COLOR = {"common": "#6c7486", "rare": "#4a8fd1", "legendary": "#f4c24a"}
 
 
 def load_meta(set_name):

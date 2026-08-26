@@ -115,7 +115,7 @@ For each card:
 3. Write the action (if any) — `name:ap_cost:effect` format, where effect is a snake_case identifier (e.g. `strength_contest_injure`, `buy_item_free`, `move_and_gain_gold`)
 4. Write card text that explains the mechanic clearly
 5. Write flavor text (short, punchy, historically grounded)
-6. Confirm the rarity follows from how singular the subject is, not from its power level
+6. Confirm the rarity follows from how specialised the role is, or how widely known the name is — not from power level
 7. Assign cost based on overall power budget
 
 Present designs as a table matching the CSV columns before writing to files. Always show the full row so the user can review before committing.

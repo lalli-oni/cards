@@ -23,7 +23,7 @@ In each round every player gets a turn, first starting player and then going clo
 Each player brings a **seeding deck** of [var:seeding_deck_size:60] cards (shuffled).
 Each seeding deck must contain exactly [var:seeding_locations:16] **locations** and
 [var:seeding_dilemmas:16] **dilemmas**; the remaining [var:seeding_other:28] cards are units, items,
-and events. Rarity limits apply per deck (see Rarity). Policies are
+and events. Rarity limits apply per sub-deck (see Rarity). Policies are
 not part of the seeding deck and do not count toward these totals.
 
 Each player brings [var:policy_pool_size:3] policy cards (separate from the seeding
@@ -386,7 +386,8 @@ or market deck — they are always placed under a mission location or
 sent to the player's prospect deck. See Seeding Phase for details.
 
 Dilemmas may only be **common** or **rare** rarity, and carry their
-own cap row above — they never draw on the main body's budget.
+own row in the cap table (see [Rarity](#rarity)) — they never draw on the main
+body's budget.
 
 Any player can attempt to solve dilemmas at any mission — there is
 no mission ownership. Players may strategically place dilemmas on
@@ -520,9 +521,9 @@ body, so a scarce location does not compete with a scarce unit for one budget.
 
 | Sub-deck | Size | Legendary | Rare | Common |
 |-----------|------|-----------|------|--------|
-| Main body | 28 | max [var:max_legendary:6] | max [var:max_rare:12] | no cap |
+| Main body | [var:seeding_other:28] | max [var:max_legendary_main:6] | max [var:max_rare_main:12] | no cap |
 | Locations | [var:seeding_locations:16] | max [var:max_legendary_locations:3] | max [var:max_rare_locations:6] | no cap |
-| Dilemmas | 16 | not permitted | no cap | no cap |
+| Dilemmas | [var:seeding_dilemmas:16] | not permitted | no cap | no cap |
 
 A tier cap is not a copy limit: it bounds how many cards of a tier you may
 **bring**, not how many copies of one card. Bounding repeats needs a per-card
@@ -611,8 +612,8 @@ takes −1 to all stats in a contest (including combat).
 
 #### Seeding
 - Seeding deck size: 60 (16 locations, 16 dilemmas, 28 other)
-- Rarity caps, applied per-deck and per sub-deck: main body [var:max_legendary:6] legendary /
-  [var:max_rare:12] rare; locations [var:max_legendary_locations:3] legendary /
+- Rarity caps, applied per-deck and per sub-deck: main body [var:max_legendary_main:6] legendary /
+  [var:max_rare_main:12] rare; locations [var:max_legendary_locations:3] legendary /
   [var:max_rare_locations:6] rare; dilemmas uncapped (never legendary)
 - Draft round draw: 10 cards (last 2 to Arena, 8 kept)
 - Claim: pick until Arena is empty; locations placed on grid; starting player token rotates each round

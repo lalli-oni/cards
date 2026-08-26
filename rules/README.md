@@ -521,7 +521,7 @@ body, so a scarce location does not compete with a scarce unit for one budget.
 | Sub-deck | Size | Legendary | Rare | Common |
 |-----------|------|-----------|------|--------|
 | Main body | 28 | max [var:max_legendary:6] | max [var:max_rare:12] | no cap |
-| Locations | [var:seeding_locations:16] | max [var:max_legendary_locations:2] | max [var:max_rare_locations:6] | no cap |
+| Locations | [var:seeding_locations:16] | max [var:max_legendary_locations:3] | max [var:max_rare_locations:6] | no cap |
 | Dilemmas | 16 | not permitted | no cap | no cap |
 
 A tier cap is not a copy limit: it bounds how many cards of a tier you may
@@ -612,7 +612,7 @@ takes −1 to all stats in a contest (including combat).
 #### Seeding
 - Seeding deck size: 60 (16 locations, 16 dilemmas, 28 other)
 - Rarity caps, applied per-deck and per sub-deck: main body [var:max_legendary:6] legendary /
-  [var:max_rare:12] rare; locations [var:max_legendary_locations:2] legendary /
+  [var:max_rare:12] rare; locations [var:max_legendary_locations:3] legendary /
   [var:max_rare_locations:6] rare; dilemmas uncapped (never legendary)
 - Draft round draw: 10 cards (last 2 to Arena, 8 kept)
 - Claim: pick until Arena is empty; locations placed on grid; starting player token rotates each round

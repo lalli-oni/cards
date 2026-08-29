@@ -23,8 +23,16 @@ In each round every player gets a turn, first starting player and then going clo
 Each player brings a **seeding deck** of [var:seeding_deck_size:60] cards (shuffled).
 Each seeding deck must contain exactly [var:seeding_locations:16] **locations** and
 [var:seeding_dilemmas:16] **dilemmas**; the remaining [var:seeding_other:28] cards are units, items,
-and events. Rarity limits apply per sub-deck (see Rarity). Policies are
-not part of the seeding deck and do not count toward these totals.
+and events. Policies are not part of the seeding deck and do not count
+toward these totals.
+
+Each seeding deck is **dealt at random from the set**, drawing to the
+rarity caps in [Rarity](#rarity) as quotas rather than ceilings. A set
+holds more cards than a seeding deck takes, so players receive different
+subsets and no two games start from the same board.
+
+[design: The deal is not implemented yet — #285. Until it lands, callers
+supply a seeding deck directly and nothing validates its composition.]
 
 Each player brings [var:policy_pool_size:3] policy cards (separate from the seeding
 deck).

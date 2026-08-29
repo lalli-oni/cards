@@ -65,6 +65,6 @@ Monorepo with bun workspaces. Single version (`package.json` root). Rules and li
 - New sets: create a new directory under `library/sets/` with the same CSV structure
 
 ### Workflows
-- **Editing**: Use VisiData (`vd library/sets/baseline/units.csv`) for terminal spreadsheet editing, or Numbers/Excel for bulk sessions
+- **Editing**: Use VisiData (`vd library/sets/alpha-1/units.csv`) for terminal spreadsheet editing, or Numbers/Excel for bulk sessions
 - **Querying**: Use `/card-query` skill to query card data with nushell
 - **Building**: Run `bun library/build.ts` after edits to validate and generate JSON

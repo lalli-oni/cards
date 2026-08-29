@@ -1,0 +1,106 @@
+# Set-level metadata. Card-level column specs live in `library/schema.md`;
+# this file describes the set as a whole. Spec: issue #276.
+
+name = "alpha-1"
+title = "Alpha 1"
+status = "in-revision"
+
+description = """
+The first playable set. Its job is to be playable, not balanced — broad enough
+to cover every archetype and mechanic at rough power levels, small enough that a
+player holds the core after a few games. Under active revision (#45); the counts
+below are the target the content passes author toward, not a description of what
+the CSVs currently hold.
+"""
+
+# Rules variants this set is built for.
+variants = ["baseline"]
+
+# Minimum engine version that can load and resolve this set.
+engine_min_version = "0.1.0"
+
+[ladder]
+tiers = ["common", "rare", "legendary"]
+notes = """
+Three tiers, settled in #279. `uncommon`, `epic` and `rare`-as-a-fourth-tier are
+retired and rejected by the build. Which tier a card belongs in follows from
+`rules/design-principles.md` → Rarity Reflects Repeat Tolerance: how often should
+seeing this card twice feel normal.
+"""
+
+# ---------------------------------------------------------------------------
+# Target counts per type x tier — the composition lock (#196).
+# These are design targets. The CSVs diverge from them until #260-#264 land.
+# ---------------------------------------------------------------------------
+
+[targets.unit]
+common = 8
+rare = 8
+legendary = 6
+
+[targets.item]
+common = 5
+rare = 3
+legendary = 2
+
+[targets.event]
+common = 5
+rare = 7
+legendary = 2
+
+[targets.location]
+common = 8
+rare = 10
+legendary = 6
+
+[targets.policy]
+common = 8
+
+[design]
+commons = """
+Commons are the backbone a deck leans on and repeats happily — generic roles and
+place-types, not named subjects. The per-sub-deck rarity caps make them a
+structural floor of roughly a third of every legal deck, so they carry the set
+rather than padding it. alpha-1 has none today: every unit is a named historical
+figure, which is the single largest piece of work in the revision.
+"""
+
+named_subjects = """
+The set is about historical figures, but not only about them — locations, items
+and events each matter in their own right, and unnamed archetypes stand on their
+own merits. Units are the frontmen. Names live at `rare` and `legendary`; a name
+everyone knows is `legendary`, an obscure one may be `rare`. Historical accuracy
+is not a goal and occasional absurdity is welcome.
+"""
+
+families = """
+Prefer templated families over unrelated singles: one trap per stat on a shared
+template, common units on a fixed shape (one attribute, a set stat spread). A
+family of three costs far less to learn than three unrelated cards, so the
+learnability budget is measured in distinct *patterns*, not distinct cards.
+"""
+
+attribute_coverage = """
+Units are the sole carrier of attributes in v0.1 and mission requirements are
+stated in attributes, so an attribute with no units is a dead archetype. Three of
+the ten governed attributes — Exploration, Espionage, Culture — currently have no
+units at all. Unit counts are derived from a floor of ~3 units per attribute, not
+from appetite for named figures.
+"""
+
+locations = """
+19 missions to 5 non-mission. Mission yield scales with tier: commons pay gold
+plus a small VP amount and turn over quickly, legendaries are the 6-8 VP prizes.
+Competition comes from scarce high-yield missions rather than scarce missions,
+which keeps the grid cycling while still giving players something to race for.
+Commons must be able to carry missions — the current confound, where every
+mission is rare or legendary, would leave nearly half the grid producing no VP.
+Non-mission locations are the low-churn part of the board: still removable, but
+they do not self-remove the way a completed mission does.
+"""
+
+policies = """
+All `common`. Rarity is inert for policies — they are not part of the seeding
+deck and do not count against its limits — so a spread on them implies a
+distinction that does not exist. The column stays because the schema requires it.
+"""

@@ -692,23 +692,25 @@ function handleRaze(
 
   const razedLocationId = cell.location.id;
 
-  // Discard razed cards to whichever player currently controls them. For a
-  // friendly raze this collapses to the razer; for a bought/stolen unit that
-  // was at the location, the controller (not the original owner) collects it.
+  const player = getPlayerById(draft, playerId);
+
+  // Units go to whoever currently controls them — for a bought or stolen unit
+  // that is the controller, not the original owner. Raze bars enemy units, so
+  // this is almost always the razer anyway.
   for (const u of cell.units) {
     const owner = getPlayerById(draft, u.controllerId);
     owner.discardPile.push(u);
   }
   cell.units = [];
 
+  // Items go to the razing player regardless of ownership, matching mission
+  // completion — the other "this cell is wiped" rule. Nobody controls a loose
+  // item, so there is no controller to route one to.
   for (const item of cell.items) {
-    const owner = getPlayerById(draft, item.controllerId);
-    owner.discardPile.push(item);
+    player.discardPile.push(item);
   }
   cell.items = [];
 
-  // Discard the location
-  const player = getPlayerById(draft, playerId);
   player.discardPile.push(cell.location);
   cell.location = null;
 

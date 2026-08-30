@@ -14,7 +14,7 @@ library/
       items.csv
       events.csv
       policies.csv
-  analysis/         # Balance/coverage checks over the built JSON
+  analysis/         # Balance/coverage checks over the built JSON (see analysis/README.md)
   build/            # Generated JSON (gitignored)
   schema.md         # Column definitions per card type
   build.ts          # CSV → JSON build script
@@ -53,7 +53,9 @@ Edit the CSV files directly. Recommended workflows:
 
 1. Create a directory under `sets/` (e.g. `sets/alpha-2/`)
 2. Add CSV files following the same column schema
-3. Add a `set.toml` describing the set — see `sets/alpha-1/set.toml`
+3. Add a `set.toml` describing the set — see `sets/alpha-1/set.toml`. The format
+   is provisional: no key spec exists yet and the build does not validate it,
+   so copy the example rather than inventing keys. The spec lands with #276.
 4. Run `bun library/build.ts` to build
 
 ## Schema

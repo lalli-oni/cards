@@ -1,16 +1,14 @@
-# Set-level metadata. Card-level column specs live in `library/schema.md`;
-# this file describes the set as a whole. Spec: issue #276.
+# Set-level metadata: what this set is, what it targets, and why. Card-level
+# column specs live in `library/schema.md` — this file describes the set as a
+# whole rather than the shape of a card row.
 
 name = "alpha-1"
 title = "Alpha 1"
 status = "in-revision"
 
 description = """
-The first playable set. Its job is to be playable, not balanced — broad enough
-to cover every archetype and mechanic at rough power levels, small enough that a
-player holds the core after a few games. Under active revision (#45); the counts
-below are the target the content passes author toward, not a description of what
-the CSVs currently hold.
+The first playable set, and currently the only one. Under active revision (#45)
+toward the targets below.
 """
 
 # Rules variants this set is built for.
@@ -19,18 +17,34 @@ variants = ["baseline"]
 # Minimum engine version that can load and resolve this set.
 engine_min_version = "0.1.0"
 
+# Nothing checks the targets below yet — the build neither validates them nor
+# fails on a mismatch.
+targets_enforced = false
+
 [ladder]
 tiers = ["common", "rare", "legendary"]
 notes = """
-Three tiers, settled in #279. `uncommon`, `epic` and `rare`-as-a-fourth-tier are
-retired and rejected by the build. Which tier a card belongs in follows from
+Three tiers, settled in #279. The previous five-tier ladder
+(`common`/`uncommon`/`rare`/`epic`/`legendary`) is retired, and the build rejects
+`uncommon` and `epic`. Which tier a card belongs in follows from
 `rules/design-principles.md` → Rarity Reflects Repeat Tolerance: how often should
 seeing this card twice feel normal.
 """
 
 # ---------------------------------------------------------------------------
 # Target counts per type x tier — the composition lock (#196).
-# These are design targets. The CSVs diverge from them until #260-#264 land.
+#
+# These are design targets, not a description of the current CSVs. The set holds
+# 65 cards against a target of 78, and every type is off; closing the gap is the
+# content work in #260-#264.
+#
+# Table names are the engine's `type` discriminant (singular), not the plural
+# CSV filenames. Tier keys are counts; an omitted tier means a target of zero.
+# `[targets.location.mission]` is a nested sub-table, not a tier.
+#
+# Dilemmas are deliberately outside this lock: a seeding deck takes 16 of them,
+# but the card type does not exist yet (#255, under epic #58), so there is
+# nothing to count. They join the lock when the type lands.
 # ---------------------------------------------------------------------------
 
 [targets.unit]
@@ -53,49 +67,74 @@ common = 8
 rare = 10
 legendary = 6
 
+# How many locations of each tier carry a mission. The remainder are
+# non-mission: 19 missions to 5 non-mission overall.
+[targets.location.mission]
+common = 5
+rare = 9
+legendary = 5
+
 [targets.policy]
 common = 8
+rare = 0
+legendary = 0
 
 [design]
 commons = """
-Commons are the backbone a deck leans on and repeats happily — generic roles and
-place-types, not named subjects. The per-sub-deck rarity caps make them a
-structural floor of roughly a third of every legal deck, so they carry the set
-rather than padding it. alpha-1 has none today: every unit is a named historical
-figure, which is the single largest piece of work in the revision.
+Commons are the structural floor of every legal deck: the per-sub-deck rarity
+caps put roughly a third of a dealt deck at `common`, so they carry the set
+rather than pad it. What belongs at the tier is
+`rules/design-principles.md` → Rarity Reflects Repeat Tolerance.
+
+alpha-1's gap is units. All 20 are named historical figures, three of them
+(`ibn-battuta`, `mary-shelley`, `spartacus`) sitting at `common` against that
+rule, and no generic-role unit exists at all. Supplying them is the single
+largest piece of work in the revision.
 """
 
 named_subjects = """
 The set is about historical figures, but not only about them — locations, items
 and events each matter in their own right, and unnamed archetypes stand on their
-own merits. Units are the frontmen. Names live at `rare` and `legendary`; a name
-everyone knows is `legendary`, an obscure one may be `rare`. Historical accuracy
-is not a goal and occasional absurdity is welcome.
+own merits. Units are the frontmen. Named subjects belong at `rare` and
+`legendary`; the three named units currently at `common` are a known deviation,
+tracked with the rest of the unit re-sort in #263. Historical accuracy is not a
+goal and occasional absurdity is welcome.
 """
 
 families = """
 Prefer templated families over unrelated singles: one trap per stat on a shared
-template, common units on a fixed shape (one attribute, a set stat spread). A
-family of three costs far less to learn than three unrelated cards, so the
-learnability budget is measured in distinct *patterns*, not distinct cards.
+template, common units on a fixed shape (one attribute, a set stat spread). What
+this spends is measured in distinct *patterns*, not distinct cards — see
+`rules/design-principles.md` → Complexity Budget vs Rules-Surface.
 """
 
 attribute_coverage = """
 Units are the sole carrier of attributes in v0.1 and mission requirements are
 stated in attributes, so an attribute with no units is a dead archetype. Three of
 the ten governed attributes — Exploration, Espionage, Culture — currently have no
-units at all. Unit counts are derived from a floor of ~3 units per attribute, not
-from appetite for named figures.
+units at all. The unit target is derived from a floor of ~3 units *covering* each
+attribute: units carry ~1.6 attributes each, so 22 units reaches that floor
+without needing one unit per attribute-slot.
 """
 
 locations = """
-19 missions to 5 non-mission. Mission yield scales with tier: commons pay gold
-plus a small VP amount and turn over quickly, legendaries are the 6-8 VP prizes.
-Competition comes from scarce high-yield missions rather than scarce missions,
-which keeps the grid cycling while still giving players something to race for.
-Commons must be able to carry missions — the current confound, where every
-mission is rare or legendary, would leave nearly half the grid producing no VP.
-Non-mission locations are the low-churn part of the board: still removable, but
+19 missions to 5 non-mission, split by tier in `[targets.location.mission]`.
+Mission yield scales with tier: commons are the small, fast-turnover missions and
+legendaries are the 6-8 VP prizes. Competition comes from scarce high-yield
+missions rather than scarce missions, which keeps the grid cycling while still
+giving players something to race for.
+
+Common missions are also meant to pay gold alongside their VP, which the schema
+cannot yet express — the `mission` column is `reqs>Nvp` and carries no gold
+component. It is what sustains the fast tier: completing a mission discards the
+units and items that completed it, so a common mission has to fund the redeploy
+it causes. Blocks #264; the options are set out there.
+
+Commons must be able to carry missions. Under the caps a legal 16-card location
+sub-deck is at least 7 common, so the current confound — every mission rare or
+legendary — would leave nearly half the grid producing no VP.
+
+Non-mission locations are the low-churn part of the grid: still removable, but
 they do not self-remove the way a completed mission does.
 """
 

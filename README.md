@@ -21,7 +21,7 @@ This repository houses a card game [name pending] with the following aspects:
 
 ### Editing Cards
 
-Cards live as CSV files in `library/sets/{set_name}/`. One file per card type: `units.csv`, `locations.csv`, `items.csv`, `events.csv`, `policies.csv`.
+Cards live as CSV files in `library/sets/{set_name}/`. One file per card type: `units.csv`, `locations.csv`, `items.csv`, `events.csv`, `policies.csv`, alongside a `set.toml` of set-level metadata.
 
 **VisiData** is the recommended editor for card CSVs. It gives you a full spreadsheet UI in the terminal with sorting, filtering, and inline editing — without leaving your workflow.
 

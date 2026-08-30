@@ -135,8 +135,8 @@ different question: **how often should seeing this card twice feel normal?**
 - **Legendary** — a name everyone knows, or a landmark there is one of:
   Cleopatra, Nikola Tesla; The Pyramids.
 
-The same reading extends past people and places. An **object** or an **event** is
-common when it is the generic kind — Sword, Plague — rare when it is a
+The same reading extends past people and places. An **item** or an **event** is
+common when it is the generic kind — Sword, Famine — rare when it is a
 distinguished instance — Damascus Blade, a named regional famine — and legendary
 when it is the one everyone knows: Excalibur, The Black Death.
 

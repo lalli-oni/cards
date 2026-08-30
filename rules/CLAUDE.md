@@ -14,7 +14,7 @@ This folder contains markdown files defining the card game rules.
 
 ## Key Terminology
 - **Deploy** — playing a unit or item from hand to HQ
-- **Seeding deck** — the [var:seeding_deck_size:60]-card collection each player brings to the game (16 locations, 16 dilemmas, 28 other)
+- **Seeding deck** — the [var:seeding_deck_size:60]-card collection each player is dealt at the start of the game (16 locations, 16 dilemmas, 28 other)
 - **Prospect deck** — personal face-down deck of locations and dilemmas (for grid replacement and dilemma placement)
 - **Market deck** — cards available for purchase in the market
 - **Main deck** — personal draw deck, seeded from market deck during deck construction

@@ -56,13 +56,14 @@ Monorepo with bun workspaces. Single version (`package.json` root). Rules and li
 ## Card Library
 
 - Cards are stored as **CSV files** in `library/sets/{set_name}/` — one file per card type
+- Each set also carries a `set.toml` — set-level metadata: description, target counts per type × tier, design notes
 - Build to JSON with `bun library/build.ts` (output in `library/build/`, gitignored)
 - Schema and column definitions are in `library/schema.md`
 - ID format: kebab-case of card name (e.g. `cleopatra`, `investment-banking`). Globally unique.
 - Card types: unit, location, item, event, policy
 - Delimiters within fields: `;` for lists, `|` for alternative costs, `:` for action components
 - When adding cards, always run the build script to validate
-- New sets: create a new directory under `library/sets/` with the same CSV structure
+- New sets: create a new directory under `library/sets/` with the same CSV structure, plus a `set.toml`
 
 ### Workflows
 - **Editing**: Use VisiData (`vd library/sets/alpha-1/units.csv`) for terminal spreadsheet editing, or Numbers/Excel for bulk sessions

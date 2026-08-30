@@ -711,10 +711,19 @@ describe("turn-start listeners", () => {
     expect(drawEvents.length).toBeGreaterThanOrEqual(2);
   });
 
-  it("Merchant Ledger: +2 gold at turn start", () => {
+  // Both gold items pay their *bearer's* side. Their printed text puts the
+  // income on the stored half ("Stored at a location: gain N gold per turn"),
+  // which the rules cannot express — a stored effect is given no side, so it
+  // has no player to pay (see effects.ts:goldPerTurn). These tests pin the half
+  // the engine can express; the text is reconciled by the item content pass.
+  it("Merchant Ledger: +2 gold at turn start while equipped", () => {
+    const bearer = makeUnit({ ownerId: "p_bearer" });
     const state = gameWith((d, p) => {
       d.grid[0][0].location = makeLocation({ ownerId: p.active });
-      d.grid[0][0].items.push(makeItem({ ownerId: p.active, definitionId: "merchant-ledger" }));
+      d.grid[0][0].units.push({ ...bearer, ownerId: p.active, controllerId: p.active });
+      d.grid[0][0].items.push(makeItem({
+        ownerId: p.active, definitionId: "merchant-ledger", equippedTo: bearer.id,
+      }));
       d.players[p.activeIdx].mainDeck.push(makeUnit({ ownerId: p.active }));
       d.players[p.otherIdx].mainDeck.push(makeUnit({ ownerId: p.other }));
     });
@@ -728,10 +737,35 @@ describe("turn-start listeners", () => {
     expect((goldEvents[0] as any).amount).toBe(2);
   });
 
-  it("Trade Goods: +1 gold at turn start", () => {
+  it("Merchant Ledger pays nobody while loose — a dropped item has no controller", () => {
+    // The regression #278 exists to prevent: before it, the item kept paying
+    // whoever last held it, on the ground and in HQ alike.
     const state = gameWith((d, p) => {
       d.grid[0][0].location = makeLocation({ ownerId: p.active });
-      d.grid[0][0].items.push(makeItem({ ownerId: p.active, definitionId: "trade-goods" }));
+      d.grid[0][0].items.push(makeItem({ ownerId: p.active, definitionId: "merchant-ledger" }));
+      d.players[p.activeIdx].hq.push(makeItem({ ownerId: p.active, definitionId: "trade-goods" }));
+      d.players[p.activeIdx].mainDeck.push(makeUnit({ ownerId: p.active }));
+      d.players[p.otherIdx].mainDeck.push(makeUnit({ ownerId: p.other }));
+    });
+
+    const { events } = passBothPlayers(state);
+
+    // The HQ copy is unattached too — rules/README.md:431 excludes HQ from
+    // "stored" outright, so it must not pay either.
+    expect(events.some((e) =>
+      e.type === "gold_changed" && "reason" in e
+      && (e.reason === "merchant-ledger" || e.reason === "trade-goods")
+    )).toBe(false);
+  });
+
+  it("Trade Goods: +1 gold at turn start while equipped", () => {
+    const bearer = makeUnit({ ownerId: "p_bearer" });
+    const state = gameWith((d, p) => {
+      d.grid[0][0].location = makeLocation({ ownerId: p.active });
+      d.grid[0][0].units.push({ ...bearer, ownerId: p.active, controllerId: p.active });
+      d.grid[0][0].items.push(makeItem({
+        ownerId: p.active, definitionId: "trade-goods", equippedTo: bearer.id,
+      }));
       d.players[p.activeIdx].mainDeck.push(makeUnit({ ownerId: p.active }));
       d.players[p.otherIdx].mainDeck.push(makeUnit({ ownerId: p.other }));
     });
@@ -744,10 +778,16 @@ describe("turn-start listeners", () => {
   });
 
   it("multiple turn-start effects accumulate", () => {
+    const bearer = makeUnit({ ownerId: "p_bearer" });
     const state = gameWith((d, p) => {
       d.grid[0][0].location = makeLocation({ ownerId: p.active });
-      d.grid[0][0].items.push(makeItem({ ownerId: p.active, definitionId: "trade-goods" }));
-      d.grid[0][0].items.push(makeItem({ ownerId: p.active, definitionId: "merchant-ledger" }));
+      d.grid[0][0].units.push({ ...bearer, ownerId: p.active, controllerId: p.active });
+      d.grid[0][0].items.push(makeItem({
+        ownerId: p.active, definitionId: "trade-goods", equippedTo: bearer.id,
+      }));
+      d.grid[0][0].items.push(makeItem({
+        ownerId: p.active, definitionId: "merchant-ledger", equippedTo: bearer.id,
+      }));
       d.players[p.activeIdx].passiveEvents.push({
         ...makePassiveEvent({ ownerId: p.active, definitionId: "golden-age" }),
         remainingDuration: 3,

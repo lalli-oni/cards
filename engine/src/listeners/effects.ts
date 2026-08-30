@@ -535,34 +535,43 @@ export const ITEM_EFFECTS: Record<string, ItemEffectFactory> = {
     } satisfies StatModifierListener],
   }),
 
-  "merchant-ledger": (item, controllerId) => ({
-    listeners: [{
-      source: { type: "item", cardId: item.id, definitionId: "merchant-ledger", controllerId },
-      on: "turn_started",
-      condition: (_state, event) => "playerId" in event && event.playerId === controllerId,
-      apply: (draft, _event, emit) => {
-        const player = getPlayerById(draft, controllerId);
-        player.gold += 2;
-        emit({ type: "gold_changed", playerId: controllerId, amount: 2, reason: "merchant-ledger" });
-      },
-    }],
-    queries: [],
-  }),
+  "merchant-ledger": (item, controllerId) => goldPerTurn(item, controllerId, "merchant-ledger", 2),
 
-  "trade-goods": (item, controllerId) => ({
+  "trade-goods": (item, controllerId) => goldPerTurn(item, controllerId, "trade-goods", 1),
+};
+
+/** Per-turn gold from a borne item, paid to the bearer's side.
+ *
+ * Both cards print their income on the *stored* half ("Stored at a location:
+ * gain N gold per turn"), which the rules cannot express: a stored effect is
+ * given no side (`rules/README.md:428` scopes ownership to the equipped effect
+ * only), so there is no player for it to pay. Paying the bearer is the half the
+ * rules can express; reconciling the printed text with it is card work, tracked
+ * on the item content pass. Until then these two pay on equip, not while
+ * stored. */
+function goldPerTurn(
+  item: ItemCard,
+  controllerId: string | undefined,
+  definitionId: string,
+  amount: number,
+): EffectDefinition {
+  if (!controllerId || !item.equippedTo) return { listeners: [], queries: [] };
+  // Aliased because TypeScript drops a *parameter's* narrowing inside the
+  // closures below — only a const keeps it.
+  const payee: string = controllerId;
+  return {
     listeners: [{
-      source: { type: "item", cardId: item.id, definitionId: "trade-goods", controllerId },
+      source: { type: "item", cardId: item.id, definitionId, controllerId },
       on: "turn_started",
-      condition: (_state, event) => "playerId" in event && event.playerId === controllerId,
+      condition: (_state, event) => "playerId" in event && event.playerId === payee,
       apply: (draft, _event, emit) => {
-        const player = getPlayerById(draft, controllerId);
-        player.gold += 1;
-        emit({ type: "gold_changed", playerId: controllerId, amount: 1, reason: "trade-goods" });
+        getPlayerById(draft, payee).gold += amount;
+        emit({ type: "gold_changed", playerId: payee, amount, reason: definitionId });
       },
     }],
     queries: [],
-  }),
-};
+  };
+}
 
 // #endregion
 

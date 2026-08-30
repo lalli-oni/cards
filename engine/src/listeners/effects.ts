@@ -54,9 +54,12 @@ export type TrapEffectFactory = (
   controllerId: string,
 ) => EffectDefinition;
 
+/** `controllerId` is undefined for a loose item — nobody controls one, so a
+ *  factory that pays or targets a player must gate on it (see
+ *  `item-helpers.ts:itemController`). */
 export type ItemEffectFactory = (
   item: ItemCard,
-  controllerId: string,
+  controllerId: string | undefined,
   position?: { row: number; col: number },
 ) => EffectDefinition;
 

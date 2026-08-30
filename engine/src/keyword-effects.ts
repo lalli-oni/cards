@@ -135,10 +135,14 @@ function buildFamilyModifier(
  * `position` is absent for HQ cards. Positional keywords (Leader, Kindred,
  * Aura) key off it and contribute no queries when it's absent; the rest apply
  * anywhere in play, HQ included.
+ *
+ * `controllerId` is absent for a loose item. Side-scoped keywords compare
+ * against it, so they simply match nobody — a dropped banner stops buffing the
+ * side that dropped it.
  */
 export function keywordEffects(
   card: KeywordCard,
-  controllerId: string,
+  controllerId: string | undefined,
   position?: { row: number; col: number },
 ): EffectDefinition {
   const listeners: EffectListener[] = [];

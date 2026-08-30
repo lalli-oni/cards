@@ -5,6 +5,7 @@ import { parseCost, spendAP, spendGold } from "./cost-helpers";
 import { drawLocationFromProspect, drawMarketCard, drawOneCard } from "./deck-helpers";
 import { checkMissionRequirements, parseRequirements, parseRewards } from "./mission-helpers";
 import { findItemPosition, findUnitPosition, getUnitsAtPosition, hasControllingUnitAt, samePosition } from "./position-helpers";
+import { itemController } from "./item-helpers";
 import {
   areFacingEdgesOpen,
   findUnitOnGrid,
@@ -538,7 +539,13 @@ function locateItemAction(
   // loose item is deliberately public: the rules expose a stored item to any
   // co-located unit, which is what makes putting one down a real cost. Only
   // equip can name a loose item, so this one rule covers all three actions.
-  if (itemResult.item.equippedTo && itemResult.item.controllerId !== playerId) {
+  //
+  // Control comes from the bearer, so a mind-controlled unit's gear answers to
+  // whoever holds the unit — this is what makes "manage its items"
+  // (rules/README.md:308) true.
+  const itemUnits = getUnitsAtPosition(draft.players, draft.grid, itemResult.position);
+  if (itemResult.item.equippedTo
+    && itemController(itemResult.item, itemResult.position, itemUnits) !== playerId) {
     throw new Error(`Item "${itemId}" is not controlled by "${playerId}"`);
   }
 
@@ -583,11 +590,8 @@ function handleEquip(
   }
 
   spendItemActionAP(draft, action, queries);
-  // Taking a loose item takes control of it, so its equip effect keys off the
-  // new bearer's side rather than whoever last carried it. Until an item's
-  // control is derived from its bearer (#278), this is the write that keeps a
-  // captured item from still working for its previous owner.
-  item.controllerId = playerId;
+  // No controller write: attaching the item to the unit *is* the control
+  // change, since an item's side is read off its bearer.
   item.equippedTo = unitId;
   emit({ type: "item_equipped", playerId, itemId, unitId, cause: { kind: "equip" } });
 }
@@ -1478,7 +1482,13 @@ function handleActivate(
     // positional verbs.
     const card = locatedItem.item as Draft<ItemCard>;
     if (!card.actions) throw new Error(`Card "${cardId}" has no actions`);
-    if (card.controllerId !== playerId) throw new Error(`Card "${cardId}" not owned by "${playerId}"`);
+    // A loose item is nobody's until it is taken (rules/README.md:428), so it
+    // has no controller and this rejects for every player — a co-located unit
+    // may pick it up, not operate it where it lies.
+    const itemUnits = getUnitsAtPosition(draft.players, draft.grid, locatedItem.position);
+    if (itemController(card, locatedItem.position, itemUnits) !== playerId) {
+      throw new Error(`Card "${cardId}" not owned by "${playerId}"`);
+    }
     if (!hasControllingUnitAt(draft.players, draft.grid, locatedItem.position, playerId)) {
       throw new Error(`Item "${cardId}" has no controlling unit co-located to activate it`);
     }

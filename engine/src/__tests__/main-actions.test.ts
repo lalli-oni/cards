@@ -5,6 +5,7 @@ import { rebuildListeners } from "../listeners/rebuild";
 import { getModifiedStat } from "../listeners/query";
 import type { GameEvent, ItemCard, MainAction, MainGameState, UnitCard } from "../types";
 import { getValidActions } from "../valid-actions";
+import { itemController } from "../item-helpers";
 import {
   createTestGame,
   makeInstantEvent,
@@ -969,7 +970,9 @@ describe("item actions — locate and control", () => {
     // whole reason putting an item down is a decision rather than free upside.
     // Control moves with the pickup so a captured item's equip effect stops
     // working for its previous holder (war-banner's equipped half keys off the
-    // item's controller). #278 replaces this with control derived from the bearer.
+    // item's controller). Since #278 that control is *derived* from the bearer
+    // rather than written onto the card, so the assertion below reads the
+    // derived value — see loose-item-controller.test.ts for the full table.
     const mine = makeUnit({ ownerId: ACTIVE });
     const loose = makeItem({ ownerId: OTHER });
     const state = gameWith((d) => {
@@ -982,10 +985,13 @@ describe("item actions — locate and control", () => {
       state, { type: "equip", playerId: ACTIVE, itemId: loose.id, unitId: mine.id },
     );
 
-    const taken = (next as MainGameState).grid[0][0].items.find((i) => i.id === loose.id);
+    const nextState = next as MainGameState;
+    const taken = nextState.grid[0][0].items.find((i) => i.id === loose.id);
     expect(taken?.equippedTo).toBe(mine.id);
     expect(events.find((e) => e.type === "item_equipped")?.cause).toEqual({ kind: "equip" });
-    expect(taken?.controllerId).toBe(ACTIVE);
+    expect(itemController(
+      taken as ItemCard, { type: "grid", row: 0, col: 0 }, nextState.grid[0][0].units,
+    )).toBe(ACTIVE);
     // ownerId is the seeding origin and never moves — only control does.
     expect(taken?.ownerId).toBe(OTHER);
   });

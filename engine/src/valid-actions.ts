@@ -4,6 +4,7 @@ import { tryParseCost } from "./cost-helpers";
 import { checkMissionRequirements, parseRequirements } from "./mission-helpers";
 import type { BoardPosition } from "./types";
 import { getItemsAtPosition, getUnitsAtPosition, hasControllingUnitAt } from "./position-helpers";
+import { itemController } from "./item-helpers";
 import {
   areFacingEdgesOpen,
   getAdjacentCells,
@@ -394,17 +395,17 @@ function getMainValidActions(
       // HQ: units belong to the player by definition. Grid: filter by
       // controllerId since multiple players share cells.
       //
-      // Items don't take the ownerFilter shortcut — an item's controllerId can
-      // diverge from where it sits. A *borne* item is offered only to its
-      // controller; a *loose* one is offered to everyone here, because the
-      // rules expose a stored item to any co-located unit. (The activate block
-      // below stays controller-only: exposure is a pickup rule, not a licence
-      // to use someone's dropped item in place.)
+      // Items don't take the ownerFilter shortcut — an item's controller is
+      // read off its bearer, not off where it sits. A *borne* item is offered
+      // only to its controller; a *loose* one is offered to everyone here,
+      // because the rules expose a stored item to any co-located unit. (The
+      // activate block below stays controller-only: exposure is a pickup rule,
+      // not a licence to use someone's dropped item in place.)
       const ownerFilter = pos.type === "hq";
+      const unitsHere = getUnitsAtPosition(state.players, state.grid, pos);
       const items = getItemsAtPosition(state.players, state.grid, pos)
-        .filter((i) => !i.equippedTo || i.controllerId === playerId);
-      const units = getUnitsAtPosition(state.players, state.grid, pos)
-        .filter((u) => ownerFilter || u.controllerId === playerId);
+        .filter((i) => !i.equippedTo || itemController(i, pos, unitsHere) === playerId);
+      const units = unitsHere.filter((u) => ownerFilter || u.controllerId === playerId);
       for (const item of items) {
         // A loose item offers equip to each unit here; a borne one offers
         // unequip plus transfer to every *other* unit here.
@@ -545,12 +546,13 @@ function getMainValidActions(
     // an action surfaces only while a unit the player controls shares the item's
     // cell (hasControllingUnitAt — the same gate handleActivate enforces). An
     // equipped item satisfies this via its own bearer, who is by construction a
-    // friendly unit in the cell; a lone/stored item with no friendly unit present
-    // offers nothing. Unlike units, an item's controllerId can diverge from where
-    // it sits, so filter items by controllerId even in HQ (no ownerFilter shortcut).
+    // friendly unit in the cell. A loose item has no controller at all, so it
+    // offers nothing to anyone until someone equips it — taking a stored item is
+    // what makes it yours (rules/README.md:428).
     if (hasControllingUnitAt(state.players, state.grid, pos, playerId)) {
+      const unitsHere = getUnitsAtPosition(state.players, state.grid, pos);
       const items = getItemsAtPosition(state.players, state.grid, pos)
-        .filter((i) => i.controllerId === playerId);
+        .filter((i) => itemController(i, pos, unitsHere) === playerId);
       for (const item of items) {
         if (!item.actions) continue;
         for (const actionDef of item.actions) {

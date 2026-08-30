@@ -7,6 +7,7 @@ import type {
   Reveals,
   Trap,
   TrapView,
+  UnitCard,
   VisibleState,
 } from "./types";
 import { getActivePlayerId } from "./types";
@@ -19,6 +20,7 @@ import {
   UNIT_EFFECTS,
 } from "./listeners/effects";
 import type { RevealsProvider } from "./listeners/types";
+import { itemController } from "./item-helpers";
 
 /**
  * Return a filtered view of the state for a specific player.
@@ -176,7 +178,9 @@ function computeReveals(state: MainGameState, viewerId: string): Reveals {
 
       for (const item of cell.items) {
         const factory = ITEM_EFFECTS[item.definitionId];
-        if (factory) apply(factory(item, item.controllerId, { row: r, col: c }).reveals);
+        if (!factory) continue;
+        const controllerId = itemController(item, { type: "grid", row: r, col: c }, cell.units);
+        apply(factory(item, controllerId, { row: r, col: c }).reveals);
       }
 
       for (const unit of cell.units) {
@@ -203,10 +207,13 @@ function computeReveals(state: MainGameState, viewerId: string): Reveals {
       const factory = TRAP_EFFECTS[trap.card.definitionId];
       if (factory) apply(factory(trap, trap.card.controllerId).reveals);
     }
+    const hqUnits = player.hq.filter((c): c is UnitCard => c.type === "unit");
     for (const card of player.hq) {
       if (card.type === "item") {
         const factory = ITEM_EFFECTS[card.definitionId];
-        if (factory) apply(factory(card, card.controllerId).reveals);
+        if (factory) {
+          apply(factory(card, itemController(card, { type: "hq", playerId: player.id }, hqUnits)).reveals);
+        }
       } else if (card.type === "unit") {
         const factory = UNIT_EFFECTS[card.definitionId];
         if (factory) apply(factory(card, card.controllerId).reveals);

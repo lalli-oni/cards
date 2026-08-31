@@ -135,9 +135,14 @@ different question: **how often should seeing this card twice feel normal?**
 - **Legendary** — a name everyone knows, or a landmark there is one of:
   Cleopatra, Nikola Tesla; The Pyramids.
 
-Two axes, depending on the subject. For roles it is **how specialised** the role
-is; for names it is **how widely known** the figure is. Both land in the same
-place: how often a repeat should turn up. Commons are the backbone a deck leans
-on and repeats happily, a rare repeating is occasional and notable, and a
+The same reading extends past people and places. An **item** or an **event** is
+common when it is the generic kind — Sword, Famine — rare when it is a
+distinguished instance — Damascus Blade, a named regional famine — and legendary
+when it is the one everyone knows: Excalibur, The Black Death.
+
+Two axes, depending on the subject. For roles and generic things it is **how
+specialised** they are; for names it is **how widely known** they are. Both land
+in the same place: how often a repeat should turn up. Commons are the backbone a
+deck leans on and repeats happily, a rare repeating is occasional and notable, and a
 legendary arriving at all reads as an event. Deck-building limits are what hold
 that frequency in place — the tier only names the intent.

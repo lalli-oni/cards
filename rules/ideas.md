@@ -26,6 +26,24 @@ Trade-offs:
 - Keywords like Duelist become redundant in a 1v1 system
 Playtest both and compare.
 
+## Locations
+
+### Hold-the-flag VP on non-mission locations
+Give non-mission locations a slow VP trickle for holding them — e.g. at
+the start of your turn, gain 1 VP if you have a unit at the location and
+no opponent does. Missions pay in bursts on completion; holding would pay
+in attrition, rewarding grid control rather than objective-chasing, and
+giving a warlike positional strategy something to earn.
+
+Deliberately out of scope until after v1.0: missions are the primary VP route
+in v0.1, and a second earning engine would compete with that before there is
+playtest evidence to tune against. Better suited to a variant, or to a small
+number of cards that carry the effect themselves rather than a global rule.
+
+Would need `library/analysis/mission-vp.nu` broadened — it currently checks
+that every populated archetype has a *mission* VP path, which assumes
+missions are the only route.
+
 ## Items
 
 ### Multiple item types per card

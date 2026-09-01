@@ -545,19 +545,22 @@ export const ITEM_EFFECTS: Record<string, ItemEffectFactory> = {
 
 /** Per-turn gold from a borne item, paid to the bearer's side.
  *
- * Both cards print their income on the *stored* half ("Stored at a location:
- * gain N gold per turn"), which the rules cannot express: a stored effect is
- * given no side (`rules/README.md:428` scopes ownership to the equipped effect
- * only), so there is no player for it to pay. Paying the bearer is the half the
- * rules can express; reconciling the printed text with it is card work, tracked
- * on the item content pass. Until then these two pay on equip, not while
- * stored. */
+ * Both cards print their whole income on the *stored* half (Merchant Ledger:
+ * "Stored at a location: gain 2 gold per turn"; Trade Goods: "Stored: gain 1
+ * gold per turn.") and have an empty `equip` column. But the rules give a
+ * stored effect no side to pay (rules/README.md → Items), so paying the
+ * bearer is the half the rules can express — these two pay every turn while
+ * equipped, and nothing while stored or in HQ, the inverse of their printed
+ * text. Reconciling the card text is tracked on #262. */
 function goldPerTurn(
   item: ItemCard,
   controllerId: string | undefined,
   definitionId: string,
   amount: number,
 ): EffectDefinition {
+  // equippedTo alone doesn't distinguish grid from HQ, so a bearer that never
+  // leaves HQ still collects this — a zero-risk income the printed "Stored at
+  // a location" text doesn't describe either. Also part of the #262 pass.
   if (!controllerId || !item.equippedTo) return { listeners: [], queries: [] };
   // Aliased because TypeScript drops a *parameter's* narrowing inside the
   // closures below — only a const keeps it.

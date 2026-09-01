@@ -3,7 +3,7 @@ import type { Primitive } from "./effect-dsl/types";
 import { tryParseCost } from "./cost-helpers";
 import { checkMissionRequirements, parseRequirements } from "./mission-helpers";
 import type { BoardPosition } from "./types";
-import { getItemsAtPosition, getUnitsAtPosition, hasControllingUnitAt } from "./position-helpers";
+import { getItemsAtPosition, getUnitsAtPosition } from "./position-helpers";
 import { itemController } from "./item-helpers";
 import {
   areFacingEdgesOpen,
@@ -514,11 +514,11 @@ function getMainValidActions(
     })),
   ];
   for (const pos of activatePositions) {
+    const unitsHere = getUnitsAtPosition(state.players, state.grid, pos);
     // HQ: units belong to the player by definition. Grid: filter by controllerId
     // since multiple players share cells.
     const ownerFilter = pos.type === "hq";
-    const units = getUnitsAtPosition(state.players, state.grid, pos)
-      .filter((u) => ownerFilter || u.controllerId === playerId);
+    const units = unitsHere.filter((u) => ownerFilter || u.controllerId === playerId);
     for (const unit of units) {
       if (!unit.actions) continue;
       for (const actionDef of unit.actions) {
@@ -544,13 +544,12 @@ function getMainValidActions(
 
     // Item actions (e.g. Philosopher's Stone). Items are operated by units, so
     // an action surfaces only while a unit the player controls shares the item's
-    // cell (hasControllingUnitAt — the same gate handleActivate enforces). An
-    // equipped item satisfies this via its own bearer, who is by construction a
-    // friendly unit in the cell. A loose item has no controller at all, so it
-    // offers nothing to anyone until someone equips it — taking a stored item is
-    // what makes it yours (rules/README.md:428).
-    if (hasControllingUnitAt(state.players, state.grid, pos, playerId)) {
-      const unitsHere = getUnitsAtPosition(state.players, state.grid, pos);
+    // cell (the same gate handleActivate enforces). An equipped item satisfies
+    // this via its own bearer, who is by construction a friendly unit in the
+    // cell. A loose item has no controller at all, so it offers nothing to
+    // anyone until someone equips it — taking a stored item is what makes it
+    // yours (rules/README.md → Items).
+    if (unitsHere.some((u) => u.controllerId === playerId)) {
       const items = getItemsAtPosition(state.players, state.grid, pos)
         .filter((i) => itemController(i, pos, unitsHere) === playerId);
       for (const item of items) {

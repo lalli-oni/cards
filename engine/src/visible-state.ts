@@ -191,9 +191,10 @@ function computeReveals(state: MainGameState, viewerId: string): Reveals {
   }
 
   // Per-player: policies, passive events, traps, HQ items + units.
-  // Mirrors rebuildListeners' per-player loop — pass card.controllerId
-  // rather than player.id so reveals stay aligned with listener attribution
-  // if a future HQ-borrowing mechanic ever lands.
+  // Mirrors rebuildListeners' per-player loop. Policies, passives, traps and
+  // units pass card.controllerId rather than player.id so reveals stay
+  // aligned with listener attribution if HQ-borrowing ever lands. Items are
+  // derived instead, which for an unattached HQ item resolves to player.id.
   for (const player of state.players) {
     for (const policy of player.activePolicies) {
       const factory = POLICY_EFFECTS[policy.definitionId];
@@ -211,9 +212,9 @@ function computeReveals(state: MainGameState, viewerId: string): Reveals {
     for (const card of player.hq) {
       if (card.type === "item") {
         const factory = ITEM_EFFECTS[card.definitionId];
-        if (factory) {
-          apply(factory(card, itemController(card, { type: "hq", playerId: player.id }, hqUnits)).reveals);
-        }
+        if (!factory) continue;
+        const controllerId = itemController(card, { type: "hq", playerId: player.id }, hqUnits);
+        apply(factory(card, controllerId).reveals);
       } else if (card.type === "unit") {
         const factory = UNIT_EFFECTS[card.definitionId];
         if (factory) apply(factory(card, card.controllerId).reveals);

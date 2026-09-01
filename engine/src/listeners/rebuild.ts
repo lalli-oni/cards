@@ -111,8 +111,9 @@ export function rebuildListeners(state: MainGameState): RebuildResult {
       }
     }
 
-    // HQ items + units (stored cards not yet on grid). Hoisted for
-    // itemController, which resolves an equipped item's bearer among them.
+    // HQ items + units (cards in play but not yet on the grid). hqUnits is
+    // hoisted for itemController, which resolves an equipped item's bearer
+    // among them.
     const hqUnits = player.hq.filter((c): c is UnitCard => c.type === "unit");
     for (const card of player.hq) {
       if (card.type === "item") {

@@ -87,12 +87,14 @@ describe("item activate — enumeration (#130)", () => {
     expect(names).toEqual(["brew", "transmute"]);
   });
 
-  it("a loose grid item is activatable by nobody until someone equips it (#278)", () => {
-    // Taking a stored item is what makes it yours (rules/README.md:428), so a
-    // co-located unit gets a pickup right, not a licence to operate the item
-    // where it lies. Before #278 the item's own controllerId answered this and
-    // a friendly unit in the cell was enough; now a loose item has no
-    // controller, so the offer is absent for *both* players.
+  it("a loose grid item is activatable by nobody until someone equips it", () => {
+    // Taking a stored item is what makes it yours (rules/README.md → Items),
+    // so a co-located unit gets a pickup right, not a licence to operate the
+    // item where it lies. Before #278 the item's own controllerId answered
+    // this and a friendly unit in the cell was enough; now a loose item has no
+    // controller, so the offer is absent — activatesFor only checks ACTIVE, so
+    // this pins ACTIVE's own view, not "both players" (an enemy's view is
+    // separately absent, but for the ordinary reason it's never their turn).
     const stone = actionItem("Philosopher's Stone", "gold[3]");
     const operator = makeUnit({ ownerId: ACTIVE, name: "Operator" });
     const loose = gameWith((d) => {
@@ -110,12 +112,18 @@ describe("item activate — enumeration (#130)", () => {
     expect(activatesFor(taken as MainGameState, stone.id)).toHaveLength(1);
   });
 
-  it("an enemy unit in the cell does not satisfy the co-located gate", () => {
+  it("an enemy unit alone does not satisfy the co-located gate for an HQ item", () => {
+    // A grid item can only have a controller by being equipped to a unit in
+    // its own cell, whose controller then satisfies hasControllingUnitAt by
+    // construction — so on the grid this case is now indistinguishable from
+    // "loose item, no controller at all" and is covered by the loose test
+    // above. HQ is where the co-located gate is still a live, separate check:
+    // an unattached HQ item does have a controller (its own player), so an
+    // enemy unit present without a friendly one is what isolates the gate.
     const stone = actionItem("Philosopher's Stone", "gold[3]");
     const state = gameWith((d) => {
-      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
-      d.grid[0][0].units.push(makeUnit({ ownerId: OPPONENT, name: "Enemy" }));
-      d.grid[0][0].items.push(stone);
+      d.players[ACTIVE_IDX].hq.push(stone);
+      d.players[ACTIVE_IDX].hq.push({ ...makeUnit({ ownerId: OPPONENT, name: "Enemy" }), controllerId: OPPONENT });
     });
     expect(activatesFor(state, stone.id)).toHaveLength(0);
   });
@@ -262,7 +270,7 @@ describe("item activate — application (#130)", () => {
         cardId: enemyStone.id,
         actionName: "transmute",
       }),
-    ).toThrow(/not owned by/);
+    ).toThrow(/is controlled by/);
   });
 
   it("rejects an item activation naming an action the item does not have", () => {

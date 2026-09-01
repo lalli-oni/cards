@@ -536,16 +536,13 @@ function locateItemAction(
   // findItemPosition scans every player's HQ and the whole grid, so a borne
   // item needs a control check or any item on the board would be a legal
   // target — unequip is the sharp case, carrying no unit to constrain it. A
-  // loose item is deliberately public: the rules expose a stored item to any
-  // co-located unit, which is what makes putting one down a real cost. Only
-  // equip can name a loose item, so this one rule covers all three actions.
-  //
-  // Control comes from the bearer, so a mind-controlled unit's gear answers to
-  // whoever holds the unit — this is what makes "manage its items"
-  // (rules/README.md:308) true.
+  // loose item is deliberately public (undefined controller passes the check
+  // below): the rules expose a stored item to any co-located unit, which is
+  // what makes putting one down a real cost. Only equip can name a loose
+  // item, so this one rule covers all three actions.
   const itemUnits = getUnitsAtPosition(draft.players, draft.grid, itemResult.position);
-  if (itemResult.item.equippedTo
-    && itemController(itemResult.item, itemResult.position, itemUnits) !== playerId) {
+  const itemLocateController = itemController(itemResult.item, itemResult.position, itemUnits);
+  if (itemLocateController !== undefined && itemLocateController !== playerId) {
     throw new Error(`Item "${itemId}" is not controlled by "${playerId}"`);
   }
 
@@ -1494,12 +1491,16 @@ function handleActivate(
     // positional verbs.
     const card = locatedItem.item as Draft<ItemCard>;
     if (!card.actions) throw new Error(`Card "${cardId}" has no actions`);
-    // A loose item is nobody's until it is taken (rules/README.md:428), so it
-    // has no controller and this rejects for every player — a co-located unit
-    // may pick it up, not operate it where it lies.
+    // A loose item is nobody's until it is taken (rules/README.md → Items →
+    // Stored), so it has no controller and this rejects for every player — a
+    // co-located unit may pick it up, not operate it where it lies.
     const itemUnits = getUnitsAtPosition(draft.players, draft.grid, locatedItem.position);
-    if (itemController(card, locatedItem.position, itemUnits) !== playerId) {
-      throw new Error(`Card "${cardId}" not owned by "${playerId}"`);
+    const itemActivateController = itemController(card, locatedItem.position, itemUnits);
+    if (itemActivateController === undefined) {
+      throw new Error(`Item "${cardId}" is loose — it must be equipped before it can be activated`);
+    }
+    if (itemActivateController !== playerId) {
+      throw new Error(`Item "${cardId}" is controlled by "${itemActivateController}", not "${playerId}"`);
     }
     if (!hasControllingUnitAt(draft.players, draft.grid, locatedItem.position, playerId)) {
       throw new Error(`Item "${cardId}" has no controlling unit co-located to activate it`);

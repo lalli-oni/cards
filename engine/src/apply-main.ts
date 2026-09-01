@@ -698,20 +698,27 @@ function handleRaze(
 
   const player = getPlayerById(draft, playerId);
 
-  // Units go to whoever currently controls them — for a bought or stolen unit
-  // that is the controller, not the original owner. Raze bars enemy units, so
-  // this is almost always the razer anyway.
+  // Raze bars enemy units, so every unit here is controlled by the razer and
+  // this loop is equivalent to routing to `player`. Kept keyed on
+  // controllerId so the rule stays "a unit goes home to whoever holds it" if
+  // that bar ever relaxes.
   for (const u of cell.units) {
     const owner = getPlayerById(draft, u.controllerId);
     owner.discardPile.push(u);
+    emit({ type: "card_discarded", playerId: owner.id, cardId: u.id, reason: "raze" });
   }
   cell.units = [];
 
   // Items go to the razing player regardless of ownership, matching mission
   // completion — the other "this cell is wiped" rule. Nobody controls a loose
-  // item, so there is no controller to route one to.
+  // item, so there is no controller to route one to. equippedTo is cleared
+  // first: a discarded item can be reshuffled and redeployed, and a stale
+  // pointer naming its (also discarded) bearer would resolve as "borne" again
+  // if that bearer id ever reappears on the board.
   for (const item of cell.items) {
+    item.equippedTo = undefined;
     player.discardPile.push(item);
+    emit({ type: "card_discarded", playerId: player.id, cardId: item.id, reason: "raze" });
   }
   cell.items = [];
 
@@ -1417,12 +1424,17 @@ function handleAttemptMission(
   // All units at location → completing player's discard (regardless of owner)
   for (const u of cell.units) {
     player.discardPile.push(u);
+    emit({ type: "card_discarded", playerId: player.id, cardId: u.id, reason: "mission_completed" });
   }
   cell.units = [];
 
-  // All items at location → completing player's discard
+  // All items at location → completing player's discard. equippedTo is
+  // cleared first — see the matching raze comment above for why a stale
+  // pointer surviving the discard is dangerous.
   for (const item of cell.items) {
+    item.equippedTo = undefined;
     player.discardPile.push(item);
+    emit({ type: "card_discarded", playerId: player.id, cardId: item.id, reason: "mission_completed" });
   }
   cell.items = [];
 

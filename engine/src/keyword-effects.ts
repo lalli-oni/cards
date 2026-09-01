@@ -136,10 +136,28 @@ function buildFamilyModifier(
  * Aura) key off it and contribute no queries when it's absent; the rest apply
  * anywhere in play, HQ included.
  *
- * `controllerId` is absent for a loose item. Side-scoped keywords compare
- * against it, so they simply match nobody — a dropped banner stops buffing the
- * side that dropped it.
+ * `controllerId` is absent for a loose item. Every keyword an item can
+ * actually carry today (Flying, Heavy, Lightweight — see keywords.ts's
+ * per-card-type allowlist) is side-agnostic, so nothing observes this yet;
+ * the parameter is widened defensively, for the day a side-scoped keyword
+ * (Leader, Squire, ...) is opened up to items, at which point it would match
+ * nobody while loose rather than the side that dropped it.
+ *
+ * Only items can be loose, so units and locations keep a required
+ * `controllerId` — the two overloads below let a caller that passes a unit or
+ * location fail to compile on `undefined` instead of silently matching
+ * nobody.
  */
+export function keywordEffects(
+  card: ItemCard,
+  controllerId: string | undefined,
+  position?: { row: number; col: number },
+): EffectDefinition;
+export function keywordEffects(
+  card: UnitCard | LocationCard,
+  controllerId: string,
+  position?: { row: number; col: number },
+): EffectDefinition;
 export function keywordEffects(
   card: KeywordCard,
   controllerId: string | undefined,

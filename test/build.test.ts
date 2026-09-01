@@ -11,7 +11,7 @@ import {
 } from "../library/build";
 import { KEYWORD_SPECS, KeywordError, type KeywordSpec, parseKeyword } from "../engine/src/keywords";
 import { DIRECT_HOOK_KEYWORDS, keywordEffects, type KeywordCard } from "../engine/src/keyword-effects";
-import type { CardType as EngineCardType } from "../engine/src/types";
+import type { CardType as EngineCardType, ItemCard } from "../engine/src/types";
 
 // ---------------------------------------------------------------------------
 // Build-time governed-vocabulary validation (#119)
@@ -240,7 +240,13 @@ describe("keyword runtime exhaustiveness", () => {
       for (const cardType of spec.cardTypes) {
         const card = minimalCard(cardType);
         card.keywords = [minimalToken(spec)];
-        const result = keywordEffects(card, "p1", { row: 0, col: 0 });
+        // keywordEffects overloads on card type (item vs. unit/location) so a
+        // real caller can't pass undefined for a unit's controllerId. This
+        // exhaustiveness sweep genuinely needs to call across the whole
+        // KeywordCard union at runtime, which the overloads don't model — the
+        // cast picks the more permissive (item) overload; "p1" satisfies
+        // either since it's always defined.
+        const result = keywordEffects(card as ItemCard, "p1", { row: 0, col: 0 });
         if (result.listeners.length === 0 && result.queries.length === 0) {
           unhandled.push(`${spec.name} (${cardType})`);
         }

@@ -416,6 +416,50 @@ describe("getVisibleState", () => {
       const visP2 = getVisibleState(state, "p2");
       expect(visP2.reveals.revealedTrapIds).toHaveLength(0);
     });
+
+    it("hands reveal rights to a mind-controlled bearer's new controller", () => {
+      // computeReveals derives the item's controller from cell.units, so a
+      // controlled unit's Spy Glass reveal rights follow it — a directly
+      // player-visible consequence of #278 that the static-ownership tests
+      // above don't exercise. Modeled by setting controllerId directly
+      // (matching this file's produce-a-state convention) rather than running
+      // the `control` DSL effect through applyAction.
+      //
+      // p1 owns the bearer and the item, but p2 controls the bearer (mind
+      // control). Each side has its own trap at the location, so which trap
+      // gets revealed to whom pins exactly who the derived controller is.
+      const state = produce(createTestGame(), (d) => {
+        const loc = makeLocation({ ownerId: "p1" });
+        d.grid[0][0].location = loc;
+        const unit = makeUnit({ ownerId: "p1", controllerId: "p2" });
+        d.grid[0][0].units.push(unit);
+        d.grid[0][0].items.push(
+          makeItem({ ownerId: "p1", definitionId: "spy-glass", equippedTo: unit.id }),
+        );
+        d.players.find((p) => p.id === "p1")!.activeTraps.push({
+          card: makeTrapEvent({ ownerId: "p1", trigger: "test" }),
+          targetId: loc.id,
+        });
+        d.players.find((p) => p.id === "p2")!.activeTraps.push({
+          card: makeTrapEvent({ ownerId: "p2", trigger: "test" }),
+          targetId: loc.id,
+        });
+      });
+
+      // p2 now derived-controls the bearer, so p2 — not p1 — gets the
+      // opponent's (p1's) trap revealed.
+      const visP2 = getVisibleState(state, "p2");
+      const oppP1 = visP2.opponents.find((o) => o.id === "p1")!;
+      expect(oppP1.activeTraps[0].card).toBeDefined();
+
+      // p1 still owns the card but lost derived control to the mind-control
+      // effect, so p1 no longer gets the opponent's (p2's) trap revealed —
+      // without #278's derivation this would have stayed keyed on the item's
+      // stale controllerId (p1) and revealed it anyway.
+      const visP1 = getVisibleState(state, "p1");
+      const oppP2 = visP1.opponents.find((o) => o.id === "p2")!;
+      expect(oppP2.activeTraps[0].card).toBeUndefined();
+    });
   });
 
   describe("reveals — UNIT_EFFECTS factory branches in computeReveals", () => {

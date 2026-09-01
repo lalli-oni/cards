@@ -821,6 +821,26 @@ describe("unequip", () => {
     expect(getModifiedStat(ns, after, stillThere, "strength", at)).toBe(5);
     expect(getModifiedStat(ns, after, stillThere, "strength", at, attacking)).toBe(7);
   });
+
+  it("a dropped War Banner's stored buff is side-agnostic — it helps whoever attacks there", () => {
+    // The "loose item benefits nobody" framing (#278) is about who *controls*
+    // the item — its stored half was never side-scoped and stays that way:
+    // a planted banner buffs any attacker contesting the cell, opponent's
+    // units included. This is unchanged by #278; pinned here while it's the
+    // one place "nobody controls it" has a non-obvious meaning.
+    const banner = makeItem({ ownerId: ACTIVE, definitionId: "war-banner" });
+    const attacker = makeUnit({ ownerId: OTHER, strength: 5 });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][0].units.push(attacker);
+      d.grid[0][0].items.push(banner);
+    });
+
+    const { queries } = rebuildListeners(state);
+    const buffed = getModifiedStat(state, queries, attacker, "strength", { row: 0, col: 0 },
+      { contest: { role: "attacker", row: 0, col: 0 } });
+    expect(buffed).toBe(7);
+  });
 });
 
 // ---------------------------------------------------------------------------

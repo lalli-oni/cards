@@ -712,11 +712,15 @@ describe("turn-start listeners", () => {
   });
 
   // Both gold items pay their *bearer's* side. Their printed text puts the
-  // income on the stored half ("Stored at a location: gain N gold per turn"),
-  // which the rules cannot express — a stored effect is given no side, so it
-  // has no player to pay (see effects.ts:goldPerTurn). These tests pin the half
-  // the engine can express; the text is reconciled by the item content pass.
+  // income on the stored half (Merchant Ledger: "Stored at a location: gain 2
+  // gold per turn"; Trade Goods: "Stored: gain 1 gold per turn."), but the
+  // rules give a stored effect no side to pay (see effects.ts:goldPerTurn).
+  // These tests pin the half the engine can express; reconciling the printed
+  // text is card work tracked on #262.
   it("Merchant Ledger: +2 gold at turn start while equipped", () => {
+    // "p_bearer" is a throwaway ownerId — makeUnit requires one, but it's
+    // discarded below in favor of p.active, which isn't in scope until the
+    // gameWith callback runs.
     const bearer = makeUnit({ ownerId: "p_bearer" });
     const state = gameWith((d, p) => {
       d.grid[0][0].location = makeLocation({ ownerId: p.active });
@@ -737,9 +741,14 @@ describe("turn-start listeners", () => {
     expect((goldEvents[0] as any).amount).toBe(2);
   });
 
-  it("Merchant Ledger pays nobody while loose — a dropped item has no controller", () => {
-    // The regression #278 exists to prevent: before it, the item kept paying
-    // whoever last held it, on the ground and in HQ alike.
+  it("neither a loose grid item nor an unattached HQ item pays Merchant Ledger or Trade Goods", () => {
+    // The regression #278 exists to prevent: on the ground, the item kept
+    // paying whoever last carried it. The HQ copy below is a different
+    // matter — it never went stale (an unattached HQ item's controllerId
+    // always named its own player, on main and now), so this isn't a
+    // staleness case. It pays nothing because goldPerTurn also requires
+    // item.equippedTo, and an HQ item is neither equipped nor stored
+    // (rules/README.md → Items).
     const state = gameWith((d, p) => {
       d.grid[0][0].location = makeLocation({ ownerId: p.active });
       d.grid[0][0].items.push(makeItem({ ownerId: p.active, definitionId: "merchant-ledger" }));
@@ -750,11 +759,11 @@ describe("turn-start listeners", () => {
 
     const { events } = passBothPlayers(state);
 
-    // The HQ copy is unattached too — rules/README.md:431 excludes HQ from
-    // "stored" outright, so it must not pay either.
     expect(events.some((e) =>
-      e.type === "gold_changed" && "reason" in e
-      && (e.reason === "merchant-ledger" || e.reason === "trade-goods")
+      e.type === "gold_changed" && "reason" in e && e.reason === "merchant-ledger"
+    )).toBe(false);
+    expect(events.some((e) =>
+      e.type === "gold_changed" && "reason" in e && e.reason === "trade-goods"
     )).toBe(false);
   });
 
@@ -775,6 +784,27 @@ describe("turn-start listeners", () => {
     expect(events.some((e) =>
       e.type === "gold_changed" && "reason" in e && e.reason === "trade-goods"
     )).toBe(true);
+  });
+
+  it("Merchant Ledger pays nobody when its equippedTo names a bearer that isn't there", () => {
+    // goldPerTurn's guard is `!controllerId || !item.equippedTo`. Every other
+    // test in this file exercises the `!item.equippedTo` half; this one is
+    // the only thing that pins the `!controllerId` half — a stale attachment,
+    // which item-helpers.ts derives to undefined rather than a stray player.
+    const state = gameWith((d, p) => {
+      d.grid[0][0].location = makeLocation({ ownerId: p.active });
+      d.grid[0][0].items.push(makeItem({
+        ownerId: p.active, definitionId: "merchant-ledger", equippedTo: "ghost-unit",
+      }));
+      d.players[p.activeIdx].mainDeck.push(makeUnit({ ownerId: p.active }));
+      d.players[p.otherIdx].mainDeck.push(makeUnit({ ownerId: p.other }));
+    });
+
+    const { events } = passBothPlayers(state);
+
+    expect(events.some((e) =>
+      e.type === "gold_changed" && "reason" in e && e.reason === "merchant-ledger"
+    )).toBe(false);
   });
 
   it("multiple turn-start effects accumulate", () => {

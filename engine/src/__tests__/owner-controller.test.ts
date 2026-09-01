@@ -21,9 +21,6 @@ import { beforeEach, describe, expect, it } from "bun:test";
 import { produce, type Draft } from "immer";
 import { applyAction } from "../apply-action";
 import { fillAction } from "../action-helpers";
-import { rebuildListeners } from "../listeners/rebuild";
-import { fromState } from "../rng";
-import { executeEffect, type ExecutionContext } from "../effect-dsl/executor";
 import { killUnit } from "../unit-helpers";
 import { getActivePlayerId, type GameEvent, type GameState, type MainGameState, type SeedingAction, type SeedingGameState } from "../types";
 import { getValidActions } from "../valid-actions";
@@ -34,6 +31,7 @@ import {
   makePassiveEvent,
   makeUnit,
   resetIds,
+  runEffect,
 } from "./helpers";
 
 beforeEach(() => resetIds());
@@ -46,33 +44,6 @@ const OTHER_IDX = 1;
 
 function gameWith(fn: (draft: Draft<MainGameState>) => void): MainGameState {
   return produce(createTestGame(), fn);
-}
-
-/** Run a DSL effect against a state for a chosen controlling player. */
-function runEffect(
-  state: MainGameState,
-  effectStr: string,
-  asPlayerId: string,
-  opts?: { targetId?: string },
-): { state: MainGameState; events: GameEvent[] } {
-  const events: GameEvent[] = [];
-  const { queries } = rebuildListeners(state);
-  const nextState = produce(state, (draft) => {
-    const rng = fromState(draft.rngState);
-    const ctx: ExecutionContext = {
-      draft,
-      playerId: asPlayerId,
-      actingCardSource: { type: "unit", cardId: "test-actor", definitionId: "test-actor" },
-      emit: (e) => { events.push(e); },
-      events,
-      queries,
-      rng,
-      targetId: opts?.targetId,
-    };
-    const result = executeEffect(effectStr, ctx);
-    draft.rngState = (result.rng.getState?.() ?? draft.rngState) as number[];
-  });
-  return { state: nextState, events };
 }
 
 // ---------------------------------------------------------------------------

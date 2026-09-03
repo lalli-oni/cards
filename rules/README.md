@@ -169,7 +169,7 @@ Each player has [var:action_points_per_turn:3] **action points (AP)** per turn. 
 |--------|---------|-------------|
 | Deploy | 1 | Play a unit or item from hand to HQ. Pay the card's gold cost. |
 | Buy | 0 | Purchase a card from the market. Pay its gold cost. Card goes to hand. |
-| Activate | varies | Use an action printed on a unit or item. AP cost is printed on the card. |
+| Activate | varies | Use an action printed on a unit or item. AP cost is printed on the card. An item's action additionally requires a friendly unit sharing its place — see [Items](#items). |
 | Draw | 1 | Draw a card from your main deck. |
 | Enter | 1 | Move a unit from HQ to any perimeter location on the grid. The location's edge facing the grid boundary must be open (the boundary is treated as blocked). |
 | Move | 1 | Move a unit to an orthogonally adjacent location (or from an edge location back to HQ — edge facing boundary must be open). Both facing edges must be open (see Location borders). |
@@ -438,6 +438,24 @@ stored effect.
 
 Taking a stored item makes it yours — its equipped effect then works for
 its new bearer's side.
+
+**Controller.** An item's controller follows from where it sits, not who
+drafted or last equipped it:
+
+- **Equipped** — the bearer's controller. A unit that changes hands (bought,
+  stolen, or temporarily controlled) brings its gear with it, and the
+  controller may manage it (Equip, Unequip, Transfer) the same as their own
+  units' items.
+- **Stored on the grid** — nobody. This is why a stored item is exposed (see
+  above): with no controller, nobody may activate it where it lies.
+- **Unattached in HQ** — the player whose HQ it's in. HQ is private ground,
+  so there is no one else present to expose it to.
+
+Activating an item's printed action needs both a controller and a friendly
+unit sharing its place to operate it — an equipped item's bearer always
+satisfies the second condition by being that unit, but a stored item (no
+controller) or an HQ item with no unit present (no operator) cannot be
+activated until both are met.
 
 Items deployed to HQ start unattached; they reach the grid only by being
 equipped to a unit that moves out. An unattached item in HQ is neither

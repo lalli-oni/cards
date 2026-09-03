@@ -91,7 +91,12 @@ interface CardBase {
   attributes?: Attribute[];
   /** Seeding/creation origin. Immutable after the card is instantiated. */
   ownerId: string;
-  /** Current in-game controller. Mutates on buy, seed-steal, and control effects. */
+  /** Current in-game controller. Mutates on buy, seed-steal, and control effects.
+   *
+   *  Items ignore this: an item's controller is derived from its place, not
+   *  stored on the card — see `item-helpers.ts:itemController`. The field is
+   *  still written on buy/seed-steal for items (kept required here since
+   *  `ItemCard` shares this base), but never read back for one. */
   controllerId: string;
 }
 

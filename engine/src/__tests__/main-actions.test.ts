@@ -1084,6 +1084,29 @@ describe("raze", () => {
     expect(events.some((e) => e.type === "location_placed")).toBe(true);
   });
 
+  it("removes the razed location from the game rather than discarding it", () => {
+    // The main deck (which the discard pile recycles into) is documented as
+    // units/items/events only. Mirrors mission completion, the other rule
+    // that clears a location off the grid.
+    const unit = makeUnit({ ownerId: ACTIVE });
+    const location = makeLocation({ ownerId: ACTIVE });
+    const replacement = makeLocation({ ownerId: ACTIVE });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = location;
+      d.grid[0][0].units.push(unit);
+      d.players[ACTIVE_IDX].prospectDeck.push(replacement);
+    });
+
+    const { state: next } = applyAction(state, {
+      type: "raze", playerId: ACTIVE, unitId: unit.id, row: 0, col: 0,
+    });
+    const ns = next as MainGameState;
+    const p = ns.players[ACTIVE_IDX];
+
+    expect(p.removedFromGame.some((c) => c.id === location.id)).toBe(true);
+    expect(p.discardPile.some((c) => c.id === location.id)).toBe(false);
+  });
+
   it("rejects raze when enemy units are present", () => {
     const unit = makeUnit({ ownerId: ACTIVE });
     const enemy = makeUnit({ ownerId: OTHER });

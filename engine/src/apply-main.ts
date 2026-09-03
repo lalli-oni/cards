@@ -719,7 +719,11 @@ function handleRaze(
   }
   cell.items = [];
 
-  player.discardPile.push(cell.location);
+  // Razed location → removed from game (not discard, to avoid reshuffle) —
+  // the main deck's contents are documented as units/items/events only, and
+  // mission completion (the other location-leaves-the-grid rule) already
+  // routes here rather than to the discard pile.
+  player.removedFromGame.push(cell.location);
   cell.location = null;
 
   emit({ type: "location_razed", row, col, cardId: razedLocationId });

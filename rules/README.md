@@ -111,7 +111,7 @@ Each player has four personal decks:
 | **Prospect deck** | Locations, dilemmas | Built during seeding (locations/dilemmas go here when grid is full or no room) | Populates and replenishes grid locations; provides dilemmas for placement |
 | **Market deck** | Units, items, events (undrawn cards) | Seeding deck remainder after deck construction | Purchasable cards in the market |
 | **Main deck** | Units, items, events (drawn cards) | Drawn from market deck during deck construction; later refilled from discard pile | Personal draw source during player turns |
-| **Discard pile** | Played, killed, completed cards | During play | Recycled into the main deck when needed (see Drawing cards) |
+| **Discard pile** | Played, killed, razed, completed cards | During play | Recycled into the main deck when needed (see Drawing cards) |
 
 #### The Grid
 
@@ -180,7 +180,7 @@ Each player has [var:action_points_per_turn:3] **action points (AP)** per turn. 
 | Destroy | 1 | Remove a card from your hand from the game permanently. |
 | Attempt Mission | 1 | Initiate a mission attempt at a location where you have at least one unit. All friendly units at the location contribute to requirement checks. Dilemmas are resolved one at a time (top first). If all dilemmas are overcome, mission requirements are checked — if met, mission completes. See Missions for details. |
 | Attack | 1 | Initiate combat at a location where you have at least one unit and an opponent has at least one unit. See Combat for details. |
-| Raze | [var:raze_ap_cost:3] | Your unit at a location destroys it. No enemy units may be present. All friendly units at the location, the location, and any items there are discarded. The active player draws a new location from their prospect deck and places it in the same slot. |
+| Raze | [var:raze_ap_cost:3] | Your unit at a location destroys it. No enemy units may be present. All friendly units at the location are discarded to their current controller's discard pile (see Killed for the temporary-Control exception, not yet engine-implemented — #143). All items there are discarded to the razing player's discard pile, regardless of original ownership. The location itself is removed from the game, not discarded, so it can't reshuffle into a deck. The active player draws a new location from their prospect deck and places it in the same slot. |
 
 A player may pass any remaining AP to end their turn early.
 

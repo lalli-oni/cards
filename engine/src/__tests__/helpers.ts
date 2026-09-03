@@ -1,10 +1,14 @@
 import { expect } from "bun:test";
+import { produce, type Draft } from "immer";
 import { fromState, type RandomGenerator } from "../rng";
 import { createGame } from "../create-game";
+import { rebuildListeners } from "../listeners/rebuild";
+import { executeEffect, type ExecutionContext } from "../effect-dsl/executor";
 import type {
   Card,
   SetupInput,
   GameConfig,
+  GameEvent,
   GameState,
   InstantEventCard,
   ItemCard,
@@ -280,4 +284,31 @@ export function createSeedingGame(overrides?: {
 /** Get the RNG from a game state (reconstructed from stored state). */
 export function getRng(state: GameState): RandomGenerator {
   return fromState(state.rngState);
+}
+
+/** Run a DSL effect string against a state for a chosen controlling player. */
+export function runEffect(
+  state: MainGameState,
+  effectStr: string,
+  asPlayerId: string,
+  opts?: { targetId?: string },
+): { state: MainGameState; events: GameEvent[] } {
+  const events: GameEvent[] = [];
+  const { queries } = rebuildListeners(state);
+  const nextState = produce(state, (draft: Draft<MainGameState>) => {
+    const rng = fromState(draft.rngState);
+    const ctx: ExecutionContext = {
+      draft,
+      playerId: asPlayerId,
+      actingCardSource: { type: "unit", cardId: "test-actor", definitionId: "test-actor" },
+      emit: (e) => { events.push(e); },
+      events,
+      queries,
+      rng,
+      targetId: opts?.targetId,
+    };
+    const result = executeEffect(effectStr, ctx);
+    draft.rngState = (result.rng.getState?.() ?? draft.rngState) as number[];
+  });
+  return { state: nextState, events };
 }

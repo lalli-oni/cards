@@ -10,8 +10,13 @@ export interface EffectSource {
   definitionId: string;
   /** Current controller of the source card. Bought / stolen cards report the
    *  new player here, so "is this mine?" checks in listener conditions
-   *  follow the card's current side rather than its original drafter. */
-  controllerId: string;
+   *  follow the card's current side rather than its original drafter.
+   *
+   *  Undefined when nobody controls the source — a loose item on the grid,
+   *  attached or not (see `item-helpers.ts:itemController`). Attribution
+   *  only within this engine — nothing here reads it back — but `EffectSource`
+   *  is re-exported publicly, so an SDK consumer may. */
+  controllerId: string | undefined;
   /** Grid position for location-bound effects. */
   position?: { row: number; col: number };
 }

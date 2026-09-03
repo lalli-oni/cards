@@ -5,6 +5,7 @@ import { parseCost, spendAP, spendGold } from "./cost-helpers";
 import { drawLocationFromProspect, drawMarketCard, drawOneCard } from "./deck-helpers";
 import { checkMissionRequirements, parseRequirements, parseRewards } from "./mission-helpers";
 import { findItemPosition, findUnitPosition, getUnitsAtPosition, hasControllingUnitAt, samePosition } from "./position-helpers";
+import { itemController } from "./item-helpers";
 import {
   areFacingEdgesOpen,
   findUnitOnGrid,
@@ -535,10 +536,13 @@ function locateItemAction(
   // findItemPosition scans every player's HQ and the whole grid, so a borne
   // item needs a control check or any item on the board would be a legal
   // target — unequip is the sharp case, carrying no unit to constrain it. A
-  // loose item is deliberately public: the rules expose a stored item to any
-  // co-located unit, which is what makes putting one down a real cost. Only
-  // equip can name a loose item, so this one rule covers all three actions.
-  if (itemResult.item.equippedTo && itemResult.item.controllerId !== playerId) {
+  // loose item is deliberately public (undefined controller passes the check
+  // below): the rules expose a stored item to any co-located unit, which is
+  // what makes putting one down a real cost. Only equip can name a loose
+  // item, so this one rule covers all three actions.
+  const itemUnits = getUnitsAtPosition(draft.players, draft.grid, itemResult.position);
+  const itemLocateController = itemController(itemResult.item, itemResult.position, itemUnits);
+  if (itemLocateController !== undefined && itemLocateController !== playerId) {
     throw new Error(`Item "${itemId}" is not controlled by "${playerId}"`);
   }
 
@@ -583,11 +587,8 @@ function handleEquip(
   }
 
   spendItemActionAP(draft, action, queries);
-  // Taking a loose item takes control of it, so its equip effect keys off the
-  // new bearer's side rather than whoever last carried it. Until an item's
-  // control is derived from its bearer (#278), this is the write that keeps a
-  // captured item from still working for its previous owner.
-  item.controllerId = playerId;
+  // No controller write: attaching the item to the unit *is* the control
+  // change, since an item's side is read off its bearer.
   item.equippedTo = unitId;
   emit({ type: "item_equipped", playerId, itemId, unitId, cause: { kind: "equip" } });
 }
@@ -692,24 +693,37 @@ function handleRaze(
 
   const razedLocationId = cell.location.id;
 
-  // Discard razed cards to whichever player currently controls them. For a
-  // friendly raze this collapses to the razer; for a bought/stolen unit that
-  // was at the location, the controller (not the original owner) collects it.
+  const player = getPlayerById(draft, playerId);
+
+  // Raze bars enemy units, so every unit here is controlled by the razer and
+  // this loop is equivalent to routing to `player`. Kept keyed on
+  // controllerId so the rule stays "a unit goes home to whoever holds it" if
+  // that bar ever relaxes.
   for (const u of cell.units) {
     const owner = getPlayerById(draft, u.controllerId);
     owner.discardPile.push(u);
+    emit({ type: "card_discarded", playerId: owner.id, cardId: u.id, reason: "raze" });
   }
   cell.units = [];
 
+  // Items go to the razing player regardless of ownership, matching mission
+  // completion — the other "this cell is wiped" rule. Nobody controls a loose
+  // item, so there is no controller to route one to. equippedTo is cleared
+  // first: a discarded item can be reshuffled and redeployed, and a stale
+  // pointer naming its (also discarded) bearer would resolve as "borne" again
+  // if that bearer id ever reappears on the board.
   for (const item of cell.items) {
-    const owner = getPlayerById(draft, item.controllerId);
-    owner.discardPile.push(item);
+    item.equippedTo = undefined;
+    player.discardPile.push(item);
+    emit({ type: "card_discarded", playerId: player.id, cardId: item.id, reason: "raze" });
   }
   cell.items = [];
 
-  // Discard the location
-  const player = getPlayerById(draft, playerId);
-  player.discardPile.push(cell.location);
+  // Razed location → removed from game (not discard, to avoid reshuffle) —
+  // the main deck's contents are documented as units/items/events only, and
+  // mission completion (the other location-leaves-the-grid rule) already
+  // routes here rather than to the discard pile.
+  player.removedFromGame.push(cell.location);
   cell.location = null;
 
   emit({ type: "location_razed", row, col, cardId: razedLocationId });
@@ -1411,12 +1425,17 @@ function handleAttemptMission(
   // All units at location → completing player's discard (regardless of owner)
   for (const u of cell.units) {
     player.discardPile.push(u);
+    emit({ type: "card_discarded", playerId: player.id, cardId: u.id, reason: "mission_completed" });
   }
   cell.units = [];
 
-  // All items at location → completing player's discard
+  // All items at location → completing player's discard. equippedTo is
+  // cleared first — see the matching raze comment above for why a stale
+  // pointer surviving the discard is dangerous.
   for (const item of cell.items) {
+    item.equippedTo = undefined;
     player.discardPile.push(item);
+    emit({ type: "card_discarded", playerId: player.id, cardId: item.id, reason: "mission_completed" });
   }
   cell.items = [];
 
@@ -1476,7 +1495,17 @@ function handleActivate(
     // positional verbs.
     const card = locatedItem.item as Draft<ItemCard>;
     if (!card.actions) throw new Error(`Card "${cardId}" has no actions`);
-    if (card.controllerId !== playerId) throw new Error(`Card "${cardId}" not owned by "${playerId}"`);
+    // A loose item is nobody's until it is taken (rules/README.md → Items →
+    // Stored), so it has no controller and this rejects for every player — a
+    // co-located unit may pick it up, not operate it where it lies.
+    const itemUnits = getUnitsAtPosition(draft.players, draft.grid, locatedItem.position);
+    const itemActivateController = itemController(card, locatedItem.position, itemUnits);
+    if (itemActivateController === undefined) {
+      throw new Error(`Item "${cardId}" is loose — it must be equipped before it can be activated`);
+    }
+    if (itemActivateController !== playerId) {
+      throw new Error(`Item "${cardId}" is controlled by "${itemActivateController}", not "${playerId}"`);
+    }
     if (!hasControllingUnitAt(draft.players, draft.grid, locatedItem.position, playerId)) {
       throw new Error(`Item "${cardId}" has no controlling unit co-located to activate it`);
     }

@@ -1,4 +1,5 @@
-import type { MainGameState } from "../types";
+import type { MainGameState, UnitCard } from "../types";
+import { itemController } from "../item-helpers";
 import type { EffectListener, QueryListener } from "./types";
 import {
   LOCATION_EFFECTS,
@@ -47,15 +48,18 @@ export function rebuildListeners(state: MainGameState): RebuildResult {
         queries.push(...kwResult.queries);
       }
 
-      // Stored / equipped item effects (items sitting at a grid location)
+      // Stored / equipped item effects (items sitting at a grid location).
+      // An item's side comes from its bearer, so a loose one contributes its
+      // effects with no controller at all.
       for (const item of cell.items) {
+        const controllerId = itemController(item, { type: "grid", row: r, col: c }, cell.units);
         const factory = ITEM_EFFECTS[item.definitionId];
         if (factory) {
-          const result = factory(item, item.controllerId, { row: r, col: c });
+          const result = factory(item, controllerId, { row: r, col: c });
           listeners.push(...result.listeners);
           queries.push(...result.queries);
         }
-        const kwResult = keywordEffects(item, item.controllerId, { row: r, col: c });
+        const kwResult = keywordEffects(item, controllerId, { row: r, col: c });
         listeners.push(...kwResult.listeners);
         queries.push(...kwResult.queries);
       }
@@ -107,16 +111,20 @@ export function rebuildListeners(state: MainGameState): RebuildResult {
       }
     }
 
-    // HQ items + units (stored cards not yet on grid)
+    // HQ items + units (cards in play but not yet on the grid). hqUnits is
+    // hoisted for itemController, which resolves an equipped item's bearer
+    // among them.
+    const hqUnits = player.hq.filter((c): c is UnitCard => c.type === "unit");
     for (const card of player.hq) {
       if (card.type === "item") {
+        const controllerId = itemController(card, { type: "hq", playerId: player.id }, hqUnits);
         const factory = ITEM_EFFECTS[card.definitionId];
         if (factory) {
-          const result = factory(card, card.controllerId);
+          const result = factory(card, controllerId);
           listeners.push(...result.listeners);
           queries.push(...result.queries);
         }
-        const kwResult = keywordEffects(card, card.controllerId);
+        const kwResult = keywordEffects(card, controllerId);
         listeners.push(...kwResult.listeners);
         queries.push(...kwResult.queries);
       } else if (card.type === "unit") {

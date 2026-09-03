@@ -29,6 +29,7 @@ export { createGame } from "./create-game";
 export { deriveCombatOutcome } from "./apply-main";
 export { decideKillVsInjure } from "./unit-helpers";
 export { findUnitOnGrid } from "./grid-helpers";
+export { itemController } from "./item-helpers";
 // Pre-built game setup
 export type { PrebuiltGameInput, PrebuiltPlayerInput } from "./prebuilt";
 export { buildPrebuiltSetup } from "./prebuilt";

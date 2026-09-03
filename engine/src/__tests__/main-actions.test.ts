@@ -5,6 +5,7 @@ import { rebuildListeners } from "../listeners/rebuild";
 import { getModifiedStat } from "../listeners/query";
 import type { GameEvent, ItemCard, MainAction, MainGameState, UnitCard } from "../types";
 import { getValidActions } from "../valid-actions";
+import { itemController } from "../item-helpers";
 import {
   createTestGame,
   makeInstantEvent,
@@ -820,6 +821,26 @@ describe("unequip", () => {
     expect(getModifiedStat(ns, after, stillThere, "strength", at)).toBe(5);
     expect(getModifiedStat(ns, after, stillThere, "strength", at, attacking)).toBe(7);
   });
+
+  it("a dropped War Banner's stored buff is side-agnostic — it helps whoever attacks there", () => {
+    // The "loose item benefits nobody" framing (#278) is about who *controls*
+    // the item — its stored half was never side-scoped and stays that way:
+    // a planted banner buffs any attacker contesting the cell, opponent's
+    // units included. This is unchanged by #278; pinned here while it's the
+    // one place "nobody controls it" has a non-obvious meaning.
+    const banner = makeItem({ ownerId: ACTIVE, definitionId: "war-banner" });
+    const attacker = makeUnit({ ownerId: OTHER, strength: 5 });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
+      d.grid[0][0].units.push(attacker);
+      d.grid[0][0].items.push(banner);
+    });
+
+    const { queries } = rebuildListeners(state);
+    const buffed = getModifiedStat(state, queries, attacker, "strength", { row: 0, col: 0 },
+      { contest: { role: "attacker", row: 0, col: 0 } });
+    expect(buffed).toBe(7);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -969,7 +990,9 @@ describe("item actions — locate and control", () => {
     // whole reason putting an item down is a decision rather than free upside.
     // Control moves with the pickup so a captured item's equip effect stops
     // working for its previous holder (war-banner's equipped half keys off the
-    // item's controller). #278 replaces this with control derived from the bearer.
+    // item's controller). Since #278 that control is *derived* from the bearer
+    // rather than written onto the card, so the assertion below reads the
+    // derived value — see loose-item-controller.test.ts for the full table.
     const mine = makeUnit({ ownerId: ACTIVE });
     const loose = makeItem({ ownerId: OTHER });
     const state = gameWith((d) => {
@@ -982,10 +1005,13 @@ describe("item actions — locate and control", () => {
       state, { type: "equip", playerId: ACTIVE, itemId: loose.id, unitId: mine.id },
     );
 
-    const taken = (next as MainGameState).grid[0][0].items.find((i) => i.id === loose.id);
+    const nextState = next as MainGameState;
+    const taken = nextState.grid[0][0].items.find((i) => i.id === loose.id);
     expect(taken?.equippedTo).toBe(mine.id);
     expect(events.find((e) => e.type === "item_equipped")?.cause).toEqual({ kind: "equip" });
-    expect(taken?.controllerId).toBe(ACTIVE);
+    expect(itemController(
+      taken as ItemCard, { type: "grid", row: 0, col: 0 }, nextState.grid[0][0].units,
+    )).toBe(ACTIVE);
     // ownerId is the seeding origin and never moves — only control does.
     expect(taken?.ownerId).toBe(OTHER);
   });
@@ -1056,6 +1082,29 @@ describe("raze", () => {
     expect(ns.turn.actionPointsRemaining).toBe(0);
     expect(events.some((e) => e.type === "location_razed")).toBe(true);
     expect(events.some((e) => e.type === "location_placed")).toBe(true);
+  });
+
+  it("removes the razed location from the game rather than discarding it", () => {
+    // The main deck (which the discard pile recycles into) is documented as
+    // units/items/events only. Mirrors mission completion, the other rule
+    // that clears a location off the grid.
+    const unit = makeUnit({ ownerId: ACTIVE });
+    const location = makeLocation({ ownerId: ACTIVE });
+    const replacement = makeLocation({ ownerId: ACTIVE });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = location;
+      d.grid[0][0].units.push(unit);
+      d.players[ACTIVE_IDX].prospectDeck.push(replacement);
+    });
+
+    const { state: next } = applyAction(state, {
+      type: "raze", playerId: ACTIVE, unitId: unit.id, row: 0, col: 0,
+    });
+    const ns = next as MainGameState;
+    const p = ns.players[ACTIVE_IDX];
+
+    expect(p.removedFromGame.some((c) => c.id === location.id)).toBe(true);
+    expect(p.discardPile.some((c) => c.id === location.id)).toBe(false);
   });
 
   it("rejects raze when enemy units are present", () => {

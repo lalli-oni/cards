@@ -87,39 +87,56 @@ describe("item activate — enumeration (#130)", () => {
     expect(names).toEqual(["brew", "transmute"]);
   });
 
-  it("grid stored item is activatable only while a friendly unit shares the cell", () => {
+  it("a loose grid item is activatable by nobody until someone equips it", () => {
+    // Taking a stored item is what makes it yours (rules/README.md → Items),
+    // so a co-located unit gets a pickup right, not a licence to operate the
+    // item where it lies. Before #278 the item's own controllerId answered
+    // this and a friendly unit in the cell was enough; now a loose item has no
+    // controller, so the offer is absent — activatesFor only checks ACTIVE, so
+    // this pins ACTIVE's own view, not "both players" (an enemy's view is
+    // separately absent, but for the ordinary reason it's never their turn).
     const stone = actionItem("Philosopher's Stone", "gold[3]");
-    const withUnit = gameWith((d) => {
+    const operator = makeUnit({ ownerId: ACTIVE, name: "Operator" });
+    const loose = gameWith((d) => {
       d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
-      d.grid[0][0].units.push(makeUnit({ ownerId: ACTIVE, name: "Operator" }));
+      d.grid[0][0].units.push(operator);
       d.grid[0][0].items.push(stone);
     });
-    expect(activatesFor(withUnit, stone.id)).toHaveLength(1);
+    expect(activatesFor(loose, stone.id)).toHaveLength(0);
 
-    const stoneAlone = actionItem("Philosopher's Stone", "gold[3]");
-    const noUnit = gameWith((d) => {
-      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
-      d.grid[0][0].items.push(stoneAlone);
-    });
-    expect(activatesFor(noUnit, stoneAlone.id)).toHaveLength(0);
+    // Equipping it to that same unit is the whole difference — control now
+    // comes from the bearer.
+    const { state: taken } = applyAction(
+      loose, { type: "equip", playerId: ACTIVE, itemId: stone.id, unitId: operator.id },
+    );
+    expect(activatesFor(taken as MainGameState, stone.id)).toHaveLength(1);
   });
 
-  it("an enemy unit in the cell does not satisfy the co-located gate", () => {
+  it("an enemy unit alone does not satisfy the co-located gate for an HQ item", () => {
+    // A grid item can only have a controller by being equipped to a unit in
+    // its own cell, whose controller then satisfies hasControllingUnitAt by
+    // construction — so on the grid this case is now indistinguishable from
+    // "loose item, no controller at all" and is covered by the loose test
+    // above. HQ is where the co-located gate is still a live, separate check:
+    // an unattached HQ item does have a controller (its own player), so an
+    // enemy unit present without a friendly one is what isolates the gate.
     const stone = actionItem("Philosopher's Stone", "gold[3]");
     const state = gameWith((d) => {
-      d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
-      d.grid[0][0].units.push(makeUnit({ ownerId: OPPONENT, name: "Enemy" }));
-      d.grid[0][0].items.push(stone);
+      d.players[ACTIVE_IDX].hq.push(stone);
+      d.players[ACTIVE_IDX].hq.push({ ...makeUnit({ ownerId: OPPONENT, name: "Enemy" }), controllerId: OPPONENT });
     });
     expect(activatesFor(state, stone.id)).toHaveLength(0);
   });
 
-  it("an enemy-controlled item is not enumerated even with a friendly unit present", () => {
+  it("an enemy's borne item is not enumerated even with a friendly unit present", () => {
+    // Borne by an opposing unit, so the derived controller is the opponent.
+    // (The loose counterpart is covered above: it is offered to nobody at all.)
+    const enemyBearer = makeUnit({ ownerId: OPPONENT, name: "Their Bearer" });
     const enemyStone = actionItem("Philosopher's Stone", "gold[3]", 1, OPPONENT);
     const state = gameWith((d) => {
       d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
-      d.grid[0][0].units.push(makeUnit({ ownerId: ACTIVE, name: "Operator" }));
-      d.grid[0][0].items.push(enemyStone);
+      d.grid[0][0].units.push(makeUnit({ ownerId: ACTIVE, name: "Operator" }), enemyBearer);
+      d.grid[0][0].items.push({ ...enemyStone, equippedTo: enemyBearer.id });
     });
     expect(activatesFor(state, enemyStone.id)).toHaveLength(0);
   });
@@ -191,12 +208,16 @@ describe("item activate — application (#130)", () => {
     // through getActingPosition — the item-grid fallback added for #130. The
     // friendly unit in the item's cell is buffed; one in another cell is not.
     const engine = actionItem("Siege Engine", "buff.strength(all + friendly)[2]~turn");
+    const nearUnit = makeUnit({ ownerId: ACTIVE, name: "Near" });
     const state = gameWith((d) => {
       d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
       d.grid[1][1].location = makeLocation({ ownerId: ACTIVE });
-      d.grid[0][0].units.push(makeUnit({ ownerId: ACTIVE, name: "Near" }));
+      d.grid[0][0].units.push(nearUnit);
       d.grid[1][1].units.push(makeUnit({ ownerId: ACTIVE, name: "Far" }));
-      d.grid[0][0].items.push(engine);
+      // Borne, not loose: since #278 a loose item has no controller and so no
+      // player may activate it. The bearer stands in the item's own cell, which
+      // is what getActingPosition resolves.
+      d.grid[0][0].items.push({ ...engine, equippedTo: nearUnit.id });
     });
 
     const { state: next } = applyAction(state, {
@@ -231,13 +252,16 @@ describe("item activate — application (#130)", () => {
   });
 
   it("rejects activating an item the player does not control", () => {
+    const enemyBearer = makeUnit({ ownerId: OPPONENT, name: "Their Bearer" });
     const enemyStone = actionItem("Philosopher's Stone", "gold[3]", 1, OPPONENT);
     const state = gameWith((d) => {
       // A friendly unit is present, so the co-located gate would pass — the
-      // controllerId check must reject first.
+      // control check must reject first. The item is borne by an opposing unit,
+      // which is what gives it a controller to differ from ACTIVE; a loose item
+      // would reject here too, but for want of any controller at all.
       d.grid[0][0].location = makeLocation({ ownerId: ACTIVE });
-      d.grid[0][0].units.push(makeUnit({ ownerId: ACTIVE, name: "Operator" }));
-      d.grid[0][0].items.push(enemyStone);
+      d.grid[0][0].units.push(makeUnit({ ownerId: ACTIVE, name: "Operator" }), enemyBearer);
+      d.grid[0][0].items.push({ ...enemyStone, equippedTo: enemyBearer.id });
     });
     expect(() =>
       applyAction(state, {
@@ -246,7 +270,7 @@ describe("item activate — application (#130)", () => {
         cardId: enemyStone.id,
         actionName: "transmute",
       }),
-    ).toThrow(/not owned by/);
+    ).toThrow(/is controlled by/);
   });
 
   it("rejects an item activation naming an action the item does not have", () => {

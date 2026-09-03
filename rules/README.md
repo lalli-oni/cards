@@ -111,7 +111,7 @@ Each player has four personal decks:
 | **Prospect deck** | Locations, dilemmas | Built during seeding (locations/dilemmas go here when grid is full or no room) | Populates and replenishes grid locations; provides dilemmas for placement |
 | **Market deck** | Units, items, events (undrawn cards) | Seeding deck remainder after deck construction | Purchasable cards in the market |
 | **Main deck** | Units, items, events (drawn cards) | Drawn from market deck during deck construction; later refilled from discard pile | Personal draw source during player turns |
-| **Discard pile** | Played, killed, completed cards | During play | Recycled into the main deck when needed (see Drawing cards) |
+| **Discard pile** | Played, killed, razed, completed cards | During play | Recycled into the main deck when needed (see Drawing cards) |
 
 #### The Grid
 
@@ -169,7 +169,7 @@ Each player has [var:action_points_per_turn:3] **action points (AP)** per turn. 
 |--------|---------|-------------|
 | Deploy | 1 | Play a unit or item from hand to HQ. Pay the card's gold cost. |
 | Buy | 0 | Purchase a card from the market. Pay its gold cost. Card goes to hand. |
-| Activate | varies | Use an action printed on a unit or item. AP cost is printed on the card. |
+| Activate | varies | Use an action printed on a unit or item. AP cost is printed on the card. An item's action additionally requires a friendly unit sharing its place — see [Items](#items). |
 | Draw | 1 | Draw a card from your main deck. |
 | Enter | 1 | Move a unit from HQ to any perimeter location on the grid. The location's edge facing the grid boundary must be open (the boundary is treated as blocked). |
 | Move | 1 | Move a unit to an orthogonally adjacent location (or from an edge location back to HQ — edge facing boundary must be open). Both facing edges must be open (see Location borders). |
@@ -180,7 +180,7 @@ Each player has [var:action_points_per_turn:3] **action points (AP)** per turn. 
 | Destroy | 1 | Remove a card from your hand from the game permanently. |
 | Attempt Mission | 1 | Initiate a mission attempt at a location where you have at least one unit. All friendly units at the location contribute to requirement checks. Dilemmas are resolved one at a time (top first). If all dilemmas are overcome, mission requirements are checked — if met, mission completes. See Missions for details. |
 | Attack | 1 | Initiate combat at a location where you have at least one unit and an opponent has at least one unit. See Combat for details. |
-| Raze | [var:raze_ap_cost:3] | Your unit at a location destroys it. No enemy units may be present. All friendly units at the location, the location, and any items there are discarded. The active player draws a new location from their prospect deck and places it in the same slot. |
+| Raze | [var:raze_ap_cost:3] | Your unit at a location destroys it. No enemy units may be present. All friendly units at the location are discarded to their current controller's discard pile (see Killed for the temporary-Control exception, not yet engine-implemented — #143). All items there are discarded to the razing player's discard pile, regardless of original ownership. The location itself is removed from the game, not discarded, so it can't reshuffle into a deck. The active player draws a new location from their prospect deck and places it in the same slot. |
 
 A player may pass any remaining AP to end their turn early.
 
@@ -438,6 +438,24 @@ stored effect.
 
 Taking a stored item makes it yours — its equipped effect then works for
 its new bearer's side.
+
+**Controller.** An item's controller follows from where it sits, not who
+drafted or last equipped it:
+
+- **Equipped** — the bearer's controller. A unit that changes hands (bought,
+  stolen, or temporarily controlled) brings its gear with it, and the
+  controller may manage it (Equip, Unequip, Transfer) the same as their own
+  units' items.
+- **Stored on the grid** — nobody. This is why a stored item is exposed (see
+  above): with no controller, nobody may activate it where it lies.
+- **Unattached in HQ** — the player whose HQ it's in. HQ is private ground,
+  so there is no one else present to expose it to.
+
+Activating an item's printed action needs both a controller and a friendly
+unit sharing its place to operate it — an equipped item's bearer always
+satisfies the second condition by being that unit, but a stored item (no
+controller) or an HQ item with no unit present (no operator) cannot be
+activated until both are met.
 
 Items deployed to HQ start unattached; they reach the grid only by being
 equipped to a unit that moves out. An unattached item in HQ is neither

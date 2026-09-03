@@ -21,16 +21,16 @@ This repository houses a card game [name pending] with the following aspects:
 
 ### Editing Cards
 
-Cards live as CSV files in `library/sets/{set_name}/`. One file per card type: `units.csv`, `locations.csv`, `items.csv`, `events.csv`, `policies.csv`.
+Cards live as CSV files in `library/sets/{set_name}/`. One file per card type: `units.csv`, `locations.csv`, `items.csv`, `events.csv`, `policies.csv`, alongside a `set.toml` of set-level metadata.
 
 **VisiData** is the recommended editor for card CSVs. It gives you a full spreadsheet UI in the terminal with sorting, filtering, and inline editing — without leaving your workflow.
 
 ```sh
 # Open a card file for editing
-vd library/sets/baseline/units.csv
+vd library/sets/alpha-1/units.csv
 
 # Open all set files at once (tab between sheets)
-vd library/sets/baseline/*.csv
+vd library/sets/alpha-1/*.csv
 ```
 
 Key VisiData commands:
@@ -51,7 +51,7 @@ After editing CSVs, build to JSON for the engine:
 
 ```sh
 bun library/build.ts              # build all sets
-bun library/build.ts baseline     # build a specific set
+bun library/build.ts alpha-1      # build a specific set
 ```
 
 The build script validates required fields and enum values. Fix any reported errors before committing.
@@ -62,10 +62,10 @@ Use nushell for quick queries and analysis:
 
 ```sh
 # List all legendary units
-nu -c "open library/sets/baseline/units.csv | where rarity == 'legendary'"
+nu -c "open library/sets/alpha-1/units.csv | where rarity == 'legendary'"
 
 # Count cards by rarity across all types
-nu -c "glob library/sets/baseline/*.csv | each { open \$in } | flatten | group-by rarity | transpose key value | each { { rarity: \$in.key, count: (\$in.value | length) } }"
+nu -c "glob library/sets/alpha-1/*.csv | each { open \$in } | flatten | group-by rarity | transpose key value | each { { rarity: \$in.key, count: (\$in.value | length) } }"
 ```
 
 See `library/schema.md` for the full column definitions per card type.

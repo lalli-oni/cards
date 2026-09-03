@@ -1,8 +1,8 @@
 {
   "meta": {
     "name": "cords CCG — Policy card, layout 'Gate', V2 'Modern Trek'",
-    "example": "Scholar (ALPHA-1 · P03, epic, Knowledge — doctrine + seeding + action)",
-    "note": "Only policy-specific values; shares glass/hatch/footer language with the other Gate cards. Policies have NO cost coin — the header right box holds an attribute badge instead. Always epic rarity. Measured from live DOM at 1:1.",
+    "example": "Scholar (ALPHA-1 · P03, rare, Knowledge — doctrine + seeding + action)",
+    "note": "Only policy-specific values; shares glass/hatch/footer language with the other Gate cards. Policies have NO cost coin — the header right box holds an attribute badge instead. Rarity is uniform across all policies. Measured from live DOM at 1:1.",
     "canvas": { "width": 750, "height": 1050, "cardCornerRadius": 14, "background": "#0a1220" }
   },
 
@@ -41,7 +41,7 @@
     "flavor": { "x": 61, "baseline": 953.5, "font": "Space Grotesk 15 italic", "lineHeight": 21, "color": "#7a8aa6", "quoted": true, "note": "larger than event/item flavor (15 vs 12.5)" },
     "footerLine": {
       "divider": { "x1": 61, "x2": 689, "y": 972, "stroke": "1px #1a2540" },
-      "rarity": { "text": "◆ EPIC", "x": 61, "baseline": 991, "font": "JetBrains Mono 9/700 ls .22em", "color": "#c8f562" },
+      "rarity": { "text": "◆ RARE", "x": 61, "baseline": 991, "font": "JetBrains Mono 9/700 ls .22em", "color": "#c8f562" },
       "setId": { "text": "POLICY // ALPHA-1 · P03", "rightAlignedTo": 689, "baseline": 991.5, "font": "JetBrains Mono 11/400 ls .22em", "color": "#7a8aa6", "note": "11px — larger than the 9px used on event/item/unit footers", "pattern": "POLICY // {SET} · P##" }
     }
   },

@@ -59,7 +59,7 @@ const VALID_ITEM: CardDefinition = {
   name: "Test Sword",
   set: "test-set",
   type: "item",
-  rarity: "uncommon",
+  rarity: "rare",
   cost: "2",
   text: "+2 Strength",
   flavor: null,
@@ -90,7 +90,7 @@ const VALID_POLICY: CardDefinition = {
   name: "Test Tax",
   set: "test-set",
   type: "policy",
-  rarity: "uncommon",
+  rarity: "rare",
   cost: "0",
   text: null,
   flavor: null,
@@ -160,6 +160,39 @@ describe("loadCardDefinitions", () => {
     ]);
     expect(() => loadCardDefinitions(path)).toThrow(CardValidationError);
   });
+
+  // The ladder was collapsed from five tiers to three (common/rare/legendary).
+  // `uncommon` and `epic` were real values across the whole card library before
+  // that, and `rare` was accepted by the engine while the rules never described
+  // it — so a stale definition rebuilt from an old CSV is a live failure mode,
+  // not a hypothetical one. Pin that the retired tiers are now rejected rather
+  // than silently loaded.
+  test.each(["uncommon", "epic"])("rejects retired rarity tier %s", (tier) => {
+    const path = writeTmpJson(`retired-${tier}.json`, [
+      { ...VALID_UNIT, rarity: tier },
+    ]);
+    try {
+      loadCardDefinitions(path);
+      expect(true).toBe(false);
+    } catch (e) {
+      expect(e).toBeInstanceOf(CardValidationError);
+      expect(
+        (e as CardValidationError).errors.some((err) =>
+          err.message.includes(`invalid rarity: ${tier}`),
+        ),
+      ).toBe(true);
+    }
+  });
+
+  test.each(["common", "rare", "legendary"])(
+    "accepts current rarity tier %s",
+    (tier) => {
+      const path = writeTmpJson(`current-${tier}.json`, [
+        { ...VALID_UNIT, rarity: tier },
+      ]);
+      expect(loadCardDefinitions(path)[0].rarity).toBe(tier);
+    },
+  );
 
   test("detects duplicate card IDs", () => {
     const path = writeTmpJson("dup.json", [VALID_UNIT, VALID_UNIT]);

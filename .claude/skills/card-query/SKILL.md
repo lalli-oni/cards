@@ -36,7 +36,7 @@ only the `use library/analysis/selectors.nu` path is relative to where you run `
 
 - `load-set <set>` — table of all cards in the set (adds numeric `gold-cost`)
 - `of-type unit|location|item|event|policy` — filter by card type
-- `of-rarity common|uncommon|rare|epic|legendary` — filter by rarity
+- `of-rarity common|rare|legendary` — filter by rarity
 - `has-attribute <Attr>` — cards with an attribute (the archetype axis)
 - `has-verb <verb>` — cards whose effects use a DSL verb (`gold`, `contest`, `buff`, …)
 - `with-verbs` — add `verbs` (DSL verbs used)

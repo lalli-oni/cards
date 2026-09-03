@@ -1,7 +1,7 @@
 {
   "meta": {
     "name": "cords CCG — Item card, layout 'Gate', V2 'Modern Trek'",
-    "example": "War Banner (ALPHA-1 · I02, uncommon, Banner, cost 3, equip + stored modes)",
+    "example": "War Banner (ALPHA-1 · I02, rare, Banner, cost 3, equip + stored modes)",
     "note": "Only item-specific values. Shares glass panels, hatch, gold coin, name/footer styling with the other Gate cards (see event-card-spec.json / location-card-spec.json). Measured from live DOM at 1:1.",
     "canvas": { "width": 750, "height": 1050, "cardCornerRadius": 14, "background": "#0a1220" }
   },
@@ -40,7 +40,7 @@
     "flavor": { "x": 61, "baseline": 956.5, "font": "Space Grotesk 12.5 italic", "lineHeight": 17.5, "color": "#7a8aa6", "quoted": true },
     "footerLine": {
       "divider": { "x1": 61, "x2": 689, "y": 975, "stroke": "1px #1a2540" },
-      "rarity": { "text": "◇ UNCOMMON", "x": 61, "baseline": 992.5, "font": "JetBrains Mono 9/700 ls .22em", "color": "#c8f562" },
+      "rarity": { "text": "◆ RARE", "x": 61, "baseline": 992.5, "font": "JetBrains Mono 9/700 ls .22em", "color": "#c8f562" },
       "setId": { "text": "ITEM · BANNER // ALPHA-1 · I02", "rightAlignedTo": 689, "baseline": 992.5, "font": "JetBrains Mono 9/400 ls .22em", "color": "#7a8aa6", "pattern": "ITEM · {TYPE} // {SET} · I##" }
     }
   },

@@ -1,7 +1,7 @@
 {
   "meta": {
     "name": "cords CCG — Event card, layout 'Gate', V2 'Modern Trek'",
-    "example": "Ambush (ALPHA-1 · E03, uncommon, TRAP, cost 2)",
+    "example": "Ambush (ALPHA-1 · E03, rare, TRAP, cost 2)",
     "note": "Only event-specific values. Shares with unit/location cards: palette, fonts, gold cost coin, glass panels (#060c18 @78%, 1px #1a2540, r10, backdrop-blur 6px), full-bleed hatch ('\\' 45°, 2px/16px, #fff @5%), rarity footer. Measured from live DOM at 1:1.",
     "canvas": { "width": 750, "height": 1050, "cardCornerRadius": 14, "background": "#0a1220" }
   },
@@ -49,7 +49,7 @@
     "flavor": { "x": 61, "baseline": 959.5, "font": "Space Grotesk", "size": 12.5, "style": "italic", "lineHeight": 17.5, "color": "#7a8aa6", "quoted": true },
     "footerLine": {
       "divider": { "x1": 61, "x2": 689, "y": 975, "stroke": "1px #1a2540" },
-      "rarity": { "text": "◇ UNCOMMON", "x": 61, "baseline": 992.5, "font": "JetBrains Mono 9/700", "letterSpacing": "0.22em", "color": "#c8f562", "note": "◇ hollow for uncommon, ◆ solid for epic+ — same as unit footer" },
+      "rarity": { "text": "◆ RARE", "x": 61, "baseline": 992.5, "font": "JetBrains Mono 9/700", "letterSpacing": "0.22em", "color": "#c8f562", "note": "● common, ◆ rare, ★ legendary — same as unit footer" },
       "setId": { "text": "EVENT · TRAP // ALPHA-1 · E03", "rightAlignedTo": 689, "baseline": 992.5, "font": "JetBrains Mono 9/400", "letterSpacing": "0.22em", "color": "#7a8aa6", "pattern": "EVENT · {TIMING} // {SET} · E##" }
     }
   },

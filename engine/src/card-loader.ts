@@ -93,13 +93,7 @@ export function createInstanceCounter(): InstanceCounter {
 // ---------------------------------------------------------------------------
 
 const VALID_TYPES: CardType[] = ["unit", "location", "item", "event", "policy"];
-const VALID_RARITIES: Rarity[] = [
-  "common",
-  "uncommon",
-  "rare",
-  "epic",
-  "legendary",
-];
+const VALID_RARITIES: Rarity[] = ["common", "rare", "legendary"];
 const VALID_TIMINGS: EventTiming[] = ["instant", "passive", "trap"];
 
 export class CardValidationError extends Error {

@@ -1,7 +1,7 @@
 {
   "meta": {
     "name": "cords CCG — Location card, layout 'Gate', V2 'Modern Trek'",
-    "example": "The Great Wall (ALPHA-1 · L09, epic, blocked N/S, ROTATE action)",
+    "example": "The Great Wall (ALPHA-1 · L09, rare, blocked N/S, ROTATE action)",
     "note": "Only location-specific values. Palette, fonts (Space Grotesk / JetBrains Mono), gold coin gradient, and rarity gems are identical to card-spec.json (unit card). All boxes below measured from the live DOM at 1:1 — text baselines accurate to ±1px.",
     "sharedWithUnitCard": "colors, fonts, cost/VP coin gradient (#ffe9a8 → #f4c24a 55% → #a3761a, focal 35% 30%, border 2px #8a6522, inner ring 3px #ffe9a8 @33%), footer type styling, rarity gems/colors"
   },
@@ -104,7 +104,7 @@
     },
     "footerLine": {
       "divider": { "x1": 59, "y": 681.5, "x2": 691, "stroke": "1px #1a2540", "paddingTopAfter": 7 },
-      "rarity": { "text": "◆ EPIC", "x": 59, "baseline": 698.5, "font": "JetBrains Mono", "size": 9, "weight": 700, "letterSpacing": "0.22em", "color": "#c8f562 (rarity accent)", "note": "same as unit footer" },
+      "rarity": { "text": "◆ RARE", "x": 59, "baseline": 698.5, "font": "JetBrains Mono", "size": 9, "weight": 700, "letterSpacing": "0.22em", "color": "#c8f562 (rarity accent)", "note": "same as unit footer" },
       "setId": { "text": "MISSION // ALPHA-1 · L09", "rightAlignedTo": 691, "baseline": 698.5, "font": "JetBrains Mono", "size": 9, "weight": 400, "letterSpacing": "0.22em", "color": "#7a8aa6", "note": "prefix is 'MISSION' for mission locations, 'LOCATION' otherwise; matches unit footer style. L## is the location set number" }
     }
   },

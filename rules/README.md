@@ -20,14 +20,24 @@ All phases consist of rounds.
 In each round every player gets a turn, first starting player and then going clockwise until last player ends their turn.
 
 ### Seeding Phase [var:seeding-phase]
-Each player brings a **seeding deck** of [var:seeding_deck_size:60] cards (shuffled).
+Each player receives a **seeding deck** of [var:seeding_deck_size:60] cards (shuffled).
 Each seeding deck must contain exactly [var:seeding_locations:16] **locations** and
 [var:seeding_dilemmas:16] **dilemmas**; the remaining [var:seeding_other:28] cards are units, items,
-and events. Rarity limits apply per deck (see Rarity). Policies are
-not part of the seeding deck and do not count toward these totals.
+and events. Policies are not part of the seeding deck and do not count
+toward these totals.
 
-Each player brings [var:policy_pool_size:3] policy cards (separate from the seeding
-deck).
+Each seeding deck is **dealt at random from the set**, drawing to the
+rarity caps in [Rarity](#rarity) as quotas rather than ceilings. Each player
+is dealt independently from the full set, so the same card may reach more than
+one player, and players receive different subsets — openings vary game to game.
+
+[design: The deal is not implemented yet — #285. Until it lands, callers
+supply a seeding deck directly and nothing validates its composition. The
+dilemma sub-deck also has no pool to deal from: the card type does not exist
+yet (#255, under epic #58).]
+
+Each player brings [var:policy_pool_size:3] policy cards of their own choosing
+(separate from the seeding deck, and not dealt).
 
 #### 1. First policy selection
 Each player picks 1 policy from their pool (face-up, visible to all).
@@ -127,7 +137,7 @@ action; it is provided by specific card effects (unit actions, events).
 **Initial population:** During draft rounds, locations are placed on the
 grid immediately — whether drawn (kept) or claimed. If the grid is
 full, excess locations go to the player's prospect deck. The grid is
-guaranteed to fill during draft rounds (each player brings [var:seeding_locations:16]
+guaranteed to fill during draft rounds (each player is dealt [var:seeding_locations:16]
 locations, exceeding available grid slots for all player counts).
 
 **Replacement:** When a location is removed from the grid (e.g. mission
@@ -385,8 +395,9 @@ draw/claim flow as other cards. Dilemmas never enter a player's hand
 or market deck — they are always placed under a mission location or
 sent to the player's prospect deck. See Seeding Phase for details.
 
-Dilemmas may only be **common** or **uncommon** rarity. They do not
-count toward the legendary/epic caps.
+Dilemmas may only be **common** or **rare** rarity, and carry their
+own row in the cap table (see [Rarity](#rarity)) — they never draw on the main
+body's budget.
 
 Any player can attempt to solve dilemmas at any mission — there is
 no mission ownership. Players may strategically place dilemmas on
@@ -504,16 +515,46 @@ Policies do not count against seeding deck limits.
 > See [Policy Rules](policies.md) for full details and examples.
 
 ## Rarity
-Four tiers: **Common**, **Uncommon**, **Epic**, **Legendary**.
+Three tiers: **Common**, **Rare**, **Legendary**.
 
-Rarity affects deck-building limits and pack distribution only. It has
+Rarity affects seeding-deck composition and pack distribution only. It has
 no direct effect on gameplay mechanics or card cost — a common can be
 more expensive or powerful than a legendary.
 
-- Legendary: max [var:max_legendary:8] per seeding deck
-- Epic: max [var:max_epic:16] per seeding deck
-- Uncommon: no cap
-- Common: no cap
+Which tier a card belongs to is set by
+[Rarity Reflects Repeat Tolerance](design-principles.md#rarity-reflects-repeat-tolerance).
+
+Caps apply **per sub-deck**, not across the seeding deck as a whole. The
+location and dilemma blocks are fixed-size and do a different job from the main
+body, so a scarce location does not compete with a scarce unit for one budget.
+
+| Sub-deck | Size | Legendary | Rare | Common |
+|-----------|------|-----------|------|--------|
+| Main body | [var:seeding_other:28] | max [var:max_legendary_main:5] | max [var:max_rare_main:12] | no cap |
+| Locations | [var:seeding_locations:16] | max [var:max_legendary_locations:3] | max [var:max_rare_locations:6] | no cap |
+| Dilemmas | [var:seeding_dilemmas:16] | not permitted | no cap | no cap |
+
+Under the random deal these caps are read as **quotas**: a quota is exact, not
+a maximum. A dealt main body is exactly [var:max_legendary_main:5] legendary and
+[var:max_rare_main:12] rare, the rest — 11 at baseline — common; a dealt location
+sub-deck is exactly [var:max_legendary_locations:3] legendary and
+[var:max_rare_locations:6] rare, the rest — 7 at baseline — common. "No cap" is
+the residual, not an unbounded allowance. A set that cannot fill a quota is an
+error, not a deck dealt short.
+
+The dilemma sub-deck has no quota: rare and common are both uncapped there, so
+the table does not determine its composition.
+
+[design: Whether dilemmas get an explicit split or are exempt from the quota
+reading is open — #286. Moot until the dilemma card type exists (#255).]
+
+A tier cap is not a copy limit: it bounds how many cards of a tier a deck
+**receives**, not how many copies of one card. Bounding repeats needs a per-card
+limit, which the game does not yet define.
+
+[design: `max_legendary_main` is half the 10-card main-body legendary pool the
+set targets (`library/sets/alpha-1/set.toml`) — half the tier available rather
+than guaranteed in every deck.]
 
 ## Keyword System
 
@@ -598,7 +639,9 @@ takes −1 to all stats in a contest (including combat).
 
 #### Seeding
 - Seeding deck size: 60 (16 locations, 16 dilemmas, 28 other)
-- Rarity caps on seeding deck: [var:max_legendary:8] legendary, [var:max_epic:16] epic (applied per-deck)
+- Rarity quotas, applied per-deck and per sub-deck: main body [var:max_legendary_main:5] legendary /
+  [var:max_rare_main:12] rare; locations [var:max_legendary_locations:3] legendary /
+  [var:max_rare_locations:6] rare; dilemmas uncapped (never legendary)
 - Draft round draw: 10 cards (last 2 to Arena, 8 kept)
 - Claim: pick until Arena is empty; locations placed on grid; starting player token rotates each round
 - Dilemmas per location: 2

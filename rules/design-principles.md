@@ -120,3 +120,29 @@ can no longer be interacted with becomes a solved-puzzle win button. Build
 synergies an opponent can still disrupt — deny a piece, race the setup, or
 punish the commitment. This is the card-craft echo of **Every Mechanic Needs
 Counterplay**.
+
+### Rarity Reflects Repeat Tolerance
+
+Rarity is not a power dial — cost and effect are independent of it. It answers a
+different question: **how often should seeing this card twice feel normal?**
+
+- **Common** — a common noun. A role or a place-type, many of which exist in the
+  world: Doctor, Soldier, Engineer; Market, Hospital, Overgrown Grove.
+- **Rare** — a *specialised* role: the distinguished cousin of a common.
+  Samurai, Berserker, Neurosurgeon. It may instead be a named figure, but only
+  an obscure one — Durable Mike Malloy, Wrong Way Corrigan — and the tier should
+  hold more roles than names.
+- **Legendary** — a name everyone knows, or a landmark there is one of:
+  Cleopatra, Nikola Tesla; The Pyramids.
+
+The same reading extends past people and places. An **item** or an **event** is
+common when it is the generic kind — Sword, Famine — rare when it is a
+distinguished instance — Damascus Blade, a named regional famine — and legendary
+when it is the one everyone knows: Excalibur, The Black Death.
+
+Two axes, depending on the subject. For roles and generic things it is **how
+specialised** they are; for names it is **how widely known** they are. Both land
+in the same place: how often a repeat should turn up. Commons are the backbone a
+deck leans on and repeats happily, a rare repeating is occasional and notable, and a
+legendary arriving at all reads as an event. Deck-building limits are what hold
+that frequency in place — the tier only names the intent.

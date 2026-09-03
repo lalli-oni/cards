@@ -196,8 +196,8 @@ tr:nth-child(even) td{ background:#f6f8fc; }
 .stat{ display:inline-block; font-weight:800; font-size:.8em; color:#fff; padding:.16em .4em; border-radius:4px; }
 .stat.str{ background:var(--str); } .stat.cun{ background:var(--cun); } .stat.cha{ background:var(--cha); }
 .gem{ font-size:1.15em; }
-.gem.common{ color:#6c7486; } .gem.uncommon{ color:#4a8fd1; }
-.gem.epic{ color:#d9a441; } .gem.legendary{ color:#d9a441; }
+.gem.common{ color:#6c7486; } .gem.rare{ color:#4a8fd1; }
+.gem.legendary{ color:#d9a441; }
 .keytable td{ border:none; border-bottom:1px solid var(--line); padding:.55em .4em; }
 .keytable td.sym{ width:5.2em; text-align:center; white-space:nowrap; font-size:1.05em; }
 .lede{ color:#33435f; }
@@ -266,11 +266,10 @@ KEY = """
     <tr><td class="sym"><span class="stat cha">CHA</span></td>
         <td><b>Charisma</b><br>A contest / check stat; Untouchable keys off it in v0.1.</td></tr>
     <tr><td class="sym"><span class="gem common">&#9679;</span>
-                        <span class="gem uncommon">&#9671;</span>
-                        <span class="gem epic">&#9670;</span>
+                        <span class="gem rare">&#9670;</span>
                         <span class="gem legendary">&#9733;</span></td>
-        <td><b>Rarity</b><br>Common &#9679; &nbsp; Uncommon &#9671; &nbsp; Epic &#9670;
-        &nbsp; Legendary &#9733;. Affects deck-building limits only &mdash; not cost or power.</td></tr>
+        <td><b>Rarity</b><br>Common &#9679; &nbsp; Rare &#9670; &nbsp; Legendary &#9733;.
+        Affects deck-building limits only &mdash; not cost or power.</td></tr>
   </table>
 </section>
 """

@@ -11,8 +11,8 @@ Every card type includes these columns:
 |----------|--------|----------|-------------|
 | id       | string | yes      | Unique identifier. Kebab-case of card name (e.g. `cleopatra`, `nikola-tesla`) |
 | name     | string | yes      | Display name |
-| set      | string | yes      | Set identifier (e.g. `baseline`) |
-| rarity   | enum   | yes      | `common`, `uncommon`, `epic`, `legendary` |
+| set      | string | yes      | Set identifier (e.g. `alpha-1`) |
+| rarity   | enum   | yes      | `common`, `rare`, `legendary` — see [Rarity Reflects Repeat Tolerance](../rules/design-principles.md#rarity-reflects-repeat-tolerance) for which tier a card belongs in |
 | cost     | string | yes      | Gold cost to deploy/play. Multiple costs separated by `\|` (player pays one) |
 | text     | string | no       | Card text — rules text, keywords, effects |
 | flavor   | string | no       | Flavor text |
@@ -40,8 +40,7 @@ A unit's freeform `text` remains the reminder prose for its single `action`
 
 | Column       | Type   | Required | Description |
 |--------------|--------|----------|-------------|
-| requirements | string | no       | Mission requirements. Semicolon-separated atomic checks, AND'd. See Requirement Checks below. |
-| rewards      | string | no       | Mission rewards. Format: `Nvp` (e.g. `5vp`). A location with both `requirements` and `rewards` is a mission location. |
+| mission      | string | no       | Mission requirements and reward in one field, format `requirements>vp` (e.g. `knowledge_2>5`). Requirements are semicolon-separated atomic checks, AND'd — see Requirement Checks below; the reward is a bare number of VP. A location with a `mission` value is a mission location. The build splits this into `requirements` and `rewards` (`Nvp`) on the loaded card; neither is a CSV column. |
 | passive      | string | no       | Passive effect text |
 | edges   | string | no       | Blocked edges, semicolon-separated (`N`, `S`, `E`, `W`). Unlisted edges are open. Empty = all open. |
 | actions | string | no       | Semicolon-separated action definitions. Format: `name:ap_cost:effect`. Usable by any player with a unit at this location. |

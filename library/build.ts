@@ -48,7 +48,12 @@ const MAIN_BODY_TYPES: CardType[] = ["units", "items", "events"];
 // --- CSV parsing ---
 
 function parseCSV(raw: string): Record<string, string>[] {
-  const lines = raw.trim().split("\n");
+  // Split on either line ending. A spreadsheet export (the Numbers/Excel
+  // workflow) or a Windows checkout under core.autocrlf is CRLF; splitting on
+  // "\n" alone left a trailing \r on every line, which renamed the last header
+  // (`effect` -> `effect\r`) and dropped that whole column from the build with
+  // no error, since every last column is optional (#289).
+  const lines = raw.trim().split(/\r?\n/);
   if (lines.length < 2) return [];
 
   const headers = parseLine(lines[0]);

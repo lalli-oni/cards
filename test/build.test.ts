@@ -476,6 +476,73 @@ describe("build validation — cost is a numeric gold amount", () => {
 });
 
 // ---------------------------------------------------------------------------
+// CRLF line endings (#289)
+//
+// `parseCSV` split on "\n" only, so a CRLF file left a trailing \r on every
+// line. That renamed the last header (`effect` -> `effect\r`), so the lookup
+// for that column missed and the build dropped it — silently, because every
+// last column in the real CSVs is optional. On a Windows checkout it emptied
+// all 3 instant-event effects, 7 policy action sets and all 46 flavor texts,
+// which deadlocked the greedy-bot integration games at a permanent 3vp tie.
+// A spreadsheet export writes CRLF on any OS, so this is not Windows-only.
+// ---------------------------------------------------------------------------
+describe("build — CRLF line endings (#289)", () => {
+  const fixtureRoot: string = mkdtempSync(join(tmpdir(), "cards-crlf-"));
+  afterAll(() => rmSync(fixtureRoot, { recursive: true, force: true }));
+
+  /** Write a two-card fixture set whose lines are joined with `eol`. */
+  function makeSet(name: string, eol: string): void {
+    const dir: string = join(fixtureRoot, name);
+    mkdirSync(dir, { recursive: true });
+    // `effect` and `flavor` sit last on purpose — mirroring the real events.csv
+    // and units.csv column order, since the last column is the only one a
+    // trailing \r can corrupt.
+    writeFileSync(
+      join(dir, "events.csv"),
+      [
+        "id,name,set,rarity,cost,timing,keywords,attributes,text,flavor,effect",
+        "crlf-event,CRLF Event,crlf-set,common,2,instant,,,,Flavour here,gold[3]",
+      ].join(eol) + eol,
+    );
+    writeFileSync(
+      join(dir, "units.csv"),
+      [
+        "id,name,set,rarity,cost,keywords,attributes,strength,cunning,charisma,flavor",
+        "crlf-unit,CRLF Unit,crlf-set,common,3,,Military,2,1,1,Some flavour",
+      ].join(eol) + eol,
+    );
+  }
+
+  test("keeps the last column when lines end in CRLF", () => {
+    makeSet("crlf-set", "\r\n");
+    const { cards, errors } = buildSet("crlf-set", fixtureRoot);
+
+    expect(errors).toEqual([]);
+    const event = cards.find((c) => (c.id as string) === "crlf-event");
+    const unit = cards.find((c) => (c.id as string) === "crlf-unit");
+    expect(event?.effect).toBe("gold[3]");
+    expect(unit?.flavor).toBe("Some flavour");
+  });
+
+  test("leaves no carriage return in any built value", () => {
+    // The trailing \r also rode along on the last *value* of every row, so a
+    // build that merely renamed the header back would still ship dirty data.
+    makeSet("crlf-set-dirty", "\r\n");
+    const { cards } = buildSet("crlf-set-dirty", fixtureRoot);
+
+    expect(JSON.stringify(cards)).not.toContain("\r");
+  });
+
+  test("LF files are unaffected", () => {
+    makeSet("lf-set", "\n");
+    const { cards, errors } = buildSet("lf-set", fixtureRoot);
+
+    expect(errors).toEqual([]);
+    expect(cards.find((c) => (c.id as string) === "crlf-event")?.effect).toBe("gold[3]");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Structured warnings channel (#213)
 //
 // Non-failing build notices (e.g. a missing per-type CSV) return via

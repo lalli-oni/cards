@@ -411,7 +411,8 @@ describe("build transform + validation — main-body copies (#284)", () => {
   test.each<CardType>(["units", "items", "events"])(
     "accepts a governed copies value on %s",
     (type) => {
-      const overrides = type === "events" ? { timing: "instant", copies: "2" } : { copies: "2" };
+      const overrides: Record<string, string> =
+        type === "events" ? { timing: "instant", copies: "2" } : { copies: "2" };
       expect(check(type, overrides)).toEqual([]);
     },
   );

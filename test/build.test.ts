@@ -373,6 +373,84 @@ describe("build transform + validation — event resolution (#231)", () => {
   });
 });
 
+describe("build transform + validation — main-body copies (#284)", () => {
+  // `copies` is the deck-copy allowance, added ahead of the content passes so
+  // authors can express intent without a later retro-edit across the set. It is
+  // main-body only (unit/item/event): a location recurs via the prospect deck
+  // and a policy is a single global card, so the column is rejected on both.
+  // Nothing reads the value yet (#196 shapes the mechanic), so these tests are
+  // the only thing pinning transform's default and validate's gate.
+  const copiesOf = (type: CardType, overrides: Record<string, string>) =>
+    (transformCard(type, row(type === "events" ? { timing: "instant", ...overrides } : overrides)) as {
+      copies?: unknown;
+    }).copies;
+
+  test.each<CardType>(["units", "items", "events"])(
+    "defaults an absent copies to 1 on %s",
+    (type) => {
+      expect(copiesOf(type, {})).toBe(1);
+    },
+  );
+
+  test("treats an empty copies as the default 1", () => {
+    // An author who adds the column but leaves a cell blank means "baseline",
+    // not "malformed" — same tolerance as the `resolution` column above.
+    expect(copiesOf("units", { copies: "" })).toBe(1);
+  });
+
+  test("preserves an explicit count", () => {
+    expect(copiesOf("units", { copies: "3" })).toBe(3);
+  });
+
+  test("trims surrounding whitespace before parsing", () => {
+    // A stray space, or a stray carriage return from a spreadsheet export,
+    // must not make a valid count look malformed.
+    expect(copiesOf("items", { copies: "  2  " })).toBe(2);
+  });
+
+  test.each<CardType>(["units", "items", "events"])(
+    "accepts a governed copies value on %s",
+    (type) => {
+      const overrides = type === "events" ? { timing: "instant", copies: "2" } : { copies: "2" };
+      expect(check(type, overrides)).toEqual([]);
+    },
+  );
+
+  test("rejects a non-numeric copies", () => {
+    const errors = check("units", { copies: "two" });
+    expect(errors.some((e) => e.field === "copies" && e.message.includes("two"))).toBe(true);
+  });
+
+  test("rejects a numeric-prefixed value rather than coercing it", () => {
+    // `parseInt("3abc")` is 3 — the silent coercion transform deliberately
+    // avoids, since it would ship a count the author never wrote.
+    const errors = check("units", { copies: "3abc" });
+    expect(errors.some((e) => e.field === "copies" && e.message.includes("3abc"))).toBe(true);
+  });
+
+  test.each(["0", "-1"])("rejects a non-positive copies (%s)", (value) => {
+    // Zero copies would mean an undeckable card; a negative one is nonsense.
+    expect(check("units", { copies: value }).some((e) => e.field === "copies")).toBe(true);
+  });
+
+  test.each<CardType>(["locations", "policies"])(
+    "rejects copies on %s — main-body types only",
+    (type) => {
+      const errors = check(type, { copies: "2" });
+      expect(errors.some((e) => e.field === "copies" && e.message.includes("main-body"))).toBe(true);
+    },
+  );
+
+  test.each<CardType>(["locations", "policies"])(
+    "emits no copies field on %s when the column is absent",
+    (type) => {
+      // The rejection above only fires on a value actually present, so a normal
+      // location/policy row must come out of transform without the key at all.
+      expect(copiesOf(type, {})).toBeUndefined();
+    },
+  );
+});
+
 describe("build validation — cost is a numeric gold amount", () => {
   test("accepts an integer cost and `|`-separated integer alternatives", () => {
     expect(check("units", { cost: "3", attributes: "Military" })).toEqual([]);

@@ -35,6 +35,11 @@ export type CardType = (typeof CARD_TYPES)[number];
 const RARITIES = ["common", "rare", "legendary"] as const;
 const EVENT_TIMINGS = ["instant", "passive", "trap"] as const;
 
+// Types that go into a player's main deck. Only these carry `copies`: a
+// location reaches the grid through the prospect deck rather than through deck
+// copies, and a policy is a single global card, so neither has a copy count.
+const MAIN_BODY_TYPES: CardType[] = ["units", "items", "events"];
+
 // Governed per-type category vocabularies (`LOCATION_TYPES`/`EVENT_TYPES`/
 // `ITEM_TYPES`) live in `engine/src/card-categories.ts` — the single source of
 // truth shared with the engine types and effect factories. Validated here at
@@ -134,6 +139,16 @@ function parsePassive(
   return { name, effect };
 }
 
+// Absent/empty means the baseline 1, so every built main-body card carries a
+// concrete count. A malformed value is returned verbatim for `validate` to
+// reject rather than run through `parseInt`, which would read "3abc" as 3 and
+// ship a number the card author never wrote.
+function parseCopies(value: string | undefined): number | string {
+  const trimmed: string = (value ?? "").trim();
+  if (!trimmed) return 1;
+  return /^\d+$/.test(trimmed) ? parseInt(trimmed, 10) : trimmed;
+}
+
 function intOrNull(value: string): number | null {
   if (!value) return null;
   const n = parseInt(value, 10);
@@ -163,6 +178,15 @@ export function transformCard(
     keywords: splitList(raw.keywords || ""),
     attributes: splitList(raw.attributes || ""),
   };
+
+  // `copies` is main-body only. A value on a location or policy is carried
+  // through verbatim rather than dropped, so `validate` can name it as the
+  // wrong column for that type instead of the author's intent vanishing.
+  if (MAIN_BODY_TYPES.includes(type)) {
+    base.copies = parseCopies(raw.copies);
+  } else if (raw.copies?.trim()) {
+    base.copies = raw.copies.trim();
+  }
 
   switch (type) {
     case "units":
@@ -339,6 +363,19 @@ export function validate(
         errors.push(err("type", `invalid item type: ${t}`));
       }
     }
+  }
+
+  // `copies` (deck-copy allowance) is main-body only — see library/schema.md.
+  // transformCard defaults an absent value to 1 on those types, so anything
+  // that isn't a positive integer here means the CSV carried something
+  // malformed rather than nothing at all.
+  if (MAIN_BODY_TYPES.includes(type)) {
+    const copies = card.copies;
+    if (typeof copies !== "number" || !Number.isInteger(copies) || copies < 1) {
+      errors.push(err("copies", `invalid copies: ${JSON.stringify(copies)} (expected a positive integer)`));
+    }
+  } else if (card.copies !== undefined) {
+    errors.push(err("copies", `copies is not allowed on ${type} — main-body types only (units, items, events)`));
   }
 
   // DSL effect validation — skipped for policies (action.effect is

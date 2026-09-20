@@ -354,6 +354,65 @@ describe("loadCardDefinitions", () => {
 });
 
 // ---------------------------------------------------------------------------
+// copies (#284)
+// ---------------------------------------------------------------------------
+
+describe("copies", () => {
+  // `copies` is the main-body deck-copy allowance (unit/item/event). The
+  // library build is the canonical gate, but stale or hand-edited JSON reaches
+  // the loader directly — so the loader re-checks the same rule, the way it
+  // already re-checks the governed vocabularies. Nothing in the engine reads
+  // the value yet (the mechanic is shaped in #196); these tests pin that it
+  // survives instantiation and that the wrong shapes are refused.
+
+  test("carries copies onto an instantiated unit, item and event", () => {
+    for (const def of [VALID_UNIT, VALID_ITEM, VALID_EVENT]) {
+      const card = instantiateCard({ ...def, copies: 2 }, "player-1", counter);
+      expect((card as { copies?: number }).copies).toBe(2);
+    }
+  });
+
+  test("a def without copies instantiates as undefined (absent means 1)", () => {
+    // The loader fabricates no default — library-built cards already carry a
+    // concrete count, and a hand-built def is read as the baseline downstream.
+    const card = instantiateCard(VALID_UNIT, "player-1", counter);
+    expect((card as { copies?: number }).copies).toBeUndefined();
+  });
+
+  test("never puts copies on a location or policy instance", () => {
+    // `copies` is set per-branch rather than on the shared base, so a location
+    // or policy can't pick it up by spread even if the def smuggles one in.
+    for (const def of [VALID_LOCATION, VALID_POLICY]) {
+      const card = instantiateCard({ ...def, copies: 2 }, "player-1", counter);
+      expect("copies" in card).toBe(false);
+    }
+  });
+
+  test("accepts a positive-integer copies through loadCardDefinitions", () => {
+    const path = writeTmpJson("copies-ok.json", [{ ...VALID_UNIT, copies: 3 }]);
+    expect(loadCardDefinitions(path)[0].copies).toBe(3);
+  });
+
+  test.each<[string, CardDefinition]>([
+    ["location", VALID_LOCATION],
+    ["policy", VALID_POLICY],
+  ])("rejects copies on a %s definition", (label, def) => {
+    const path = writeTmpJson(`copies-on-${label}.json`, [{ ...def, copies: 2 }]);
+    expect(() => loadCardDefinitions(path)).toThrow(CardValidationError);
+    expect(() => loadCardDefinitions(path)).toThrow("copies is not allowed");
+  });
+
+  test.each([0, -1, 1.5, "2"])("rejects a malformed copies value (%s)", (value) => {
+    // Zero is an undeckable card, a fraction isn't a count, and a string is the
+    // shape a hand-edited JSON most plausibly drifts into.
+    const path = writeTmpJson(`copies-bad-${String(value)}.json`, [
+      { ...VALID_UNIT, copies: value },
+    ]);
+    expect(() => loadCardDefinitions(path)).toThrow("invalid copies");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // loadCardDefinitionsFromBuild
 // ---------------------------------------------------------------------------
 

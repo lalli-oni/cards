@@ -42,6 +42,10 @@ export interface CardDefinition {
   keywords: string[];
   attributes?: string[];
 
+  /** Main-body fields (unit/item/event) — see library/schema.md. Absent means
+   *  the baseline 1; the library build always emits it on those types. */
+  copies?: number;
+
   // Unit fields
   strength?: number | null;
   cunning?: number | null;
@@ -95,6 +99,9 @@ export function createInstanceCounter(): InstanceCounter {
 const VALID_TYPES: CardType[] = ["unit", "location", "item", "event", "policy"];
 const VALID_RARITIES: Rarity[] = ["common", "rare", "legendary"];
 const VALID_TIMINGS: EventTiming[] = ["instant", "passive", "trap"];
+/** Types that may carry `copies` — mirrors `MAIN_BODY_TYPES` in library/build.ts
+ *  (which names the same set in its plural CSV spelling). */
+const MAIN_BODY_TYPES: CardType[] = ["unit", "item", "event"];
 
 export class CardValidationError extends Error {
   constructor(public readonly errors: { cardId: string; message: string }[]) {
@@ -182,6 +189,22 @@ function validateDefinition(
       if (!ITEM_TYPES.includes(t as ItemType)) {
         errors.push({ cardId, message: `invalid item type: ${t}` });
       }
+    }
+  }
+
+  // `copies` is main-body only and must be a positive integer. The library
+  // build is the canonical gate; re-checked here for the same reason as the
+  // vocabularies above — hand-edited or stale JSON shouldn't be able to put a
+  // deck-copy count on a location, or a nonsensical one on anything.
+  if (def.copies !== undefined) {
+    if (!MAIN_BODY_TYPES.includes(def.type as CardType)) {
+      errors.push({ cardId, message: `copies is not allowed on ${def.type} cards` });
+    } else if (
+      typeof def.copies !== "number" ||
+      !Number.isInteger(def.copies) ||
+      def.copies < 1
+    ) {
+      errors.push({ cardId, message: `invalid copies: ${def.copies} (expected a positive integer)` });
     }
   }
 
@@ -332,6 +355,7 @@ export function instantiateCard(
       return {
         ...base,
         type: "unit",
+        copies: def.copies ?? undefined,
         strength: def.strength ?? 0,
         cunning: def.cunning ?? 0,
         charisma: def.charisma ?? 0,
@@ -356,6 +380,7 @@ export function instantiateCard(
       return {
         ...base,
         type: "item",
+        copies: def.copies ?? undefined,
         equip: def.equip ?? undefined,
         stored: def.stored ?? undefined,
         itemType:
@@ -371,12 +396,13 @@ export function instantiateCard(
       }
       switch (def.timing) {
         case "instant":
-          return { ...base, type: "event", timing: "instant", eventType: (def.eventType ?? undefined) as EventType | undefined, effect: def.effect ?? undefined } satisfies InstantEventCard;
+          return { ...base, type: "event", timing: "instant", copies: def.copies ?? undefined, eventType: (def.eventType ?? undefined) as EventType | undefined, effect: def.effect ?? undefined } satisfies InstantEventCard;
         case "passive":
           return {
             ...base,
             type: "event",
             timing: "passive",
+            copies: def.copies ?? undefined,
             eventType: (def.eventType ?? undefined) as EventType | undefined,
             duration: def.duration ?? 1,
           } satisfies PassiveEventCard;
@@ -385,6 +411,7 @@ export function instantiateCard(
             ...base,
             type: "event",
             timing: "trap",
+            copies: def.copies ?? undefined,
             eventType: (def.eventType ?? undefined) as EventType | undefined,
             trigger: def.trigger ?? "",
           } satisfies TrapEventCard;

@@ -100,6 +100,18 @@ interface CardBase {
   controllerId: string;
 }
 
+/** Cards that go into a player's main deck: units, items and events. Locations
+ *  reach the grid through the prospect deck and policies are single global
+ *  cards, so neither is one of these — which is what keeps `copies` off them. */
+interface MainBodyCard extends CardBase {
+  /** How many copies of this card a deck may contain. Data only: no
+   *  deck-construction rule reads it yet (the mechanic is shaped in #196). The
+   *  library build defaults an absent value to 1, so cards built from the
+   *  library always carry it; cards built elsewhere (the card-loader, test
+   *  fixtures) may omit it — treat absent as 1. */
+  copies?: number;
+}
+
 /** Alias, not a second declaration — a hand-written copy of this union would
  *  silently drift from STAT_NAMES the day a fourth stat is added. */
 export type StatName = Stat;
@@ -225,7 +237,7 @@ export interface ControlOverride {
   remainingDuration: number;
 }
 
-export interface UnitCard extends CardBase {
+export interface UnitCard extends MainBodyCard {
   type: "unit";
   strength: number;
   cunning: number;
@@ -256,7 +268,7 @@ export interface LocationCard extends CardBase {
   locationType?: LocationType;
 }
 
-export interface ItemCard extends CardBase {
+export interface ItemCard extends MainBodyCard {
   type: "item";
   equip?: string;
   stored?: string;
@@ -272,7 +284,7 @@ export interface ItemCard extends CardBase {
   actions?: ActionDef[];
 }
 
-interface EventCardBase extends CardBase {
+interface EventCardBase extends MainBodyCard {
   type: "event";
   /** Per-type category (Catastrophe, Prosperity). Flavor-only today; see #160.
    *  From the CSV `event_type` column (renamed to camelCase in-engine). */

@@ -19,6 +19,18 @@ Every card type includes these columns:
 | keywords   | string | no     | Semicolon-separated mechanical **keywords** — things the card *does* (e.g. `Berserker;Leader:+1:all:contest`). Drawn from the governed keyword vocabulary; see [Governed vocabularies](#governed-vocabularies) and the Keyword Glossary in `rules/README.md`. Vocabulary-validated: the build fails on unknown or malformed tokens. |
 | attributes | string | no     | Semicolon-separated cross-type synergy labels (e.g. `Knowledge;Engineering`). Governed closed set — see [Governed vocabularies](#governed-vocabularies). |
 
+## Main-Body Columns
+
+Cards that go into a player's main deck — **units, items and events** — also
+carry the columns below. Locations and policies do not: a location reaches the
+grid through the prospect deck rather than through deck copies, and a policy is
+a single global card, so neither has a copy count to express. The build rejects
+these columns on a location or policy row.
+
+| Column | Type | Required | Description |
+|--------|------|----------|-------------|
+| copies | int  | no       | How many copies of this card a deck may contain. Defaults to `1` when omitted, so every built main-body card carries a concrete value. Must be a positive integer. Data only for now — no deck-construction rule reads it yet; the mechanic itself is shaped in #196. |
+
 ## Units
 
 | Column     | Type   | Required | Description |

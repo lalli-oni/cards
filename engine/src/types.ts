@@ -100,6 +100,17 @@ interface CardBase {
   controllerId: string;
 }
 
+/** Cards that go into a player's main deck: units, items and events — the set
+ *  that may carry `copies`. See `library/schema.md` § Main-Body Columns for why
+ *  locations and policies are excluded. */
+export interface MainBodyCard extends CardBase {
+  /** How many copies of this card a deck may contain. Nothing reads it yet.
+   *  A card loaded from a library build always carries a count; a hand-written
+   *  definition (test fixtures, ad-hoc defs) may leave it undefined — treat
+   *  absent as 1. */
+  copies?: number;
+}
+
 /** Alias, not a second declaration — a hand-written copy of this union would
  *  silently drift from STAT_NAMES the day a fourth stat is added. */
 export type StatName = Stat;
@@ -225,7 +236,7 @@ export interface ControlOverride {
   remainingDuration: number;
 }
 
-export interface UnitCard extends CardBase {
+export interface UnitCard extends MainBodyCard {
   type: "unit";
   strength: number;
   cunning: number;
@@ -244,6 +255,9 @@ export interface UnitCard extends CardBase {
 
 export interface LocationCard extends CardBase {
   type: "location";
+  /** Open/closed per compass point, derived by the loader from the CSV's list
+   *  of *blocked* edges — the two shapes are inverses, so don't read this as
+   *  the authored value. */
   edges: LocationEdges;
   requirements?: string;
   rewards?: string;
@@ -256,7 +270,7 @@ export interface LocationCard extends CardBase {
   locationType?: LocationType;
 }
 
-export interface ItemCard extends CardBase {
+export interface ItemCard extends MainBodyCard {
   type: "item";
   equip?: string;
   stored?: string;
@@ -272,7 +286,7 @@ export interface ItemCard extends CardBase {
   actions?: ActionDef[];
 }
 
-interface EventCardBase extends CardBase {
+interface EventCardBase extends MainBodyCard {
   type: "event";
   /** Per-type category (Catastrophe, Prosperity). Flavor-only today; see #160.
    *  From the CSV `event_type` column (renamed to camelCase in-engine). */
@@ -315,6 +329,9 @@ export type EventCard = InstantEventCard | PassiveEventCard | TrapEventCard;
 export interface PolicyCard extends CardBase {
   type: "policy";
   effect: string;
+  /** Seeding-phase effect as prose, like `effect`. Display-only: no seeding
+   *  rule reads it, and the engine does not apply it. */
+  seedingEffect?: string;
   /** UI-only action descriptions — `ActionDef.effect` is human-readable here. */
   actions?: ActionDef[];
 }

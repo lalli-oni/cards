@@ -8,6 +8,7 @@ import {
   validate,
   type BuildWarning,
   type CardType,
+  type ValidationError,
 } from "../library/build";
 import { KEYWORD_SPECS, KeywordError, type KeywordSpec, parseKeyword } from "../engine/src/keywords";
 import { DIRECT_HOOK_KEYWORDS, keywordEffects, type KeywordCard } from "../engine/src/keyword-effects";
@@ -41,7 +42,7 @@ function row(overrides: Record<string, string>): Record<string, string> {
 }
 
 /** transformCard + validate in one step, returning the validation errors. */
-function check(type: CardType, overrides: Record<string, string>) {
+function check(type: CardType, overrides: Record<string, string>): ValidationError[] {
   return validate(type, transformCard(type, row(overrides)));
 }
 
@@ -373,6 +374,84 @@ describe("build transform + validation — event resolution (#231)", () => {
   });
 });
 
+describe("build transform + validation — main-body copies (#284)", () => {
+  // `copies` is the deck-copy allowance, added ahead of the content passes so
+  // authors can express intent without a later retro-edit across the set.
+  // Main-body only — see library/schema.md § Main-Body Columns for why.
+  // Nothing reads the value yet, so these tests are the only thing pinning
+  // transform's default and validate's gate.
+  const copiesOf = (type: CardType, overrides: Record<string, string>): unknown =>
+    (transformCard(type, row(type === "events" ? { timing: "instant", ...overrides } : overrides)) as {
+      copies?: unknown;
+    }).copies;
+
+  test.each<CardType>(["units", "items", "events"])(
+    "defaults an absent copies to 1 on %s",
+    (type) => {
+      expect(copiesOf(type, {})).toBe(1);
+    },
+  );
+
+  test("treats an empty copies as the default 1", () => {
+    // An author who adds the column but leaves a cell blank means "baseline",
+    // not "malformed" — same tolerance as the `resolution` column above.
+    expect(copiesOf("units", { copies: "" })).toBe(1);
+  });
+
+  test("preserves an explicit count", () => {
+    expect(copiesOf("units", { copies: "3" })).toBe(3);
+  });
+
+  test("trims surrounding whitespace before parsing", () => {
+    // A stray space, or a stray carriage return from a spreadsheet export,
+    // must not make a valid count look malformed.
+    expect(copiesOf("items", { copies: "  2  " })).toBe(2);
+  });
+
+  test.each<CardType>(["units", "items", "events"])(
+    "accepts a governed copies value on %s",
+    (type) => {
+      const overrides: Record<string, string> =
+        type === "events" ? { timing: "instant", copies: "2" } : { copies: "2" };
+      expect(check(type, overrides)).toEqual([]);
+    },
+  );
+
+  test("rejects a non-numeric copies", () => {
+    const errors = check("units", { copies: "two" });
+    expect(errors.some((e) => e.field === "copies" && e.message.includes("two"))).toBe(true);
+  });
+
+  test("rejects a numeric-prefixed value rather than coercing it", () => {
+    // `parseInt("3abc")` is 3 — the silent coercion transform deliberately
+    // avoids, since it would ship a count the author never wrote.
+    const errors = check("units", { copies: "3abc" });
+    expect(errors.some((e) => e.field === "copies" && e.message.includes("3abc"))).toBe(true);
+  });
+
+  test.each(["0", "-1"])("rejects a non-positive copies (%s)", (value) => {
+    // Zero copies would mean an undeckable card; a negative one is nonsense.
+    expect(check("units", { copies: value }).some((e) => e.field === "copies")).toBe(true);
+  });
+
+  test.each<CardType>(["locations", "policies"])(
+    "rejects copies on %s — main-body types only",
+    (type) => {
+      const errors = check(type, { copies: "2" });
+      expect(errors.some((e) => e.field === "copies" && e.message.includes("main-body"))).toBe(true);
+    },
+  );
+
+  test.each<CardType>(["locations", "policies"])(
+    "emits no copies field on %s when the column is absent",
+    (type) => {
+      // The rejection above only fires on a value actually present, so a normal
+      // location/policy row must come out of transform without the key at all.
+      expect(copiesOf(type, {})).toBeUndefined();
+    },
+  );
+});
+
 describe("build validation — cost is a numeric gold amount", () => {
   test("accepts an integer cost and `|`-separated integer alternatives", () => {
     expect(check("units", { cost: "3", attributes: "Military" })).toEqual([]);
@@ -393,6 +472,177 @@ describe("build validation — cost is a numeric gold amount", () => {
   test("rejects when any alternative-cost option is non-numeric", () => {
     const errors = check("units", { cost: "4|X", attributes: "Military" });
     expect(errors.some((e) => e.field === "cost")).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Record splitting: line endings and quoted newlines (#289)
+//
+// See `splitRecords` for the mechanism. The blast radius is what makes these
+// worth pinning: a CRLF checkout emptied the last column of every CSV — flavor
+// on units, items and locations, `effect` on events, `actions` on policies —
+// and the eventless games then stalled the greedy-bot integration suite in a
+// tie it could not break. CRLF is not Windows-only: spreadsheet exports produce
+// it too, and the same export is what writes a quoted newline into a multi-line
+// flavor text.
+// ---------------------------------------------------------------------------
+describe("build — record splitting (#289)", () => {
+  const fixtureRoot: string = mkdtempSync(join(tmpdir(), "cards-crlf-"));
+  afterAll(() => rmSync(fixtureRoot, { recursive: true, force: true }));
+
+  /** Write a two-card fixture set whose lines are joined with `eol`. */
+  function makeSet(name: string, eol: string): void {
+    const dir: string = join(fixtureRoot, name);
+    mkdirSync(dir, { recursive: true });
+    // `effect` and `flavor` sit last on purpose — mirroring the real events.csv
+    // and units.csv column order, since the last column is the only one a
+    // trailing \r can corrupt.
+    writeFileSync(
+      join(dir, "events.csv"),
+      [
+        "id,name,set,rarity,cost,timing,keywords,attributes,text,flavor,effect",
+        "crlf-event,CRLF Event,crlf-set,common,2,instant,,,,Flavour here,gold[3]",
+      ].join(eol) + eol,
+    );
+    writeFileSync(
+      join(dir, "units.csv"),
+      [
+        "id,name,set,rarity,cost,keywords,attributes,strength,cunning,charisma,flavor",
+        "crlf-unit,CRLF Unit,crlf-set,common,3,,Military,2,1,1,Some flavour",
+      ].join(eol) + eol,
+    );
+  }
+
+  test("keeps the last column when lines end in CRLF", () => {
+    makeSet("crlf-set", "\r\n");
+    const { cards, errors } = buildSet("crlf-set", fixtureRoot);
+
+    expect(errors).toEqual([]);
+    const event = cards.find((c) => (c.id as string) === "crlf-event");
+    const unit = cards.find((c) => (c.id as string) === "crlf-unit");
+    expect(event?.effect).toBe("gold[3]");
+    expect(unit?.flavor).toBe("Some flavour");
+  });
+
+  test("leaves no carriage return in any built value", () => {
+    // The trailing \r also rode along on the last *value* of every row, so a
+    // build that merely renamed the header back would still ship dirty data.
+    makeSet("crlf-set-dirty", "\r\n");
+    const { cards } = buildSet("crlf-set-dirty", fixtureRoot);
+
+    expect(JSON.stringify(cards)).not.toContain("\r");
+  });
+
+  test("LF files are unaffected", () => {
+    makeSet("lf-set", "\n");
+    const { cards, errors } = buildSet("lf-set", fixtureRoot);
+
+    expect(errors).toEqual([]);
+    expect(cards.find((c) => (c.id as string) === "crlf-event")?.effect).toBe("gold[3]");
+  });
+  test("keeps a quoted field containing a newline in one record", () => {
+    // What a spreadsheet writes for multi-line flavor text. Splitting on line
+    // endings first tore this into a truncated row plus a phantom row whose id
+    // was the second line — silently, because flavor is optional.
+    const dir: string = join(fixtureRoot, "quoted-newline");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, "units.csv"),
+      'id,name,set,rarity,cost,keywords,attributes,strength,cunning,charisma,flavor\r\n' +
+        'quoted-unit,Quoted Unit,q-set,common,3,,Military,2,1,1,"First line\r\nSecond line"\r\n',
+    );
+    const { cards, errors } = buildSet("quoted-newline", fixtureRoot);
+
+    expect(errors).toEqual([]);
+    expect(cards).toHaveLength(1);
+    expect(cards[0].flavor).toBe("First line\r\nSecond line");
+  });
+
+  test("reports a row whose field count disagrees with the header", () => {
+    // A dropped comma used to shift every later column in silence. The error
+    // names the line number the author's editor shows.
+    const dir: string = join(fixtureRoot, "ragged");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, "units.csv"),
+      "id,name,set,rarity,cost,keywords,attributes,strength,cunning,charisma,flavor\n" +
+        "ragged-unit,Ragged Unit,r-set,common,3,,Military,2,1,1\n",
+    );
+    const { errors } = buildSet("ragged", fixtureRoot);
+
+    const raggedError = errors.find((e) => e.field === "row");
+    expect(raggedError).toBeDefined();
+    expect(raggedError?.message).toContain("line 2");
+    expect(raggedError?.message).toContain("10 field(s)");
+  });
+
+  test("warns about a header the build never reads", () => {
+    // The generalised form of the bug: any column the transform doesn't consume
+    // is authored data being thrown away. `seeding_effect` sat unbuilt on every
+    // policy for exactly this reason, and nothing said so.
+    const dir: string = join(fixtureRoot, "unread-column");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, "units.csv"),
+      "id,name,set,rarity,cost,keywords,attributes,strength,cunning,charisma,flavour\n" +
+        "typo-unit,Typo Unit,u-set,common,3,,Military,2,1,1,Misspelled header\n",
+    );
+    const { warnings } = buildSet("unread-column", fixtureRoot);
+
+    const unread = warnings.find((w) => w.field === "flavour");
+    expect(unread).toBeDefined();
+    expect(unread?.message).toContain("not read by the build");
+  });
+});
+
+describe("build — columns that used to be dropped", () => {
+  // Both columns are documented in library/schema.md and carried real authored
+  // values in alpha-1, and the build read neither — the same silent-drop class
+  // as the record-splitting bug above, found while reviewing its fix.
+  const fixtureRoot: string = mkdtempSync(join(tmpdir(), "cards-dropped-"));
+  afterAll(() => rmSync(fixtureRoot, { recursive: true, force: true }));
+
+  test("carries a policy's seeding_effect through to the built card", () => {
+    const dir: string = join(fixtureRoot, "policy-set");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, "policies.csv"),
+      "id,name,set,rarity,cost,effect,attributes,keywords,text,flavor,seeding_effect,actions\n" +
+        "test-policy,Test Policy,p-set,common,0,Global modifier.,,,,,Swap one card before Claim.,\n",
+    );
+    const { cards, errors } = buildSet("policy-set", fixtureRoot);
+
+    expect(errors).toEqual([]);
+    expect(cards[0].seedingEffect).toBe("Swap one card before Claim.");
+  });
+
+  test("carries a location's blocked edges through to the built card", () => {
+    const dir: string = join(fixtureRoot, "edge-set");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, "locations.csv"),
+      "id,name,set,rarity,cost,mission,passive,edges,attributes,keywords,location_type,text,flavor\n" +
+        "walled,Walled Place,l-set,common,4,,,N;S,,,Fortification,,\n",
+    );
+    const { cards, errors } = buildSet("edge-set", fixtureRoot);
+
+    expect(errors).toEqual([]);
+    expect(cards[0].edges).toEqual(["N", "S"]);
+  });
+
+  test("rejects an edge token outside the compass set", () => {
+    // A typo'd token would otherwise reach the loader and quietly leave that
+    // edge open, which is indistinguishable from the author not blocking it.
+    const dir: string = join(fixtureRoot, "bad-edge-set");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, "locations.csv"),
+      "id,name,set,rarity,cost,mission,passive,edges,attributes,keywords,location_type,text,flavor\n" +
+        "typo-edge,Typo Edge,l-set,common,4,,,North,,,Fortification,,\n",
+    );
+    const { errors } = buildSet("bad-edge-set", fixtureRoot);
+
+    expect(errors.some((e) => e.field === "edges" && e.message.includes("North"))).toBe(true);
   });
 });
 

@@ -4,6 +4,7 @@ import { join } from "node:path";
 import type { CardDefinition, InstanceCounter } from "../card-loader";
 import {
   CardValidationError,
+  validateCardDefinitions,
   createInstanceCounter,
   instantiateCard,
   instantiateCards,
@@ -349,6 +350,127 @@ describe("loadCardDefinitions", () => {
           err.message.includes("invalid item type"),
         ),
       ).toBe(true);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// copies (#284)
+// ---------------------------------------------------------------------------
+
+describe("copies", () => {
+  // `copies` is the main-body deck-copy allowance — see library/schema.md
+  // § Main-Body Columns for which types carry it and why. The library build is
+  // the canonical gate, but stale or hand-edited JSON reaches the loader
+  // directly, so the loader re-checks the same rule the way it already
+  // re-checks the governed vocabularies. Nothing reads the value yet; these
+  // tests pin that it survives instantiation and that wrong shapes are
+  // refused.
+
+  test("carries copies onto an instantiated unit, item and event", () => {
+    for (const def of [VALID_UNIT, VALID_ITEM, VALID_EVENT]) {
+      const card = instantiateCard({ ...def, copies: 2 }, "player-1", counter);
+      expect((card as { copies?: number }).copies).toBe(2);
+    }
+  });
+
+  test("a def without copies instantiates as undefined (absent means 1)", () => {
+    // The loader fabricates no default — library-built cards already carry a
+    // concrete count, and absent is defined to mean 1 for whatever eventually
+    // reads it.
+    const card = instantiateCard(VALID_UNIT, "player-1", counter);
+    expect((card as { copies?: number }).copies).toBeUndefined();
+  });
+
+  test("never puts copies on a location or policy instance", () => {
+    // `copies` is set per-branch rather than on the shared base, which every
+    // branch spreads — so a location or policy never picks it up.
+    for (const def of [VALID_LOCATION, VALID_POLICY]) {
+      const card = instantiateCard({ ...def, copies: 2 }, "player-1", counter);
+      expect("copies" in card).toBe(false);
+    }
+  });
+
+  test("accepts a positive-integer copies through loadCardDefinitions", () => {
+    const path = writeTmpJson("copies-ok.json", [{ ...VALID_UNIT, copies: 3 }]);
+    expect(loadCardDefinitions(path)[0].copies).toBe(3);
+  });
+
+  test.each<[string, CardDefinition]>([
+    ["location", VALID_LOCATION],
+    ["policy", VALID_POLICY],
+  ])("rejects copies on a %s definition", (label, def) => {
+    const path = writeTmpJson(`copies-on-${label}.json`, [{ ...def, copies: 2 }]);
+    expect(() => loadCardDefinitions(path)).toThrow(CardValidationError);
+    expect(() => loadCardDefinitions(path)).toThrow("copies is not allowed");
+  });
+
+  test.each([0, -1, 1.5, "2"])("rejects a malformed copies value (%s)", (value) => {
+    // Zero is an undeckable card, a fraction isn't a count, and a string is the
+    // shape a hand-edited JSON most plausibly drifts into.
+    const path = writeTmpJson(`copies-bad-${String(value)}.json`, [
+      { ...VALID_UNIT, copies: value },
+    ]);
+    expect(() => loadCardDefinitions(path)).toThrow("invalid copies");
+  });
+  test("a library-built definition round-trips to copies 1 on the instance", () => {
+    // The seam between the two gates: the build defaults an absent CSV column
+    // to a concrete 1, and the loader trusts that. Each half was pinned alone,
+    // so either could have silently stopped defaulting without a test failing —
+    // and since no CSV carries the column today, every real card takes exactly
+    // this path. The def below is shaped like what `library/build.ts` emits.
+    const path = writeTmpJson("built-shape.json", [{ ...VALID_UNIT, copies: 1 }]);
+    const defs = loadCardDefinitionsFromBuild(TMP_DIR, ["built-shape"]);
+
+    expect(defs[0].copies).toBe(1);
+    const card = instantiateCard(defs[0], "player-1", counter);
+    expect((card as { copies?: number }).copies).toBe(1);
+    expect(path).toContain("built-shape.json");
+  });
+
+  test("validateCardDefinitions gates already-parsed JSON", () => {
+    // The web client imports all.json through its bundler rather than the file
+    // loader, so without this entry point its only check was a type assertion.
+    expect(() => validateCardDefinitions([{ ...VALID_LOCATION, copies: 2 }])).toThrow(
+      "copies is not allowed",
+    );
+    expect(validateCardDefinitions([VALID_UNIT])[0].id).toBe("test-warrior");
+  });
+});
+
+describe("columns that used to be dropped", () => {
+  // `edges` and `seeding_effect` were authored in the CSVs and read by nothing;
+  // these pin the engine half of carrying them through.
+
+  test("inverts the CSV's blocked-edge list into open/closed booleans", () => {
+    // The two shapes are inverses: the CSV names what is BLOCKED, the engine
+    // stores what is OPEN. Getting this backwards would silently wall off every
+    // edge a card didn't mention.
+    const card = instantiateCard(
+      { ...VALID_LOCATION, edges: ["N", "S"] },
+      "player-1",
+      counter,
+    );
+    if (card.type === "location") {
+      expect(card.edges).toEqual({ n: false, e: true, s: false, w: true });
+    }
+  });
+
+  test("treats an absent edge list as every edge open", () => {
+    const card = instantiateCard(VALID_LOCATION, "player-1", counter);
+    if (card.type === "location") {
+      expect(card.edges).toEqual({ n: true, e: true, s: true, w: true });
+    }
+  });
+
+  test("carries a policy's seedingEffect onto the instance", () => {
+    const card = instantiateCard(
+      { ...VALID_POLICY, seedingEffect: "Swap one card before Claim." },
+      "player-1",
+      counter,
+    );
+    if (card.type === "policy") {
+      expect(card.seedingEffect).toBe("Swap one card before Claim.");
     }
   });
 });

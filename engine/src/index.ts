@@ -15,6 +15,7 @@ export {
   instantiateCards,
   loadCardDefinitions,
   loadCardDefinitionsFromBuild,
+  validateCardDefinitions,
 } from "./card-loader";
 // Action legality gate
 export type {

@@ -20,6 +20,7 @@ import {
   EVENT_TYPES,
   EVENT_RESOLUTIONS,
   ITEM_TYPES,
+  MAIN_BODY_TYPES,
 } from "../engine/src/card-categories";
 
 const LIBRARY_DIR = join(import.meta.dir);
@@ -34,26 +35,117 @@ export type CardType = (typeof CARD_TYPES)[number];
 
 const RARITIES = ["common", "rare", "legendary"] as const;
 const EVENT_TIMINGS = ["instant", "passive", "trap"] as const;
+/** Compass tokens a location's `edges` column may name as blocked. */
+const EDGE_NAMES = ["N", "E", "S", "W"] as const;
+
+/** CSV directory name -> the engine's card-type discriminant (`units` ->
+ *  `unit`). The transform derives `base.type` the same way; naming it once
+ *  keeps the plural/singular split from becoming a second vocabulary. */
+function toEngineType(type: CardType): EngineCardType {
+  return (type === "policies" ? "policy" : type.replace(/s$/, "")) as EngineCardType;
+}
+
+function isMainBody(type: CardType): boolean {
+  return MAIN_BODY_TYPES.includes(toEngineType(type) as (typeof MAIN_BODY_TYPES)[number]);
+}
 
 // Governed per-type category vocabularies (`LOCATION_TYPES`/`EVENT_TYPES`/
 // `ITEM_TYPES`) live in `engine/src/card-categories.ts` — the single source of
 // truth shared with the engine types and effect factories. Validated here at
 // build time like `rarity`/`timing`.
 
+// Every column each transform actually reads. A header absent from this list is
+// reported as dropped data (see `buildSet`) — the check that would have caught
+// the CRLF header bug on its own, and that catches the next optional column
+// someone adds to a CSV and forgets to wire through.
+const SHARED_COLUMNS: string[] = [
+  "id",
+  "name",
+  "set",
+  "rarity",
+  "cost",
+  "text",
+  "flavor",
+  "keywords",
+  "attributes",
+  "copies",
+];
+
+const READ_COLUMNS: Record<CardType, string[]> = {
+  units: [...SHARED_COLUMNS, "strength", "cunning", "charisma", "actions", "passives"],
+  // `actions` is deliberately absent: the one authored location action
+  // (`rotate:0:rotate_location`) is not expressible in the effect DSL, so the
+  // build reports the column as dropped rather than inventing a rule for it.
+  locations: [...SHARED_COLUMNS, "mission", "passive", "edges", "location_type"],
+  items: [...SHARED_COLUMNS, "equip", "stored", "type", "actions"],
+  events: [...SHARED_COLUMNS, "timing", "duration", "trigger", "effect", "event_type", "resolution"],
+  policies: [...SHARED_COLUMNS, "effect", "seeding_effect", "actions"],
+};
+
 // --- CSV parsing ---
 
-function parseCSV(raw: string): Record<string, string>[] {
-  const lines = raw.trim().split("\n");
-  if (lines.length < 2) return [];
+// Split the file into records, tracking quote state as we go. Splitting on line
+// endings first breaks two ways, both silently, because the columns that land
+// last are all optional: a CRLF file leaves a trailing \r that renames the last
+// header (`effect` -> `effect\r`), and a quoted field containing a real newline
+// — what a spreadsheet writes for multi-line flavor text — is torn into two
+// broken records.
+function splitRecords(raw: string): string[] {
+  const records: string[] = [];
+  let current: string = "";
+  let inQuotes: boolean = false;
 
-  const headers = parseLine(lines[0]);
-  return lines.slice(1).map((line) => {
-    const values = parseLine(line);
-    const record: Record<string, string> = {};
+  for (let i = 0; i < raw.length; i++) {
+    const ch: string = raw[i];
+    if (ch === '"') {
+      // A doubled quote is an escaped literal, not a state change — consume
+      // both so the second can't flip us back out of the quoted field.
+      if (inQuotes && raw[i + 1] === '"') {
+        current += '""';
+        i++;
+        continue;
+      }
+      inQuotes = !inQuotes;
+      current += ch;
+    } else if (!inQuotes && (ch === "\n" || ch === "\r")) {
+      if (ch === "\r" && raw[i + 1] === "\n") i++;
+      records.push(current);
+      current = "";
+    } else {
+      current += ch;
+    }
+  }
+  records.push(current);
+
+  return records.filter((r) => r.trim() !== "");
+}
+
+function parseCSV(
+  raw: string,
+  onNotice: (field: string, message: string) => void = () => {},
+): Record<string, string>[] {
+  const records: string[] = splitRecords(raw);
+  if (records.length < 2) return [];
+
+  const headers: string[] = parseLine(records[0]).map((h) => h.trim());
+  return records.slice(1).map((record, rowIndex) => {
+    const values: string[] = parseLine(record);
+    // A row whose width doesn't match the header loses data either way — a
+    // short row pads with empty strings, a long one drops the overflow — and
+    // both used to pass in silence, so one dropped comma shifted every later
+    // column without a word. The line number is the one the author's editor
+    // shows (header is line 1).
+    if (values.length !== headers.length) {
+      onNotice(
+        "row",
+        `line ${rowIndex + 2} has ${values.length} field(s) but the header has ${headers.length}`,
+      );
+    }
+    const row: Record<string, string> = {};
     headers.forEach((h, i) => {
-      record[h] = values[i] ?? "";
+      row[h] = values[i] ?? "";
     });
-    return record;
+    return row;
   });
 }
 
@@ -134,6 +226,16 @@ function parsePassive(
   return { name, effect };
 }
 
+// Absent/empty means the baseline 1, so every built main-body card carries a
+// concrete count. A malformed value is returned as-is (trimmed) for `validate`
+// to reject rather than run through `parseInt`, which would read "3abc" as 3
+// and ship a number the card author never wrote.
+function parseCopies(value: string | undefined): number | string {
+  const trimmed: string = (value ?? "").trim();
+  if (!trimmed) return 1;
+  return /^\d+$/.test(trimmed) ? parseInt(trimmed, 10) : trimmed;
+}
+
 function intOrNull(value: string): number | null {
   if (!value) return null;
   const n = parseInt(value, 10);
@@ -151,7 +253,7 @@ export function transformCard(
     id: raw.id,
     name: raw.name,
     set: raw.set,
-    type: type === "policies" ? "policy" : type.replace(/s$/, ""), // units -> unit, policies -> policy
+    type: toEngineType(type),
     rarity: raw.rarity,
     cost: raw.cost.includes("|") ? raw.cost.split("|").map((c) => c.trim()) : raw.cost,
     text: raw.text || null,
@@ -163,6 +265,16 @@ export function transformCard(
     keywords: splitList(raw.keywords || ""),
     attributes: splitList(raw.attributes || ""),
   };
+
+  // Main-body only — see library/schema.md § Main-Body Columns. A value on a
+  // location or policy is carried through rather than dropped, so `validate`
+  // can name it as the wrong column for that type instead of the author's
+  // intent vanishing.
+  if (isMainBody(type)) {
+    base.copies = parseCopies(raw.copies);
+  } else if (raw.copies?.trim()) {
+    base.copies = raw.copies.trim();
+  }
 
   switch (type) {
     case "units":
@@ -184,6 +296,10 @@ export function transformCard(
         base.rewards = `${parts[1].trim()}vp`;
       }
       base.passive = raw.passive || null;
+      // Blocked edges as authored (`N;S`); the loader turns this into the
+      // engine's open/closed booleans. Carried as the CSV's own list so the
+      // build validates the authored tokens, not a derived shape.
+      base.edges = splitList(raw.edges || "");
       // CSV column is `location_type`; stored as `locationType` on the card for
       // camelCase consistency with `itemType` and the engine field.
       base.locationType = raw.location_type || null;
@@ -213,6 +329,9 @@ export function transformCard(
 
     case "policies":
       base.effect = raw.effect;
+      // Seeding-phase prose (not DSL), same shape as `effect`. Authored on
+      // every alpha-1 policy and dropped by the build until now.
+      base.seedingEffect = raw.seeding_effect || null;
       // Policy actions: the third colon-separated field is human-readable
       // prose for UI display (e.g. "Look at one opponent's hand."), not a
       // DSL string. The executable DSL is wired in
@@ -341,6 +460,33 @@ export function validate(
     }
   }
 
+  // Edge tokens are a closed set; a typo'd one would otherwise be carried into
+  // the loader and silently leave that edge open.
+  if (type === "locations") {
+    for (const edge of (card.edges as string[] | undefined) ?? []) {
+      if (!EDGE_NAMES.includes(edge as (typeof EDGE_NAMES)[number])) {
+        errors.push(err("edges", `invalid edge: ${edge} (expected one of ${EDGE_NAMES.join(", ")})`));
+      }
+    }
+  }
+
+  // `copies` (deck-copy allowance) is main-body only — see library/schema.md.
+  // transformCard defaults an absent value to 1 on those types, so anything
+  // that isn't a positive integer here means the CSV carried something
+  // malformed rather than nothing at all.
+  if (isMainBody(type)) {
+    const copies: unknown = card.copies;
+    // `Number.isSafeInteger` rather than `isInteger`: an oversized numeral
+    // parses to an imprecise float that is still "an integer >= 1", so the
+    // value written would differ from the one typed. The game-design ceiling
+    // is a separate question, settled with the mechanic.
+    if (typeof copies !== "number" || !Number.isSafeInteger(copies) || copies < 1) {
+      errors.push(err("copies", `invalid copies: ${JSON.stringify(copies)} (expected a positive integer)`));
+    }
+  } else if (card.copies !== undefined) {
+    errors.push(err("copies", `copies is not allowed on ${type} — main-body types only (units, items, events)`));
+  }
+
   // DSL effect validation — skipped for policies (action.effect is
   // human-readable prose; executable DSL lives in POLICY_ACTIONS).
   const actions = card.actions as { name: string; apCost: number; effect: string }[] | undefined;
@@ -398,8 +544,26 @@ export function buildSet(setName: string, setsDir: string = SETS_DIR): {
       continue;
     }
 
-    const raw = readFileSync(csvPath, "utf-8");
-    const rows = parseCSV(raw);
+    const raw: string = readFileSync(csvPath, "utf-8");
+    const rows: Record<string, string>[] = parseCSV(raw, (field, message) => {
+      errors.push({ card: `${setName}/${type}`, field, message, severity: "error" });
+    });
+
+    // A header the transformer never reads is data the author wrote and the
+    // build threw away — the failure mode behind the CRLF header bug, and why
+    // `seeding_effect` sat unbuilt on every policy for as long as it did. The
+    // build can't tell a typo'd header from a deliberate one, so this warns
+    // rather than fails; it just refuses to stay quiet about it.
+    for (const header of Object.keys(rows[0] ?? {})) {
+      if (!READ_COLUMNS[type].includes(header)) {
+        warnings.push({
+          card: `${setName}/${type}`,
+          field: header,
+          message: `column "${header}" is not read by the build — its values are dropped`,
+          severity: "warning",
+        });
+      }
+    }
 
     for (const row of rows) {
       const card = transformCard(type, row, warnings);
@@ -441,11 +605,15 @@ function main() {
   let totalErrors: ValidationError[] = [];
   let totalWarnings: BuildWarning[] = [];
 
+  // Built output per set, held back until every set has validated — see the
+  // write guard below.
+  const built: { name: string; cards: Record<string, unknown>[] }[] = [];
+
   for (const setName of sets) {
     console.log(`Building set: ${setName}`);
     const { cards, errors, warnings } = buildSet(setName);
 
-    writeFileSync(join(BUILD_DIR, `${setName}.json`), JSON.stringify(cards, null, 2));
+    built.push({ name: setName, cards });
     console.log(`  ${cards.length} cards`);
 
     allCards = allCards.concat(cards);
@@ -453,7 +621,19 @@ function main() {
     totalWarnings = totalWarnings.concat(warnings);
   }
 
-  // Write merged output
+  // Report — warnings first (non-failing), then errors (which fail the build).
+  printNotices(totalWarnings, "warning(s)", (m) => console.warn(m));
+  printNotices(totalErrors, "validation error(s)", (m) => console.error(m));
+
+  // Nothing is written until the whole build validates. Writing first and
+  // exiting non-zero afterwards left `library/build/` holding the invalid data
+  // that had just been rejected — and the web client reads that directory
+  // directly, without the loader's re-validation.
+  if (totalErrors.length > 0) process.exit(1);
+
+  for (const { name, cards } of built) {
+    writeFileSync(join(BUILD_DIR, `${name}.json`), JSON.stringify(cards, null, 2));
+  }
   writeFileSync(join(BUILD_DIR, "all.json"), JSON.stringify(allCards, null, 2));
 
   // Emit the governed keyword vocabulary so tooling (keyword-coverage) and the
@@ -479,11 +659,6 @@ function main() {
       2,
     ),
   );
-
-  // Report — warnings first (non-failing), then errors (which fail the build).
-  printNotices(totalWarnings, "warning(s)", (m) => console.warn(m));
-  printNotices(totalErrors, "validation error(s)", (m) => console.error(m));
-  if (totalErrors.length > 0) process.exit(1);
 
   console.log(`\nDone. ${allCards.length} cards total across ${sets.length} set(s).`);
 }

@@ -1,6 +1,7 @@
 import {
   createInstanceCounter,
   instantiateCards,
+  validateCardDefinitions,
   buildPrebuiltSetup,
   mersenne,
   uniformIntDistribution,
@@ -36,8 +37,19 @@ export const DEFAULT_CONFIG: GameConfig = {
   combat_kill_ratio: 2,
 };
 
+// Memoised: the validation walks every card, and the definitions are immutable
+// for the life of the page.
+let validatedDefs: CardDefinition[] | null = null;
+
 export function getCardDefinitions(): CardDefinition[] {
-  return cardDefsJson as CardDefinition[];
+  // The bundler hands us `all.json` as whatever the last build wrote, with no
+  // guarantee that build succeeded — so this is the only place the client can
+  // catch a stale or hand-edited library. Asserting the type instead would let
+  // a bad card reach the table as a silently wrong one.
+  if (validatedDefs === null) {
+    validatedDefs = validateCardDefinitions(cardDefsJson as unknown[]);
+  }
+  return validatedDefs;
 }
 
 export function buildSeedingSetup(

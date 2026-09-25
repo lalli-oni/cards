@@ -114,10 +114,10 @@ async function runFullGame(opts: {
 
 // Shared pinned seed for the full-game smoke + determinism suites. Single source
 // of truth so the two describe blocks can't drift out of sync when rotating.
-const SMOKE_SEED = "seed-6";
+const SMOKE_SEED = "seed-5";
 
 describe("full game flow", () => {
-  // SMOKE_SEED (seed-6) produces a decisive winner (a sole VP leader by the turn
+  // SMOKE_SEED (seed-5) produces a decisive winner (a sole VP leader by the turn
   // limit) across 2/3/4 player counts with the current card library and greedy
   // bots. Greedy bots often tie at low VP, so if card behavior changes (new
   // effects, bot tweaks) this seed may need rotating — pick one where scores
@@ -125,7 +125,10 @@ describe("full game flow", () => {
   // seed-6: after #230 removed Golden Age, seed-3's 4-player game stopped
   // terminating within the action budget — a tie that never resolves at the turn
   // limit, tracked in #246; seed-3's 2- and 3-player games still resolve
-  // decisively.)
+  // decisively. Rotated seed-6 → seed-5 for the same reason: the build started
+  // applying locations' authored blocked edges, which changed movement and left
+  // seed-6's 4-player game tied. seed-5 resolves decisively at all three
+  // counts, to three different winners.)
   const DECISIVE_SEED = SMOKE_SEED;
 
   it("runs a 1v1 game to completion (seeding → main → ended)", async () => {

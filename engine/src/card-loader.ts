@@ -8,6 +8,7 @@ import type {
   InstantEventCard,
   ItemCard,
   LocationCard,
+  LocationEdges,
   PassiveDef,
   PassiveEventCard,
   PolicyCard,
@@ -20,6 +21,7 @@ import {
   LOCATION_TYPES,
   EVENT_TYPES,
   ITEM_TYPES,
+  MAIN_BODY_TYPES,
   type LocationType,
   type EventType,
   type ItemType,
@@ -42,8 +44,8 @@ export interface CardDefinition {
   keywords: string[];
   attributes?: string[];
 
-  /** Main-body fields (unit/item/event) — see library/schema.md. Absent means
-   *  the baseline 1; the library build always emits it on those types. */
+  /** Main-body only (unit/item/event) — see library/schema.md. Absent means the
+   *  baseline 1; the library build always emits it on those types. */
   copies?: number;
 
   // Unit fields
@@ -59,6 +61,9 @@ export interface CardDefinition {
   requirements?: string | null;
   rewards?: string | null;
   passive?: string | null;
+  /** CSV `edges` column: the compass points that are *blocked*. Inverted into
+   *  `LocationCard.edges` (where true = open) at instantiation. */
+  edges?: string[];
   /** CSV `location_type` column. Named `locationType` in-engine (camelCase). */
   locationType?: string | null;
 
@@ -78,6 +83,8 @@ export interface CardDefinition {
 
   // Policy fields
   effect?: string;
+  /** CSV `seeding_effect` column. Prose, like `effect`. */
+  seedingEffect?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -99,9 +106,6 @@ export function createInstanceCounter(): InstanceCounter {
 const VALID_TYPES: CardType[] = ["unit", "location", "item", "event", "policy"];
 const VALID_RARITIES: Rarity[] = ["common", "rare", "legendary"];
 const VALID_TIMINGS: EventTiming[] = ["instant", "passive", "trap"];
-/** Types that may carry `copies` — mirrors `MAIN_BODY_TYPES` in library/build.ts
- *  (which names the same set in its plural CSV spelling). */
-const MAIN_BODY_TYPES: CardType[] = ["unit", "item", "event"];
 
 export class CardValidationError extends Error {
   constructor(public readonly errors: { cardId: string; message: string }[]) {
@@ -197,7 +201,7 @@ function validateDefinition(
   // vocabularies above — hand-edited or stale JSON shouldn't be able to put a
   // deck-copy count on a location, or a nonsensical one on anything.
   if (def.copies !== undefined) {
-    if (!MAIN_BODY_TYPES.includes(def.type as CardType)) {
+    if (!MAIN_BODY_TYPES.includes(def.type as (typeof MAIN_BODY_TYPES)[number])) {
       errors.push({ cardId, message: `copies is not allowed on ${def.type} cards` });
     } else if (
       typeof def.copies !== "number" ||
@@ -264,10 +268,23 @@ export function loadCardDefinitions(jsonPath: string): CardDefinition[] {
     throw new Error(`Expected JSON array in ${jsonPath}`);
   }
 
+  return validateCardDefinitions(parsed);
+}
+
+/**
+ * Validate already-parsed definitions and narrow them to `CardDefinition[]`,
+ * throwing `CardValidationError` if any are invalid.
+ *
+ * Split out of `loadCardDefinitions` so a caller that gets the JSON some other
+ * way — a bundler importing `all.json`, say — runs the same gate instead of
+ * asserting the type and hoping. Without it, the only check on those cards is
+ * the build that produced the file, which the caller has no way to confirm ran.
+ */
+export function validateCardDefinitions(defs: unknown[]): CardDefinition[] {
   const allErrors: { cardId: string; message: string }[] = [];
   const seenIds = new Set<string>();
 
-  for (const entry of parsed) {
+  for (const entry of defs) {
     allErrors.push(...validateDefinition(entry as Record<string, unknown>));
     const id = (entry as Record<string, unknown>).id as string;
     if (id) {
@@ -282,7 +299,7 @@ export function loadCardDefinitions(jsonPath: string): CardDefinition[] {
     throw new CardValidationError(allErrors);
   }
 
-  return parsed as CardDefinition[];
+  return defs as CardDefinition[];
 }
 
 /**
@@ -313,6 +330,18 @@ export function loadCardDefinitionsFromBuild(
 // ---------------------------------------------------------------------------
 // Instantiation — convert definitions to engine Card instances
 // ---------------------------------------------------------------------------
+
+/** The CSV names the *blocked* compass points; the engine stores open/closed.
+ *  An absent or empty list means every edge is open. */
+function blockedToEdges(blocked: string[] | undefined): LocationEdges {
+  const isBlocked = (edge: string): boolean => (blocked ?? []).includes(edge);
+  return {
+    n: !isBlocked("N"),
+    e: !isBlocked("E"),
+    s: !isBlocked("S"),
+    w: !isBlocked("W"),
+  };
+}
 
 /** Normalize cost to string (join alternatives with |). */
 function normalizeCost(cost: string | string[]): string {
@@ -355,7 +384,7 @@ export function instantiateCard(
       return {
         ...base,
         type: "unit",
-        copies: def.copies ?? undefined,
+        copies: def.copies,
         strength: def.strength ?? 0,
         cunning: def.cunning ?? 0,
         charisma: def.charisma ?? 0,
@@ -369,7 +398,7 @@ export function instantiateCard(
       return {
         ...base,
         type: "location",
-        edges: { n: true, e: true, s: true, w: true },
+        edges: blockedToEdges(def.edges),
         requirements: def.requirements ?? def.mission ?? undefined,
         rewards: def.rewards ?? undefined,
         passive: def.passive ?? undefined,
@@ -380,7 +409,7 @@ export function instantiateCard(
       return {
         ...base,
         type: "item",
-        copies: def.copies ?? undefined,
+        copies: def.copies,
         equip: def.equip ?? undefined,
         stored: def.stored ?? undefined,
         itemType:
@@ -396,13 +425,13 @@ export function instantiateCard(
       }
       switch (def.timing) {
         case "instant":
-          return { ...base, type: "event", timing: "instant", copies: def.copies ?? undefined, eventType: (def.eventType ?? undefined) as EventType | undefined, effect: def.effect ?? undefined } satisfies InstantEventCard;
+          return { ...base, type: "event", timing: "instant", copies: def.copies, eventType: (def.eventType ?? undefined) as EventType | undefined, effect: def.effect ?? undefined } satisfies InstantEventCard;
         case "passive":
           return {
             ...base,
             type: "event",
             timing: "passive",
-            copies: def.copies ?? undefined,
+            copies: def.copies,
             eventType: (def.eventType ?? undefined) as EventType | undefined,
             duration: def.duration ?? 1,
           } satisfies PassiveEventCard;
@@ -411,7 +440,7 @@ export function instantiateCard(
             ...base,
             type: "event",
             timing: "trap",
-            copies: def.copies ?? undefined,
+            copies: def.copies,
             eventType: (def.eventType ?? undefined) as EventType | undefined,
             trigger: def.trigger ?? "",
           } satisfies TrapEventCard;
@@ -428,6 +457,7 @@ export function instantiateCard(
         ...base,
         type: "policy",
         effect: def.effect,
+        seedingEffect: def.seedingEffect ?? undefined,
         actions: def.actions ?? undefined,
       } satisfies PolicyCard;
   }

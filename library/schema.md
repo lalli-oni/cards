@@ -22,14 +22,15 @@ Every card type includes these columns:
 ## Main-Body Columns
 
 Cards that go into a player's main deck — **units, items and events** — also
-carry the columns below. Locations and policies do not: a location reaches the
+carry the column below. Locations and policies do not: a location reaches the
 grid through the prospect deck rather than through deck copies, and a policy is
 a single global card, so neither has a copy count to express. The build rejects
-these columns on a location or policy row.
+a *value* here on a location or policy row; an empty cell is ignored, so adding
+the column set-wide is harmless.
 
 | Column | Type | Required | Description |
 |--------|------|----------|-------------|
-| copies | int  | no       | How many copies of this card a deck may contain. Defaults to `1` when omitted, so every built main-body card carries a concrete value. Must be a positive integer. Data only for now — no deck-construction rule reads it yet; the mechanic itself is shaped in #196. |
+| copies | int  | no       | How many copies of this card a deck may contain. Defaults to `1` when omitted, so every built main-body card carries a concrete value. Must be a positive integer. Data only for now — nothing reads it yet; the mechanic is still being designed (the *Copies requirement* thread on #196). |
 
 ## Units
 
@@ -42,6 +43,7 @@ these columns on a location or policy row.
 | passives   | string | no       | Semicolon-separated **named passive abilities** (e.g. Genghis Khan's `Horselord`). Format: `name:effect`, where `effect` is human-readable prose — not DSL — like a location's `passive`. No AP cost, no activation (contrast `actions`). Split from the freeform `text` blob so a passive's name and effect are structured, not conflated with an action's reminder. Display-only today; the engine does not yet apply unit passives mechanically. |
 
 `attributes` is a shared column (see above) — units are the primary carriers.
+Units also carry the [Main-Body Columns](#main-body-columns).
 
 A unit's freeform `text` remains the reminder prose for its single `action`
 (if any); its named passives live in `passives`, and its mechanical keywords in
@@ -54,8 +56,8 @@ A unit's freeform `text` remains the reminder prose for its single `action`
 |--------------|--------|----------|-------------|
 | mission      | string | no       | Mission requirements and reward in one field, format `requirements>vp` (e.g. `knowledge_2>5`). Requirements are semicolon-separated atomic checks, AND'd — see Requirement Checks below; the reward is a bare number of VP. A location with a `mission` value is a mission location. The build splits this into `requirements` and `rewards` (`Nvp`) on the loaded card; neither is a CSV column. |
 | passive      | string | no       | Passive effect text |
-| edges   | string | no       | Blocked edges, semicolon-separated (`N`, `S`, `E`, `W`). Unlisted edges are open. Empty = all open. |
-| actions | string | no       | Semicolon-separated action definitions. Format: `name:ap_cost:effect`. Usable by any player with a unit at this location. |
+| edges   | string | no       | Blocked edges, semicolon-separated (`N`, `S`, `E`, `W`). Unlisted edges are open. Empty = all open. The loader inverts this into the engine's per-edge open/closed booleans. |
+| actions | string | no       | Semicolon-separated action definitions. Format: `name:ap_cost:effect`. Usable by any player with a unit at this location. **Not built today** — the only authored value isn't expressible in the effect DSL, so the build reports the column as dropped rather than inventing a rule for it. |
 | location_type | enum | no      | Per-type category (single value). See [Governed vocabularies](#governed-vocabularies). Loaded as `locationType` in the engine (camelCase). |
 
 ## Items
@@ -66,6 +68,8 @@ A unit's freeform `text` remains the reminder prose for its single `action`
 | stored  | string | no       | Effect when stored at a location |
 | type    | enum   | no       | Multi-value item category (semicolon-separated). See [Governed vocabularies](#governed-vocabularies). Loaded as `itemType` in the engine (avoids colliding with the card-type discriminant). |
 | actions | string | no       | Semicolon-separated action definitions. Format: `name:ap_cost:effect` |
+
+Items also carry the [Main-Body Columns](#main-body-columns).
 
 ## Events
 
@@ -78,12 +82,14 @@ A unit's freeform `text` remains the reminder prose for its single `action`
 | event_type | enum | no       | Per-type category (single value): `Catastrophe`, `Prosperity`. Thematic — distinct from the mechanical `timing` field. See [Governed vocabularies](#governed-vocabularies). Loaded as `eventType` in the engine (camelCase). |
 | resolution | enum | no       | Where the event goes when it resolves: `discard` (default) or `main-top` (return to top of the owner's main deck). Absent/empty defaults to `discard`, so every built event carries a value. See [Governed vocabularies](#governed-vocabularies). Runtime routing: #212 (scoped under #231). |
 
+Events also carry the [Main-Body Columns](#main-body-columns).
+
 ## Policies
 
 | Column         | Type   | Required | Description |
 |----------------|--------|----------|-------------|
 | effect         | string | yes      | Passive global modifier text |
-| seeding_effect | string | no       | Effect that applies during the seeding phase |
+| seeding_effect | string | no       | Effect that applies during the seeding phase. Prose, like `effect`; loaded as `seedingEffect`. Display-only — no seeding rule reads it. |
 | actions        | string | no       | Semicolon-separated action definitions. Format: `name:ap_cost:effect` |
 
 ## Governed vocabularies

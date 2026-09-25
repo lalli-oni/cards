@@ -31,6 +31,18 @@ export const LOCATION_TYPES = [
 export const EVENT_TYPES = ["Catastrophe", "Prosperity"] as const;
 
 /**
+ * Card types that go into a player's main deck, and so may carry a `copies`
+ * allowance. Locations reach the grid through the prospect deck and policies
+ * are single global cards, so neither is one of these — see
+ * `library/schema.md` § Main-Body Columns.
+ *
+ * Lives here for the same reason as the vocabularies above: the build and the
+ * engine each gate on this set, and a copy in each would fail *open* — a type
+ * missing from the build's list loses the column silently.
+ */
+export const MAIN_BODY_TYPES = ["unit", "item", "event"] as const;
+
+/**
  * Where an event card goes when it resolves — its lifecycle destination, a
  * governed property of every event (peer of `timing`/`duration`, not a
  * keyword). `discard` is the default (the normal fate); `main-top` returns the

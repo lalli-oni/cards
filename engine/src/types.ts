@@ -100,15 +100,14 @@ interface CardBase {
   controllerId: string;
 }
 
-/** Cards that go into a player's main deck: units, items and events. Locations
- *  reach the grid through the prospect deck and policies are single global
- *  cards, so neither is one of these — which is what keeps `copies` off them. */
-interface MainBodyCard extends CardBase {
-  /** How many copies of this card a deck may contain. Data only: no
-   *  deck-construction rule reads it yet (the mechanic is shaped in #196). The
-   *  library build defaults an absent value to 1, so cards built from the
-   *  library always carry it; cards built elsewhere (the card-loader, test
-   *  fixtures) may omit it — treat absent as 1. */
+/** Cards that go into a player's main deck: units, items and events — the set
+ *  that may carry `copies`. See `library/schema.md` § Main-Body Columns for why
+ *  locations and policies are excluded. */
+export interface MainBodyCard extends CardBase {
+  /** How many copies of this card a deck may contain. Nothing reads it yet.
+   *  A card loaded from a library build always carries a count; a hand-written
+   *  definition (test fixtures, ad-hoc defs) may leave it undefined — treat
+   *  absent as 1. */
   copies?: number;
 }
 
@@ -256,6 +255,9 @@ export interface UnitCard extends MainBodyCard {
 
 export interface LocationCard extends CardBase {
   type: "location";
+  /** Open/closed per compass point, derived by the loader from the CSV's list
+   *  of *blocked* edges — the two shapes are inverses, so don't read this as
+   *  the authored value. */
   edges: LocationEdges;
   requirements?: string;
   rewards?: string;
@@ -327,6 +329,9 @@ export type EventCard = InstantEventCard | PassiveEventCard | TrapEventCard;
 export interface PolicyCard extends CardBase {
   type: "policy";
   effect: string;
+  /** Seeding-phase effect as prose, like `effect`. Display-only: no seeding
+   *  rule reads it, and the engine does not apply it. */
+  seedingEffect?: string;
   /** UI-only action descriptions — `ActionDef.effect` is human-readable here. */
   actions?: ActionDef[];
 }

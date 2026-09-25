@@ -375,11 +375,10 @@ describe("build transform + validation — event resolution (#231)", () => {
 
 describe("build transform + validation — main-body copies (#284)", () => {
   // `copies` is the deck-copy allowance, added ahead of the content passes so
-  // authors can express intent without a later retro-edit across the set. It is
-  // main-body only (unit/item/event): a location recurs via the prospect deck
-  // and a policy is a single global card, so the column is rejected on both.
-  // Nothing reads the value yet (#196 shapes the mechanic), so these tests are
-  // the only thing pinning transform's default and validate's gate.
+  // authors can express intent without a later retro-edit across the set.
+  // Main-body only — see library/schema.md § Main-Body Columns for why.
+  // Nothing reads the value yet, so these tests are the only thing pinning
+  // transform's default and validate's gate.
   const copiesOf = (type: CardType, overrides: Record<string, string>) =>
     (transformCard(type, row(type === "events" ? { timing: "instant", ...overrides } : overrides)) as {
       copies?: unknown;
@@ -476,17 +475,17 @@ describe("build validation — cost is a numeric gold amount", () => {
 });
 
 // ---------------------------------------------------------------------------
-// CRLF line endings (#289)
+// Record splitting: line endings and quoted newlines (#289)
 //
-// `parseCSV` split on "\n" only, so a CRLF file left a trailing \r on every
-// line. That renamed the last header (`effect` -> `effect\r`), so the lookup
-// for that column missed and the build dropped it — silently, because every
-// last column in the real CSVs is optional. On a Windows checkout it emptied
-// all 3 instant-event effects, 7 policy action sets and all 46 flavor texts,
-// which deadlocked the greedy-bot integration games at a permanent 3vp tie.
-// A spreadsheet export writes CRLF on any OS, so this is not Windows-only.
+// See `splitRecords` for the mechanism. The blast radius is what makes these
+// worth pinning: a CRLF checkout emptied the last column of every CSV — flavor
+// on units, items and locations, `effect` on events, `actions` on policies —
+// and the eventless games then stalled the greedy-bot integration suite in a
+// tie it could not break. CRLF is not Windows-only: spreadsheet exports produce
+// it too, and the same export is what writes a quoted newline into a multi-line
+// flavor text.
 // ---------------------------------------------------------------------------
-describe("build — CRLF line endings (#289)", () => {
+describe("build — record splitting (#289)", () => {
   const fixtureRoot: string = mkdtempSync(join(tmpdir(), "cards-crlf-"));
   afterAll(() => rmSync(fixtureRoot, { recursive: true, force: true }));
 
@@ -539,6 +538,110 @@ describe("build — CRLF line endings (#289)", () => {
 
     expect(errors).toEqual([]);
     expect(cards.find((c) => (c.id as string) === "crlf-event")?.effect).toBe("gold[3]");
+  });
+  test("keeps a quoted field containing a newline in one record", () => {
+    // What a spreadsheet writes for multi-line flavor text. Splitting on line
+    // endings first tore this into a truncated row plus a phantom row whose id
+    // was the second line — silently, because flavor is optional.
+    const dir: string = join(fixtureRoot, "quoted-newline");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, "units.csv"),
+      'id,name,set,rarity,cost,keywords,attributes,strength,cunning,charisma,flavor\r\n' +
+        'quoted-unit,Quoted Unit,q-set,common,3,,Military,2,1,1,"First line\r\nSecond line"\r\n',
+    );
+    const { cards, errors } = buildSet("quoted-newline", fixtureRoot);
+
+    expect(errors).toEqual([]);
+    expect(cards).toHaveLength(1);
+    expect(cards[0].flavor).toBe("First line\r\nSecond line");
+  });
+
+  test("reports a row whose field count disagrees with the header", () => {
+    // A dropped comma used to shift every later column in silence. The error
+    // names the line number the author's editor shows.
+    const dir: string = join(fixtureRoot, "ragged");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, "units.csv"),
+      "id,name,set,rarity,cost,keywords,attributes,strength,cunning,charisma,flavor\n" +
+        "ragged-unit,Ragged Unit,r-set,common,3,,Military,2,1,1\n",
+    );
+    const { errors } = buildSet("ragged", fixtureRoot);
+
+    const raggedError = errors.find((e) => e.field === "row");
+    expect(raggedError).toBeDefined();
+    expect(raggedError?.message).toContain("line 2");
+    expect(raggedError?.message).toContain("10 field(s)");
+  });
+
+  test("warns about a header the build never reads", () => {
+    // The generalised form of the bug: any column the transform doesn't consume
+    // is authored data being thrown away. `seeding_effect` sat unbuilt on every
+    // policy for exactly this reason, and nothing said so.
+    const dir: string = join(fixtureRoot, "unread-column");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, "units.csv"),
+      "id,name,set,rarity,cost,keywords,attributes,strength,cunning,charisma,flavour\n" +
+        "typo-unit,Typo Unit,u-set,common,3,,Military,2,1,1,Misspelled header\n",
+    );
+    const { warnings } = buildSet("unread-column", fixtureRoot);
+
+    const unread = warnings.find((w) => w.field === "flavour");
+    expect(unread).toBeDefined();
+    expect(unread?.message).toContain("not read by the build");
+  });
+});
+
+describe("build — columns that used to be dropped", () => {
+  // Both columns are documented in library/schema.md and carried real authored
+  // values in alpha-1, and the build read neither — the same silent-drop class
+  // as the record-splitting bug above, found while reviewing its fix.
+  const fixtureRoot: string = mkdtempSync(join(tmpdir(), "cards-dropped-"));
+  afterAll(() => rmSync(fixtureRoot, { recursive: true, force: true }));
+
+  test("carries a policy's seeding_effect through to the built card", () => {
+    const dir: string = join(fixtureRoot, "policy-set");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, "policies.csv"),
+      "id,name,set,rarity,cost,effect,attributes,keywords,text,flavor,seeding_effect,actions\n" +
+        "test-policy,Test Policy,p-set,common,0,Global modifier.,,,,,Swap one card before Claim.,\n",
+    );
+    const { cards, errors } = buildSet("policy-set", fixtureRoot);
+
+    expect(errors).toEqual([]);
+    expect(cards[0].seedingEffect).toBe("Swap one card before Claim.");
+  });
+
+  test("carries a location's blocked edges through to the built card", () => {
+    const dir: string = join(fixtureRoot, "edge-set");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, "locations.csv"),
+      "id,name,set,rarity,cost,mission,passive,edges,attributes,keywords,location_type,text,flavor\n" +
+        "walled,Walled Place,l-set,common,4,,,N;S,,,Fortification,,\n",
+    );
+    const { cards, errors } = buildSet("edge-set", fixtureRoot);
+
+    expect(errors).toEqual([]);
+    expect(cards[0].edges).toEqual(["N", "S"]);
+  });
+
+  test("rejects an edge token outside the compass set", () => {
+    // A typo'd token would otherwise reach the loader and quietly leave that
+    // edge open, which is indistinguishable from the author not blocking it.
+    const dir: string = join(fixtureRoot, "bad-edge-set");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, "locations.csv"),
+      "id,name,set,rarity,cost,mission,passive,edges,attributes,keywords,location_type,text,flavor\n" +
+        "typo-edge,Typo Edge,l-set,common,4,,,North,,,Fortification,,\n",
+    );
+    const { errors } = buildSet("bad-edge-set", fixtureRoot);
+
+    expect(errors.some((e) => e.field === "edges" && e.message.includes("North"))).toBe(true);
   });
 });
 

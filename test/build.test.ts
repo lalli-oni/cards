@@ -8,6 +8,7 @@ import {
   validate,
   type BuildWarning,
   type CardType,
+  type ValidationError,
 } from "../library/build";
 import { KEYWORD_SPECS, KeywordError, type KeywordSpec, parseKeyword } from "../engine/src/keywords";
 import { DIRECT_HOOK_KEYWORDS, keywordEffects, type KeywordCard } from "../engine/src/keyword-effects";
@@ -41,7 +42,7 @@ function row(overrides: Record<string, string>): Record<string, string> {
 }
 
 /** transformCard + validate in one step, returning the validation errors. */
-function check(type: CardType, overrides: Record<string, string>) {
+function check(type: CardType, overrides: Record<string, string>): ValidationError[] {
   return validate(type, transformCard(type, row(overrides)));
 }
 
@@ -379,7 +380,7 @@ describe("build transform + validation — main-body copies (#284)", () => {
   // Main-body only — see library/schema.md § Main-Body Columns for why.
   // Nothing reads the value yet, so these tests are the only thing pinning
   // transform's default and validate's gate.
-  const copiesOf = (type: CardType, overrides: Record<string, string>) =>
+  const copiesOf = (type: CardType, overrides: Record<string, string>): unknown =>
     (transformCard(type, row(type === "events" ? { timing: "instant", ...overrides } : overrides)) as {
       copies?: unknown;
     }).copies;

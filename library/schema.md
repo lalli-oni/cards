@@ -30,7 +30,7 @@ the column set-wide is harmless.
 
 | Column | Type | Required | Description |
 |--------|------|----------|-------------|
-| copies | int  | no       | How many copies of this card a deck may contain. Defaults to `1` when omitted, so every built main-body card carries a concrete value. Must be a positive integer. Data only for now — nothing reads it yet; the mechanic is still being designed (the *Copies requirement* thread on #196). |
+| copies | int  | no       | How many copies of this card a deck may contain. Defaults to `1` when omitted, so every built main-body card carries a concrete value. Must be a positive integer. Data only for now — nothing reads it yet; the mechanic is still being designed (#290). |
 
 ## Units
 

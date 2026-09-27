@@ -80,7 +80,7 @@ const READ_COLUMNS: Record<CardType, string[]> = {
   // `actions` is deliberately absent: the one authored location action
   // (`rotate:0:rotate_location`) is not expressible in the effect DSL, so the
   // build reports the column as dropped rather than inventing a rule for it.
-  locations: [...SHARED_COLUMNS, "mission", "passive", "edges", "location_type"],
+  locations: [...SHARED_COLUMNS, "mission", "reward", "passive", "edges", "location_type"],
   items: [...SHARED_COLUMNS, "equip", "stored", "type", "actions"],
   events: [...SHARED_COLUMNS, "timing", "duration", "trigger", "effect", "event_type", "resolution"],
   policies: [...SHARED_COLUMNS, "effect", "seeding_effect", "actions"],
@@ -290,16 +290,10 @@ export function transformCard(
       break;
 
     case "locations":
-      base.requirements = null;
-      base.rewards = null;
-      if (raw.mission) {
-        // Split on the first ">" only: the reward is a DSL expression, which
-        // uses ">" itself to chain steps. Requirements never contain one.
-        const sep = raw.mission.indexOf(">");
-        if (sep < 0) throw new Error(`${raw.id}: mission "${raw.mission}" must be requirements>reward`);
-        base.requirements = splitList(raw.mission.slice(0, sep)).join(";");
-        base.rewards = raw.mission.slice(sep + 1).trim();
-      }
+      // CSV `mission` holds the requirements, `reward` the DSL expression;
+      // `validate` checks they're authored together.
+      base.requirements = raw.mission ? splitList(raw.mission).join(";") : null;
+      base.rewards = raw.reward?.trim() || null;
       base.passive = raw.passive || null;
       // Blocked edges as authored (`N;S`); the loader turns this into the
       // engine's open/closed booleans. Carried as the CSV's own list so the
@@ -505,6 +499,9 @@ export function validate(
       }
     }
   }
+  if (type === "locations" && Boolean(card.requirements) !== Boolean(card.rewards)) {
+    errors.push(err(card.requirements ? "reward" : "mission", "a mission needs both requirements (`mission`) and a `reward`"));
+  }
   if (typeof card.rewards === "string") {
     try {
       const unsafe: string[] = parseDSL(card.rewards)
@@ -512,11 +509,11 @@ export function validate(
         .map((step) => step.primitive.verb)
         .filter((verb) => !MISSION_REWARD_VERBS.has(verb));
       if (unsafe.length > 0) {
-        errors.push(err("mission", `mission reward uses ${unsafe.join(", ")} — only ${[...MISSION_REWARD_VERBS].join(", ")} are allowed`));
+        errors.push(err("reward", `mission reward uses ${unsafe.join(", ")} — only ${[...MISSION_REWARD_VERBS].join(", ")} are allowed`));
       }
     } catch (e) {
       const msg = (e instanceof DSLParseError || e instanceof DSLValidationError) ? e.message : String(e);
-      errors.push(err("mission", `invalid DSL in mission reward: ${msg}`));
+      errors.push(err("reward", `invalid DSL in mission reward: ${msg}`));
     }
   }
   if (card.timing === "instant" && card.effect) {

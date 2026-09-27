@@ -153,7 +153,7 @@ has room, the dilemma goes to the bottom of the prospect deck.
 - **HQ** — the player's staging area (off-grid). Units and items enter play here when deployed from hand.
 - **Grid** — shared 2D field containing all active locations. Units move between locations on the grid.
 - **Active trap area** — face-down trap events. Targets are indicated by matching tokens. Visible to all players but contents hidden.
-- **Scoring area** — completed mission locations are placed here. Worth their printed VP.
+- **Scoring area** — completed mission locations are placed here. Their VP was gained as part of the mission reward on completion.
 - **Discard pile** — cards removed from play. Recycled into the main deck when needed (see Drawing cards).
 - **Removed from game** — cards that are permanently removed. They do not cycle back into any deck.
 
@@ -376,9 +376,10 @@ as follows:
    If not met, the attempt ends with no penalty.
 
 Upon completion:
-1. The location is moved to the completing player's **scoring area** (worth its printed VP).
-2. All units and items at that location are moved to the **completing player's discard pile** (regardless of original ownership).
-3. The active player draws a replacement location from their prospect deck and places it in the vacated slot.
+1. The completing player gains the mission's printed **reward** — VP, and on some missions gold or cards as well (e.g. "2 gold and 1 VP").
+2. The location is moved to the completing player's **scoring area**.
+3. All units and items at that location are moved to the **completing player's discard pile** (regardless of original ownership).
+4. The active player draws a replacement location from their prospect deck and places it in the vacated slot.
 
 #### Passive effects
 Locations can grant ongoing bonuses to units present at that location.

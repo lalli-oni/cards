@@ -37,6 +37,10 @@ const RARITIES = ["common", "rare", "legendary"] as const;
 const EVENT_TIMINGS = ["instant", "passive", "trap"] as const;
 /** Compass tokens a location's `edges` column may name as blocked. */
 const EDGE_NAMES = ["N", "E", "S", "W"] as const;
+/** Verbs a mission reward may use. Completion runs the reward with no target
+ *  and carries on discarding afterwards, so a verb that needs a target or
+ *  suspends for a prompt (`peek`/`pick`) would no-op or strand the completion. */
+const MISSION_REWARD_VERBS: ReadonlySet<string> = new Set(["gold", "vp", "draw"]);
 
 /** CSV directory name -> the engine's card-type discriminant (`units` ->
  *  `unit`). The transform derives `base.type` the same way; naming it once
@@ -76,7 +80,7 @@ const READ_COLUMNS: Record<CardType, string[]> = {
   // `actions` is deliberately absent: the one authored location action
   // (`rotate:0:rotate_location`) is not expressible in the effect DSL, so the
   // build reports the column as dropped rather than inventing a rule for it.
-  locations: [...SHARED_COLUMNS, "mission", "passive", "edges", "location_type"],
+  locations: [...SHARED_COLUMNS, "mission", "reward", "passive", "edges", "location_type"],
   items: [...SHARED_COLUMNS, "equip", "stored", "type", "actions"],
   events: [...SHARED_COLUMNS, "timing", "duration", "trigger", "effect", "event_type", "resolution"],
   policies: [...SHARED_COLUMNS, "effect", "seeding_effect", "actions"],
@@ -286,15 +290,10 @@ export function transformCard(
       break;
 
     case "locations":
-      base.requirements = null;
-      base.rewards = null;
-      if (raw.mission) {
-        const parts = raw.mission.split(">");
-        if (parts.length !== 2) throw new Error(`${raw.id}: mission "${raw.mission}" must have exactly one ">"`);
-        if (!/^\d+$/.test(parts[1].trim())) throw new Error(`${raw.id}: mission reward must be a number, got "${parts[1]}"`);
-        base.requirements = splitList(parts[0]).join(";");
-        base.rewards = `${parts[1].trim()}vp`;
-      }
+      // CSV `mission` holds the requirements, `reward` the DSL expression;
+      // `validate` checks they're authored together.
+      base.requirements = raw.mission ? splitList(raw.mission).join(";") : null;
+      base.rewards = raw.reward?.trim() || null;
       base.passive = raw.passive || null;
       // Blocked edges as authored (`N;S`); the loader turns this into the
       // engine's open/closed booleans. Carried as the CSV's own list so the
@@ -498,6 +497,23 @@ export function validate(
         const msg = (e instanceof DSLParseError || e instanceof DSLValidationError) ? e.message : String(e);
         errors.push(err("actions", `invalid DSL in action "${action.name}": ${msg}`));
       }
+    }
+  }
+  if (type === "locations" && Boolean(card.requirements) !== Boolean(card.rewards)) {
+    errors.push(err(card.requirements ? "reward" : "mission", "a mission needs both requirements (`mission`) and a `reward`"));
+  }
+  if (typeof card.rewards === "string") {
+    try {
+      const unsafe: string[] = parseDSL(card.rewards)
+        .flat()
+        .map((step) => step.primitive.verb)
+        .filter((verb) => !MISSION_REWARD_VERBS.has(verb));
+      if (unsafe.length > 0) {
+        errors.push(err("reward", `mission reward uses ${unsafe.join(", ")} — only ${[...MISSION_REWARD_VERBS].join(", ")} are allowed`));
+      }
+    } catch (e) {
+      const msg = (e instanceof DSLParseError || e instanceof DSLValidationError) ? e.message : String(e);
+      errors.push(err("reward", `invalid DSL in mission reward: ${msg}`));
     }
   }
   if (card.timing === "instant" && card.effect) {

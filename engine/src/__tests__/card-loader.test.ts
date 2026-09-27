@@ -50,7 +50,7 @@ const VALID_LOCATION: CardDefinition = {
   keywords: [],
   mission: "control>3",
   requirements: "units_3",
-  rewards: "3vp",
+  rewards: "vp[3]",
   passive: "gain_gold_1",
   locationType: "Sanctuary",
 };
@@ -616,7 +616,7 @@ describe("instantiateCard", () => {
     if (card.type === "location") {
       expect(card.edges).toEqual({ n: true, e: true, s: true, w: true });
       expect(card.requirements).toBe("units_3");
-      expect(card.rewards).toBe("3vp");
+      expect(card.rewards).toBe("vp[3]");
       expect(card.passive).toBe("gain_gold_1");
       expect(card.locationType).toBe("Sanctuary");
     }

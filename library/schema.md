@@ -54,7 +54,8 @@ A unit's freeform `text` remains the reminder prose for its single `action`
 
 | Column       | Type   | Required | Description |
 |--------------|--------|----------|-------------|
-| mission      | string | no       | Mission requirements and reward in one field, format `requirements>vp` (e.g. `knowledge_2>5`). Requirements are semicolon-separated atomic checks, AND'd — see Requirement Checks below; the reward is a bare number of VP. A location with a `mission` value is a mission location. The build splits this into `requirements` and `rewards` (`Nvp`) on the loaded card; neither is a CSV column. |
+| mission      | string | no       | Mission requirements: semicolon-separated atomic checks, AND'd (e.g. `knowledge_1;cunning_6`) — see Requirement Checks below. A location with a `mission` value is a mission location, and must also have a `reward`. Loaded onto the card as `requirements`. |
+| reward       | string | no       | Mission reward, an effect-DSL expression limited to `gold`, `vp` and `draw` (e.g. `vp[5]`, `gold[2] + vp[1]`). Required when `mission` is set, and only allowed with it. Loaded onto the card as `rewards`. |
 | passive      | string | no       | Passive effect text |
 | edges   | string | no       | Blocked edges, semicolon-separated (`N`, `S`, `E`, `W`). Unlisted edges are open. Empty = all open. The loader inverts this into the engine's per-edge open/closed booleans. |
 | actions | string | no       | Semicolon-separated action definitions. Format: `name:ap_cost:effect`. Usable by any player with a unit at this location. **Not built today** — the only authored value isn't expressible in the effect DSL, so the build reports the column as dropped rather than inventing a rule for it. |

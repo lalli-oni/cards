@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Card } from "cards-engine";
-  import { formatRequirements, parseRequirementParts } from "../lib/formatRequirements";
+  import { formatRequirements, formatRewards, parseRequirementParts } from "../lib/formatRequirements";
 
   interface Props {
     card: Card;
@@ -32,7 +32,7 @@
       lines.push(`Str:${card.strength} Cun:${card.cunning} Cha:${card.charisma}${card.injured ? " (injured)" : ""}`);
     } else if (card.type === "location") {
       if (card.requirements) lines.push(`Req: ${formatRequirements(card.requirements)}`);
-      if (card.rewards) lines.push(`Rew: ${card.rewards}`);
+      if (card.rewards) lines.push(`Rew: ${formatRewards(card.rewards)}`);
       if (card.passive) lines.push(`Passive: ${card.passive}`);
     } else if (card.type === "item") {
       if (card.equip) lines.push(`Equip: ${card.equip}`);

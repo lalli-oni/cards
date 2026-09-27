@@ -65,3 +65,21 @@ function formatOnePart(check: string): RequirementPart {
 function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
+
+const REWARD_UNITS: Record<string, string> = {
+  vp: " ⭐",
+  gold: "g",
+  draw: " card(s)",
+};
+
+/**
+ * Format a mission reward (an effect-DSL expression) for display:
+ *   "vp[5]"           → "5 ⭐"
+ *   "gold[2] + vp[1]" → "2g + 1 ⭐"
+ *
+ * Only rewrites the `verb[N]` shapes the build allows in rewards; anything
+ * else stays verbatim so an unexpected reward is still readable.
+ */
+export function formatRewards(raw: string): string {
+  return raw.replace(/\b(vp|gold|draw)\[(\d+)\]/g, (_match: string, verb: string, n: string) => `${n}${REWARD_UNITS[verb]}`);
+}

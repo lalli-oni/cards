@@ -646,6 +646,61 @@ describe("build — columns that used to be dropped", () => {
   });
 });
 
+describe("build — mission rewards as effect-DSL expressions", () => {
+  // The `mission` column is `requirements>reward`, where the reward is an
+  // effect-DSL expression that engine/src/apply-main.ts (handleAttemptMission)
+  // runs through executeEffect. Before this, the reward was a bare VP number,
+  // so a common-tier mission paying gold (#264) could not be written.
+  const fixtureRoot: string = mkdtempSync(join(tmpdir(), "cards-mission-"));
+  afterAll(() => rmSync(fixtureRoot, { recursive: true, force: true }));
+
+  const HEADER: string = "id,name,set,rarity,cost,mission,passive,edges,attributes,keywords,location_type,text,flavor\n";
+
+  function buildMission(name: string, mission: string): ReturnType<typeof buildSet> {
+    const dir: string = join(fixtureRoot, name);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "locations.csv"), HEADER + `m-${name},Mission,m-set,common,4,${mission},,,,,,,\n`);
+    return buildSet(name, fixtureRoot);
+  }
+
+  test("builds a compound gold + vp reward, the shape common missions use", () => {
+    const { cards, errors } = buildMission("gold-vp", "knowledge_1;cunning_6>gold[2] + vp[1]");
+
+    expect(errors).toEqual([]);
+    expect(cards[0].requirements).toBe("knowledge_1;cunning_6");
+    expect(cards[0].rewards).toBe("gold[2] + vp[1]");
+  });
+
+  test("splits on the first '>' so a chained reward keeps its own '>'", () => {
+    // The DSL chains steps with ">", the same character that separates
+    // requirements from reward. Splitting on every ">" would cut the reward
+    // `draw[1] > gold[1]` in half.
+    const { cards, errors } = buildMission("chained", "units_2>draw[1] > gold[1]");
+
+    expect(errors).toEqual([]);
+    expect(cards[0].requirements).toBe("units_2");
+    expect(cards[0].rewards).toBe("draw[1] > gold[1]");
+  });
+
+  test("rejects the old bare-number reward", () => {
+    // `knowledge_2>5` was the format before rewards became DSL. It isn't valid
+    // DSL, so an unmigrated row fails loudly instead of loading as nothing.
+    const { errors } = buildMission("bare-number", "knowledge_2>5");
+
+    expect(errors.some((e) => e.field === "mission" && e.message.includes("invalid DSL"))).toBe(true);
+  });
+
+  test("rejects a verb that can't resolve during mission completion", () => {
+    // `kill` needs a target, and completion runs the reward with none. The
+    // allowlist is MISSION_REWARD_VERBS in library/build.ts.
+    const { errors } = buildMission("kill-reward", "military_1>kill(opponent + unit)");
+
+    const verbError = errors.find((e) => e.field === "mission");
+    expect(verbError?.message).toContain("kill");
+    expect(verbError?.message).toContain("only gold, vp, draw");
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Structured warnings channel (#213)
 //

@@ -2656,7 +2656,7 @@ describe("attempt_mission", () => {
   it("awards VP and replaces location on completion", () => {
     const unit1 = makeUnit({ ownerId: ACTIVE, attributes: ["Knowledge"] });
     const unit2 = makeUnit({ ownerId: ACTIVE, attributes: ["Knowledge"] });
-    const location = makeLocation({ ownerId: OTHER, requirements: "knowledge_2", rewards: "5vp" });
+    const location = makeLocation({ ownerId: OTHER, requirements: "knowledge_2", rewards: "vp[5]" });
     const replacement = makeLocation({ ownerId: ACTIVE });
     const state = gameWith((d) => {
       d.grid[0][0].location = location;
@@ -2687,9 +2687,35 @@ describe("attempt_mission", () => {
     expect(events.some((e) => e.type === "location_placed")).toBe(true);
   });
 
+  it("runs a compound gold + vp reward through the effect DSL", () => {
+    // Common-tier missions (#264) pay gold plus a little VP, e.g.
+    // `gold[2] + vp[1]`. The whole expression resolves for the completing
+    // player, and mission_completed reports only the VP part of it.
+    const unit = makeUnit({ ownerId: ACTIVE, attributes: ["Knowledge"] });
+    const location = makeLocation({ ownerId: OTHER, requirements: "knowledge_1", rewards: "gold[2] + vp[1]" });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = location;
+      d.grid[0][0].units.push(unit);
+    });
+    const goldBefore: number = state.players[ACTIVE_IDX].gold;
+
+    const { state: next, events } = applyAction(state, {
+      type: "attempt_mission",
+      playerId: ACTIVE,
+      row: 0,
+      col: 0,
+    });
+    const p = (next as MainGameState).players[ACTIVE_IDX];
+
+    expect(p.vp).toBe(1);
+    expect(p.gold).toBe(goldBefore + 2);
+    expect(events.find((e) => e.type === "mission_completed")).toMatchObject({ vp: 1 });
+    expect(events.some((e) => e.type === "gold_changed" && e.amount === 2)).toBe(true);
+  });
+
   it("fails gracefully when requirements not met", () => {
     const unit = makeUnit({ ownerId: ACTIVE, attributes: ["Military"] });
-    const location = makeLocation({ ownerId: OTHER, requirements: "knowledge_2", rewards: "5vp" });
+    const location = makeLocation({ ownerId: OTHER, requirements: "knowledge_2", rewards: "vp[5]" });
     const state = gameWith((d) => {
       d.grid[0][0].location = location;
       d.grid[0][0].units.push(unit);
@@ -2715,7 +2741,7 @@ describe("attempt_mission", () => {
   });
 
   it("rejects when no friendly units at location", () => {
-    const location = makeLocation({ ownerId: OTHER, requirements: "knowledge_2", rewards: "5vp" });
+    const location = makeLocation({ ownerId: OTHER, requirements: "knowledge_2", rewards: "vp[5]" });
     const state = gameWith((d) => {
       d.grid[0][0].location = location;
     });

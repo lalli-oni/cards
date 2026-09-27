@@ -3,7 +3,7 @@ import { castDraft, current, produce } from "immer";
 import { fromState, uniformIntDistribution } from "./rng";
 import { parseCost, spendAP, spendGold } from "./cost-helpers";
 import { drawLocationFromProspect, drawMarketCard, drawOneCard } from "./deck-helpers";
-import { checkMissionRequirements, parseRequirements, parseRewards } from "./mission-helpers";
+import { checkMissionRequirements, parseRequirements } from "./mission-helpers";
 import { findItemPosition, findUnitPosition, getUnitsAtPosition, hasControllingUnitAt, samePosition } from "./position-helpers";
 import { itemController } from "./item-helpers";
 import {
@@ -1401,7 +1401,6 @@ function handleAttemptMission(
   spendAP(draft, 1);
 
   const requirements = parseRequirements(cell.location.requirements);
-  const { vp } = parseRewards(cell.location.rewards);
 
   if (!checkMissionRequirements(requirements, friendlyUnits, draft as MainGameState, queries, { row, col })) {
     emit({
@@ -1417,10 +1416,26 @@ function handleAttemptMission(
   }
 
   const player = getPlayerById(draft, playerId);
-  const locationId = cell.location.id;
+  const location = cell.location;
+  const locationId = location.id;
+  const rewards: string = cell.location.rewards;
 
-  // Award VP
-  player.vp += vp;
+  // The reward resolves before the units and location leave the grid, so an
+  // effect sees the board as it stood at completion.
+  const vpBefore: number = player.vp;
+  const rng: RandomGenerator = fromState(draft.rngState);
+  const result = executeEffect(rewards, {
+    draft, playerId, emit,
+    events, queries,
+    rng,
+    actingCardSource: {
+      type: "location",
+      cardId: location.id,
+      definitionId: location.definitionId,
+    },
+  });
+  draft.rngState = extractRngState(result.rng) as number[];
+  const vp: number = player.vp - vpBefore;
 
   // All units at location → completing player's discard (regardless of owner)
   for (const u of cell.units) {

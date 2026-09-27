@@ -37,6 +37,10 @@ const RARITIES = ["common", "rare", "legendary"] as const;
 const EVENT_TIMINGS = ["instant", "passive", "trap"] as const;
 /** Compass tokens a location's `edges` column may name as blocked. */
 const EDGE_NAMES = ["N", "E", "S", "W"] as const;
+/** Verbs a mission reward may use. Completion runs the reward with no target
+ *  and carries on discarding afterwards, so a verb that needs a target or
+ *  suspends for a prompt (`peek`/`pick`) would no-op or strand the completion. */
+const MISSION_REWARD_VERBS: ReadonlySet<string> = new Set(["gold", "vp", "draw"]);
 
 /** CSV directory name -> the engine's card-type discriminant (`units` ->
  *  `unit`). The transform derives `base.type` the same way; naming it once
@@ -289,11 +293,12 @@ export function transformCard(
       base.requirements = null;
       base.rewards = null;
       if (raw.mission) {
-        const parts = raw.mission.split(">");
-        if (parts.length !== 2) throw new Error(`${raw.id}: mission "${raw.mission}" must have exactly one ">"`);
-        if (!/^\d+$/.test(parts[1].trim())) throw new Error(`${raw.id}: mission reward must be a number, got "${parts[1]}"`);
-        base.requirements = splitList(parts[0]).join(";");
-        base.rewards = `${parts[1].trim()}vp`;
+        // Split on the first ">" only: the reward is a DSL expression, which
+        // uses ">" itself to chain steps. Requirements never contain one.
+        const sep = raw.mission.indexOf(">");
+        if (sep < 0) throw new Error(`${raw.id}: mission "${raw.mission}" must be requirements>reward`);
+        base.requirements = splitList(raw.mission.slice(0, sep)).join(";");
+        base.rewards = raw.mission.slice(sep + 1).trim();
       }
       base.passive = raw.passive || null;
       // Blocked edges as authored (`N;S`); the loader turns this into the
@@ -498,6 +503,20 @@ export function validate(
         const msg = (e instanceof DSLParseError || e instanceof DSLValidationError) ? e.message : String(e);
         errors.push(err("actions", `invalid DSL in action "${action.name}": ${msg}`));
       }
+    }
+  }
+  if (typeof card.rewards === "string") {
+    try {
+      const unsafe: string[] = parseDSL(card.rewards)
+        .flat()
+        .map((step) => step.primitive.verb)
+        .filter((verb) => !MISSION_REWARD_VERBS.has(verb));
+      if (unsafe.length > 0) {
+        errors.push(err("mission", `mission reward uses ${unsafe.join(", ")} — only ${[...MISSION_REWARD_VERBS].join(", ")} are allowed`));
+      }
+    } catch (e) {
+      const msg = (e instanceof DSLParseError || e instanceof DSLValidationError) ? e.message : String(e);
+      errors.push(err("mission", `invalid DSL in mission reward: ${msg}`));
     }
   }
   if (card.timing === "instant" && card.effect) {

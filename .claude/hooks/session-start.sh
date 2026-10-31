@@ -42,11 +42,13 @@ if ! command -v gh &>/dev/null; then
 fi
 
 ###############################################################################
-# Nushell — used by /card-query and /session-query skills
+# Nushell — used by /card-query, /session-query and .claude/scripts/pm-audit.nu.
+# Version comes from .nu-version (shared with CI); the persistent bin outlives
+# sessions, so reinstall on mismatch rather than only when absent.
 ###############################################################################
-if ! command -v nu &>/dev/null; then
-  echo "Installing Nushell..."
-  NU_VERSION="0.103.0"
+NU_VERSION="$(tr -d '[:space:]' < "$CLAUDE_PROJECT_DIR/.nu-version")"
+if ! command -v nu &>/dev/null || [ "$(nu --version)" != "$NU_VERSION" ]; then
+  echo "Installing Nushell ${NU_VERSION}..."
   NU_ARCH="$(uname -m)"
   case "$NU_ARCH" in
     x86_64)  NU_ARCH="x86_64" ;;

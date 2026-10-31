@@ -1457,7 +1457,7 @@ function handleAttemptMission(
   cell.items = [];
 
   // Completed mission location → removed from game (not discard, to avoid reshuffle)
-  // TODO(#59): move to scoring area when HQ is on grid
+  // TODO(#301): move to a scoring area once the engine has one
   player.removedFromGame.push(cell.location);
   cell.location = null;
 

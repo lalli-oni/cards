@@ -10,14 +10,17 @@
 # Rules are pure functions over fetched records (see `fetch-*`), so tests feed
 # them fixtures: `nu .claude/scripts/pm-audit.test.nu`.
 
-# Keep in sync with CLAUDE.md "Guard the cross-area hot files" (schema.md is
-# hot in practice: every column change edits it alongside build.ts).
+# Keep in sync with CLAUDE.md "Guard the cross-area hot files".
 export const HOT_FILES = [
   "library/build.ts"
   "engine/src/keywords.ts"
   "engine/src/types.ts"
-  "library/schema.md"
 ]
+
+# An issue body containing `<!-- pm-audit:ack <rule-id> -->` silences that rule
+# for that issue — for findings that were judged and deliberately left standing,
+# which would otherwise reappear on every run.
+const ACK_PATTERN = 'pm-audit:ack\s+(?<rule>[a-z-]+)'
 
 export const AREA_LABELS = [engine client rules visuals tooling cards]
 
@@ -28,12 +31,12 @@ export const RULES = [
   {
     id: open-issue-merged-pr
     title: "Open issue whose PR merged"
-    instruction: "A PR for this issue merged but the issue is still open. Read the full thread, verify each scope item against the repo, then close it — or make the remaining scope explicit in the body (or split it out). Never close over an untracked leftover."
+    instruction: "A PR for this issue merged but the issue is still open. Read the full thread, verify each scope item against the repo, then close it — or make the remaining scope explicit in the body (or split it out). Never close over an untracked leftover. If it stays open deliberately, add `<!-- pm-audit:ack open-issue-merged-pr -->` to the body."
   }
   {
     id: open-issue-abandoned-pr
     title: "Open issue whose only PRs were closed unmerged"
-    instruction: "The last implementation attempt was abandoned. Check the branch for salvageable work, record on the issue why the attempt stopped, and make sure the branch is deleted so the next attempt doesn't look like duplicate work."
+    instruction: "The last implementation attempt was abandoned. Check the branch for salvageable work, record on the issue why the attempt stopped, and make sure the branch is deleted so the next attempt doesn't look like duplicate work. Once recorded, add `<!-- pm-audit:ack open-issue-abandoned-pr -->` to the body."
   }
   {
     id: duplicate-open-prs
@@ -220,7 +223,7 @@ export def rule-closed-untracked-leftovers [issues: list<record>, now: datetime,
         $i.body | lines | where {|l| ($l =~ '^\s*[-*] \[ \]') and ($l !~ '#\d+') } | each {|l| $l | str trim }
       )
       if ($leftovers | is-not-empty) {
-        let first: string = ($leftovers | first | str substring 0..80)
+        let first: string = ($leftovers | first | str substring --grapheme-clusters 0..79)
         finding closed-untracked-leftovers (issue-ref $i.number) $"($i.title) — ($leftovers | length) item\(s\), e.g. `($first)`"
       }
     }
@@ -266,6 +269,16 @@ export def run-rules [data: record, now: datetime, stale_days: int, closed_days:
     (rule-merged-remote-branch $data.branches $data.prs)
   ]
   | flatten
+  | drop-acked $data.issues
+}
+
+export def drop-acked [issues: list<record>]: list<record> -> list<record> {
+  let acks: list<string> = (
+    $issues
+    | each {|i| $i.body | default "" | parse --regex $ACK_PATTERN | get rule | each {|r| $"#($i.number) ($r)" } }
+    | flatten
+  )
+  $in | where {|f| $"($f.ref) ($f.rule)" not-in $acks }
 }
 
 export def render-markdown [findings: list<record>, notes: list<string>]: nothing -> string {

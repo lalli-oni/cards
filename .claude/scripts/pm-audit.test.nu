@@ -179,6 +179,37 @@ def "test merged branches by ancestry or squash head, open and protected kept" [
   assert equal ($found | get ref) ["design/all-card-types" "library/alpha-1-cards"]
 }
 
+# --- acknowledgements -----------------------------------------------------------
+
+# An issue deliberately left open after a partial merge (remaining scope written
+# into the body) would otherwise be re-flagged on every run. The ack silences
+# only the named rule on only that issue: #2's ack names a different rule, and
+# #3 has no ack, so both stay.
+def "test ack marker silences only the named rule on that issue" [] {
+  let issues: list<record> = [
+    (issue 1 OPEN --body "Remaining scope below.\n<!-- pm-audit:ack open-issue-merged-pr -->")
+    (issue 2 OPEN --body "<!-- pm-audit:ack missing-area-label -->")
+    (issue 3 OPEN)
+  ]
+  let findings: list<record> = [
+    {rule: open-issue-merged-pr, ref: "#1", detail: ""}
+    {rule: open-issue-merged-pr, ref: "#2", detail: ""}
+    {rule: missing-area-label, ref: "#1", detail: ""}
+    {rule: open-issue-merged-pr, ref: "#3", detail: ""}
+  ]
+  let kept: list<string> = ($findings | drop-acked $issues | each {|f| $"($f.ref) ($f.rule)" })
+  assert equal $kept ["#2 open-issue-merged-pr" "#1 missing-area-label" "#3 open-issue-merged-pr"]
+}
+
+# Leftover excerpts are cut by grapheme, not byte: bodies here are full of
+# multi-byte `—` / `→`, and a byte cut produced a broken `�` in the detail.
+def "test leftover excerpt does not split multi-byte characters" [] {
+  let line: string = $"- [ ] (1..79 | each { 'a' } | str join '')— trailing"
+  let issues: list<record> = [(issue 1 CLOSED --reason COMPLETED --closed "2026-10-20T00:00:00Z" --body $line)]
+  let detail: string = (rule-closed-untracked-leftovers $issues $NOW 90 | first | get detail)
+  assert not ($detail | str contains "�")
+}
+
 # --- rendering ------------------------------------------------------------------
 
 # The instruction is the part injected into the agent's context; it must appear

@@ -48,7 +48,6 @@ const VALID_LOCATION: CardDefinition = {
   text: null,
   flavor: null,
   keywords: [],
-  mission: "control>3",
   requirements: "units_3",
   rewards: "vp[3]",
   passive: "gain_gold_1",
@@ -435,6 +434,39 @@ describe("copies", () => {
       "copies is not allowed",
     );
     expect(validateCardDefinitions([VALID_UNIT])[0].id).toBe("test-warrior");
+  });
+
+  // Mission data is re-checked at load for the same reason as the governed
+  // vocabulary above: library/build.ts is the canonical gate, but the web
+  // client's bundled all.json may come from a stale or hand-edited build.
+  // Without these checks a bad mission only shows up mid-game, as a mission
+  // getValidActions silently skips or a reward handleAttemptMission runs wrong.
+  // The reward rules themselves live in engine/src/effect-dsl/mission-reward.ts
+  // and are covered case by case in test/build.test.ts.
+  test("rejects a reward that pays someone other than the completing player", () => {
+    // execVp ignores its selector, so this would pay the completer 3 VP while
+    // the card text says the opponent gets them.
+    expect(() => validateCardDefinitions([{ ...VALID_LOCATION, rewards: "vp(opponent)[3]" }])).toThrow(
+      "must be a bare vp[N]",
+    );
+  });
+
+  test("rejects a reward in the pre-DSL format", () => {
+    // `5vp` is what rewards looked like before they became DSL expressions; a
+    // stale all.json still carrying it would otherwise throw a parse error with
+    // no card context the first time someone completed the mission.
+    expect(() => validateCardDefinitions([{ ...VALID_LOCATION, rewards: "5vp" }])).toThrow(
+      "invalid DSL in mission reward",
+    );
+  });
+
+  test("rejects mission requirements that don't parse", () => {
+    // `knowledge_2>5` is a row still in the old `requirements>N` format.
+    // getValidActions would catch the parse error, warn, and never offer the
+    // mission, so the location would quietly play as a non-mission.
+    expect(() => validateCardDefinitions([{ ...VALID_LOCATION, requirements: "knowledge_2>5" }])).toThrow(
+      "invalid mission requirements",
+    );
   });
 });
 

@@ -44,6 +44,7 @@ import type {
   GridCell,
   ItemAction,
   ItemCard,
+  LocationCard,
   MainAction,
   ModifierEntry,
   ModifierSource,
@@ -1416,15 +1417,15 @@ function handleAttemptMission(
   }
 
   const player = getPlayerById(draft, playerId);
-  const location = cell.location;
-  const locationId = location.id;
+  const location: LocationCard = cell.location;
+  const locationId: string = location.id;
   const rewards: string = cell.location.rewards;
 
-  // The reward resolves before the units and location leave the grid, so an
-  // effect sees the board as it stood at completion.
+  // Reward first (rules step 1): a `draw` that reshuffles the discard pile
+  // must not pick up the units and items this completion discards.
   const vpBefore: number = player.vp;
   const rng: RandomGenerator = fromState(draft.rngState);
-  const result = executeEffect(rewards, {
+  const result: { rng: RandomGenerator } = executeEffect(rewards, {
     draft, playerId, emit,
     events, queries,
     rng,
@@ -1435,6 +1436,7 @@ function handleAttemptMission(
     },
   });
   draft.rngState = extractRngState(result.rng) as number[];
+  // Net VP change while the reward resolved, reported on `mission_completed`.
   const vp: number = player.vp - vpBefore;
 
   // All units at location → completing player's discard (regardless of owner)

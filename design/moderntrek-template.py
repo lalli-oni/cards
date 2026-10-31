@@ -603,16 +603,32 @@ def _render_block(rect, text, i, b, cursor, body_fs=BODY_FS, hard_bottom=None,
 # Locations (square 750x750; compass edges, VP coin, mission/passive/action)
 # ---------------------------------------------------------------------------
 
+# Mission rewards are effect-DSL expressions limited to gold/vp/draw[N] steps;
+# formatted the same way as formatRewards in clients/web/src/lib/formatRequirements.ts.
+REWARD_UNITS = {"vp": " VP", "gold": "g", "draw": " card(s)"}
+REWARD_STEP = re.compile(r"\b(vp|gold|draw)\[\s*(\d+)\s*\]")
+
+
+def parse_reward(reward):
+    """(display text, VP for the header coin) for a mission's `reward` column.
+    The coin shows the summed vp[N] steps, or None when the reward pays no VP."""
+    reward = (reward or "").strip()
+    if not reward:
+        return "", None
+    text = REWARD_STEP.sub(lambda m: f"{m[2]}{REWARD_UNITS[m[1]]}", reward)
+    vp = sum(int(n) for verb, n in REWARD_STEP.findall(reward) if verb == "vp")
+    return text, (str(vp) if vp else None)
+
+
 def parse_location(row, index):
     def split(field):
         return [x.strip() for x in row.get(field, "").split(";") if x.strip()]
 
-    reqs, vp = [], None
+    reqs = []
+    reward, vp = parse_reward(row.get("reward"))
     mission = row.get("mission", "").strip()
     if mission:
-        req_part, _, vp_part = mission.partition(">")
-        vp = vp_part.strip() or None
-        for r in req_part.split(";"):
+        for r in mission.split(";"):
             r = r.strip()
             if r:
                 key, sep, n = r.rpartition("_")
@@ -639,6 +655,7 @@ def parse_location(row, index):
         "rarity": (row.get("rarity") or "common").lower(),
         "location_type": (row.get("location_type") or "").strip(),
         "reqs": reqs,
+        "reward": reward,
         "vp": vp,
         "passive": (row.get("passive") or "").strip(),
         "edges": [e.strip().upper() for e in row.get("edges", "").split(";") if e.strip()],
@@ -725,9 +742,10 @@ def _loc_rows(rect, text, card, vocab, scale=1.0):
                 text(f"Req {j}", cx, cur + 7, w, 16, label, JB, "12", "700",
                      C["text"], align="center", ls=1.2)
                 cx += w + 8
-            if card["vp"]:
-                text("Mission VP", cx + 4, cur + 8, 130, 14, f"→ {card['vp']} VP",
-                     JB, "11", "700", C["muted"], ls=1.2)
+            if card["reward"]:
+                label = f"→ {card['reward']}"
+                text("Mission Reward", cx + 4, cur + 8, int(len(label) * 11 * 0.62) + 12,
+                     14, label, JB, "11", "700", C["muted"], ls=1.2)
         rows.append((31, render_mission))
 
     if card["passive"]:

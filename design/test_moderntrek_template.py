@@ -239,6 +239,21 @@ def test_nonunit_keywords():
     # can render pills (Aura on locations, Flying/Heavy/Lightweight on items).
     loc = mt.parse_location({"id": "x", "name": "X", "keywords": "Aura:-1:all:contest"}, 0)
     check("parse_location carries keywords", loc["keywords"] == ["Aura:-1:all:contest"])
+
+    # Mission rewards live in their own `reward` column as DSL (`gold[2] + vp[1]`).
+    # The renderer used to pull VP out of `mission` as `reqs>N`; after the CSV
+    # migration that silently dropped the VP coin and "→ N VP" line from every
+    # mission card. The coin shows only the VP part; the mission row shows all of it.
+    m = mt.parse_location({"id": "m", "name": "M", "mission": "knowledge_1;cunning_6",
+                           "reward": "gold[2] + vp[1]"}, 0)
+    check("parse_location reads requirements from mission alone",
+          m["reqs"] == [("KNOWLEDGE", "×1"), ("CUNNING", "≥6")])
+    check("parse_location formats the whole reward", m["reward"] == "2g + 1 VP")
+    check("parse_location puts the VP part on the coin", m["vp"] == "1")
+    gold_only = mt.parse_location({"id": "g", "name": "G", "mission": "units_2",
+                                   "reward": "draw[1] > gold[1]"}, 0)
+    check("a reward with no VP shows no coin", gold_only["vp"] is None)
+    check("a chained reward keeps its '>'", gold_only["reward"] == "1 card(s) > 1g")
     item = mt.parse_item({"id": "y", "name": "Y", "keywords": "Flying;Heavy"}, 0)
     check("parse_item carries keywords", item["keywords"] == ["Flying", "Heavy"])
 
@@ -505,7 +520,8 @@ def test_overflow_containment():
             "charisma": "5", "text": giant, "passives": "Overload:" + giant2,
             "flavor": giant}),
         ("location", 750, mt.parse_location, {
-            "id": "s-l", "name": "Stress Loc", "mission": "strength_15;knowledge_2>3",
+            "id": "s-l", "name": "Stress Loc", "mission": "strength_15;knowledge_2",
+            "reward": "gold[2] + draw[1] + vp[3]",
             "passive": giant, "actions": "survey:2:scout", "text": giant2}),
         ("item", 1050, mt.parse_item, {
             "id": "s-i", "name": "Stress Item", "type": "WEAPON", "equip": giant,

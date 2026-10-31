@@ -11,7 +11,8 @@
 
 import { readdirSync, readFileSync, mkdirSync, writeFileSync, existsSync } from "fs";
 import { join } from "path";
-import { parse as parseDSL, DSLParseError, DSLValidationError } from "../engine/src/effect-dsl";
+import { parse as parseDSL, DSLParseError, DSLValidationError, missionRewardErrors } from "../engine/src/effect-dsl";
+import { parseRequirements } from "../engine/src/mission-helpers";
 import { ATTRIBUTES } from "../engine/src/attributes";
 import { KEYWORD_SPECS, KeywordError, parseKeyword } from "../engine/src/keywords";
 import type { CardType as EngineCardType } from "../engine/src/types";
@@ -37,10 +38,6 @@ const RARITIES = ["common", "rare", "legendary"] as const;
 const EVENT_TIMINGS = ["instant", "passive", "trap"] as const;
 /** Compass tokens a location's `edges` column may name as blocked. */
 const EDGE_NAMES = ["N", "E", "S", "W"] as const;
-/** Verbs a mission reward may use. Completion runs the reward with no target
- *  and carries on discarding afterwards, so a verb that needs a target or
- *  suspends for a prompt (`peek`/`pick`) would no-op or strand the completion. */
-const MISSION_REWARD_VERBS: ReadonlySet<string> = new Set(["gold", "vp", "draw"]);
 
 /** CSV directory name -> the engine's card-type discriminant (`units` ->
  *  `unit`). The transform derives `base.type` the same way; naming it once
@@ -502,18 +499,18 @@ export function validate(
   if (type === "locations" && Boolean(card.requirements) !== Boolean(card.rewards)) {
     errors.push(err(card.requirements ? "reward" : "mission", "a mission needs both requirements (`mission`) and a `reward`"));
   }
-  if (typeof card.rewards === "string") {
+  if (typeof card.requirements === "string") {
     try {
-      const unsafe: string[] = parseDSL(card.rewards)
-        .flat()
-        .map((step) => step.primitive.verb)
-        .filter((verb) => !MISSION_REWARD_VERBS.has(verb));
-      if (unsafe.length > 0) {
-        errors.push(err("reward", `mission reward uses ${unsafe.join(", ")} — only ${[...MISSION_REWARD_VERBS].join(", ")} are allowed`));
-      }
+      parseRequirements(card.requirements);
     } catch (e) {
-      const msg = (e instanceof DSLParseError || e instanceof DSLValidationError) ? e.message : String(e);
-      errors.push(err("reward", `invalid DSL in mission reward: ${msg}`));
+      // A leftover `>` means a row still in the pre-`reward`-column format.
+      const hint: string = card.requirements.includes(">") ? " (the reward now goes in the `reward` column)" : "";
+      errors.push(err("mission", `invalid mission requirements${hint}: ${e instanceof Error ? e.message : String(e)}`));
+    }
+  }
+  if (typeof card.rewards === "string") {
+    for (const message of missionRewardErrors(card.rewards)) {
+      errors.push(err("reward", message));
     }
   }
   if (card.timing === "instant" && card.effect) {

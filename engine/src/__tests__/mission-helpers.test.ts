@@ -284,18 +284,15 @@ describe("library validation", () => {
     const csv = readFileSync(csvPath, "utf-8");
     const lines = csv.trim().split("\n");
     const header = lines[0].split(",");
-    // Support both old "mission" and new "requirements" column
-    let reqIdx = header.indexOf("requirements");
-    if (reqIdx === -1) reqIdx = header.indexOf("mission");
+    // Read as authored, so a leftover `requirements>N` cell fails to parse here.
+    const reqIdx: number = header.indexOf("mission");
 
     const requirements: string[] = [];
     for (let i = 1; i < lines.length; i++) {
       const cols = lines[i].split(",");
       const req = cols[reqIdx];
       if (req && req.trim()) {
-        // Strip VP suffix if using old format (requirements>vp)
-        const clean = req.includes(">") ? req.split(">")[0] : req;
-        requirements.push(clean.trim());
+        requirements.push(req.trim());
       }
     }
 

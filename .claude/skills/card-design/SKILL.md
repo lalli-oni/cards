@@ -128,7 +128,7 @@ Delimiter rules (from `library/schema.md`):
 - `;` separates list items (attributes, keywords, actions)
 - `|` separates alternative costs
 - `:` separates action components (name:ap_cost:effect)
-- `>` separates mission requirements from VP reward
+- A mission location puts its requirements in `mission` (`;`-separated) and its reward in the separate `reward` column, as an effect-DSL expression limited to `gold`, `vp` and `draw` (e.g. `vp[5]`, `gold[2] + vp[1]`). There, `>` chains reward steps; it no longer separates requirements from reward. See `library/schema.md` → Locations.
 
 ### Step 4: Build and validate
 

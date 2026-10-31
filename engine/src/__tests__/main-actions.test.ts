@@ -2656,7 +2656,7 @@ describe("attempt_mission", () => {
   it("awards VP and replaces location on completion", () => {
     const unit1 = makeUnit({ ownerId: ACTIVE, attributes: ["Knowledge"] });
     const unit2 = makeUnit({ ownerId: ACTIVE, attributes: ["Knowledge"] });
-    const location = makeLocation({ ownerId: OTHER, requirements: "knowledge_2", rewards: "5vp" });
+    const location = makeLocation({ ownerId: OTHER, requirements: "knowledge_2", rewards: "vp[5]" });
     const replacement = makeLocation({ ownerId: ACTIVE });
     const state = gameWith((d) => {
       d.grid[0][0].location = location;
@@ -2687,9 +2687,93 @@ describe("attempt_mission", () => {
     expect(events.some((e) => e.type === "location_placed")).toBe(true);
   });
 
+  it("runs a compound gold + vp reward through the effect DSL", () => {
+    // Common-tier missions pay gold plus a little VP, e.g. `gold[2] + vp[1]`.
+    // The whole expression resolves for the completing player, and
+    // mission_completed reports only the VP part of it.
+    //
+    // The player starts at 7 VP so the event's `vp` is pinned as the VP the
+    // reward *gave* (apply-main.ts measures player.vp before and after). From
+    // 0 VP, `{ vp: 1 }` would also pass if the event reported the running
+    // total, which is what the web event log would then print as "for 8 VP".
+    const unit = makeUnit({ ownerId: ACTIVE, attributes: ["Knowledge"] });
+    const location = makeLocation({ ownerId: OTHER, requirements: "knowledge_1", rewards: "gold[2] + vp[1]" });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = location;
+      d.grid[0][0].units.push(unit);
+      d.players[ACTIVE_IDX].vp = 7;
+    });
+    const goldBefore: number = state.players[ACTIVE_IDX].gold;
+
+    const { state: next, events } = applyAction(state, {
+      type: "attempt_mission",
+      playerId: ACTIVE,
+      row: 0,
+      col: 0,
+    });
+    const p = (next as MainGameState).players[ACTIVE_IDX];
+
+    expect(p.vp).toBe(8);
+    expect(p.gold).toBe(goldBefore + 2);
+    expect(events.find((e) => e.type === "mission_completed")).toMatchObject({ vp: 1 });
+    expect(events.some((e) => e.type === "gold_changed" && e.amount === 2)).toBe(true);
+  });
+
+  it("reports 0 VP on mission_completed for a reward with no VP in it", () => {
+    // Rewards don't have to include VP (`gold[3]` is a valid reward). The event
+    // still fires, and its `vp` is the 0 the reward gave, not the player's total.
+    const unit = makeUnit({ ownerId: ACTIVE, attributes: ["Knowledge"] });
+    const location = makeLocation({ ownerId: OTHER, requirements: "knowledge_1", rewards: "gold[3]" });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = location;
+      d.grid[0][0].units.push(unit);
+      d.players[ACTIVE_IDX].vp = 4;
+    });
+
+    const { state: next, events } = applyAction(state, { type: "attempt_mission", playerId: ACTIVE, row: 0, col: 0 });
+
+    expect((next as MainGameState).players[ACTIVE_IDX].vp).toBe(4);
+    expect(events.find((e) => e.type === "mission_completed")).toMatchObject({ vp: 0 });
+  });
+
+  it("resolves a draw reward before the completing units are discarded", () => {
+    // `draw` is the one reward verb that touches the RNG: with an empty main
+    // deck, drawOneCard reshuffles the discard pile, and handleAttemptMission
+    // must write the reshuffled rngState back from executeEffect's result.
+    //
+    // It also pins the completion order (rules/README.md, Upon completion step
+    // 1): the reward resolves while the mission's own units are still on the
+    // grid, so the reshuffle only sees the two cards already in the discard
+    // pile. If the units were discarded first, they could be drawn straight
+    // back into hand.
+    const missionUnit = makeUnit({ ownerId: ACTIVE, attributes: ["Knowledge"] });
+    const discarded1 = makeUnit({ ownerId: ACTIVE });
+    const discarded2 = makeUnit({ ownerId: ACTIVE });
+    const location = makeLocation({ ownerId: OTHER, requirements: "knowledge_1", rewards: "draw[2]" });
+    const state = gameWith((d) => {
+      d.grid[0][0].location = location;
+      d.grid[0][0].units.push(missionUnit);
+      d.players[ACTIVE_IDX].mainDeck = [];
+      d.players[ACTIVE_IDX].hand = [];
+      d.players[ACTIVE_IDX].discardPile = [discarded1, discarded2];
+    });
+
+    const { state: next, events } = applyAction(state, { type: "attempt_mission", playerId: ACTIVE, row: 0, col: 0 });
+    const ns = next as MainGameState;
+    const p = ns.players[ACTIVE_IDX];
+
+    expect(p.hand.map((c) => c.id).sort()).toEqual([discarded1.id, discarded2.id].sort());
+    expect(p.discardPile.map((c) => c.id)).toEqual([missionUnit.id]);
+    expect(events.some((e) => e.type === "deck_shuffled")).toBe(true);
+    expect(ns.rngState).not.toEqual(state.rngState);
+    expect(events.find((e) => e.type === "mission_completed")).toMatchObject({ vp: 0 });
+  });
+
   it("fails gracefully when requirements not met", () => {
+    // A compound reward, so a failed attempt is shown to pay none of it: no
+    // VP, no gold, no cards.
     const unit = makeUnit({ ownerId: ACTIVE, attributes: ["Military"] });
-    const location = makeLocation({ ownerId: OTHER, requirements: "knowledge_2", rewards: "5vp" });
+    const location = makeLocation({ ownerId: OTHER, requirements: "knowledge_2", rewards: "gold[2] + draw[1] + vp[5]" });
     const state = gameWith((d) => {
       d.grid[0][0].location = location;
       d.grid[0][0].units.push(unit);
@@ -2703,8 +2787,10 @@ describe("attempt_mission", () => {
     });
     const ns = next as MainGameState;
 
-    // No VP, emits mission_attempt_failed
+    // No reward of any kind, emits mission_attempt_failed
     expect(ns.players[ACTIVE_IDX].vp).toBe(0);
+    expect(ns.players[ACTIVE_IDX].gold).toBe(state.players[ACTIVE_IDX].gold);
+    expect(ns.players[ACTIVE_IDX].hand).toHaveLength(state.players[ACTIVE_IDX].hand.length);
     expect(events.some((e) => e.type === "mission_completed")).toBe(false);
     expect(events.some((e) => e.type === "mission_attempt_failed")).toBe(true);
     // Units and location stay
@@ -2715,7 +2801,7 @@ describe("attempt_mission", () => {
   });
 
   it("rejects when no friendly units at location", () => {
-    const location = makeLocation({ ownerId: OTHER, requirements: "knowledge_2", rewards: "5vp" });
+    const location = makeLocation({ ownerId: OTHER, requirements: "knowledge_2", rewards: "vp[5]" });
     const state = gameWith((d) => {
       d.grid[0][0].location = location;
     });

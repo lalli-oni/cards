@@ -11,7 +11,8 @@
 
 import { readdirSync, readFileSync, mkdirSync, writeFileSync, existsSync } from "fs";
 import { join } from "path";
-import { parse as parseDSL, DSLParseError, DSLValidationError } from "../engine/src/effect-dsl";
+import { parse as parseDSL, DSLParseError, DSLValidationError, missionRewardErrors } from "../engine/src/effect-dsl";
+import { parseRequirements } from "../engine/src/mission-helpers";
 import { ATTRIBUTES } from "../engine/src/attributes";
 import { KEYWORD_SPECS, KeywordError, parseKeyword } from "../engine/src/keywords";
 import type { CardType as EngineCardType } from "../engine/src/types";
@@ -76,7 +77,7 @@ const READ_COLUMNS: Record<CardType, string[]> = {
   // `actions` is deliberately absent: the one authored location action
   // (`rotate:0:rotate_location`) is not expressible in the effect DSL, so the
   // build reports the column as dropped rather than inventing a rule for it.
-  locations: [...SHARED_COLUMNS, "mission", "passive", "edges", "location_type"],
+  locations: [...SHARED_COLUMNS, "mission", "reward", "passive", "edges", "location_type"],
   items: [...SHARED_COLUMNS, "equip", "stored", "type", "actions"],
   events: [...SHARED_COLUMNS, "timing", "duration", "trigger", "effect", "event_type", "resolution"],
   policies: [...SHARED_COLUMNS, "effect", "seeding_effect", "actions"],
@@ -286,15 +287,10 @@ export function transformCard(
       break;
 
     case "locations":
-      base.requirements = null;
-      base.rewards = null;
-      if (raw.mission) {
-        const parts = raw.mission.split(">");
-        if (parts.length !== 2) throw new Error(`${raw.id}: mission "${raw.mission}" must have exactly one ">"`);
-        if (!/^\d+$/.test(parts[1].trim())) throw new Error(`${raw.id}: mission reward must be a number, got "${parts[1]}"`);
-        base.requirements = splitList(parts[0]).join(";");
-        base.rewards = `${parts[1].trim()}vp`;
-      }
+      // CSV `mission` holds the requirements, `reward` the DSL expression;
+      // `validate` checks they're authored together.
+      base.requirements = raw.mission ? splitList(raw.mission).join(";") : null;
+      base.rewards = raw.reward?.trim() || null;
       base.passive = raw.passive || null;
       // Blocked edges as authored (`N;S`); the loader turns this into the
       // engine's open/closed booleans. Carried as the CSV's own list so the
@@ -498,6 +494,23 @@ export function validate(
         const msg = (e instanceof DSLParseError || e instanceof DSLValidationError) ? e.message : String(e);
         errors.push(err("actions", `invalid DSL in action "${action.name}": ${msg}`));
       }
+    }
+  }
+  if (type === "locations" && Boolean(card.requirements) !== Boolean(card.rewards)) {
+    errors.push(err(card.requirements ? "reward" : "mission", "a mission needs both requirements (`mission`) and a `reward`"));
+  }
+  if (typeof card.requirements === "string") {
+    try {
+      parseRequirements(card.requirements);
+    } catch (e) {
+      // A leftover `>` means a row still in the pre-`reward`-column format.
+      const hint: string = card.requirements.includes(">") ? " (the reward now goes in the `reward` column)" : "";
+      errors.push(err("mission", `invalid mission requirements${hint}: ${e instanceof Error ? e.message : String(e)}`));
+    }
+  }
+  if (typeof card.rewards === "string") {
+    for (const message of missionRewardErrors(card.rewards)) {
+      errors.push(err("reward", message));
     }
   }
   if (card.timing === "instant" && card.effect) {

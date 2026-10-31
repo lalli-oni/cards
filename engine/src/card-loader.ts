@@ -17,6 +17,8 @@ import type {
   UnitCard,
 } from "./types";
 import { ATTRIBUTES, type Attribute } from "./attributes";
+import { missionRewardErrors } from "./effect-dsl";
+import { parseRequirements } from "./mission-helpers";
 import {
   LOCATION_TYPES,
   EVENT_TYPES,
@@ -180,6 +182,21 @@ function validateDefinition(
     !LOCATION_TYPES.includes(def.locationType as LocationType)
   ) {
     errors.push({ cardId, message: `invalid location_type: ${def.locationType}` });
+  }
+  // Without these, a bad mission only surfaces mid-game: unparseable
+  // requirements make `getValidActions` skip the mission with a warning, and an
+  // unsafe reward runs wrong (or throws) on completion.
+  if (def.type === "location" && typeof def.requirements === "string") {
+    try {
+      parseRequirements(def.requirements);
+    } catch (e) {
+      errors.push({ cardId, message: `invalid mission requirements: ${e instanceof Error ? e.message : String(e)}` });
+    }
+  }
+  if (def.type === "location" && typeof def.rewards === "string") {
+    for (const message of missionRewardErrors(def.rewards)) {
+      errors.push({ cardId, message });
+    }
   }
   if (
     def.type === "event" &&

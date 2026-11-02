@@ -159,17 +159,6 @@ export const LOCATION_EFFECTS: Record<string, LocationEffectFactory> = {
     } satisfies StatModifierListener],
   }),
 
-  "the-great-wall": (_loc, _controllerId, row, col) => ({
-    listeners: [],
-    queries: [{
-      source: { type: "location", cardId: _loc.id, definitionId: "the-great-wall", controllerId: _controllerId, position: { row, col } },
-      query: "stat",
-      modify: (_state, ctx) =>
-        ctx.stat === "strength" && ctx.contest?.role === "defender"
-        && ctx.contest.row === row && ctx.contest.col === col ? 1 : 0,
-    } satisfies StatModifierListener],
-  }),
-
   "the-bazaar": (_loc, _controllerId, row, col) => ({
     listeners: [],
     queries: [{
@@ -182,16 +171,6 @@ export const LOCATION_EFFECTS: Record<string, LocationEffectFactory> = {
         return cell?.units.some((u) => u.controllerId === ctx.playerId) ? -1 : 0;
       },
     } satisfies CostModifierListener],
-  }),
-
-  "machu-picchu": (_loc, _controllerId, row, col) => ({
-    listeners: [],
-    queries: [{
-      source: { type: "location", cardId: _loc.id, definitionId: "machu-picchu", controllerId: _controllerId, position: { row, col } },
-      query: "protection",
-      isProtected: (_state, ctx) =>
-        ctx.kind === "event_target" && ctx.position.row === row && ctx.position.col === col,
-    } satisfies ProtectionListener],
   }),
 
   "the-catacombs": (_loc, _controllerId, row, col) => ({

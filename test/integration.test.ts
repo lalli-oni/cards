@@ -207,7 +207,8 @@ describe("determinism", () => {
 
   it("different seeds produce different games", async () => {
     const c1 = await runFullGame({ seed: DET_SEED });
-    const c2 = await runFullGame({ seed: "seed-7" });
+    // Rotated seed-7 → seed-8 after #264 re-authored the location pool (old seed now ties 0–0 forever; see #246).
+    const c2 = await runFullGame({ seed: "seed-8" });
 
     const s1 = c1.getState() as EndedGameState;
     const s2 = c2.getState() as EndedGameState;
@@ -318,7 +319,8 @@ describe("real card data", () => {
   });
 
   it("real cards survive the full seeding pipeline", async () => {
-    const controller = await runFullGame({ seed: "seed-3" });
+    // Rotated seed-3 → seed-1 after #264 re-authored the location pool (old seed now ties 0–0 forever; see #246).
+    const controller = await runFullGame({ seed: "seed-1" });
     const state = controller.getState() as EndedGameState;
 
     // Players should have cards distributed across zones
@@ -356,7 +358,10 @@ describe("pre-built game flow", () => {
     const defs = loadCardDefinitionsFromBuild(BUILD_DIR);
     const counter = createInstanceCounter();
 
-    const locations = defs.filter((d) => d.type === "location");
+    // Only mission locations go on the opening row: replacements are drawn only on
+    // completion or raze, so a row of no-mission locations can never produce VP and
+    // the game never ends. Picking by CSV order made this depend on row order.
+    const locations = defs.filter((d) => d.type === "location" && Boolean((d as { requirements?: unknown }).requirements));
     const policies = defs.filter((d) => d.type === "policy");
     const nonLocationNonPolicy = defs.filter(
       (d) => d.type !== "location" && d.type !== "policy",

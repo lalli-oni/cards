@@ -942,15 +942,21 @@ describe("stat modifier queries", () => {
       { contest: { role: "defender", row: 0, col: 0 } })).toBe(5);
   });
 
-  it("Great Wall: +1 str defender only", () => {
+  it("Great Wall: +2 str to defenders only, from its CSV Aura keyword (#122)", () => {
+    const defs = loadCardDefinitions(join(import.meta.dir, "../../../library/build/alpha-1.json"));
+    const wall = defs.find((d) => d.id === "the-great-wall") as
+      { keywords?: string[]; edges?: string[]; requirements?: string | null } | undefined;
+    expect(wall?.keywords).toEqual(["Aura:+2:strength:contest:def"]);
+    expect(wall?.edges).toEqual(["N", "S"]);
+    expect(wall?.requirements ?? null).toBeNull(); // non-mission
     const state = gameWith((d, p) => {
-      d.grid[0][0].location = makeLocation({ ownerId: p.active, definitionId: "the-great-wall" });
+      d.grid[0][0].location = makeLocation({ ownerId: p.active, definitionId: "the-great-wall", keywords: wall!.keywords });
     });
     const { queries } = rebuildListeners(state);
     const unit = makeUnit({ ownerId: state.turn.activePlayerId, strength: 5 });
 
     expect(getModifiedStat(state, queries, unit, "strength", { row: 0, col: 0 },
-      { contest: { role: "defender", row: 0, col: 0 } })).toBe(6);
+      { contest: { role: "defender", row: 0, col: 0 } })).toBe(7);
     expect(getModifiedStat(state, queries, unit, "strength", { row: 0, col: 0 },
       { contest: { role: "attacker", row: 0, col: 0 } })).toBe(5);
   });
@@ -1310,18 +1316,6 @@ describe("cost modifier queries", () => {
 // ---------------------------------------------------------------------------
 
 describe("protection queries", () => {
-  it("Machu Picchu: protected from event_target", () => {
-    const state = gameWith((d, p) => {
-      d.grid[0][0].location = makeLocation({ ownerId: p.active, definitionId: "machu-picchu" });
-    });
-    const { queries } = rebuildListeners(state);
-    const unit = makeUnit({ ownerId: state.turn.activePlayerId });
-
-    expect(isUnitProtected(state, queries, unit, { row: 0, col: 0 }, "event_target")).toBe(true);
-    expect(isUnitProtected(state, queries, unit, { row: 0, col: 1 }, "event_target")).toBe(false);
-    expect(isUnitProtected(state, queries, unit, { row: 0, col: 0 }, "event_injury")).toBe(false);
-  });
-
   it("The Catacombs: protected from event_injury", () => {
     const state = gameWith((d, p) => {
       d.grid[0][0].location = makeLocation({ ownerId: p.active, definitionId: "the-catacombs" });

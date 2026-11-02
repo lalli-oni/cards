@@ -58,7 +58,7 @@ A unit's freeform `text` remains the reminder prose for its single `action`
 | reward       | string | no       | Mission reward, an effect-DSL expression whose steps are each a bare `gold[N]`, `vp[N]` or `draw[N]` with N ≥ 1 (e.g. `vp[5]`, `gold[2] + vp[1]`) — no selectors or `:` branches, since the reward always goes to the completing player. Required when `mission` is set, and only allowed with it. Loaded onto the card as `rewards`. |
 | passive      | string | no       | Passive effect text |
 | edges   | string | no       | Blocked edges, semicolon-separated (`N`, `S`, `E`, `W`). Unlisted edges are open. Empty = all open. The loader inverts this into the engine's per-edge open/closed booleans. |
-| actions | string | no       | Semicolon-separated action definitions. Format: `name:ap_cost:effect`. Usable by any player with a unit at this location. **Not built today** — the only authored value isn't expressible in the effect DSL, so the build reports the column as dropped rather than inventing a rule for it. |
+| actions | string | no       | Semicolon-separated action definitions. Format: `name:ap_cost:effect`. Usable by any player with a unit at this location. **Not built today** — no location carries an action, so alpha-1's `locations.csv` omits the column (the build would warn it is dropped). Wiring it means adding `actions` to the `locations` entry of `READ_COLUMNS` in `library/build.ts`. |
 | location_type | enum | no      | Per-type category (single value). See [Governed vocabularies](#governed-vocabularies). Loaded as `locationType` in the engine (camelCase). |
 
 ## Items

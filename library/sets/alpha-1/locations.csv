@@ -1,17 +1,25 @@
-id,name,set,rarity,cost,mission,reward,passive,edges,actions,attributes,keywords,location_type,text,flavor
-the-great-library,The Great Library,alpha-1,rare,0,knowledge_2,vp[5],Your units here get +1 cunning.,,,,,Archive,Have 2 units with the Knowledge attribute here to complete.,Knowledge is the only treasure that multiplies when shared.
-the-colosseum,The Colosseum,alpha-1,rare,0,military_1;strength_15,vp[4],,,,,Aura:+1:strength:contest,Arena,Have Military units with combined strength of 15+ here to complete.,The sand remembers every name.
-the-silk-road,The Silk Road,alpha-1,rare,0,military_1;diplomacy_1;knowledge_1,vp[3],Units here generate 1 gold at start of your turn.,,,Commerce,,,Have 3 units with different attributes here to complete.,A thread that stitched the world together.
-the-agora,The Agora,alpha-1,rare,0,diplomacy_1;charisma_12,vp[3],,,,,,Market,Have Diplomacy units with combined charisma 12+ here.,Where words were worth more than swords.
-machu-picchu,Machu Picchu,alpha-1,rare,0,units_3,vp[5],Units entering here cannot be targeted by events until your next turn.,,,,,Sanctuary,Have 3 units here to complete.,Hidden above the clouds.
-the-forge,The Forge,alpha-1,common,0,,,Units here get +1 strength.,,,,,Workshop,No mission. +1 strength to all units here.,The anvil sings when struck.
-alexandria-harbor,Alexandria Harbor,alpha-1,rare,0,knowledge_1;diplomacy_1,vp[3],You may look at the top card of your main deck at any time.,,,,,Port,Have 1 Knowledge and 1 Diplomacy unit here.,Where knowledge met commerce.
-the-bazaar,The Bazaar,alpha-1,common,0,,,Players with a unit here pay 1 less gold on Buy actions (minimum 1).,,,Commerce,,,No mission. Reduced Buy costs.,Everything has a price — just not always gold.
-the-great-wall,The Great Wall,alpha-1,rare,0,military_3,vp[6],,N;S,rotate:0:rotate_location,,,Fortification,Have 3 Military units here to complete. A unit here may rotate this location for 0 AP.,They could not go over it.
-versailles,Versailles,alpha-1,rare,0,politics_1;charisma_20,vp[7],Your Politics units here get +1 charisma.,,,,,Palace,Have Politics units with combined charisma 20+ here.,Excess as a form of government.
-the-pyramids,The Pyramids,alpha-1,legendary,0,units_5,vp[8],,,,,,Monument,Have 5 units here to complete.,Built to outlast memory itself.
-sherwood-forest,Sherwood Forest,alpha-1,rare,0,cunning_7,vp[3],Units here with 7+ cunning cannot be targeted by strength contests.,,,,,Hideout,Have a unit with 7+ cunning here.,The trees keep secrets.
-the-arena,The Arena,alpha-1,common,0,,,Strength contests here get +1 bonus for the attacker.,,,,,Arena,No mission. Favors attackers.,The crowd demands blood.
-the-observatory,The Observatory,alpha-1,rare,0,knowledge_1;cunning_14,vp[4],,,,,,Research,Have Knowledge units with combined cunning 14+ here.,The stars do not lie — if you know how to read them.
-trade-port,Trade Port,alpha-1,common,0,,,Generates 1 gold at start of your turn if a Diplomacy unit is here.,,,Commerce,,,No mission. Gold income with Diplomacy unit.,Ships come and go. Gold stays.
-the-catacombs,The Catacombs,alpha-1,rare,0,spirituality_2,vp[4],Units here cannot be injured by events.,,,,Aura:-1:all:contest,Sanctuary,Have 2 Spirituality units here.,The dead protect the living.
+id,name,set,rarity,cost,mission,reward,passive,edges,attributes,keywords,location_type,text,flavor
+the-forge,The Forge,alpha-1,common,0,,,Units here get +1 strength.,,,,Workshop,No mission. +1 strength to all units here.,The anvil sings when struck.
+the-bazaar,The Bazaar,alpha-1,common,0,,,Players with a unit here pay 1 less gold on Buy actions (minimum 1).,,Commerce,,,No mission. Reduced Buy costs.,Everything has a price — just not always gold.
+trade-port,Trade Port,alpha-1,common,0,,,At the start of your turn gain 1 gold if you have a Diplomacy unit here.,,Commerce,,,No mission. Gold income with a Diplomacy unit.,Ships come and go. Gold stays.
+the-arena,The Arena,alpha-1,common,0,military_1;strength_8,gold[2] + vp[1],Strength contests here get +1 bonus for the attacker.,,,,Arena,Have a Military unit and combined strength 8+ here to complete.,The crowd demands blood.
+scriptorium,Scriptorium,alpha-1,common,0,knowledge_1;cunning_8,gold[2] + vp[1],,,,,Archive,Have a Knowledge unit and combined cunning 8+ here to complete.,Every copy is a small act of preservation.
+town-hall,Town Hall,alpha-1,common,0,politics_1;charisma_8,gold[2] + vp[1],,,,,Palace,Have a Politics unit and combined charisma 8+ here to complete.,Every empire is governed one town at a time.
+temple,Temple,alpha-1,common,0,spirituality_1;charisma_8,gold[2] + vp[1],,,,,Sanctuary,Have a Spirituality unit and combined charisma 8+ here to complete.,Offerings in. Blessings out.
+counting-house,Counting House,alpha-1,common,0,commerce_1;cunning_8,gold[2] + vp[1],,,,,Market,Have a Commerce unit and combined cunning 8+ here to complete.,Debit on the left. Credit on the right. Profit in between.
+alexandria-harbor,Alexandria Harbor,alpha-1,rare,0,knowledge_1;diplomacy_1;units_2,vp[3],You may look at the top card of your main deck at any time.,,,,Port,Have a Knowledge unit and a Diplomacy unit among 2+ units here to complete.,Where knowledge met commerce.
+the-agora,The Agora,alpha-1,rare,0,diplomacy_1;charisma_12,vp[3],,,,,Market,Have a Diplomacy unit and combined charisma 12+ here to complete.,Where words were worth more than swords.
+the-catacombs,The Catacombs,alpha-1,rare,0,spirituality_2,vp[4],Units here cannot be injured by events.,,,Aura:-1:all:contest,Sanctuary,Have 2 Spirituality units here to complete.,The dead protect the living.
+the-observatory,The Observatory,alpha-1,rare,0,knowledge_1;cunning_14,vp[4],,,,,Research,Have a Knowledge unit and combined cunning 14+ here to complete.,The stars do not lie — if you know how to read them.
+iga-province,Iga Province,alpha-1,rare,0,espionage_1;cunning_12,vp[4],,,,,Hideout,Have an Espionage unit and combined cunning 12+ here to complete.,Its mountain families learned to move unseen.
+globe-theatre,Globe Theatre,alpha-1,rare,0,culture_1;units_3,vp[4],,,,,,Have a Culture unit among 3+ units here to complete.,All the world's a stage.
+sagres,Sagres,alpha-1,rare,0,exploration_2,vp[3] + draw[1],,,,,Research,Have 2 Exploration units here to complete.,Charts drawn at the edge of the known world.
+grand-canal,Grand Canal,alpha-1,rare,0,engineering_1;strength_14,vp[4],,,,,Monument,Have an Engineering unit and combined strength 14+ here to complete.,A river dug by hand from Hangzhou to Beijing.
+venetian-arsenal,Venetian Arsenal,alpha-1,rare,0,engineering_1;military_1,gold[2] + vp[3],,,,,Workshop,Have an Engineering unit and a Military unit here to complete.,It could fit out a war galley in a single day.
+sherwood-forest,Sherwood Forest,alpha-1,rare,0,,,Units here with 7+ cunning cannot be targeted by strength contests.,,,,Hideout,No mission. Units here with 7+ cunning cannot be targeted by strength contests.,The trees keep secrets.
+the-great-library,The Great Library,alpha-1,legendary,0,knowledge_2;cunning_16,vp[6],Knowledge units here get +1 cunning.,,,,Archive,Have 2 Knowledge units and combined cunning 16+ here to complete.,Knowledge is the only treasure that multiplies when shared.
+the-colosseum,The Colosseum,alpha-1,legendary,0,military_2;strength_18,vp[6],,,,Aura:+1:strength:contest,Arena,Have 2 Military units and combined strength 18+ here to complete.,The sand remembers every name.
+the-silk-road,The Silk Road,alpha-1,legendary,0,commerce_1;diplomacy_1;knowledge_1;units_3,vp[6],At the start of your turn gain 1 gold if you have a unit here.,,Commerce,,,Have a Commerce unit and a Diplomacy unit and a Knowledge unit among 3+ units here to complete.,A thread that stitched the world together.
+versailles,Versailles,alpha-1,legendary,0,politics_1;charisma_20,vp[7],Politics units here get +1 charisma.,,,,Palace,Have a Politics unit and combined charisma 20+ here to complete.,Excess as a form of government.
+the-pyramids,The Pyramids,alpha-1,legendary,0,units_5,vp[8],,,,,Monument,Have 5 units here to complete.,Built to outlast memory itself.
+the-great-wall,The Great Wall,alpha-1,legendary,0,,,,N;S,,Aura:+2:strength:contest:def,Fortification,No mission. Blocked to the north and south. Units defending here get +2 strength in contests.,They could not go over it.

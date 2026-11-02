@@ -35,8 +35,8 @@ seeing this card twice feel normal.
 # Target counts per type x tier — the composition lock (#196).
 #
 # These are design targets, not a description of the current CSVs. The set holds
-# 65 cards against a target of 78, and every type is off; closing the gap is the
-# content work in #260-#264.
+# 73 cards against a target of 78. Locations meet their target (#264); every
+# other type is still off, and closing the gap is the content work in #260-#263.
 #
 # Table names are the engine's `type` discriminant (singular), not the plural
 # CSV filenames. Tier keys are counts; an omitted tier means a target of zero.
@@ -127,8 +127,12 @@ giving players something to race for.
 Common missions are also meant to pay gold alongside their VP, written in the
 `reward` column as a DSL expression (e.g. `gold[2] + vp[1]`). It is what sustains
 the fast tier: completing a mission discards the units and items that completed
-it, so a common mission has to fund the redeploy it causes. The commons
-themselves still need authoring under #264.
+it, so a common mission has to fund the redeploy it causes. #264 authored
+them on one template: one attribute plus 8 of a stat, paying `gold[2] + vp[1]`.
+
+Three rare missions name attributes no unit carries yet: `iga-province`
+(Espionage), `globe-theatre` (Culture) and `sagres` (Exploration). They cannot
+be completed until #263 supplies those units.
 
 Commons must be able to carry missions. Under the caps a legal 16-card location
 sub-deck is at least 7 common, so the current confound — every mission rare or

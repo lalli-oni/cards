@@ -260,6 +260,7 @@ export interface LocationCard extends CardBase {
    *  the authored value. */
   edges: LocationEdges;
   requirements?: string;
+  /** Effect-DSL expression run for the completing player (e.g. `gold[2] + vp[1]`). */
   rewards?: string;
   /** A single unnamed passive as prose. Note the asymmetry with
    *  `UnitCard.passives` (a named, structured `PassiveDef[]`): the same "passive

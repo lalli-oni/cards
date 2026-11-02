@@ -646,6 +646,149 @@ describe("build — columns that used to be dropped", () => {
   });
 });
 
+describe("build — mission rewards as effect-DSL expressions", () => {
+  // A mission location authors its requirements in `mission` and its reward in
+  // `reward`, an effect-DSL expression that engine/src/apply-main.ts
+  // (handleAttemptMission) runs through executeEffect. Before this the reward
+  // was a bare VP number packed into `mission` as `requirements>N`, so a
+  // common-tier mission paying gold could not be written. The reward rules are
+  // missionRewardErrors in engine/src/effect-dsl/mission-reward.ts, which the
+  // engine's card loader also runs.
+  const fixtureRoot: string = mkdtempSync(join(tmpdir(), "cards-mission-"));
+  afterAll(() => rmSync(fixtureRoot, { recursive: true, force: true }));
+
+  const HEADER: string = "id,name,set,rarity,cost,mission,reward,passive,edges,attributes,keywords,location_type,text,flavor\n";
+
+  function buildMission(name: string, mission: string, reward: string): ReturnType<typeof buildSet> {
+    const dir: string = join(fixtureRoot, name);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "locations.csv"), `${HEADER}m-${name},Mission,m-set,common,4,${mission},${reward},,,,,,,\n`);
+    return buildSet(name, fixtureRoot);
+  }
+
+  test("builds a compound gold + vp reward, the shape common missions use", () => {
+    const { cards, errors } = buildMission("gold-vp", "knowledge_1;cunning_6", "gold[2] + vp[1]");
+
+    expect(errors).toEqual([]);
+    expect(cards[0].requirements).toBe("knowledge_1;cunning_6");
+    expect(cards[0].rewards).toBe("gold[2] + vp[1]");
+  });
+
+  test("keeps a chained reward intact", () => {
+    // The DSL chains steps with ">", the character the old single `mission`
+    // column used to separate requirements from reward. In its own column the
+    // chain needs no special handling.
+    const { cards, errors } = buildMission("chained", "units_2", "draw[1] > gold[1]");
+
+    expect(errors).toEqual([]);
+    expect(cards[0].rewards).toBe("draw[1] > gold[1]");
+  });
+
+  test("rejects the old bare-number reward", () => {
+    // Pre-DSL rewards were a VP count (`5`). It isn't valid DSL, so a
+    // half-migrated row fails loudly instead of loading as nothing.
+    const { errors } = buildMission("bare-number", "knowledge_2", "5");
+
+    expect(errors.some((e) => e.field === "reward" && e.message.includes("invalid DSL"))).toBe(true);
+  });
+
+  test("rejects a verb that can't resolve during mission completion", () => {
+    // `kill` needs a target, and completion runs the reward with none. The
+    // allowlist is MISSION_REWARD_VERBS in engine/src/effect-dsl/mission-reward.ts;
+    // widening it is tracked in #296.
+    const { errors } = buildMission("kill-reward", "military_1", "kill(opponent + unit)");
+
+    const verbError = errors.find((e) => e.field === "reward");
+    expect(verbError?.message).toContain("kill");
+    expect(verbError?.message).toContain("only gold, vp, draw");
+  });
+
+  test("rejects requirements with no reward, and a reward with no requirements", () => {
+    // Either half alone is a mission the engine can't run: handleAttemptMission
+    // needs both, and valid-actions never offers a mission missing one, so the
+    // location would silently play as a non-mission.
+    const noReward = buildMission("no-reward", "knowledge_2", "");
+    const noRequirements = buildMission("no-requirements", "", "vp[3]");
+
+    // Matching the message, not just the field, so an unrelated reward or
+    // mission error can't make this pass.
+    expect(noReward.errors.some((e) => e.field === "reward" && e.message.includes("needs both"))).toBe(true);
+    expect(noRequirements.errors.some((e) => e.field === "mission" && e.message.includes("needs both"))).toBe(true);
+  });
+
+  test("treats a whitespace-only reward as missing", () => {
+    // `transformCard` trims `reward` to null, so a cell holding only spaces
+    // gets the "needs both" error rather than a confusing DSL parse error.
+    const { errors } = buildMission("blank-reward", "knowledge_2", "   ");
+
+    expect(errors.some((e) => e.field === "reward" && e.message.includes("needs both"))).toBe(true);
+  });
+
+  test("rejects a mission cell still in the old requirements>N format", () => {
+    // A half-migrated row: the reward was copied into the new column but the
+    // `>N` suffix was left in `mission`. Without this check it built cleanly,
+    // then getValidActions failed to parse the requirements, warned, and never
+    // offered the mission, so the location silently played as a non-mission.
+    const { errors } = buildMission("half-migrated", "knowledge_2>5", "vp[5]");
+
+    const missionError = errors.find((e) => e.field === "mission");
+    expect(missionError?.message).toContain("invalid mission requirements");
+    expect(missionError?.message).toContain("`reward` column");
+  });
+
+  test("rejects a verb that would suspend completion for a prompt", () => {
+    // This is the allowlist's stated reason: `peek` opens a view prompt, and
+    // completion carries on discarding without waiting for it. (A chained
+    // `draw[1] > pick(hand)` doesn't exercise this, because the DSL parser
+    // already rejects `pick` there for lacking a producer.)
+    const { errors } = buildMission("peek-reward", "knowledge_1", "peek(own + main)[1]");
+
+    expect(errors.find((e) => e.field === "reward")?.message).toContain("mission reward uses peek");
+  });
+
+  test("rejects a verb in the wrong case", () => {
+    // Verbs are case-sensitive: `VP[3]` is not `vp[3]`. Pins that a case slip is
+    // caught at build time rather than reaching the engine.
+    const { errors } = buildMission("upper-vp", "knowledge_1", "VP[3]");
+
+    expect(errors.some((e) => e.field === "reward")).toBe(true);
+  });
+
+  test("rejects an allowed verb with a selector", () => {
+    // execGold/execVp/execDraw ignore their selector and always act on the
+    // completing player, so `vp(opponent)[3]` would pay the completer while
+    // the card (and formatRewards, which shows it verbatim) says otherwise.
+    const { errors } = buildMission("targeted-vp", "knowledge_1", "vp(opponent)[3]");
+
+    expect(errors.find((e) => e.field === "reward")?.message).toContain("must be a bare vp[N]");
+  });
+
+  test("rejects a ':' branch, which would be silently dropped", () => {
+    // The parser attaches whatever follows `:` to the previous step as a
+    // consequence, and the executor only runs consequences after a `contest`.
+    // So in `gold[1] > vp[1] : kill(self)` the kill would never happen, and a
+    // `+` typo'd as `:` (`gold[2] : vp[1]`) would quietly pay only the gold.
+    // The verb check alone missed it because it only looked at top-level steps.
+    const killBranch = buildMission("kill-branch", "knowledge_1", "gold[1] > vp[1] : kill(self)");
+    const typo = buildMission("colon-typo", "knowledge_1", "gold[2] : vp[1]");
+
+    expect(killBranch.errors.find((e) => e.field === "reward")?.message).toContain("':' branch");
+    expect(typo.errors.find((e) => e.field === "reward")?.message).toContain("':' branch");
+  });
+
+  test("rejects a reward step that pays nothing or takes something away", () => {
+    // execVp/execGold default a missing amount to 0 (`value ?? 0`), so a bare
+    // `vp` paid nothing. A zero or negative amount turns the reward into a
+    // no-op or a cost (and execGold clamps gold at 0 while still announcing
+    // the full loss).
+    for (const [name, reward] of [["bare-vp", "vp"], ["zero-draw", "draw[0]"], ["negative-gold", "gold[-3]"]]) {
+      const { errors } = buildMission(name, "knowledge_1", reward);
+
+      expect(errors.find((e) => e.field === "reward")?.message).toContain("needs a positive amount");
+    }
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Structured warnings channel (#213)
 //

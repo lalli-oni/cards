@@ -40,6 +40,18 @@ jobs:
       - name: Test (engine/web/test suites)
         run: bun --filter '*' test
 
+      - name: Read pinned Nushell version
+        id: nu-version
+        run: echo "version=$(tr -d '[:space:]' < .nu-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Nushell
+        uses: hustcer/setup-nu@v3
+        with:
+          version: ${{ steps.nu-version.outputs.version }}
+
+      - name: PM audit rule tests (Nushell)
+        run: nu .claude/scripts/pm-audit.test.nu
+
       - name: Install Python print-tooling deps
         run: python3 -m pip install -r design/requirements.txt
 

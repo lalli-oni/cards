@@ -3,7 +3,7 @@ import { castDraft, current, produce } from "immer";
 import { fromState, uniformIntDistribution } from "./rng";
 import { parseCost, spendAP, spendGold } from "./cost-helpers";
 import { drawLocationFromProspect, drawMarketCard, drawOneCard } from "./deck-helpers";
-import { checkMissionRequirements, parseRequirements, parseRewards } from "./mission-helpers";
+import { checkMissionRequirements, parseRequirements } from "./mission-helpers";
 import { findItemPosition, findUnitPosition, getUnitsAtPosition, hasControllingUnitAt, samePosition } from "./position-helpers";
 import { itemController } from "./item-helpers";
 import {
@@ -44,6 +44,7 @@ import type {
   GridCell,
   ItemAction,
   ItemCard,
+  LocationCard,
   MainAction,
   ModifierEntry,
   ModifierSource,
@@ -1401,7 +1402,6 @@ function handleAttemptMission(
   spendAP(draft, 1);
 
   const requirements = parseRequirements(cell.location.requirements);
-  const { vp } = parseRewards(cell.location.rewards);
 
   if (!checkMissionRequirements(requirements, friendlyUnits, draft as MainGameState, queries, { row, col })) {
     emit({
@@ -1417,10 +1417,27 @@ function handleAttemptMission(
   }
 
   const player = getPlayerById(draft, playerId);
-  const locationId = cell.location.id;
+  const location: LocationCard = cell.location;
+  const locationId: string = location.id;
+  const rewards: string = cell.location.rewards;
 
-  // Award VP
-  player.vp += vp;
+  // Reward first (rules step 1): a `draw` that reshuffles the discard pile
+  // must not pick up the units and items this completion discards.
+  const vpBefore: number = player.vp;
+  const rng: RandomGenerator = fromState(draft.rngState);
+  const result: { rng: RandomGenerator } = executeEffect(rewards, {
+    draft, playerId, emit,
+    events, queries,
+    rng,
+    actingCardSource: {
+      type: "location",
+      cardId: location.id,
+      definitionId: location.definitionId,
+    },
+  });
+  draft.rngState = extractRngState(result.rng) as number[];
+  // Net VP change while the reward resolved, reported on `mission_completed`.
+  const vp: number = player.vp - vpBefore;
 
   // All units at location → completing player's discard (regardless of owner)
   for (const u of cell.units) {
@@ -1440,7 +1457,7 @@ function handleAttemptMission(
   cell.items = [];
 
   // Completed mission location → removed from game (not discard, to avoid reshuffle)
-  // TODO(#59): move to scoring area when HQ is on grid
+  // TODO(#301): move to a scoring area once the engine has one
   player.removedFromGame.push(cell.location);
   cell.location = null;
 

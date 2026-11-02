@@ -13,7 +13,7 @@ export def main [] {
   let dist = $r.detail.distribution
   assert equal ($dist | where type == "unit" and rarity == "common" | get 0.count) 4
   assert equal ($dist | where type == "location" and rarity == "common" | get 0.count) 2
-  # dup group is the two identical spirituality_1 => 3vp shrines
+  # dup group is the two identical spirituality_1 => vp[3] shrines
   assert equal ($r.detail.duplicates | length) 1
   assert equal ($r.detail.duplicates | get 0.ids | sort) [twin-shrine-a twin-shrine-b]
   # the two identical reward-less outposts share a signature but are NOT flagged:

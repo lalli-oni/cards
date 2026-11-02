@@ -53,7 +53,7 @@
     "keywords": [],
     "attributes": [],
     "requirements": "knowledge_1;military_1;diplomacy_1;commerce_1;politics_1;spirituality_1;engineering_1;exploration_1;espionage_1;culture_1",
-    "rewards": "5vp",
+    "rewards": "vp[5]",
     "passive": null,
     "locationType": "Nexus"
   }

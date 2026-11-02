@@ -149,7 +149,9 @@ def ap-cost-of [c: record] {
 }
 
 # All DSL effect strings a card carries. Policy action effects are prose (not
-# DSL) per build.ts, so policies are excluded.
+# DSL) per build.ts, so policies are excluded. A location's mission `rewards` is
+# DSL too but is left out for now: counting it would fold mission VP into
+# `vp-out` and change every location's payout figure.
 def card-effects [c: record] {
   let type = ($c.type? | default "")
   mut effs = []

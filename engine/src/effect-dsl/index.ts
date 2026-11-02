@@ -11,3 +11,4 @@ export type {
   Token,
   Consequence,
 } from "./types";
+export { MISSION_REWARD_VERBS, missionRewardErrors } from "./mission-reward";

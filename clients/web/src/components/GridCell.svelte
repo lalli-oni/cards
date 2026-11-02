@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { GridCell, ItemCard } from "cards-engine";
-  import { formatRequirements, parseRequirementParts } from "../lib/formatRequirements";
+  import { formatRequirements, formatRewards, parseRequirementParts } from "../lib/formatRequirements";
 
   interface Props {
     cell: GridCell;
@@ -65,7 +65,7 @@
       lines.push(cell.location.name);
       lines.push(`Edges: N:${dir(e.n)} E:${dir(e.e)} S:${dir(e.s)} W:${dir(e.w)}`);
       if (cell.location.requirements) lines.push(`Req: ${formatRequirements(cell.location.requirements)}`);
-      if (cell.location.rewards) lines.push(`Rew: ${cell.location.rewards}`);
+      if (cell.location.rewards) lines.push(`Rew: ${formatRewards(cell.location.rewards)}`);
       if (cell.location.passive) lines.push(`Passive: ${cell.location.passive}`);
     }
     for (const u of cell.units) {
@@ -113,7 +113,7 @@
     {#if cell.location.requirements || cell.location.rewards}
       <span class="w-full text-2xs text-text-muted">
         {#if cell.location.requirements}{#each parseRequirementParts(cell.location.requirements) as part}<span class={part.className ?? ""}>{part.text}</span>{/each}{/if}
-        {#if cell.location.rewards}{cell.location.requirements ? " " : ""}→ {cell.location.rewards.replace("vp", " ⭐")}{/if}
+        {#if cell.location.rewards}{cell.location.requirements ? " " : ""}→ {formatRewards(cell.location.rewards)}{/if}
       </span>
     {/if}
     {#if cell.location.passive}

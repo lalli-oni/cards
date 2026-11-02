@@ -43,8 +43,9 @@ Always state the detected environment at the top of your output so the user know
 
 ### Status Report
 When asked for status, project overview, or "what's going on":
-1. Fetch open issues: `gh issue list --limit 50 --json number,title,labels,state,updatedAt,body`
-2. Fetch open design questions: `gh issue list --label rules,question --json number,title,state,body`
+0. Run `nu .claude/scripts/pm-audit.nu` first. It mechanically checks issue/PR/branch drift (merged-but-open issues, empty or stale PRs, hot-file collisions, roadmap drift, untracked leftovers, merged branches), and each finding comes with its instruction. Lead your report with its findings. Treat them as leads, not verdicts: read the full issue before acting on one.
+1. Fetch open issues: `gh issue list --limit 200 --json number,title,labels,state,updatedAt,body` (the default limit of 30 has caused real miscounts)
+2. Fetch open design questions: `gh issue list --limit 200 --label rules,question --json number,title,state,body`
 3. Check milestones: `gh api repos/lalli-oni/cards/milestones`
 4. Summarize by area (`engine`, `client`, `rules`, `visuals`, `cards`, `tooling`), flag blockers and dependencies
 
@@ -130,6 +131,16 @@ Issues are not write-once. When working on one:
 - **New design decisions go in comments first**, then distil into the body once stable.
 
 This convention is what lets multiple sessions (and humans) pick up an issue without re-reading the whole thread every time.
+
+### Read the full issue before asserting anything about it
+A state check is not a content check. Before you claim an issue is done, untracked, blocked, superseded or stale, read its whole thread: body, every comment, close reason and closing PRs.
+
+```bash
+gh issue view <N> --json title,state,stateReason,body,comments,closedByPullRequestsReferences
+```
+
+- **"Not tracked anywhere"** requires a search of open *and* closed issues (`gh issue list --state all --limit 200 --search "<keywords>"`) plus the closing comment of the issue you're reasoning from. Follow-ups are usually named there.
+- **Closing with leftover scope:** name each leftover's tracking issue in the closing comment. If one has none, file it or ask, rather than closing over an untracked gap.
 
 ### Milestones
 Milestones answer "what's in this release." Labels answer "what kind of work is this." These are orthogonal — every issue has labels, only milestone-critical issues get a milestone.

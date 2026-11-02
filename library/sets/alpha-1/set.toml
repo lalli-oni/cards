@@ -124,11 +124,11 @@ legendaries are the 6-8 VP prizes. Competition comes from scarce high-yield
 missions rather than scarce missions, which keeps the grid cycling while still
 giving players something to race for.
 
-Common missions are also meant to pay gold alongside their VP, which the schema
-cannot yet express — the `mission` column is `reqs>Nvp` and carries no gold
-component. It is what sustains the fast tier: completing a mission discards the
-units and items that completed it, so a common mission has to fund the redeploy
-it causes. Blocks #264; the options are set out there.
+Common missions are also meant to pay gold alongside their VP, written in the
+`reward` column as a DSL expression (e.g. `gold[2] + vp[1]`). It is what sustains
+the fast tier: completing a mission discards the units and items that completed
+it, so a common mission has to fund the redeploy it causes. The commons
+themselves still need authoring under #264.
 
 Commons must be able to carry missions. Under the caps a legal 16-card location
 sub-deck is at least 7 common, so the current confound — every mission rare or

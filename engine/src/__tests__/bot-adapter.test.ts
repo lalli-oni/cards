@@ -89,7 +89,7 @@ describe("BotAdapter greedy strategy", () => {
       d.grid[0][0].location = makeLocation({
         ownerId: "p1",
         requirements: "units_1",
-        rewards: "3vp",
+        rewards: "vp[3]",
       });
     });
     return getVisibleState(state, state.turn.activePlayerId);

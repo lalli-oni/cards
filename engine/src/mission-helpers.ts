@@ -12,10 +12,6 @@ export type MissionRequirement =
   | { kind: "stat"; stat: Stat; threshold: number }
   | { kind: "units"; count: number };
 
-export interface ParsedRewards {
-  vp: number;
-}
-
 const STATS = new Set<string>(STAT_NAMES);
 
 // ---------------------------------------------------------------------------
@@ -130,22 +126,6 @@ function parseAtomicCheck(check: string): MissionRequirement[] {
 
 function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
-}
-
-// ---------------------------------------------------------------------------
-// Rewards parser
-// ---------------------------------------------------------------------------
-
-/**
- * Parse a rewards string. Currently only supports VP.
- * Format: "4vp" or "4VP"
- */
-export function parseRewards(rewardsString: string): ParsedRewards {
-  const match = rewardsString.trim().match(/^(\d+)\s*vp$/i);
-  if (!match) {
-    throw new Error(`Invalid rewards format "${rewardsString}" — expected "Nvp" (e.g. "4vp")`);
-  }
-  return { vp: Number(match[1]) };
 }
 
 // ---------------------------------------------------------------------------

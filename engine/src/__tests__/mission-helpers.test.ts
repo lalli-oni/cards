@@ -5,7 +5,6 @@ import { resolve } from "node:path";
 import {
   checkMissionRequirements,
   parseRequirements,
-  parseRewards,
 } from "../mission-helpers";
 import { isAttribute } from "../attributes";
 import type { Attribute } from "../attributes";
@@ -110,20 +109,6 @@ describe("parseRequirements", () => {
     expect(parseRequirements("KNOWLEDGE_2")).toEqual([
       { kind: "attribute", attribute: "Knowledge", count: 2 },
     ]);
-  });
-});
-
-describe("parseRewards", () => {
-  it("parses VP reward: 5vp", () => {
-    expect(parseRewards("5vp")).toEqual({ vp: 5 });
-  });
-
-  it("parses case-insensitive: 3VP", () => {
-    expect(parseRewards("3VP")).toEqual({ vp: 3 });
-  });
-
-  it("throws on invalid format", () => {
-    expect(() => parseRewards("gold_5")).toThrow("Invalid rewards format");
   });
 });
 
@@ -240,7 +225,7 @@ describe("checkMissionRequirements", () => {
       d.grid[0][0].location = makeLocation({
         ownerId: d.players[0].id,
         requirements: "strength_7",
-        rewards: "3vp",
+        rewards: "vp[3]",
       });
       d.grid[0][0].units.push(unit([], {
         id: "m1", strength: 5,
@@ -299,18 +284,15 @@ describe("library validation", () => {
     const csv = readFileSync(csvPath, "utf-8");
     const lines = csv.trim().split("\n");
     const header = lines[0].split(",");
-    // Support both old "mission" and new "requirements" column
-    let reqIdx = header.indexOf("requirements");
-    if (reqIdx === -1) reqIdx = header.indexOf("mission");
+    // Read as authored, so a leftover `requirements>N` cell fails to parse here.
+    const reqIdx: number = header.indexOf("mission");
 
     const requirements: string[] = [];
     for (let i = 1; i < lines.length; i++) {
       const cols = lines[i].split(",");
       const req = cols[reqIdx];
       if (req && req.trim()) {
-        // Strip VP suffix if using old format (requirements>vp)
-        const clean = req.includes(">") ? req.split(">")[0] : req;
-        requirements.push(clean.trim());
+        requirements.push(req.trim());
       }
     }
 

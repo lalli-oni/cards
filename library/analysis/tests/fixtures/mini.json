@@ -123,7 +123,7 @@
     "keywords": [],
     "attributes": [],
     "requirements": "knowledge_2;units_3",
-    "rewards": "5vp",
+    "rewards": "vp[5]",
     "passive": null,
     "locationType": "Archive"
   },
@@ -139,7 +139,7 @@
     "keywords": [],
     "attributes": [],
     "requirements": "spirituality_1",
-    "rewards": "3vp",
+    "rewards": "vp[3]",
     "passive": null,
     "locationType": "Sanctuary"
   },
@@ -155,7 +155,7 @@
     "keywords": [],
     "attributes": [],
     "requirements": "spirituality_1",
-    "rewards": "3vp",
+    "rewards": "vp[3]",
     "passive": null,
     "locationType": "Sanctuary"
   },

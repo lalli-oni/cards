@@ -74,9 +74,9 @@ const SHARED_COLUMNS: string[] = [
 
 const READ_COLUMNS: Record<CardType, string[]> = {
   units: [...SHARED_COLUMNS, "strength", "cunning", "charisma", "actions", "passives"],
-  // `actions` is deliberately absent: the one authored location action
-  // (`rotate:0:rotate_location`) is not expressible in the effect DSL, so the
-  // build reports the column as dropped rather than inventing a rule for it.
+  // `actions` is deliberately absent: no location carries an action since
+  // The Great Wall's undefined `rotate_location` was cut (#122/#264), so a CSV
+  // carrying the column is reported as dropped rather than half-wired.
   locations: [...SHARED_COLUMNS, "mission", "reward", "passive", "edges", "location_type"],
   items: [...SHARED_COLUMNS, "equip", "stored", "type", "actions"],
   events: [...SHARED_COLUMNS, "timing", "duration", "trigger", "effect", "event_type", "resolution"],
